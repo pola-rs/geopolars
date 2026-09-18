@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from geopolars.geometry import affine, construct
+from geopolars.geometry import affine, centroid, construct
 
 
 @pl.api.register_expr_namespace("geometry")
@@ -20,3 +20,6 @@ class Geometry:
 
     def translate(self, dx: float, dy: float, dz: float = 0.0) -> pl.Expr:
         return affine.translate(self._expr, dx=dx, dy=dy, dz=dz)
+
+    def coordinate_centroid(self) -> pl.Expr:
+        return centroid.coordinate_centroid(self._expr)

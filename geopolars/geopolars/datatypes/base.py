@@ -32,6 +32,9 @@ class GeoArrowType(pl.datatypes.BaseExtension):
     #: stores one coordinate per row, a linestring a list of them.
     _nesting: ClassVar[int]
 
+    # `True` if this geometry's innermost lists are rings.
+    _rings: ClassVar[bool] = False
+
     #: The coordinates this concrete type carries. Empty on a geometry's base
     #: class, which stands for every dimension at once.
     _dimension: ClassVar[Dimension] = ()
@@ -76,6 +79,11 @@ class GeoArrowType(pl.datatypes.BaseExtension):
     def of_dimension(cls, dimension: Dimension) -> type[GeoArrowType]:
         """The concrete type of this geometry carrying these coordinates."""
         return cls._by_dimension[dimension]
+
+    @classmethod
+    def dimensions(cls) -> tuple[type[GeoArrowType], ...]:
+        """Every concrete type of this geometry, one per dimension."""
+        return tuple(cls._by_dimension.values())
 
     @classmethod
     def ext_from_params(

@@ -5,6 +5,7 @@ here
 """
 
 from geopolars.geometry.affine import translate
+from geopolars.geometry.centroid import coordinate_centroid
 from geopolars.geometry.construct import (
     linestring,
     linestring_from_columns,
@@ -16,6 +17,7 @@ from geopolars.geometry.construct import (
 )
 
 __all__ = [
+    "coordinate_centroid",
     "linestring",
     "linestring_from_columns",
     "linestring_from_vertices",

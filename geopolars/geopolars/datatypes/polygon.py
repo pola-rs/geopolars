@@ -21,6 +21,8 @@ class GeoPolygon(GeoArrowType):
     _extension_name: ClassVar[str] = "geoarrow.polygon"
     _display: ClassVar[str] = "polygon"
     _nesting: ClassVar[int] = 2
+    # A polygon's inner lists are its rings, and a ring is closed.
+    _rings: ClassVar[bool] = True
 
 
 class PolygonXY(GeoPolygon):
