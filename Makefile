@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: install install-release run run-geo run-line run-centroid run-release rebuild test test-rust test-python clean
+.PHONY: install install-release run run-geo run-line run-centroid run-centroid-manual run-release rebuild test test-rust test-python clean
 
 ## Sync the venv, building the plugin unoptimized (fast edit-compile loop).
 install:
@@ -39,6 +39,10 @@ run-line: install
 ## Run the coordinate centroid proof of concept.
 run-centroid: install
 	uv run examples/run_centroid.py
+
+## Run the same centroid written by hand, in plain Polars.
+run-centroid-manual: install
+	uv run examples/run_centroid_manual.py
 
 clean:
 	-@rm -rf .venv target

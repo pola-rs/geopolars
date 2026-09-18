@@ -1,7 +1,9 @@
-"""The centroid of a collection of points, built out of ordinary expressions.
-This example shows how changing columns into points
-and then executing it is only an abstraction on the plugin layer.
-It uses only polars under the hood, no magic!
+"""Example showing the calculation of centroids of coordinates.
+Shows the following steps:
+- changing columns into points
+- calculating centroids from the points.
+Ideally this should just be an abstraction on the plugin layer.
+It uses only polars under the hood, no custom nodes and no magic!
 """
 
 import polars as pl
@@ -22,8 +24,8 @@ lf = pl.LazyFrame(
 print("Three plain float columns, one row per sample:")
 print(lf.collect())
 
-# Passing `m` is what makes these XYM points: x and y say where, `value` says
-# what was measured there.
+# Passing `m` is what makes these XYM points: x and y say where,
+# `value` says  what was measured there.
 points = lf.select(point=geometry.point("x", "y", m="value"))
 
 print("\nOne point per row, with the measurement carried along:")
@@ -47,7 +49,8 @@ print(
         after Polars is allowed to optimise it."
 )
 print(centre.explain())
-print(centre.show_graph(plan_stage="physical", engine="streaming"))
+print("\nThe physical plan, node by node:")
+centre.show_graph(plan_stage="physical", engine="streaming", optimized=True)
 
 print("\nThe centroid of the four samples:")
 print(centre.collect())

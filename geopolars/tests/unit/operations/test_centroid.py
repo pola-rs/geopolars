@@ -13,6 +13,7 @@ from geopolars.datatypes import (
     GeoPoint,
     LineStringXY,
     PointXY,
+    PolygonXY,
 )
 from tests.unit.conftest import XY, XYZM, Dimension, coordinates
 
@@ -99,6 +100,28 @@ def test_a_closed_linestring_keeps_every_vertex() -> None:
     out = df.select(geometry.coordinate_centroid("line"))
 
     assert_frame_equal(coordinates(out, "line"), pl.DataFrame({"x": [1.6], "y": [1.6]}))
+
+
+def test_an_empty_ring_takes_nothing_with_it() -> None:
+    df = pl.DataFrame(
+        {"rings": [[_SQUARE, []], [[], _SQUARE]]}, schema={"rings": _XY_RINGS}
+    ).select(geometry.polygon("rings").alias("polygon"))
+    out = df.select(geometry.coordinate_centroid("polygon"))
+
+    # The square's four corners, whichever side of it the empty ring is on.
+    assert_frame_equal(
+        coordinates(out, "polygon"),
+        pl.DataFrame({"x": [2.0, 2.0], "y": [2.0, 2.0]}),
+    )
+
+
+def test_a_missing_ring_takes_the_whole_centroid_with_it() -> None:
+    df = pl.DataFrame(
+        {"polygon": [[_SQUARE, None]]}, schema={"polygon": _XY_RINGS}
+    ).select(pl.col("polygon").ext.to(PolygonXY()))
+    out = df.select(geometry.coordinate_centroid("polygon"))
+
+    assert out["polygon"].is_null().to_list() == [True]
 
 
 @pytest.mark.parametrize("builder", ["point", "line", "polygon"])

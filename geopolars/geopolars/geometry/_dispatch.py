@@ -1,16 +1,29 @@
 """Choosing an expression by the dtype of the column it is given.
 
-An expression is spelled out before Polars resolves a schema,
-so Python cannot look at a column's dtype while building one.
-We still need this functionality.
+We need to be able to predict what a schema could look like.
+Normally this is the responsibility of Polars itself,
+but with our struct types and the FFI boundary crossing,
+it can use every bit of help it can get.
 
 We do this using a *selector*:
-this only works on a *column*, whose dtype the schema knows.
+An expression built on a selector vanishes unless the column
+is the geometry it was written for,
+and `coalesce` is what gathers the one that is left back into a single expression.
+This only works on a *column*, whose dtype the schema knows.
+
+What may be built on a vanishing expression is not everything:
+methods and operators on it go along quietly, and so does `pl.when`
+anything variadic (e.g. `pl.struct`, `pl.all_horizontal`, `pl.concat_list`)
+sees no inputs left and either raises or collapses to a literal,
+so a vanishing expression cannot be handed to one.
+`coalesce` first, then build.
+`pl.coalesce` itself needs an input that is still there,
+which a literal gives it.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -19,8 +32,6 @@ import polars.selectors as cs
 from geopolars.datatypes import GEOMETRIES, GeoArrowType
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
     from geopolars._typing import IntoExprColumn
 
 # analog of `Kind::ALL` x `Dimension::ALL` on the Rust side.
@@ -40,9 +51,11 @@ UNSUPPORTED = (
     "and no extension metadata, which this version cannot carry through"
 )
 
-# What a branch is built from, once the dtype is known.
-# the geometry the column holds, and the column itself.
-Build = Callable[[type[GeoArrowType], pl.Expr], pl.Expr]
+# The column, where its dtype is one of these geometries; `None` if it cannot be.
+Where = Callable[..., "pl.Expr | None"]
+
+# The branches to choose between, one per geometry the column could hold.
+Build = Callable[[Where], Iterable[pl.Expr]]
 
 
 def _column(value: IntoExprColumn) -> str:
@@ -68,22 +81,32 @@ def _geometry_of(dtype: pl.DataType) -> type[GeoArrowType]:
     return geometry
 
 
-def _branches(name: str, build: Build) -> Iterator[pl.Expr]:
-    """One branch per geometry dtype, each selecting only the column it fits."""
-    for geometry in GEOMETRY_TYPES:
-        yield build(geometry, cs.by_name(name) & cs.by_dtype(geometry()))
-
-    # All of the errors raise an error if it fails.
-    # If one of them does not raise an error, it must be that type.
-    yield (cs.by_name(name) - cs.by_dtype(*(g() for g in GEOMETRY_TYPES))).struct.field(
-        UNSUPPORTED
-    )
+def _unsupported(name: str) -> pl.Expr:
+    """The branch left standing when the column is no geometry of ours.
+    this is the 'error' case."""
+    rest = cs.by_name(name) - cs.by_dtype(*(g() for g in GEOMETRY_TYPES))
+    return rest.struct.field(UNSUPPORTED)
 
 
 def by_geometry(value: IntoExprColumn, build: Build) -> pl.Expr:
-    """Build an expression for whichever geometry `value` turns out to hold."""
+    """Build an expression for whichever geometry `value` turns out to hold.
+    Tries out all the different types, and returns if one fits the criteria.
+    """
     if isinstance(value, pl.Series):
         # A Series carries its dtype with it, so there is nothing to choose.
-        return build(_geometry_of(value.dtype), pl.lit(value))
+        geometry = _geometry_of(value.dtype)
+        column = pl.lit(value)
 
-    return pl.coalesce(list(_branches(_column(value), build)))
+        def known(*types: type[GeoArrowType]) -> pl.Expr | None:
+            return column if geometry in types else None
+
+        # The branches are named after whatever they were built from, so the
+        # column's own name has to be put back on the one that survived.
+        return pl.coalesce(list(build(known))).alias(value.name)
+
+    name = _column(value)
+
+    def selecting(*types: type[GeoArrowType]) -> pl.Expr | None:
+        return cs.by_name(name) & cs.by_dtype(*(geometry() for geometry in types))
+
+    return pl.coalesce([*build(selecting), _unsupported(name)]).alias(name)

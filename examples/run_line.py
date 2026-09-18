@@ -81,9 +81,7 @@ print("  ", repr(direct.schema["xy"]), "vs", repr(direct.schema["xyz"]), "\n")
 print("The coordinate columns have to nest the same way, or there are no")
 print("vertices to be had.")
 try:
-    grouped.select(
-        geometry.linestring_from_columns("lon", pl.col("lat").list.head(1))
-    )
+    grouped.select(geometry.linestring_from_columns("lon", pl.col("lat").list.head(1)))
 except Exception as e:
     detail = next(l for l in str(e).splitlines() if "nest the same way" in l)
     print(f"  {type(e).__name__}: {detail.strip()}")
