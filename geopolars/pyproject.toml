@@ -1,0 +1,58 @@
+[build-system]
+# Pinned: https://github.com/PyO3/maturin/issues/3106
+requires = ["maturin>=1.0,<=1.12.4"]
+build-backend = "maturin"
+
+[project]
+name = "geopolars"
+version = "0.0.1"
+requires-python = ">=3.10"
+classifiers = [
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = ["polars>=1.44"]
+
+[tool.maturin]
+# Mixed layout: Python sources in geopolars/, Rust cdylib compiled in
+# beside them, so that `plugin_path=LIB` finds it.
+python-source = "."
+module-name = "geopolars.geopolars"
+# Local bytecode otherwise might get swept into the wheel
+# interpreter-specific .pyc files in a wheel tagged abi3 for 3.10+.
+exclude = ["**/__pycache__/**", "tests/**"]
+
+[tool.pytest.ini_options]
+# Mirrors py-polars/pyproject.toml.
+testpaths = ["tests"]
+addopts = [
+  "--tb=short",
+  "--strict-config",
+  "--strict-markers",
+  "--import-mode=importlib",
+  # Default to running fast tests only. To run ALL tests, run: pytest -m ""
+  "-m not slow and not release and not benchmark",
+]
+markers = [
+  "benchmark: Tests used to benchmark with.",
+  "release: Tests that should be run on a geopolars release build.",
+  "slow: Tests with a longer than average runtime.",
+  "may_fail_lazy_schema: Test whose lazy queries may have a `collect_schema()` that disagrees with the schema of the collected DataFrame.",
+]
+filterwarnings = [
+  # Fail on warnings.
+  "error",
+]
+xfail_strict = true
+
+[tool.uv]
+# Without this, uv fingerprints only the Python metadata and will serve a stale
+# .so after you edit Rust. These keys force a rebuild on Rust changes.
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "Cargo.toml" },
+  { file = "../Cargo.toml" },
+  { file = "../Cargo.lock" },
+  { file = "src/**/*.rs" },
+]

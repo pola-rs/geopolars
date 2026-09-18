@@ -1,0 +1,38 @@
+[package]
+name = "geopolars"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "geopolars"
+# cdylib only: polars dlopen's this file, it is never linked as a Rust lib.
+crate-type = ["cdylib"]
+
+[features]
+default = ["extension-module"]
+# This is put behind a feature flag so we can `cargo test --no-default-features`.
+# extension-module controls linking to libpython, which breaks rust testing.
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+polars = { workspace = true, features = [
+  "timezones",
+  "allow_unused",
+  "dtype-extension",
+  "dtype-struct",
+] }
+# Needed directly for `use polars_plan::prelude::FieldsMapper`.
+polars-plan = { workspace = true }
+polars-core = { workspace = true, features = ["dtype-extension", "dtype-struct"] }
+# `use arrow::array::PrimitiveArray` -> polars-arrow, aliased in the workspace.
+arrow = { workspace = true }
+
+pyo3-polars = { workspace = true, features = ["derive"] }
+# abi3-py310: one wheel for 3.10+, matching polars' own requires-python.
+# extension-module is behind the default feature below, not set here.
+pyo3 = { workspace = true, features = ["abi3-py310"] }
+
+num = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true, features = ["derive"] }

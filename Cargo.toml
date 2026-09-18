@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = ["geopolars"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Keep every polars-* crate on the SAME minor version. Mixing them (e.g. polars
+# 0.55 with polars-plan 0.54) compiles into two incompatible copies of the core
+# types and fails with confusing trait errors.
+polars = { version = "0.55", default-features = false }
+polars-core = { version = "0.55", default-features = false }
+polars-ffi = { version = "0.55", default-features = false }
+polars-lazy = { version = "0.55", default-features = false }
+polars-plan = { version = "0.55", default-features = false }
+polars-utils = { version = "0.55", default-features = false }
+
+# pyo3-polars is versioned INDEPENDENTLY of polars. 0.28 is the release built
+# against polars 0.55 / pyo3 0.29. Bump all three together, never one alone.
+pyo3-polars = { version = "0.28" }
+pyo3 = { version = "0.29" }
+
+num = "0.4"
+rayon = "1.12"
+serde = { version = "1.0.188", features = ["derive", "rc"] }
+
+# `use arrow::...` in the plugin refers to polars' vendored arrow, not the
+# arrow-rs crate. It must track the polars version exactly.
+[workspace.dependencies.arrow]
+package = "polars-arrow"
+version = "0.55"
+default-features = false
+
+# Full debuginfo for all of polars statically linked into one cdylib produces an
+# ~800MB artifact. Line tables are enough for backtraces and keep it sane.
+[profile.dev]
+debug = "line-tables-only"
+
+# A plugin is a cdylib loaded into the polars process: build it optimized or the
+# FFI hop costs more than the work it does.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# To track polars git instead of a release, uncomment ALL of these together so
+# the whole graph moves as one.
+# [patch.crates-io]
+# polars = { git = "https://github.com/pola-rs/polars.git" }
+# polars-arrow = { git = "https://github.com/pola-rs/polars.git" }
+# polars-core = { git = "https://github.com/pola-rs/polars.git" }
+# polars-ffi = { git = "https://github.com/pola-rs/polars.git" }
+# polars-lazy = { git = "https://github.com/pola-rs/polars.git" }
+# polars-plan = { git = "https://github.com/pola-rs/polars.git" }
+# polars-utils = { git = "https://github.com/pola-rs/polars.git" }

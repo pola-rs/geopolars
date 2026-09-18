@@ -1,0 +1,34 @@
+[project]
+name = "geopolars-dev"
+version = "0.0.0"
+description = "Dev environment for the geopolars polars plugin"
+requires-python = ">=3.10"
+dependencies = [
+    "geopolars",
+    "polars>=1.44",
+]
+
+[tool.uv]
+# The root is a "virtual" project: it exists to pin the dev environment, and is
+# never built or published itself.
+package = false
+
+# Mirrors the [workspace] members in the root Cargo.toml.
+[tool.uv.workspace]
+members = ["geopolars"]
+
+# Resolve geopolars from the workspace instead of PyPI. uv installs
+# workspace members editable by default, which is what puts the compiled
+# cdylib next to the Python sources where `plugin_path=LIB` expects it.
+[tool.uv.sources]
+geopolars = { workspace = true }
+
+[dependency-groups]
+dev = [
+    # Pinned: https://github.com/PyO3/maturin/issues/3106
+    "maturin>=1.0,<=1.12.4",
+    # Test suite. Tooling is pinned loosely; the tests themselves must keep
+    # passing against the latest polars, so polars is not pinned here.
+    "pytest>=8.0",
+    "pytest-xdist>=3.5",
+]
