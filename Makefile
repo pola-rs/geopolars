@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: install install-release run run-geo run-line run-release rebuild test test-rust test-python clean
+.PHONY: install install-release run run-geo run-line run-centroid run-release rebuild test test-rust test-python clean
 
 ## Sync the venv, building the plugin unoptimized (fast edit-compile loop).
 install:
@@ -35,6 +35,10 @@ run-geo: install
 ## Run the geoarrow.linestring proof of concept.
 run-line: install
 	uv run examples/run_line.py
+
+## Run the coordinate centroid proof of concept.
+run-centroid: install
+	uv run examples/run_centroid.py
 
 clean:
 	-@rm -rf .venv target
