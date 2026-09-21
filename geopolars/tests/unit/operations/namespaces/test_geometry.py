@@ -17,6 +17,7 @@ from tests.unit.conftest import (
     Dimension,
     coordinates,
     line_coordinates,
+    multipoint_coordinates,
     ring_coordinates,
 )
 
@@ -183,6 +184,48 @@ def test_translate_keeps_empty_and_missing_linestrings(dimension: Dimension) -> 
     assert_frame_equal(out, df)
 
 
+def test_translate_shifts_every_point_of_a_multipoint(
+    line_coords: pl.DataFrame, dimension: Dimension
+) -> None:
+    df = dimension.multipoints(line_coords)
+    out = df.select(
+        geometry.translate("multipoint", dx=1.5, dy=-2.0).alias("multipoint")
+    )
+
+    assert out.schema["multipoint"] == dimension.multipoint_dtype()
+    assert_frame_equal(
+        multipoint_coordinates(out),
+        multipoint_coordinates(df).with_columns(pl.col("x") + 1.5, pl.col("y") - 2.0),
+    )
+    assert_frame_equal(
+        out.select(pl.col("multipoint").ext.storage().list.len()),
+        df.select(pl.col("multipoint").ext.storage().list.len()),
+    )
+
+
+def test_translate_leaves_a_multipoints_measures_untouched(
+    line_coords: pl.DataFrame,
+) -> None:
+    df = XYZM.multipoints(line_coords)
+    out = df.select(
+        geometry.translate("multipoint", dx=10.0, dy=10.0, dz=10.0).alias("multipoint")
+    )
+
+    assert_frame_equal(
+        multipoint_coordinates(out).select("m"),
+        multipoint_coordinates(df).select("m"),
+    )
+
+
+def test_translate_rejects_dz_on_a_multipoint_with_no_z(
+    line_coords: pl.DataFrame,
+) -> None:
+    df = XY.multipoints(line_coords)
+
+    with pytest.raises(ComputeError, match="cannot translate by dz"):
+        df.select(geometry.translate("multipoint", dx=0.0, dy=0.0, dz=1.0))
+
+
 def test_translate_shifts_every_vertex_of_every_ring(
     ring_coords: pl.DataFrame, dimension: Dimension
 ) -> None:
@@ -234,6 +277,17 @@ def test_linestring_namespace_matches_the_functional_api(
     assert_frame_equal(
         vertices.select(gpl.col("point").geometry.linestring().alias("line")),
         vertices.select(geometry.linestring("point").alias("line")),
+    )
+
+
+def test_multipoint_namespace_matches_the_functional_api(
+    line_coords: pl.DataFrame,
+) -> None:
+    points = line_coords.group_by("line", maintain_order=True).agg(XYZ.point())
+
+    assert_frame_equal(
+        points.select(gpl.col("point").geometry.multipoint().alias("multipoint")),
+        points.select(geometry.multipoint("point").alias("multipoint")),
     )
 
 

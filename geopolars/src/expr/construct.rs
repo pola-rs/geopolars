@@ -70,6 +70,10 @@ fn polygon_type(input_fields: &[Field]) -> PolarsResult<Field> {
     gathered_type(input_fields, Kind::Polygon, Kind::LineString)
 }
 
+fn multipoint_type(input_fields: &[Field]) -> PolarsResult<Field> {
+    gathered_type(input_fields, Kind::MultiPoint, Kind::Point)
+}
+
 /// Elementwise: is this geometry there in full, down to the last coordinate?
 ///
 /// A part that is missing anywhere below the outermost level
@@ -144,6 +148,16 @@ fn polygon(inputs: &[Series]) -> PolarsResult<Series> {
     gather(&inputs[0], Kind::Polygon, Kind::LineString)
 }
 
+/// Gather lists of points into multipoints.
+///
+/// The same gather a linestring is built by, over the same parts. Only the
+/// `Kind` it is labelled with differs, and that is the whole difference between
+/// the two geometries.
+#[polars_expr(output_type_func=multipoint_type)]
+fn multipoint(inputs: &[Series]) -> PolarsResult<Series> {
+    gather(&inputs[0], Kind::MultiPoint, Kind::Point)
+}
+
 /// The dimension a set of separate coordinate columns spells out.
 fn coordinates_of(input_fields: &[Field], kind: Kind) -> PolarsResult<Dimension> {
     let mut coordinates = Vec::with_capacity(input_fields.len());
@@ -190,6 +204,10 @@ fn linestring_coords_type(input_fields: &[Field]) -> PolarsResult<Field> {
 
 fn polygon_coords_type(input_fields: &[Field]) -> PolarsResult<Field> {
     zipped_type(input_fields, Kind::Polygon)
+}
+
+fn multipoint_coords_type(input_fields: &[Field]) -> PolarsResult<Field> {
+    zipped_type(input_fields, Kind::MultiPoint)
 }
 
 /// Interleave columns that each nest their coordinate `nesting` `List` layers
@@ -266,4 +284,10 @@ fn linestring_coords(inputs: &[Series]) -> PolarsResult<Series> {
 #[polars_expr(output_type_func=polygon_coords_type)]
 fn polygon_coords(inputs: &[Series]) -> PolarsResult<Series> {
     zip(inputs, Kind::Polygon)
+}
+
+/// Zip lists of coordinates into multipoints.
+#[polars_expr(output_type_func=multipoint_coords_type)]
+fn multipoint_coords(inputs: &[Series]) -> PolarsResult<Series> {
+    zip(inputs, Kind::MultiPoint)
 }

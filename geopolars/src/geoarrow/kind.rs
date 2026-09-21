@@ -10,10 +10,16 @@ pub enum Kind {
     Point,
     LineString,
     Polygon,
+    MultiPoint,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 3] = [Kind::Point, Kind::LineString, Kind::Polygon];
+    pub const ALL: [Kind; 4] = [
+        Kind::Point,
+        Kind::LineString,
+        Kind::Polygon,
+        Kind::MultiPoint,
+    ];
 
     /// The `ARROW:extension:name` this geometry is registered under.
     /// The Python side must spell the same name.
@@ -22,6 +28,7 @@ impl Kind {
             Kind::Point => "geoarrow.point",
             Kind::LineString => "geoarrow.linestring",
             Kind::Polygon => "geoarrow.polygon",
+            Kind::MultiPoint => "geoarrow.multipoint",
         }
     }
 
@@ -31,6 +38,7 @@ impl Kind {
             Kind::Point => "point",
             Kind::LineString => "linestring",
             Kind::Polygon => "polygon",
+            Kind::MultiPoint => "multipoint",
         }
     }
 
@@ -40,19 +48,23 @@ impl Kind {
             Kind::Point => "Point",
             Kind::LineString => "LineString",
             Kind::Polygon => "Polygon",
+            Kind::MultiPoint => "MultiPoint",
         }
     }
 
-    /// `List` layers between the storage and the coordinate struct.
+    /// Tells us how deeply nested the data type is.
+    /// A geoarrow.linestring is a collection of points, so it is 1.
+    /// A geoarrow.polygon is a collection of linestings, so it is 2.
     ///
-    /// This is the whole of how the geometries differ in memory: a point stores
-    /// one coordinate per row, a linestring a list of them, and a polygon a list
-    /// of those -- one per ring. Expressions walk this rather than asking which
-    /// geometry they were handed.
+    /// Warning: This does not uniquely identify a geometry kind:
+    /// E.g. geoarrow.linestring and geoarrow.multipoint both have a nesting of 2.
+    /// The extension name is what tells them apart,
+    /// which is why [`describe`](super::describe) reads the name and derives the nesting,
+    /// rather than the other way round.
     pub const fn nesting(self) -> u8 {
         match self {
             Kind::Point => 0,
-            Kind::LineString => 1,
+            Kind::LineString | Kind::MultiPoint => 1,
             Kind::Polygon => 2,
         }
     }

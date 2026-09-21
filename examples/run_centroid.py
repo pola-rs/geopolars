@@ -34,8 +34,7 @@ print("dtype:", points.collect_schema()["point"])
 assert points.collect_schema()["point"] == PointXYM()
 
 collection = points.select(pl.col("point").implode()).select(
-    # TODO: replace with multipoint
-    samples=geometry.linestring("point")
+    samples=geometry.multipoint("point")
 )
 
 print("\nGathered into one geometry, the four samples are one row:")

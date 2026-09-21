@@ -15,6 +15,9 @@ class Geometry:
     def linestring(self) -> pl.Expr:
         return construct.linestring_from_vertices(self._expr)
 
+    def multipoint(self) -> pl.Expr:
+        return construct.multipoint_from_points(self._expr)
+
     def polygon(self) -> pl.Expr:
         return construct.polygon_from_rings(self._expr)
 

@@ -13,6 +13,13 @@ from geopolars.datatypes.linestring import (
     LineStringXYZ,
     LineStringXYZM,
 )
+from geopolars.datatypes.multipoint import (
+    GeoMultiPoint,
+    MultiPointXY,
+    MultiPointXYM,
+    MultiPointXYZ,
+    MultiPointXYZM,
+)
 from geopolars.datatypes.point import (
     GeoPoint,
     PointXY,
@@ -33,12 +40,17 @@ __all__ = [
     "GEOMETRIES",
     "GeoArrowType",
     "GeoLineString",
+    "GeoMultiPoint",
     "GeoPoint",
     "GeoPolygon",
     "LineStringXY",
     "LineStringXYM",
     "LineStringXYZ",
     "LineStringXYZM",
+    "MultiPointXY",
+    "MultiPointXYM",
+    "MultiPointXYZ",
+    "MultiPointXYZM",
     "PointXY",
     "PointXYM",
     "PointXYZ",

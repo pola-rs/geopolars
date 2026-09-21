@@ -5,14 +5,21 @@ from typing import NamedTuple
 
 import polars as pl
 import pytest
+
+from geopolars import geometry
 from geopolars.datatypes import (
     GeoLineString,
+    GeoMultiPoint,
     GeoPoint,
     GeoPolygon,
     LineStringXY,
     LineStringXYM,
     LineStringXYZ,
     LineStringXYZM,
+    MultiPointXY,
+    MultiPointXYM,
+    MultiPointXYZ,
+    MultiPointXYZM,
     PointXY,
     PointXYM,
     PointXYZ,
@@ -22,8 +29,6 @@ from geopolars.datatypes import (
     PolygonXYZ,
     PolygonXYZM,
 )
-
-from geopolars import geometry
 
 #: Every coordinate column the fixtures carry. Aggregating these is what turns
 #: a vertex frame into the nested coordinate columns the constructors take.
@@ -41,6 +46,7 @@ class Dimension(NamedTuple):
     point_dtype: type[GeoPoint]
     linestring_dtype: type[GeoLineString]
     polygon_dtype: type[GeoPolygon]
+    multipoint_dtype: type[GeoMultiPoint]
     coords: tuple[str, ...]
 
     @property
@@ -72,6 +78,10 @@ class Dimension(NamedTuple):
         """Build a polygon of this dimension from a `line` list column."""
         return geometry.polygon("line").alias("polygon")
 
+    def multipoint(self) -> pl.Expr:
+        """Build a multipoint of this dimension from a `point` list column."""
+        return geometry.multipoint("point").alias("multipoint")
+
     def lines(self, vertices: pl.DataFrame) -> pl.DataFrame:
         """One linestring of this dimension per `line` in a vertex frame."""
         return (
@@ -90,6 +100,15 @@ class Dimension(NamedTuple):
             .group_by("polygon", maintain_order=True)
             .agg("line")
             .select(self.polygon())
+        )
+
+    def multipoints(self, vertices: pl.DataFrame) -> pl.DataFrame:
+        """One multipoint of this dimension per `line` in a vertex frame.
+        Grouped exactly like `lines`, off the same fixture."""
+        return (
+            vertices.group_by("line", maintain_order=True)
+            .agg(self.point())
+            .select(self.multipoint())
         )
 
     def lines_from_coords(self, vertices: pl.DataFrame) -> pl.DataFrame:
@@ -111,11 +130,21 @@ class Dimension(NamedTuple):
             .select(self.of_coords(geometry.polygon).alias("polygon"))
         )
 
+    def multipoints_from_coords(self, vertices: pl.DataFrame) -> pl.DataFrame:
+        """The same multipoints as `multipoints`, out of one column per axis."""
+        return (
+            vertices.group_by("line", maintain_order=True)
+            .agg(COORDS)
+            .select(self.of_coords(geometry.multipoint).alias("multipoint"))
+        )
 
-XY = Dimension(PointXY, LineStringXY, PolygonXY, ("x", "y"))
-XYZ = Dimension(PointXYZ, LineStringXYZ, PolygonXYZ, ("x", "y", "z"))
-XYM = Dimension(PointXYM, LineStringXYM, PolygonXYM, ("x", "y", "m"))
-XYZM = Dimension(PointXYZM, LineStringXYZM, PolygonXYZM, ("x", "y", "z", "m"))
+
+XY = Dimension(PointXY, LineStringXY, PolygonXY, MultiPointXY, ("x", "y"))
+XYZ = Dimension(PointXYZ, LineStringXYZ, PolygonXYZ, MultiPointXYZ, ("x", "y", "z"))
+XYM = Dimension(PointXYM, LineStringXYM, PolygonXYM, MultiPointXYM, ("x", "y", "m"))
+XYZM = Dimension(
+    PointXYZM, LineStringXYZM, PolygonXYZM, MultiPointXYZM, ("x", "y", "z", "m")
+)
 
 DIMENSIONS = [XY, XYZ, XYM, XYZM]
 
@@ -209,6 +238,10 @@ def line_coordinates(df: pl.DataFrame, name: str = "line") -> pl.DataFrame:
         .to_series()
         .struct.unnest()
     )
+
+
+def multipoint_coordinates(df: pl.DataFrame, name: str = "multipoint") -> pl.DataFrame:
+    return line_coordinates(df, name)
 
 
 def ring_coordinates(df: pl.DataFrame, name: str = "polygon") -> pl.DataFrame:

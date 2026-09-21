@@ -12,11 +12,17 @@ import polars as pl
 from geopolars import geopolars as _rust  # noqa: F401
 from geopolars.datatypes.base import GeoArrowType
 from geopolars.datatypes.linestring import GeoLineString
+from geopolars.datatypes.multipoint import GeoMultiPoint
 from geopolars.datatypes.point import GeoPoint
 from geopolars.datatypes.polygon import GeoPolygon
 
 # Mirrors `Kind::ALL`
-GEOMETRIES: tuple[type[GeoArrowType], ...] = (GeoPoint, GeoLineString, GeoPolygon)
+GEOMETRIES: tuple[type[GeoArrowType], ...] = (
+    GeoPoint,
+    GeoLineString,
+    GeoPolygon,
+    GeoMultiPoint,
+)
 
 for _geometry in GEOMETRIES:
     pl.register_extension_type(_geometry._extension_name, _geometry)

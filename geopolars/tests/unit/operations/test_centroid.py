@@ -124,7 +124,57 @@ def test_a_missing_ring_takes_the_whole_centroid_with_it() -> None:
     assert out["polygon"].is_null().to_list() == [True]
 
 
-@pytest.mark.parametrize("builder", ["point", "line", "polygon"])
+def test_a_multipoint_averages_its_points(
+    line_coords: pl.DataFrame, dimension: Dimension
+) -> None:
+    df = dimension.multipoints(line_coords)
+    out = df.select(geometry.coordinate_centroid("multipoint"))
+
+    assert_frame_equal(
+        coordinates(out, "multipoint"), _mean_per(line_coords, "line", dimension)
+    )
+
+
+def test_a_multipoint_and_a_linestring_of_the_same_points_agree(
+    line_coords: pl.DataFrame, dimension: Dimension
+) -> None:
+    multipoints = dimension.multipoints(line_coords).select(
+        geometry.coordinate_centroid("multipoint")
+    )
+    lines = dimension.lines(line_coords).select(geometry.coordinate_centroid("line"))
+
+    assert_frame_equal(
+        coordinates(multipoints, "multipoint"), coordinates(lines, "line")
+    )
+
+
+def test_a_closed_multipoint_keeps_every_point() -> None:
+    """A multipoint is not a ring: a repeated point is a point that is there
+    twice, and it counts twice."""
+    df = pl.DataFrame({"points": [_SQUARE]}, schema={"points": _XY_VERTICES}).select(
+        geometry.multipoint("points").alias("multipoint")
+    )
+    out = df.select(geometry.coordinate_centroid("multipoint"))
+
+    assert_frame_equal(
+        coordinates(out, "multipoint"), pl.DataFrame({"x": [1.6], "y": [1.6]})
+    )
+
+
+def test_an_empty_or_missing_multipoint_has_no_centroid(dimension: Dimension) -> None:
+    df = pl.DataFrame(
+        {"points": [[], None]},
+        schema={
+            "points": pl.List(pl.Struct(dict.fromkeys(dimension.coords, pl.Float64)))
+        },
+    ).select(geometry.multipoint("points").alias("multipoint"))
+
+    out = df.select(geometry.coordinate_centroid("multipoint"))
+
+    assert out["multipoint"].is_null().to_list() == [True, True]
+
+
+@pytest.mark.parametrize("builder", ["point", "line", "polygon", "multipoint"])
 def test_the_result_is_a_point_of_the_same_dimension(
     coords: pl.DataFrame,
     line_coords: pl.DataFrame,
@@ -137,6 +187,8 @@ def test_the_result_is_a_point_of_the_same_dimension(
         df = coords.select(dimension.point())
     elif builder == "line":
         df = dimension.lines(line_coords)
+    elif builder == "multipoint":
+        df = dimension.multipoints(line_coords)
     else:
         df = dimension.polygons(ring_coords)
     name = df.columns[0]

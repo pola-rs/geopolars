@@ -37,9 +37,13 @@ point = pl.struct(x=pl.col("x"), y=pl.col("y"), m=pl.col("value"))
 # One mean per axis, mapped over the fields of that struct.
 centroid = lf.select(
     centre=pl.struct(
-        **{axis: point.struct.field(axis).mean() for axis in ("x", "y", "m")}
+        # [point.struct.field(axis).mean().alias(axis) for axis in ("x", "y", "m")]
+        point.struct.field("x").mean().alias("x_mean"),
+        point.struct.field("y").mean().alias("y_mean"),
+        point.struct.field("m").mean().alias("m_mean"),
     )
 )
+# and now we need to convert it back to its point type again.
 
 print(
     "\nNow we put them all in a struct to get a little closer to the abstraction \

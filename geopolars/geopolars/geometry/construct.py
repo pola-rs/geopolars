@@ -170,6 +170,59 @@ def linestring(
     return linestring_from_columns(x, y, z, m)
 
 
+def multipoint_from_points(points: IntoExprColumn) -> pl.Expr:
+    """Build a `geoarrow.multipoint` column out of lists of points.
+
+    ```python
+    df.group_by("survey").agg(
+        geometry.multipoint_from_points(
+            geometry.point("lon", "lat").implode()
+        ).alias("sightings")
+    )
+    ```
+    """
+    return _gather("multipoint", points)
+
+
+def multipoint_from_columns(
+    x: IntoExprColumn,
+    y: IntoExprColumn,
+    z: IntoExprColumn | None = None,
+    m: IntoExprColumn | None = None,
+) -> pl.Expr:
+    """Build a `geoarrow.multipoint` column from one coordinate column per axis.
+    Each is a `List[Float64]` holding one list of coordinates per multipoint.
+
+    ```python
+    df.select(geometry.multipoint_from_columns("lon", "lat", m="seen_at"))
+    ```
+    """
+    return _from_columns("multipoint_coords", x, y, z, m)
+
+
+def multipoint(
+    x: IntoExprColumn,
+    y: IntoExprColumn | None = None,
+    z: IntoExprColumn | None = None,
+    m: IntoExprColumn | None = None,
+) -> pl.Expr:
+    """Build a `geoarrow.multipoint` column, from points or from coordinates.
+    Dispatches to either:
+    - [`multipoint_from_points`][geopolars.geometry.multipoint_from_points]
+    - [`multipoint_from_columns`][geopolars.geometry.multipoint_from_columns]
+    """
+    if y is None:
+        if z is not None or m is not None:
+            msg = (
+                "multipoint() got a z or m coordinate without a y coordinate; "
+                "pass x and y as columns, or call multipoint_from_points()"
+            )
+            raise TypeError(msg)
+        return multipoint_from_points(x)
+
+    return multipoint_from_columns(x, y, z, m)
+
+
 def polygon_from_rings(rings: IntoExprColumn) -> pl.Expr:
     """Build a `geoarrow.polygon` column out of lists of rings.
 
