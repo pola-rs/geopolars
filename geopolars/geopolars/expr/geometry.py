@@ -21,6 +21,9 @@ class Geometry:
     def polygon(self) -> pl.Expr:
         return construct.polygon_from_rings(self._expr)
 
+    def validate(self) -> pl.Expr:
+        return construct.validate(self._expr)
+
     def translate(self, dx: float, dy: float, dz: float = 0.0) -> pl.Expr:
         return affine.translate(self._expr, dx=dx, dy=dy, dz=dz)
 

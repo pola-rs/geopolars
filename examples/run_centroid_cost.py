@@ -15,6 +15,8 @@ dominates at two vertices apiece. `breakdown()` at the bottom times the real
 `_defined` and `_mean` instead, and puts the cost where it belongs.
 """
 
+import functools
+import operator
 import time
 
 import polars as pl
@@ -64,9 +66,9 @@ def axis(column: pl.Expr, name: str) -> pl.Expr:
     return column.list.eval(pl.element().struct.field(name))
 
 
-def means(column: pl.Expr) -> dict[str, pl.Expr]:
+def means(column: pl.Expr) -> list[pl.Expr]:
     """The mean of each axis, per row. The whole of what a centroid is."""
-    return {a: axis(column, a).list.sum() / column.list.len() for a in AXES}
+    return [(axis(column, a).list.sum() / column.list.len()).alias(a) for a in AXES]
 
 
 def layers(plain: pl.DataFrame, geo: pl.DataFrame) -> dict[str, pl.LazyFrame]:
@@ -74,14 +76,14 @@ def layers(plain: pl.DataFrame, geo: pl.DataFrame) -> dict[str, pl.LazyFrame]:
     nothing = pl.lit(None, dtype=pl.Float64)
 
     # 1. What the centroid is, and nothing else.
-    minimal = plain.lazy().select(centre=pl.struct(**means(SAMPLES)))
+    minimal = plain.lazy().select(centre=pl.struct(means(SAMPLES)))
 
     # 2. ...plus `_defined`: one null scan per axis, on top of the sums.
     whole = SAMPLES.list.len() > 0
     for a in AXES:
         whole = whole & (axis(SAMPLES, a).list.count_matches(None) == 0)
     checked = plain.lazy().select(
-        centre=pl.when(SAMPLES.is_not_null() & whole).then(pl.struct(**means(SAMPLES)))
+        centre=pl.when(SAMPLES.is_not_null() & whole).then(pl.struct(means(SAMPLES)))
     )
 
     # 3. ...plus what `by_geometry` wraps every branch in. By the time the
@@ -91,12 +93,7 @@ def layers(plain: pl.DataFrame, geo: pl.DataFrame) -> dict[str, pl.LazyFrame]:
         centre=pl.coalesce(
             [
                 pl.when(pl.coalesce([SAMPLES.is_not_null() & whole, pl.lit(False)])).then(
-                    pl.struct(
-                        **{
-                            a: pl.coalesce([m, nothing])
-                            for a, m in means(SAMPLES).items()
-                        }
-                    )
+                    pl.struct([pl.coalesce([m, nothing]) for m in means(SAMPLES)])
                 )
             ]
         )
@@ -111,14 +108,7 @@ def layers(plain: pl.DataFrame, geo: pl.DataFrame) -> dict[str, pl.LazyFrame]:
         centre=pl.coalesce(
             [
                 pl.when(pl.coalesce([SAMPLES.is_not_null() & intact, pl.lit(False)]))
-                .then(
-                    pl.struct(
-                        **{
-                            a: pl.coalesce([m, nothing])
-                            for a, m in means(storage).items()
-                        }
-                    )
-                )
+                .then(pl.struct([pl.coalesce([m, nothing]) for m in means(storage)]))
                 .ext.to(gpl.PointXYM())
             ]
         )
@@ -153,12 +143,18 @@ def breakdown(rows: int, vertices: int) -> None:
     dtype = GeoLineString.of_dimension(AXES)
 
     pieces = {
-        "_defined (the null scan)": impl._defined(dtype, column, AXES),
+        "_coordinates (the emptiness check)": impl._coordinates(dtype, column) > 0,
+        # What `_defined` used to do on every call, now a construction-time
+        # guarantee: one walk over every coordinate, once per axis.
+        "the null scan that used to sit here": functools.reduce(
+            operator.and_,
+            (impl._axis(storage, 1, a).list.count_matches(None) == 0 for a in AXES),
+        ),
         "_mean, every axis": pl.struct(
-            **{a: impl._mean(dtype, column, a) for a in AXES}
+            [impl._mean(dtype, column, a).alias(a) for a in AXES]
         ),
         "...of which is axis extraction": pl.struct(
-            **{a: storage.list.eval(pl.element().struct.field(a)) for a in AXES}
+            [storage.list.eval(pl.element().struct.field(a)).alias(a) for a in AXES]
         ),
         "coordinate_centroid (all of it)": geometry.coordinate_centroid("samples"),
     }

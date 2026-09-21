@@ -77,6 +77,42 @@ def _gather(function_name: str, parts: IntoExprColumn) -> pl.Expr:
     )
 
 
+def validate(geometry: IntoExprColumn) -> pl.Expr:
+    """Null out every geometry that is missing a part, or a coordinate of one.
+    GeoArrow allows nulls only at the outermost level:
+    A geometry is whole or it is null.
+    <https://geoarrow.org/format.html#missing-values-null>
+
+    Every constructor in this module already holds to that,
+    so a geometry built by one never needs this.
+    This function is for the routes into a geometry column that go
+    around them and check nothing:
+
+    ```python
+    pl.scan_parquet("routes.parquet").select(geometry.validate("route"))
+    ```
+
+    `ext.to` is a relabelling and reads no data, so it cannot check either:
+
+    ```python
+    df.select(pl.col("route").ext.to(gpl.LineStringXY())).select(
+        geometry.validate("route")
+    )
+    ```
+
+    Operations over coordinates take the guarantee as given rather than paying
+    for it on every call, so a column that arrived one of those ways is worth
+    putting through this once. On a column that is already whole it finds
+    nothing and copies nothing.
+    """
+    return register_plugin_function(
+        plugin_path=LIB,
+        args=[geometry],
+        function_name="validate",
+        is_elementwise=True,
+    )
+
+
 def point(
     x: IntoExprColumn,
     y: IntoExprColumn,

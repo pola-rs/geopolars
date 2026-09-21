@@ -119,7 +119,8 @@ def test_a_missing_ring_takes_the_whole_centroid_with_it() -> None:
     df = pl.DataFrame(
         {"polygon": [[_SQUARE, None]]}, schema={"polygon": _XY_RINGS}
     ).select(pl.col("polygon").ext.to(PolygonXY()))
-    out = df.select(geometry.coordinate_centroid("polygon"))
+    whole = df.select(geometry.validate("polygon"))
+    out = whole.select(geometry.coordinate_centroid("polygon"))
 
     assert out["polygon"].is_null().to_list() == [True]
 
@@ -256,15 +257,29 @@ def test_a_missing_point_has_no_centroid() -> None:
 def test_a_missing_coordinate_takes_the_whole_centroid_with_it() -> None:
     """The constructors do not let a vertex go missing, so this goes around
     them. Averaging what is left would hand back a centroid of a geometry that
-    is not there."""
+    is not there, which is what `validate` is there to prevent."""
     df = pl.DataFrame(
         {"line": [[{"x": 0.0, "y": 0.0}, {"x": 2.0, "y": None}]]},
         schema={"line": _XY_VERTICES},
     ).select(pl.col("line").ext.to(LineStringXY()))
+    whole = df.select(geometry.validate("line"))
 
-    out = df.select(geometry.coordinate_centroid("line"))
+    out = whole.select(geometry.coordinate_centroid("line"))
 
     assert out["line"].is_null().to_list() == [True]
+
+
+def test_a_geometry_from_a_constructor_needs_no_validating(
+    line_coords: pl.DataFrame,
+) -> None:
+    df = XY.lines(line_coords)
+
+    assert_frame_equal(
+        df.select(geometry.validate("line")).select(
+            geometry.coordinate_centroid("line")
+        ),
+        df.select(geometry.coordinate_centroid("line")),
+    )
 
 
 def test_every_form_of_column_gives_the_same_answer(line_coords: pl.DataFrame) -> None:

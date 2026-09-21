@@ -17,6 +17,7 @@ from geopolars.geometry.construct import (
     polygon,
     polygon_from_columns,
     polygon_from_rings,
+    validate,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     "polygon_from_columns",
     "polygon_from_rings",
     "translate",
+    "validate",
 ]

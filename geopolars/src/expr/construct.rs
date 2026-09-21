@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
+use super::coords::same_geometry;
 use crate::geoarrow::{coord, describe, Dimension, Geo, Kind};
 
 /// Used in error messages, don't care about allocation
@@ -156,6 +157,16 @@ fn polygon(inputs: &[Series]) -> PolarsResult<Series> {
 #[polars_expr(output_type_func=multipoint_type)]
 fn multipoint(inputs: &[Series]) -> PolarsResult<Series> {
     gather(&inputs[0], Kind::MultiPoint, Kind::Point)
+}
+
+/// Null out every geometry that is missing a part, or a coordinate of one.
+/// See python doc
+#[polars_expr(output_type_func=same_geometry)]
+fn validate(inputs: &[Series]) -> PolarsResult<Series> {
+    let geo = describe(inputs[0].dtype())?;
+    let storage = inputs[0].ext()?.storage().clone();
+
+    Ok(only_complete(storage, geo.kind.nesting())?.into_extension(geo.typ.clone()))
 }
 
 /// The dimension a set of separate coordinate columns spells out.

@@ -4,8 +4,6 @@ Note that this is different from an area centroid!
 
 from __future__ import annotations
 
-import functools
-import operator
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -17,23 +15,14 @@ from geopolars.datatypes.dimension import XYZM
 from geopolars.geometry._dispatch import by_geometry
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterator
 
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
-    from geopolars.datatypes.dimension import Dimension
     from geopolars.geometry._dispatch import Where
 
 # A reduction over the coordinates of one innermost part of a geometry.
 Reduce = Callable[[pl.Expr, bool], pl.Expr]
-
-
-def _all(conditions: Iterable[pl.Expr]) -> pl.Expr:
-    """Every one of these holds."""
-    # Not `pl.all_horizontal`: a dispatched expression vanishes when the column
-    # is not its geometry, and that collapses to `True` instead of vanishing
-    # with it. `&` is a method on the expression, so it goes along quietly.
-    return functools.reduce(operator.and_, conditions)
 
 
 def _axis(values: pl.Expr, layers: int, axis: str) -> pl.Expr:
@@ -62,18 +51,6 @@ def _count(part: pl.Expr, rings: bool) -> pl.Expr:
     return part.list.len() - (part.list.len() > 0)
 
 
-def _missing_coordinates(part: pl.Expr, rings: bool) -> pl.Expr:
-    # GeoArrow allows nulls only at the outermost level.
-    # Anything counted here is a geometry that should not exist.
-    return part.list.count_matches(None)
-
-
-def _missing_parts(parts: pl.Expr, rings: bool) -> pl.Expr:
-    # `count_matches` only compares values,
-    # Ask each part whether it is there.
-    return parts.list.eval(pl.element().is_null()).list.sum()
-
-
 def _per_geometry(values: pl.Expr, layers: int, reduce: Reduce, rings: bool) -> pl.Expr:
     """Reduce a geometry's innermost parts, and add up what that gives."""
 
@@ -86,63 +63,56 @@ def _per_geometry(values: pl.Expr, layers: int, reduce: Reduce, rings: bool) -> 
     return values.list.eval(inner).list.sum()
 
 
+def _flat(geometry: type[GeoArrowType]) -> bool:
+    """
+    A polygon nests one layer deeper and repeats a coordinate
+    per ring, so it has to go the long way round.
+    """
+    return geometry._nesting == 1 and not geometry._rings
+
+
 def _mean(geometry: type[GeoArrowType], column: pl.Expr, axis: str) -> pl.Expr:
     """The mean of one axis over a geometry's coordinates, per row."""
     storage = column.ext.storage()
-    values = _axis(storage, geometry._nesting, axis)
-    total = _per_geometry(values, geometry._nesting, _total, geometry._rings)
-    count = _per_geometry(storage, geometry._nesting, _count, geometry._rings)
+
+    if _flat(geometry):
+        return _axis(storage, 1, axis).list.mean()
+
+    nesting, rings = geometry._nesting, geometry._rings
+    total = _per_geometry(_axis(storage, nesting, axis), nesting, _total, rings)
+    count = _per_geometry(storage, nesting, _count, rings)
     return total / count
 
 
-def _defined(
-    geometry: type[GeoArrowType], column: pl.Expr, dimension: Dimension
-) -> pl.Expr:
-    """can this type and instance of geometry have a centroid at all?"""
-    # Cases to check:
-    # - polygon with a null ring
-    # - null geometry
-    # https://geoarrow.org/format.html#missing-values-null
+def _coordinates(geometry: type[GeoArrowType], column: pl.Expr) -> pl.Expr:
+    """How many coordinates a geometry holds, over all of its parts."""
     storage = column.ext.storage()
-    nesting, rings = geometry._nesting, geometry._rings
-
-    whole = [
-        _per_geometry(
-            _axis(storage, nesting, axis), nesting, _missing_coordinates, rings
-        )
-        == 0
-        for axis in dimension
-    ]
-    whole += [
-        _per_geometry(storage, layer, _missing_parts, rings=False) == 0
-        for layer in range(1, nesting)
-    ]
-    return _all([_per_geometry(storage, nesting, _count, rings) > 0, *whole])
+    return _per_geometry(storage, geometry._nesting, _count, geometry._rings)
 
 
 def _branches(where: Where) -> Iterator[pl.Expr]:
     """One centroid per geometry the column could turn out to hold."""
     nested = [geometry for geometry in GEOMETRIES if geometry._nesting > 0]
 
-    # A point is its own centroid, and its storage is already the coordinate
-    # struct a point wraps: nothing to average, nothing to build.
+    # A point is its own centroid. Its storage is already the coordinate struct
+    # a point wraps and its dtype is already the one to hand back.
     for dimension in DIMENSIONS:
-        point = GeoPoint.of_dimension(dimension)
-        column = where(point)
+        column = where(GeoPoint.of_dimension(dimension))
         if column is not None:
-            storage = column.ext.storage()
-            present = _all(storage.struct.field(a).is_not_null() for a in dimension)
-            yield pl.when(present).then(storage).ext.to(point())
+            yield column
 
-    defined = []
+    # Geometries don't have interior nulls (see spec).
+    # Only need to check if the geometry has a coordinate at all.
+    # `list.len` reads that off the offsets,
+    counted = []
     for geometry in nested:
         for dimension in DIMENSIONS:
             column = where(geometry.of_dimension(dimension))
             if column is not None:
-                defined.append(_defined(geometry, column, dimension))
+                counted.append(_coordinates(geometry, column) > 0)
     # The literal is what keeps a coalesce from being empty,
     # and says "no centroid" for a column that is none of these.
-    whole = pl.coalesce([*defined, pl.lit(False)])
+    filled = pl.coalesce([*counted, pl.lit(False)])
 
     # `m` is a measure rather than an axis, but it averages like one.
     coordinates: dict[str, pl.Expr] = {}
@@ -160,8 +130,8 @@ def _branches(where: Where) -> Iterator[pl.Expr]:
         if column is None:
             continue
         yield (
-            pl.when(column.is_not_null() & whole)
-            .then(pl.struct(**{axis: coordinates[axis] for axis in dimension}))
+            pl.when(column.is_not_null() & filled)
+            .then(pl.struct([coordinates[axis].alias(axis) for axis in dimension]))
             .ext.to(GeoPoint.of_dimension(dimension)())
         )
 
@@ -182,7 +152,7 @@ def coordinate_centroid(geometry: IntoExprColumn) -> pl.Expr:
     | `PolygonXYZM`          | `PointXYZM`  |
 
     The measure `m` is also averaged.
-    A geometry with no coordinates at all or an invalid coordinate has no centroid.
+    A null geometry, and a geometry with no coordinates at all, has no centroid.
 
     ```python
     df.select(geometry.coordinate_centroid("route"))
