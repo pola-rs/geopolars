@@ -17,6 +17,7 @@ from tests.unit.conftest import (
     Dimension,
     coordinates,
     line_coordinates,
+    multilinestring_coordinates,
     multipoint_coordinates,
     ring_coordinates,
 )
@@ -226,6 +227,56 @@ def test_translate_rejects_dz_on_a_multipoint_with_no_z(
         df.select(geometry.translate("multipoint", dx=0.0, dy=0.0, dz=1.0))
 
 
+def test_translate_shifts_every_vertex_of_every_linestring(
+    ring_coords: pl.DataFrame, dimension: Dimension
+) -> None:
+    df = dimension.multilinestrings(ring_coords)
+    out = df.select(
+        geometry.translate("multilinestring", dx=1.5, dy=-2.0).alias("multilinestring")
+    )
+    parts = pl.col("multilinestring").ext.storage()
+
+    assert out.schema["multilinestring"] == dimension.multilinestring_dtype()
+    assert_frame_equal(
+        multilinestring_coordinates(out),
+        multilinestring_coordinates(df).with_columns(
+            pl.col("x") + 1.5, pl.col("y") - 2.0
+        ),
+    )
+    assert_frame_equal(out.select(parts.list.len()), df.select(parts.list.len()))
+    assert_frame_equal(
+        out.select(parts.explode(empty_as_null=False).list.len()),
+        df.select(parts.explode(empty_as_null=False).list.len()),
+    )
+
+
+def test_translate_rejects_dz_on_a_multilinestring_with_no_z(
+    ring_coords: pl.DataFrame,
+) -> None:
+    df = XY.multilinestrings(ring_coords)
+
+    with pytest.raises(ComputeError, match="cannot translate by dz"):
+        df.select(geometry.translate("multilinestring", dx=0.0, dy=0.0, dz=1.0))
+
+
+def test_translate_keeps_empty_and_missing_multilinestrings(
+    dimension: Dimension,
+) -> None:
+    df = pl.DataFrame(
+        {"lines": [[], [[]], None]},
+        schema={
+            "lines": pl.List(
+                pl.List(pl.Struct(dict.fromkeys(dimension.coords, pl.Float64)))
+            )
+        },
+    ).select(geometry.multilinestring("lines").alias("multilinestring"))
+    out = df.select(
+        geometry.translate("multilinestring", dx=1.0, dy=1.0).alias("multilinestring")
+    )
+
+    assert_frame_equal(out, df)
+
+
 def test_translate_shifts_every_vertex_of_every_ring(
     ring_coords: pl.DataFrame, dimension: Dimension
 ) -> None:
@@ -305,6 +356,25 @@ def test_polygon_namespace_matches_the_functional_api(
     assert_frame_equal(
         rings.select(gpl.col("line").geometry.polygon().alias("polygon")),
         rings.select(geometry.polygon("line").alias("polygon")),
+    )
+
+
+def test_multilinestring_namespace_matches_the_functional_api(
+    ring_coords: pl.DataFrame,
+) -> None:
+    lines = (
+        ring_coords.group_by("polygon", "ring", maintain_order=True)
+        .agg(XYZ.point())
+        .select("polygon", XYZ.linestring())
+        .group_by("polygon", maintain_order=True)
+        .agg("line")
+    )
+
+    assert_frame_equal(
+        lines.select(
+            gpl.col("line").geometry.multilinestring().alias("multilinestring")
+        ),
+        lines.select(geometry.multilinestring("line").alias("multilinestring")),
     )
 
 

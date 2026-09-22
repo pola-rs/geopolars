@@ -9,6 +9,7 @@ import pytest
 from geopolars import geometry
 from geopolars.datatypes import (
     GeoLineString,
+    GeoMultiLineString,
     GeoMultiPoint,
     GeoPoint,
     GeoPolygon,
@@ -16,6 +17,10 @@ from geopolars.datatypes import (
     LineStringXYM,
     LineStringXYZ,
     LineStringXYZM,
+    MultiLineStringXY,
+    MultiLineStringXYM,
+    MultiLineStringXYZ,
+    MultiLineStringXYZM,
     MultiPointXY,
     MultiPointXYM,
     MultiPointXYZ,
@@ -47,6 +52,7 @@ class Dimension(NamedTuple):
     linestring_dtype: type[GeoLineString]
     polygon_dtype: type[GeoPolygon]
     multipoint_dtype: type[GeoMultiPoint]
+    multilinestring_dtype: type[GeoMultiLineString]
     coords: tuple[str, ...]
 
     @property
@@ -82,6 +88,10 @@ class Dimension(NamedTuple):
         """Build a multipoint of this dimension from a `point` list column."""
         return geometry.multipoint("point").alias("multipoint")
 
+    def multilinestring(self) -> pl.Expr:
+        """Build a multilinestring of this dimension from a `line` list column."""
+        return geometry.multilinestring("line").alias("multilinestring")
+
     def lines(self, vertices: pl.DataFrame) -> pl.DataFrame:
         """One linestring of this dimension per `line` in a vertex frame."""
         return (
@@ -111,6 +121,19 @@ class Dimension(NamedTuple):
             .select(self.multipoint())
         )
 
+    def multilinestrings(self, vertices: pl.DataFrame) -> pl.DataFrame:
+        """One multilinestring of this dimension per `polygon` in a vertex frame,
+        with one linestring per `ring` within it.
+        Grouped exactly like `polygons`, off the same fixture."""
+        return (
+            vertices.group_by("polygon", "ring", maintain_order=True)
+            .agg(self.point())
+            .select("polygon", self.linestring())
+            .group_by("polygon", maintain_order=True)
+            .agg("line")
+            .select(self.multilinestring())
+        )
+
     def lines_from_coords(self, vertices: pl.DataFrame) -> pl.DataFrame:
         """The same lines as `lines`, out of one coordinate column per axis."""
         return (
@@ -138,12 +161,44 @@ class Dimension(NamedTuple):
             .select(self.of_coords(geometry.multipoint).alias("multipoint"))
         )
 
+    def multilinestrings_from_coords(self, vertices: pl.DataFrame) -> pl.DataFrame:
+        """The same multilinestrings as `multilinestrings`, out of one
+        coordinate column per axis."""
+        return (
+            vertices.group_by("polygon", "ring", maintain_order=True)
+            .agg(COORDS)
+            .group_by("polygon", maintain_order=True)
+            .agg(COORDS)
+            .select(self.of_coords(geometry.multilinestring).alias("multilinestring"))
+        )
 
-XY = Dimension(PointXY, LineStringXY, PolygonXY, MultiPointXY, ("x", "y"))
-XYZ = Dimension(PointXYZ, LineStringXYZ, PolygonXYZ, MultiPointXYZ, ("x", "y", "z"))
-XYM = Dimension(PointXYM, LineStringXYM, PolygonXYM, MultiPointXYM, ("x", "y", "m"))
+
+XY = Dimension(
+    PointXY, LineStringXY, PolygonXY, MultiPointXY, MultiLineStringXY, ("x", "y")
+)
+XYZ = Dimension(
+    PointXYZ,
+    LineStringXYZ,
+    PolygonXYZ,
+    MultiPointXYZ,
+    MultiLineStringXYZ,
+    ("x", "y", "z"),
+)
+XYM = Dimension(
+    PointXYM,
+    LineStringXYM,
+    PolygonXYM,
+    MultiPointXYM,
+    MultiLineStringXYM,
+    ("x", "y", "m"),
+)
 XYZM = Dimension(
-    PointXYZM, LineStringXYZM, PolygonXYZM, MultiPointXYZM, ("x", "y", "z", "m")
+    PointXYZM,
+    LineStringXYZM,
+    PolygonXYZM,
+    MultiPointXYZM,
+    MultiLineStringXYZM,
+    ("x", "y", "z", "m"),
 )
 
 DIMENSIONS = [XY, XYZ, XYM, XYZM]
@@ -256,3 +311,9 @@ def ring_coordinates(df: pl.DataFrame, name: str = "polygon") -> pl.DataFrame:
         .to_series()
         .struct.unnest()
     )
+
+
+def multilinestring_coordinates(
+    df: pl.DataFrame, name: str = "multilinestring"
+) -> pl.DataFrame:
+    return ring_coordinates(df, name)

@@ -18,6 +18,9 @@ class Geometry:
     def multipoint(self) -> pl.Expr:
         return construct.multipoint_from_points(self._expr)
 
+    def multilinestring(self) -> pl.Expr:
+        return construct.multilinestring_from_linestrings(self._expr)
+
     def polygon(self) -> pl.Expr:
         return construct.polygon_from_rings(self._expr)
 

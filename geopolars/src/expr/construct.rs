@@ -75,6 +75,10 @@ fn multipoint_type(input_fields: &[Field]) -> PolarsResult<Field> {
     gathered_type(input_fields, Kind::MultiPoint, Kind::Point)
 }
 
+fn multilinestring_type(input_fields: &[Field]) -> PolarsResult<Field> {
+    gathered_type(input_fields, Kind::MultiLineString, Kind::LineString)
+}
+
 /// Elementwise: is this geometry there in full, down to the last coordinate?
 ///
 /// A part that is missing anywhere below the outermost level
@@ -159,6 +163,14 @@ fn multipoint(inputs: &[Series]) -> PolarsResult<Series> {
     gather(&inputs[0], Kind::MultiPoint, Kind::Point)
 }
 
+/// Gather lists of linestrings into multilinestrings.
+///
+/// See Python: `multilinestring_from_linestrings()`
+#[polars_expr(output_type_func=multilinestring_type)]
+fn multilinestring(inputs: &[Series]) -> PolarsResult<Series> {
+    gather(&inputs[0], Kind::MultiLineString, Kind::LineString)
+}
+
 /// Null out every geometry that is missing a part, or a coordinate of one.
 /// See python doc
 #[polars_expr(output_type_func=same_geometry)]
@@ -219,6 +231,10 @@ fn polygon_coords_type(input_fields: &[Field]) -> PolarsResult<Field> {
 
 fn multipoint_coords_type(input_fields: &[Field]) -> PolarsResult<Field> {
     zipped_type(input_fields, Kind::MultiPoint)
+}
+
+fn multilinestring_coords_type(input_fields: &[Field]) -> PolarsResult<Field> {
+    zipped_type(input_fields, Kind::MultiLineString)
 }
 
 /// Interleave columns that each nest their coordinate `nesting` `List` layers
@@ -301,4 +317,10 @@ fn polygon_coords(inputs: &[Series]) -> PolarsResult<Series> {
 #[polars_expr(output_type_func=multipoint_coords_type)]
 fn multipoint_coords(inputs: &[Series]) -> PolarsResult<Series> {
     zip(inputs, Kind::MultiPoint)
+}
+
+/// Zip lists of lists of coordinates into multilinestrings.
+#[polars_expr(output_type_func=multilinestring_coords_type)]
+fn multilinestring_coords(inputs: &[Series]) -> PolarsResult<Series> {
+    zip(inputs, Kind::MultiLineString)
 }

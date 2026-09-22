@@ -11,14 +11,16 @@ pub enum Kind {
     LineString,
     Polygon,
     MultiPoint,
+    MultiLineString,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [
+    pub const ALL: [Kind; 5] = [
         Kind::Point,
         Kind::LineString,
         Kind::Polygon,
         Kind::MultiPoint,
+        Kind::MultiLineString,
     ];
 
     /// The `ARROW:extension:name` this geometry is registered under.
@@ -29,6 +31,7 @@ impl Kind {
             Kind::LineString => "geoarrow.linestring",
             Kind::Polygon => "geoarrow.polygon",
             Kind::MultiPoint => "geoarrow.multipoint",
+            Kind::MultiLineString => "geoarrow.multilinestring",
         }
     }
 
@@ -39,6 +42,7 @@ impl Kind {
             Kind::LineString => "linestring",
             Kind::Polygon => "polygon",
             Kind::MultiPoint => "multipoint",
+            Kind::MultiLineString => "multilinestring",
         }
     }
 
@@ -49,6 +53,7 @@ impl Kind {
             Kind::LineString => "LineString",
             Kind::Polygon => "Polygon",
             Kind::MultiPoint => "MultiPoint",
+            Kind::MultiLineString => "MultiLineString",
         }
     }
 
@@ -57,7 +62,7 @@ impl Kind {
     /// A geoarrow.polygon is a collection of linestings, so it is 2.
     ///
     /// Warning: This does not uniquely identify a geometry kind:
-    /// E.g. geoarrow.linestring and geoarrow.multipoint both have a nesting of 2.
+    /// E.g. geoarrow.linestring and geoarrow.multipoint both have a nesting of 1.
     /// The extension name is what tells them apart,
     /// which is why [`describe`](super::describe) reads the name and derives the nesting,
     /// rather than the other way round.
@@ -65,7 +70,7 @@ impl Kind {
         match self {
             Kind::Point => 0,
             Kind::LineString | Kind::MultiPoint => 1,
-            Kind::Polygon => 2,
+            Kind::Polygon | Kind::MultiLineString => 2,
         }
     }
 

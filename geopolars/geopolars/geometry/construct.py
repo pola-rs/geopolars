@@ -259,6 +259,70 @@ def multipoint(
     return multipoint_from_columns(x, y, z, m)
 
 
+def multilinestring_from_linestrings(linestrings: IntoExprColumn) -> pl.Expr:
+    """Build a `geoarrow.multilinestring` column out of lists of linestrings.
+    Takes either a list of linestrings, or bare vertex lists.
+
+    ```python
+    (
+        df.group_by("river", "branch", maintain_order=True)
+        .agg(
+            geometry.linestring_from_vertices(
+                geometry.point("lon", "lat").implode()
+            ).alias("branch")
+        )
+        .group_by("river", maintain_order=True)
+        .agg(
+            geometry.multilinestring_from_linestrings(
+                pl.col("branch").implode()
+            ).alias("river")
+        )
+    )
+    ```
+    """
+    return _gather("multilinestring", linestrings)
+
+
+def multilinestring_from_columns(
+    x: IntoExprColumn,
+    y: IntoExprColumn,
+    z: IntoExprColumn | None = None,
+    m: IntoExprColumn | None = None,
+) -> pl.Expr:
+    """Build a `geoarrow.multilinestring` column from one column per axis.
+    Each is a `List[List[Float64]]`.
+
+    ```python
+    df.select(geometry.multilinestring_from_columns("lon", "lat"))
+    ```
+    """
+    return _from_columns("multilinestring_coords", x, y, z, m)
+
+
+def multilinestring(
+    x: IntoExprColumn,
+    y: IntoExprColumn | None = None,
+    z: IntoExprColumn | None = None,
+    m: IntoExprColumn | None = None,
+) -> pl.Expr:
+    """Build a `geoarrow.multilinestring` column, from linestrings or coordinates.
+    Dispatches to either:
+    - [`multilinestring_from_linestrings`][geopolars.geometry.multilinestring_from_linestrings]
+    - [`multilinestring_from_columns`][geopolars.geometry.multilinestring_from_columns]
+    """
+    if y is None:
+        if z is not None or m is not None:
+            msg = (
+                "multilinestring() got a z or m coordinate without a y "
+                "coordinate; pass x and y as columns, or call "
+                "multilinestring_from_linestrings()"
+            )
+            raise TypeError(msg)
+        return multilinestring_from_linestrings(x)
+
+    return multilinestring_from_columns(x, y, z, m)
+
+
 def polygon_from_rings(rings: IntoExprColumn) -> pl.Expr:
     """Build a `geoarrow.polygon` column out of lists of rings.
 

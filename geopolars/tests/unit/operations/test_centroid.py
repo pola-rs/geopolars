@@ -175,7 +175,66 @@ def test_an_empty_or_missing_multipoint_has_no_centroid(dimension: Dimension) ->
     assert out["multipoint"].is_null().to_list() == [True, True]
 
 
-@pytest.mark.parametrize("builder", ["point", "line", "polygon", "multipoint"])
+def test_a_multilinestring_averages_the_vertices_of_all_its_parts(
+    ring_coords: pl.DataFrame, dimension: Dimension
+) -> None:
+    df = dimension.multilinestrings(ring_coords)
+    out = df.select(geometry.coordinate_centroid("multilinestring"))
+
+    assert_frame_equal(
+        coordinates(out, "multilinestring"),
+        _mean_per(ring_coords, "polygon", dimension),
+    )
+
+
+def test_a_multilinestrings_parts_are_not_rings(ring_coords: pl.DataFrame) -> None:
+    """The same vertices, so the same storage,
+    but a polygon drops the coordinate that closes each ring
+    and a multilinestring keeps it."""
+    multilines = XY.multilinestrings(ring_coords).select(
+        geometry.coordinate_centroid("multilinestring")
+    )
+    polygons = XY.polygons(ring_coords).select(geometry.coordinate_centroid("polygon"))
+
+    assert (
+        coordinates(multilines, "multilinestring").rows()
+        != coordinates(polygons, "polygon").rows()
+    )
+
+
+def test_a_closed_multilinestring_keeps_every_vertex() -> None:
+    """A part that happens to close is still a linestring:
+    all five of the square's vertices are averaged"""
+    df = pl.DataFrame({"lines": [[_SQUARE]]}, schema={"lines": _XY_RINGS}).select(
+        geometry.multilinestring("lines").alias("multilinestring")
+    )
+    out = df.select(geometry.coordinate_centroid("multilinestring"))
+
+    assert_frame_equal(
+        coordinates(out, "multilinestring"), pl.DataFrame({"x": [1.6], "y": [1.6]})
+    )
+
+
+def test_an_empty_or_missing_multilinestring_has_no_centroid(
+    dimension: Dimension,
+) -> None:
+    df = pl.DataFrame(
+        {"lines": [[], [[]], None]},
+        schema={
+            "lines": pl.List(
+                pl.List(pl.Struct(dict.fromkeys(dimension.coords, pl.Float64)))
+            )
+        },
+    ).select(geometry.multilinestring("lines").alias("multilinestring"))
+
+    out = df.select(geometry.coordinate_centroid("multilinestring"))
+
+    assert out["multilinestring"].is_null().to_list() == [True, True, True]
+
+
+@pytest.mark.parametrize(
+    "builder", ["point", "line", "polygon", "multipoint", "multilinestring"]
+)
 def test_the_result_is_a_point_of_the_same_dimension(
     coords: pl.DataFrame,
     line_coords: pl.DataFrame,
@@ -190,6 +249,8 @@ def test_the_result_is_a_point_of_the_same_dimension(
         df = dimension.lines(line_coords)
     elif builder == "multipoint":
         df = dimension.multipoints(line_coords)
+    elif builder == "multilinestring":
+        df = dimension.multilinestrings(ring_coords)
     else:
         df = dimension.polygons(ring_coords)
     name = df.columns[0]

@@ -12,6 +12,7 @@ import polars as pl
 from geopolars import geopolars as _rust  # noqa: F401
 from geopolars.datatypes.base import GeoArrowType
 from geopolars.datatypes.linestring import GeoLineString
+from geopolars.datatypes.multilinestring import GeoMultiLineString
 from geopolars.datatypes.multipoint import GeoMultiPoint
 from geopolars.datatypes.point import GeoPoint
 from geopolars.datatypes.polygon import GeoPolygon
@@ -22,6 +23,7 @@ GEOMETRIES: tuple[type[GeoArrowType], ...] = (
     GeoLineString,
     GeoPolygon,
     GeoMultiPoint,
+    GeoMultiLineString,
 )
 
 for _geometry in GEOMETRIES:
