@@ -19,6 +19,7 @@ the comment says when one without a CRS takes a different tier.
 | `exterior` | - | | - | | A | ring 0 | - | | - | | A | LPP |
 | `interior` | - | | - | | A | rings after the first | - | | - | | A | LPP |
 | `boundary` | - | | C | | C | every ring | - | | C | LPP | C | LPP |
+| `parts` | - | | - | | - | | C | [^4] | C | [^4] | C | [^4] |
 | `convex_hull` | - | | B | GEOS [^3], straight=null | B | GEOS [^3] [^1] | B | GEOS [^3] [^1] | B | GEOS [^3] [^1] | B | GEOS[^3] [^1] |
 | `buffer` | B | GEOS; z and m dropped [^1] | B | | B | | B | | B | | B | |
 | `offset_curve` | - | | B | GEOS; z and m dropped [^1] | - | | - | | B | | - | |
@@ -53,7 +54,7 @@ the comment says when one without a CRS takes a different tier.
 | `snap_to_grid` | A | x/y/z only, m kept | A | | A | | A | | A | | A | |
 | `bounds` | A | repeats its coordinate | A | | A | | A | LPP of `box` | A | LPP of `box` | A | LPP of `box` |
 | `total_bounds` | A | one box for the column | A | | A | | A | | A | | A | |
-| `set_crs` | C | relabels only | C | | C | | C | | C | | C | |
+| `set_crs` | C | [^4] | C | | C | | C | | C | | C | |
 | `to_crs` | B | PROJ | B | PROJ | B | PROJ | B | PROJ | B | PROJ | B | PROJ |
 | `is_geographic` | C | scalar, calls PROJ at plan | C | | C | | C | | C | | C | |
 | `x` | C | `f64`, drops the CRS | C | `list[f64]` | C | `list²[f64]` | C | `list[f64]` | C | `list²[f64]` | C | `list³[f64]` |
@@ -90,3 +91,4 @@ In this table:
       Planar: A; geodesic: PROJ + GGL, needs a CRS.
 [^3]: Convex hull only cares around the points, not the actual geometry.
       See the implementation in `geopolars-compute`.
+[^4]: Metadata relabeling

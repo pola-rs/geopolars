@@ -349,6 +349,11 @@ class ExprGeoNameSpace:
 
         return boundary(self._expr)
 
+    def parts(self) -> pl.Expr:
+        from geopolars.geo.parts import parts
+
+        return parts(self._expr)
+
     def is_ring(self) -> pl.Expr:
         from geopolars.geo.is_ring import is_ring
 

@@ -67,6 +67,7 @@ from geopolars.geo.is_valid import (
 from geopolars.geo.length import length
 from geopolars.geo.mean_coordinate import mean_coordinate
 from geopolars.geo.offset_curve import offset_curve
+from geopolars.geo.parts import parts
 from geopolars.geo.remove_repeats_in_succession import remove_repeats_in_succession
 from geopolars.geo.reverse import reverse
 from geopolars.geo.rings_overlap import rings_overlap
@@ -131,6 +132,7 @@ __all__ = [
     "null_out_invalid_geoarrow",
     "null_out_invalid_ogc",
     "offset_curve",
+    "parts",
     "point",
     "polygons_from_coordinates",
     "polygons_from_nested_coordinates",
