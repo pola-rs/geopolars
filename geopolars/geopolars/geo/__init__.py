@@ -2,6 +2,7 @@
 Everything in the 'geo' namespace forwards to here.
 """
 
+from geopolars.geo.add_holes import add_holes
 from geopolars.geo.affine import (
     affine_transform,
     rotate,
@@ -83,6 +84,7 @@ __all__ = [
     "CloseRings",
     "NonFinite",
     "OutOfBounds",
+    "add_holes",
     "affine_transform",
     "area",
     "area_geodesic",

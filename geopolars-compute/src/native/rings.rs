@@ -264,57 +264,54 @@ pub fn close_open_rings<const Z: bool>(
     ))
 }
 
-/// The vertices one row of [polygons_from_exteriors_and_holes] takes.
+/// The rings and vertices one row of [polygons_with_added_holes] takes.
 struct Assembled {
-    /// The exterior's vertices, in the exteriors' coordinates.
-    exterior: Range<usize>,
+    /// The polygon's rings, in the polygons' rings.
+    rings: Range<usize>,
+    /// The polygon's vertices, in the polygons' coordinates.
+    vertices: Range<usize>,
     /// The holes, as linestrings of the holes.
     holes: Range<usize>,
     /// The holes' vertices, in the holes' coordinates.
     hole_vertices: Range<usize>,
 }
 
-/// One axis of the exteriors and of the holes,
-/// with every row's exterior followed by its holes, in `len` values.
+/// One axis of the polygons and of the holes,
+/// with every row's polygon followed by its holes, in `len` values.
 fn assembled_axis(
-    exterior: &[f64],
+    polygons: &[f64],
     holes: &[f64],
     rows: &[Option<Assembled>],
     len: usize,
 ) -> Vec<f64> {
     let mut assembled = Vec::with_capacity(len);
     for row in rows.iter().flatten() {
-        assembled.extend_from_slice(&exterior[row.exterior.clone()]);
+        assembled.extend_from_slice(&polygons[row.vertices.clone()]);
         assembled.extend_from_slice(&holes[row.hole_vertices.clone()]);
     }
     assembled
 }
 
-/// Polygons out of the linestrings of `exteriors`,
-/// each followed by the linestrings on the same row of `holes` as its holes.
-/// A null row of `holes` has no holes.
-/// Without `holes`, no polygon has holes.
+/// `polygons`, each followed by the linestrings on the same row of `holes` as extra holes.
+/// A null row of `holes` adds no holes.
+/// Without `holes`, the polygons are copied as they are.
 /// The rows are null where `validity` says,
-/// which has to cover the null rows of `exteriors`.
+/// which has to cover the null rows of `polygons`.
 ///
-/// `exteriors` and `holes` have to have the same length and dimension.
+/// `polygons` and `holes` have to have the same length and dimension.
 /// The vertices are copied into new buffers, as one slice per axis per row of each.
-pub fn polygons_from_exteriors_and_holes(
-    exteriors: &LineStringArray,
+pub fn polygons_with_added_holes(
+    polygons: &PolygonArray,
     holes: Option<&MultiLineStringArray>,
     validity: Option<Bitmap>,
 ) -> PolygonArray {
-    let len = exteriors.rows.len();
+    let len = polygons.rows.len();
     if let Some(holes) = holes {
-        assert_eq!(
-            holes.rows.len(),
-            len,
-            "exteriors and holes differ in length"
-        );
+        assert_eq!(holes.rows.len(), len, "polygons and holes differ in length");
         assert_eq!(
             holes.coords.dim(),
-            exteriors.coords.dim(),
-            "exteriors and holes differ in dimension"
+            polygons.coords.dim(),
+            "polygons and holes differ in dimension"
         );
     }
     let is_valid = |i: usize| validity.as_ref().is_none_or(|validity| validity.get_bit(i));
@@ -329,8 +326,10 @@ pub fn polygons_from_exteriors_and_holes(
                             let range = holes.rows.range(i);
                             (range.clone(), holes.lines.span(range))
                         });
+                let rings = polygons.rows.range(i);
                 Assembled {
-                    exterior: exteriors.rows.range(i),
+                    vertices: polygons.rings.span(rings.clone()),
+                    rings,
                     holes,
                     hole_vertices,
                 }
@@ -338,34 +337,36 @@ pub fn polygons_from_exteriors_and_holes(
         })
         .collect();
 
-    let ring_counts = rows
-        .iter()
-        .map(|row| row.as_ref().map_or(0, |row| 1 + row.holes.len()));
+    let ring_counts = rows.iter().map(|row| {
+        row.as_ref()
+            .map_or(0, |row| row.rings.len() + row.holes.len())
+    });
     let ring_lengths = rows.iter().flatten().flat_map(|row| {
+        let lengths = row.rings.clone().map(|j| polygons.rings.range(j).len());
         let hole_lengths = row
             .holes
             .clone()
             .map(|j| holes.expect("a hole, with holes").lines.range(j).len());
-        std::iter::once(row.exterior.len()).chain(hole_lengths)
+        lengths.chain(hole_lengths)
     });
     let coords_len = rows
         .iter()
         .flatten()
-        .map(|row| row.exterior.len() + row.hole_vertices.len())
+        .map(|row| row.vertices.len() + row.hole_vertices.len())
         .sum();
 
-    let (exterior, hole) = (&exteriors.coords, holes.map(|holes| &holes.coords));
-    let axis = |exterior: &[f64], holes: Option<&[f64]>| {
-        assembled_axis(exterior, holes.unwrap_or_default(), &rows, coords_len)
+    let (polygon, hole) = (&polygons.coords, holes.map(|holes| &holes.coords));
+    let axis = |polygons: &[f64], holes: Option<&[f64]>| {
+        assembled_axis(polygons, holes.unwrap_or_default(), &rows, coords_len)
     };
     PolygonArray::from_parts(
         List::from_offsets(offsets_of(ring_counts), validity),
         ValidList::from_offsets(offsets_of(ring_lengths)),
         ValidCoords::from_axes((
-            axis(exterior.x(), hole.map(ValidCoords::x)),
-            axis(exterior.y(), hole.map(ValidCoords::y)),
-            exterior.z().map(|z| axis(z, hole.and_then(ValidCoords::z))),
-            exterior.m().map(|m| axis(m, hole.and_then(ValidCoords::m))),
+            axis(polygon.x(), hole.map(ValidCoords::x)),
+            axis(polygon.y(), hole.map(ValidCoords::y)),
+            polygon.z().map(|z| axis(z, hole.and_then(ValidCoords::z))),
+            polygon.m().map(|m| axis(m, hole.and_then(ValidCoords::m))),
         )),
     )
 }
