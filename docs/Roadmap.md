@@ -21,15 +21,14 @@ Later goals:
 - [x] Area
 - [x] Length
 - [x] getters for coordinates (z/m)
-- [ ] CRS: opaque SRIDs refused for reprojection?
+- [x] CRS: opaque SRIDs refused for reprojection
 - [x] is_empty for all geo
 - [x] validity checking functions
 - [ ] Handling closing of loop consistently for polygon
-- [ ] mean coordinate
-- [ ] centroid
-- [ ] convex hull
-- [ ] simplify/decimate
-- [ ] equality
+- [x] mean coordinate
+- [x] centroid
+- [x] convex hull
+- [x] simplify/decimate: `simplify`
 
 affine transforms:
 
@@ -57,7 +56,7 @@ geometry editing
 - [x] polygon construction from linestrings
 - [ ] Adding additional holes to polygons from linestrings
 - [x] reverse lines
-- [ ] make lines cw/ccw
+- [x] make lines cw/ccw: `to_cw`, `to_ccw`
 - [ ] drop_dims(z: bool, m: bool)
 - [ ] to_linestring() takes list of points, multipoint, linestring
 - [ ] is_continuous (for multilinestring)
@@ -66,6 +65,10 @@ repair:
 
 - [ ] repair: drop overlaps, with the options for reltol etc.
 - [x] Close rings expr, can use this inside of 'repair'
+- [ ] expression that drops all the repeated points in a geometry (out of order)
+
+other
+
 - [ ] expr that joins `list[linestring]` or multilinestring into one long string.
       Bool flag on requiring ends to be coinciding (if true, must return multilinestring,
       otherwise linestring).
@@ -73,6 +76,7 @@ repair:
 
 ## Binary predicates
 
+- [ ] equality: (are two shapes the same?)
 - [ ] intersect
 - [ ] contains
 - [ ] within
