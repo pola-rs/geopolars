@@ -328,6 +328,11 @@ pub fn polygons_with_added_holes(
         }
         let rings = polygons.rows.range(i);
         let mut ring_count = rings.len();
+        // TODO: `try_extend_from_slice` (here and for the holes) is not inlined.
+        // With only a few rings per call, the call overhead dominates.
+        // It took ~5.5 ns/row of ~52 in a release profile
+        // (1M polygons with 1 exterior + 2-3 holes of 5 vertices).
+        // An inlined loop of our own could win most of that back.
         ring_offsets
             .try_extend_from_slice(polygons.rings.offsets(), rings.start, rings.len())
             .expect(NO_OVERFLOW);
