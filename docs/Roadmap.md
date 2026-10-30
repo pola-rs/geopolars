@@ -66,6 +66,10 @@ repair:
 
 - [ ] repair: drop overlaps, with the options for reltol etc.
 - [x] Close rings expr, can use this inside of 'repair'
+- [ ] expr that joins `list[linestring]` or multilinestring into one long string.
+      Bool flag on requiring ends to be coinciding (if true, must return multilinestring,
+      otherwise linestring).
+      Bool flag on deleting repeated overlapping point
 
 ## Binary predicates
 
