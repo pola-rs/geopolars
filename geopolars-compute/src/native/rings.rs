@@ -264,16 +264,12 @@ pub fn close_open_rings<const Z: bool>(
     ))
 }
 
-/// The rings and vertices one row of [polygons_with_added_holes] takes.
-struct Assembled {
-    /// The polygon's rings, in the polygons' rings.
-    rings: Range<usize>,
-    /// The polygon's vertices, in the polygons' coordinates.
-    vertices: Range<usize>,
-    /// The holes, as linestrings of the holes.
+/// The vertices one valid row of [polygons_with_added_holes] copies.
+struct CopiedVertices {
+    /// In the polygons' coordinates.
+    polygon: Range<usize>,
+    /// In the holes' coordinates.
     holes: Range<usize>,
-    /// The holes' vertices, in the holes' coordinates.
-    hole_vertices: Range<usize>,
 }
 
 /// One axis of the polygons and of the holes,
@@ -281,13 +277,13 @@ struct Assembled {
 fn assembled_axis(
     polygons: &[f64],
     holes: &[f64],
-    rows: &[Option<Assembled>],
+    copies: &[CopiedVertices],
     len: usize,
 ) -> Vec<f64> {
     let mut assembled = Vec::with_capacity(len);
-    for row in rows.iter().flatten() {
-        assembled.extend_from_slice(&polygons[row.vertices.clone()]);
-        assembled.extend_from_slice(&holes[row.hole_vertices.clone()]);
+    for copy in copies {
+        assembled.extend_from_slice(&polygons[copy.polygon.clone()]);
+        assembled.extend_from_slice(&holes[copy.holes.clone()]);
     }
     assembled
 }
@@ -315,53 +311,50 @@ pub fn polygons_with_added_holes(
         );
     }
     let is_valid = |i: usize| validity.as_ref().is_none_or(|validity| validity.get_bit(i));
-    // `None` for a null row: its offsets point anywhere, so it takes nothing.
-    let rows: Vec<Option<Assembled>> = (0..len)
-        .map(|i| {
-            is_valid(i).then(|| {
-                let (holes, hole_vertices) =
-                    holes
-                        .filter(|holes| holes.rows.is_valid(i))
-                        .map_or((0..0, 0..0), |holes| {
-                            let range = holes.rows.range(i);
-                            (range.clone(), holes.lines.span(range))
-                        });
-                let rings = polygons.rows.range(i);
-                Assembled {
-                    vertices: polygons.rings.span(rings.clone()),
-                    rings,
-                    holes,
-                    hole_vertices,
-                }
-            })
-        })
-        .collect();
+    const NO_OVERFLOW: &str = "no more items than the input";
 
-    let ring_counts = rows.iter().map(|row| {
-        row.as_ref()
-            .map_or(0, |row| row.rings.len() + row.holes.len())
-    });
-    let ring_lengths = rows.iter().flatten().flat_map(|row| {
-        let lengths = row.rings.clone().map(|j| polygons.rings.range(j).len());
-        let hole_lengths = row
-            .holes
-            .clone()
-            .map(|j| holes.expect("a hole, with holes").lines.range(j).len());
-        lengths.chain(hole_lengths)
-    });
-    let coords_len = rows
-        .iter()
-        .flatten()
-        .map(|row| row.vertices.len() + row.hole_vertices.len())
-        .sum();
+    // One pass for everything but the coordinates,
+    // so that no per-row record has to be read back by later passes.
+    let hole_lines = holes.map_or(0, |holes| holes.lines.len());
+    let mut row_offsets = Offsets::<i64>::with_capacity(len);
+    let mut ring_offsets = Offsets::<i64>::with_capacity(polygons.rings.len() + hole_lines);
+    let mut copies = Vec::with_capacity(len);
+    let mut coords_len = 0;
+    for i in 0..len {
+        // A null row's offsets point anywhere, so it takes nothing.
+        if !is_valid(i) {
+            row_offsets.try_push(0).expect(NO_OVERFLOW);
+            continue;
+        }
+        let rings = polygons.rows.range(i);
+        let mut ring_count = rings.len();
+        ring_offsets
+            .try_extend_from_slice(polygons.rings.offsets(), rings.start, rings.len())
+            .expect(NO_OVERFLOW);
+        let mut copy = CopiedVertices {
+            polygon: polygons.rings.span(rings),
+            holes: 0..0,
+        };
+        if let Some(holes) = holes.filter(|holes| holes.rows.is_valid(i)) {
+            let lines = holes.rows.range(i);
+            ring_count += lines.len();
+            ring_offsets
+                .try_extend_from_slice(holes.lines.offsets(), lines.start, lines.len())
+                .expect(NO_OVERFLOW);
+            copy.holes = holes.lines.span(lines);
+        }
+        row_offsets.try_push(ring_count).expect(NO_OVERFLOW);
+        coords_len += copy.polygon.len() + copy.holes.len();
+        copies.push(copy);
+    }
 
     let (polygon, hole) = (&polygons.coords, holes.map(|holes| &holes.coords));
     let axis = |polygons: &[f64], holes: Option<&[f64]>| {
-        assembled_axis(polygons, holes.unwrap_or_default(), &rows, coords_len)
+        assembled_axis(polygons, holes.unwrap_or_default(), &copies, coords_len)
     };
     PolygonArray::from_parts(
-        List::from_offsets(offsets_of(ring_counts), validity),
-        ValidList::from_offsets(offsets_of(ring_lengths)),
+        List::from_offsets(row_offsets.into(), validity),
+        ValidList::from_offsets(ring_offsets.into()),
         ValidCoords::from_axes((
             axis(polygon.x(), hole.map(ValidCoords::x)),
             axis(polygon.y(), hole.map(ValidCoords::y)),

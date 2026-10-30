@@ -24,7 +24,7 @@ Later goals:
 - [x] CRS: opaque SRIDs refused for reprojection
 - [x] is_empty for all geo
 - [x] validity checking functions
-- [ ] Handling closing of loop consistently for polygon
+- [x] Handling closing of loop consistently for polygon
 - [x] mean coordinate
 - [x] centroid
 - [x] convex hull
@@ -52,13 +52,12 @@ transfer transforms
 
 geometry editing
 
-- [ ] Linestring joining
 - [x] polygon construction from linestrings
-- [ ] Adding additional holes to polygons from linestrings
 - [x] reverse lines
 - [x] make lines cw/ccw: `to_cw`, `to_ccw`
 - [ ] drop_dims(z: bool, m: bool)
 - [x] to_linestring() takes list of points, multipoint, linestring: `line_string_from_vertices`
+- [x] split a multi-geometry into a list of its parts: `parts`
 - [ ] is_continuous (for multilinestring)
 
 repair:
@@ -76,7 +75,12 @@ other
 
 ## Binary predicates
 
+- [x] Adding additional holes to polygons from linestrings: `add_holes`
 - [ ] equality: (are two shapes the same?)
+- [ ] Adding list[linestring] to multilinestring/list[polygon] to multipolygon etc.
+
+Your classics
+
 - [ ] intersect
 - [ ] contains
 - [ ] within
