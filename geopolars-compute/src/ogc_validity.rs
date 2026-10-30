@@ -153,6 +153,9 @@ fn multi_polygon_topology_is_valid(
     meet_only_at_points_and_no_overlap(&parts)
 }
 
+// TODO: Not yet converted to bitmask pass, but is a minor candidate for it.
+// Only visit the rows set in `passing`, and give `None` when every row passes.
+// GEOS costs far more per row than the loop does.
 /// `passing`, without the rows where `test` fails.
 /// `test` only runs on the rows set in `passing`.
 fn try_and_where_passing<E>(

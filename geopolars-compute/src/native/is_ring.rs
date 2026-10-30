@@ -54,6 +54,9 @@ pub fn multi_line_strings_are_rings<const Z: bool>(
     per_row_bool(array.rows(), |i| parts_form_ring::<Z>(&array.get(i)))
 }
 
+// TODO: Not yet converted to bitmask pass, but is a minor candidate for it.
+// Mark the rings that are rings or empty in a mask,
+// and fold it with `rows_passing` (see the TODO at `polygon_shape_is_valid`).
 /// Whether every ring of `polygon` is a ring, or every one is empty (the empty polygon).
 #[inline(always)]
 fn has_only_rings<const Z: bool>(polygon: &ScalarPolygon) -> bool {

@@ -3,7 +3,7 @@
 
 use polars_arrow::array::{Array, BooleanArray, ListArray, PrimitiveArray, StructArray};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
-use polars_arrow::compute::utils::{combine_validities_and, combine_validities_and3};
+use polars_arrow::compute::utils::combine_validities_and3;
 use polars_arrow::datatypes::ArrowDataType;
 use polars_arrow::offset::OffsetsBuffer;
 use polars_buffer::Buffer;
@@ -50,11 +50,6 @@ pub fn f64_array_masked(
     let measured = succeeded(values.len(), failed);
     let validity = combine_validities_and3(a, b, measured.as_ref());
     PrimitiveArray::from_vec(values).with_validity(validity)
-}
-
-/// `validity` of `len` rows, with the rows in `failed` null too.
-pub fn validity_without(validity: Option<&Bitmap>, len: usize, failed: &[usize]) -> Option<Bitmap> {
-    combine_validities_and(validity, succeeded(len, failed).as_ref())
 }
 
 /// [f64_array], for a `bool` per row.

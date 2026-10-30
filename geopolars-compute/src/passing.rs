@@ -76,7 +76,7 @@ fn lists_passing_sparse(lists: &ValidList, items: &Bitmap) -> Bitmap {
 /// The rows passing every mask in `passing`.
 /// `lists` are the list levels, outermost first.
 /// `passing` holds a mask per list level, in the same order.
-/// Its last mask is for the coordinates.
+/// Its last mask is for the items of the innermost list level (usually the coordinates).
 pub(crate) fn rows_passing(lists: &[&ValidList], passing: Vec<Option<Bitmap>>) -> Option<Bitmap> {
     assert_eq!(passing.len(), lists.len() + 1, "a mask per level");
     let mut levels = passing.into_iter().rev();
@@ -91,13 +91,14 @@ pub(crate) fn rows_passing(lists: &[&ValidList], passing: Vec<Option<Bitmap>>) -
         })
 }
 
-/// The valid rows of `rows` whose coordinates all pass `coords` (see [rows_passing]).
+/// The valid rows of `rows` whose items all pass `items` (see [rows_passing]).
 /// `inner_lists` are the list levels below the rows, outermost first.
+/// The items are those of the innermost list level (usually the coordinates).
 #[cfg(feature = "native")]
 pub(crate) fn valid_rows_passing(
     rows: &List,
     inner_lists: &[&ValidList],
-    coords: Option<Bitmap>,
+    items: Option<Bitmap>,
 ) -> Option<Bitmap> {
     let lists: Vec<&ValidList> = [rows.ignoring_validity()]
         .into_iter()
@@ -106,7 +107,7 @@ pub(crate) fn valid_rows_passing(
     let passing = [rows.validity().cloned()]
         .into_iter()
         .chain(inner_lists.iter().map(|_| None))
-        .chain([coords])
+        .chain([items])
         .collect();
     rows_passing(&lists, passing)
 }

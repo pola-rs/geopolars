@@ -70,6 +70,11 @@ fn unique_axes(coords: &ValidCoords, unique_z: bool, unique_m: bool) -> (bool, b
     (unique_z && dim.has_z(), unique_m && dim.has_m())
 }
 
+// TODO: Not yet a SIMD pass, but is a minor candidate for it.
+// Without a tolerance, coinciding is transitive.
+// A vertex then coincides with the last unset one before it exactly when it coincides with the one right before it.
+// So the mask could be built by `bitmap_from_fn` from `coincide(i - 1, i)`, as `selected_coords` is.
+// Afterwards, only the first vertex of every list needs to be unset.
 fn repeats_in_succession_with<
     const TOLERANCE_COINCIDENCE: bool,
     const UNIQUE_Z: bool,

@@ -100,6 +100,12 @@ fn lines_to_flip(
         .collect()
 }
 
+// TODO: Not yet converted to bitmask pass, but is a good candidate for it.
+// Mark the rings that run the wrong way in a mask, which needs the polygons to tell exteriors from holes.
+// `is_ccw` then folds it with `rows_passing`, and `to_ccw` reverses the marked rings.
+// This also removes the second copy of the exterior and hole rule, in `polygon_is_ccw`.
+// First decide what to do with a ring that encloses nothing.
+// It is not CCW now, yet `to_ccw` does not flip it.
 /// Which rings of `polygons` have to be reversed to [run counter-clockwise](polygon_is_ccw).
 /// Each item of `polygons` is the range of that polygon's rings in `rings`.
 /// Collected, as [ValidCoords::with_ranges_reversed] goes over them once per axis.

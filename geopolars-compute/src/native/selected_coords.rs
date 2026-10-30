@@ -29,19 +29,18 @@
 use std::iter::Peekable;
 use std::ops::Range;
 
-use geopolars_core::output::validity_without;
 use geopolars_core::{
     same_place, Coords, LineStringArray, List, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray, ValidCoords, ValidList, MIN_RING_VERTICES,
 };
 use polars_arrow::bitmap::iterator::TrueIdxIter;
-use polars_arrow::bitmap::Bitmap;
+use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::OffsetsBuffer;
 
 use super::coordinate_selection::{selected_coords, which_are_not_selected, CoordinateSelection};
 use super::rings::offsets_of;
-use super::too_short::{list_holding, without_rows, TooShort};
+use super::too_short::TooShort;
 use crate::passing::valid_rows_passing;
 
 /// See `action` of `NonFinite` and `OutOfBounds` in Python.
@@ -158,19 +157,21 @@ fn is_too_short<const CHECK_CLOSED: bool, const Z: bool>(
 
 /// The offsets of what each of `lists` keeps, and the coordinates it keeps.
 /// A list keeps the vertices that are not `selected`, unless it is then [too short](is_too_short).
-/// Last, the lists that are too short with [TooShort::Null], which keep none.
+/// Last, a mask of the lists that pass:
+/// unset where a list is too short with [TooShort::Null], which keeps none.
+/// `None` when every list passes.
 fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
     lists: &ValidList,
     kind: Lists,
     coords: &ValidCoords,
     selected: &Bitmap,
     too_short: TooShort,
-) -> (OffsetsBuffer<i64>, ValidCoords, Vec<usize>) {
+) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     debug_assert!(
         lists.spans_all_of(coords.len()),
         "the lists have to be trimmed (see the geopolars-core README on trimming)"
     );
-    let (mut runs, mut nulled) = (Vec::new(), Vec::new());
+    let (mut runs, mut passing) = (Vec::new(), None);
     let mut selected = selected.true_idx_iter().peekable();
     let lengths: Vec<usize> = lists
         .ranges()
@@ -189,20 +190,23 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
                 }
                 TooShort::Null => {
                     runs.truncate(first_run);
-                    nulled.push(j);
+                    passing
+                        .get_or_insert_with(|| MutableBitmap::from_len_set(lists.len()))
+                        .set(j, false);
                     0
                 }
             }
         })
         .collect();
+    let passing = passing.map(Bitmap::from);
     // Every list kept every vertex, so the coordinates and offsets are shared rather than copied.
     if lengths.iter().sum::<usize>() == coords.len() {
-        return (lists.offsets().clone(), coords.clone(), nulled);
+        return (lists.offsets().clone(), coords.clone(), passing);
     }
     (
         offsets_of(lengths.into_iter()),
         coords.copy_ranges(merged_where_contiguous(runs.iter().cloned())),
-        nulled,
+        passing,
     )
 }
 
@@ -213,7 +217,7 @@ fn without_selected_in_rings(
     selected: &Bitmap,
     too_short: TooShort,
     check_closed: bool,
-) -> (OffsetsBuffer<i64>, ValidCoords, Vec<usize>) {
+) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     let kind = Lists::Rings;
     // `Z` only matters for the closure check, so it is not dispatched on without it.
     if check_closed {
@@ -231,14 +235,14 @@ pub(super) fn line_strings_without_selected(
     selected: &Bitmap,
     too_short: TooShort,
 ) -> LineStringArray {
-    let (offsets, coords, nulled) = without_selected::<false, false>(
+    let (offsets, coords, passing) = without_selected::<false, false>(
         array.rows.ignoring_validity(),
         Lists::Lines,
         &array.coords,
         selected,
         too_short,
     );
-    let validity = validity_without(array.rows.validity(), array.rows.len(), &nulled);
+    let validity = combine_validities_and(array.rows.validity(), passing.as_ref());
     LineStringArray::from_parts(List::from_offsets(offsets, validity), coords)
 }
 
@@ -266,19 +270,15 @@ pub(super) fn polygons_without_selected(
     too_short: TooShort,
     check_closed: bool,
 ) -> PolygonArray {
-    let (rings, coords, nulled) = without_selected_in_rings(
+    let (rings, coords, passing) = without_selected_in_rings(
         &array.rings,
         &array.coords,
         selected,
         too_short,
         check_closed,
     );
-    let failed: Vec<usize> = nulled
-        .into_iter()
-        .filter_map(|ring| list_holding(array.rows.ignoring_validity(), ring))
-        .collect();
     PolygonArray::from_parts(
-        without_rows(&array.rows, &failed),
+        rows_nulled_unless_passing(&array.rows, &[], passing),
         ValidList::from_offsets(rings),
         coords,
     )
@@ -289,19 +289,15 @@ pub(super) fn multi_line_strings_without_selected(
     selected: &Bitmap,
     too_short: TooShort,
 ) -> MultiLineStringArray {
-    let (lines, coords, nulled) = without_selected::<false, false>(
+    let (lines, coords, passing) = without_selected::<false, false>(
         &array.lines,
         Lists::Lines,
         &array.coords,
         selected,
         too_short,
     );
-    let failed: Vec<usize> = nulled
-        .into_iter()
-        .filter_map(|line| list_holding(array.rows.ignoring_validity(), line))
-        .collect();
     MultiLineStringArray::from_parts(
-        without_rows(&array.rows, &failed),
+        rows_nulled_unless_passing(&array.rows, &[], passing),
         ValidList::from_offsets(lines),
         coords,
     )
@@ -313,24 +309,30 @@ pub(super) fn multi_polygons_without_selected(
     too_short: TooShort,
     check_closed: bool,
 ) -> MultiPolygonArray {
-    let (rings, coords, nulled) = without_selected_in_rings(
+    let (rings, coords, passing) = without_selected_in_rings(
         &array.rings,
         &array.coords,
         selected,
         too_short,
         check_closed,
     );
-    let failed: Vec<usize> = nulled
-        .into_iter()
-        .filter_map(|ring| list_holding(&array.polygons, ring))
-        .filter_map(|polygon| list_holding(array.rows.ignoring_validity(), polygon))
-        .collect();
     MultiPolygonArray::from_parts(
-        without_rows(&array.rows, &failed),
+        rows_nulled_unless_passing(&array.rows, &[&array.polygons], passing),
         array.polygons.clone(),
         ValidList::from_offsets(rings),
         coords,
     )
+}
+
+/// `rows`, null too where a row holds an item that fails `passing` (see [valid_rows_passing]).
+/// `inner_lists` are the list levels below the rows, outermost first.
+fn rows_nulled_unless_passing(
+    rows: &List,
+    inner_lists: &[&ValidList],
+    passing: Option<Bitmap>,
+) -> List {
+    rows.clone()
+        .with_validity(valid_rows_passing(rows, inner_lists, passing))
 }
 
 /// `rows`, null too where a row holds a coordinate `selection` selects.
@@ -342,8 +344,7 @@ fn rows_nulled_where_selected(
     selection: &CoordinateSelection,
 ) -> List {
     let not_selected = which_are_not_selected(coords, selection);
-    rows.clone()
-        .with_validity(valid_rows_passing(rows, inner_lists, not_selected))
+    rows_nulled_unless_passing(rows, inner_lists, not_selected)
 }
 
 /// [SelectedAction::Drop] leaves the empty point, as a point cannot lose its coordinate.

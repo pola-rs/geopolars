@@ -58,6 +58,10 @@ pub(crate) fn line_shapes_are_valid(lines: &ValidList, coords: &ValidCoords) -> 
     )
 }
 
+// TODO: Not yet converted to bitmask pass, but is a good candidate for it.
+// Mark the rings that are empty or have at least 4 distinct vertices in a mask,
+// and fold it with `rows_passing`.
+// The polygons then only need a mask from the offsets: either every ring is empty, or none is.
 /// Whether `polygon` has a shape OGC accepts:
 /// every ring empty, or every ring with at least 4 distinct vertices.
 #[cfg(feature = "geos")]

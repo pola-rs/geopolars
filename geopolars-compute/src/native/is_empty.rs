@@ -30,6 +30,10 @@ fn only_empty_points(coords: &ValidCoords, mut vertices: Range<usize>) -> bool {
     vertices.all(|i| is_empty_point(coords, i))
 }
 
+// TODO: Not yet converted to bitmask pass, but is a good candidate for it.
+// With `CHECK_NESTED=true`, mark the empty points in a mask,
+// and fold it with `rows_passing` (as `has_repeats_in_succession` does).
+// `rows_passing` needs trimmed lists, so the kernels would trim their `Untrimmed` views first.
 #[inline(always)]
 fn has_no_points<const CHECK_NESTED: bool>(coords: &ValidCoords, vertices: Range<usize>) -> bool {
     if CHECK_NESTED {

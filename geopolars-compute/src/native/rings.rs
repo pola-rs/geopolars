@@ -167,6 +167,10 @@ pub fn multi_polygon_interiors(array: &Untrimmed<MultiPolygonArray>) -> ListArra
     per_multi_polygon(array.rows(), parts.into_list_array())
 }
 
+// TODO: Not yet converted to bitmask pass, but is a minor candidate for it.
+// Mark the rings that get their first vertex appended in one mask, and the rings that snap in another.
+// `close_open_rings` then reads the masks, rather than calling `closing_of` again in every pass.
+// With `snap_z=false` and `snap_m=false`, the first mask is the inverse of `rings_are_closed`.
 /// What [close_open_rings] does with one ring.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Closing {
