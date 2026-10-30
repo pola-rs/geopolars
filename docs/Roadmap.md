@@ -58,7 +58,7 @@ geometry editing
 - [x] reverse lines
 - [x] make lines cw/ccw: `to_cw`, `to_ccw`
 - [ ] drop_dims(z: bool, m: bool)
-- [ ] to_linestring() takes list of points, multipoint, linestring
+- [x] to_linestring() takes list of points, multipoint, linestring: `line_string_from_vertices`
 - [ ] is_continuous (for multilinestring)
 
 repair:

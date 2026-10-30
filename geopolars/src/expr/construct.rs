@@ -116,11 +116,24 @@ fn kernel_output_type_wrapper_gathered(
     Ok(Field::new(field.name().clone(), geo.dtype()))
 }
 
+fn line_string_of(dtype: &DataType, kwargs: &MetadataKwargs) -> PolarsResult<Geo> {
+    match describe(dtype) {
+        Ok(geo) if geo.kind == Kind::MultiPoint => Ok(Geo::new(
+            Kind::LineString,
+            geo.dim,
+            kwargs.apply(geo.metadata.clone())?,
+        )),
+        _ => gathered(dtype, kwargs, Kind::LineString, Kind::Point),
+    }
+}
+
 fn kernel_output_type_linestring(
     input_fields: &[Field],
     kwargs: MetadataKwargs,
 ) -> PolarsResult<Field> {
-    kernel_output_type_wrapper_gathered(input_fields, &kwargs, Kind::LineString, Kind::Point)
+    let field = &input_fields[0];
+    let geo = line_string_of(field.dtype(), &kwargs)?;
+    Ok(Field::new(field.name().clone(), geo.dtype()))
 }
 
 fn kernel_output_type_polygon(
@@ -283,7 +296,17 @@ fn gather(
 /// See `linestring_from_vertices`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_linestring)]
 fn linestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
-    gather(&inputs[0], &kwargs, None, Kind::LineString, Kind::Point)
+    let vertices = &inputs[0];
+    let geo = line_string_of(vertices.dtype(), &kwargs)?;
+    match vertices.dtype() {
+        // Only a multipoint gets past `line_string_of`, and its storage needs no change.
+        DataType::Extension(..) => Ok(vertices
+            .ext()?
+            .storage()
+            .clone()
+            .into_extension(geo.instance())),
+        _ => gather(vertices, &kwargs, None, Kind::LineString, Kind::Point),
+    }
 }
 
 /// See `polygons_from_rings_in_single_column`.

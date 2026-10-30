@@ -21,6 +21,7 @@ def line_string_from_vertices(
 
     `vertices` is a list column holding one list per linestring,
     of either `geoarrow.point`s or the bare coordinate structs a point wraps.
+    A `geoarrow.multipoint` column works too: its points become the vertices, in order.
 
     Vertices normally arrive grouped:
 

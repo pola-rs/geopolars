@@ -135,6 +135,23 @@ def test_rejects_a_linestring_column() -> None:
         df.select(geo.line_string("line"))
 
 
+def test_a_multipoint_becomes_a_linestring_of_its_points() -> None:
+    """A multipoint stores its points the way a linestring stores its vertices,
+    so its points are used as they are, and its CRS is kept."""
+    multipoint = (
+        pl.DataFrame({"x": [1.0, 3.0], "y": [2.0, 4.0]})
+        .select(point=geo.point("x", "y", crs="EPSG:4326").implode())
+        .select(geo.multi_point_from_points("point").alias("multipoint"))
+    )
+
+    df = multipoint.select(geo.line_string("multipoint").alias("line"))
+
+    assert df.schema["line"] == LineStringXY(crs="EPSG:4326")
+    assert_frame_equal(
+        line_coordinates(df), pl.DataFrame({"x": [1.0, 3.0], "y": [2.0, 4.0]})
+    )
+
+
 def test_rejects_bad_vertices_while_resolving_the_schema() -> None:
     """The dimension is read off the input's dtype,
     so vertices that are not coordinates are a schema error."""
