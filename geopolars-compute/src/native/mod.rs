@@ -21,6 +21,7 @@ mod remove_repeats_in_succession;
 mod reverse;
 mod rings;
 mod selected_coords;
+mod snap_to_grid;
 mod too_short;
 
 pub use affine::{
@@ -95,5 +96,10 @@ pub use rings::{
 pub use selected_coords::{
     line_strings_with_selected, multi_line_strings_with_selected, multi_points_with_selected,
     multi_polygons_with_selected, points_with_selected, polygons_with_selected, SelectedAction,
+};
+pub use snap_to_grid::{
+    line_strings_snapped_to_grid, multi_line_strings_snapped_to_grid, multi_points_snapped_to_grid,
+    multi_polygons_snapped_to_grid, points_snapped_to_grid, polygons_snapped_to_grid, Grid,
+    RoundMode,
 };
 pub use too_short::TooShort;

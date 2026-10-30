@@ -40,6 +40,7 @@ KEEPS_METADATA: dict[str, Callable[[str], pl.Expr]] = {
     "affine_transform about a column": lambda name: geo.affine_transform(
         name, [1, 2, 3, 4, 5, 6], geo.mean_coordinate(name)
     ),
+    "snap_to_grid": lambda name: geo.snap_to_grid(name, (0.5, 2.0), (0.1, 0.2)),
 }
 
 

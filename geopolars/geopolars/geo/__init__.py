@@ -71,6 +71,7 @@ from geopolars.geo.remove_repeats_in_succession import remove_repeats_in_success
 from geopolars.geo.reverse import reverse
 from geopolars.geo.rings_overlap import rings_overlap
 from geopolars.geo.simplify import simplify
+from geopolars.geo.snap_to_grid import snap_to_grid
 from geopolars.geo.to_ccw import to_ccw, to_cw
 from geopolars.geo.to_polygon import to_polygon
 from geopolars.geo.wkb import from_wkb, to_wkb
@@ -146,6 +147,7 @@ __all__ = [
     "simplify",
     "skew",
     "skew_about_centroid",
+    "snap_to_grid",
     "to_ccw",
     "to_crs",
     "to_cw",

@@ -35,7 +35,9 @@ def _ring(dx: float, *, with_nan: bool = False) -> list[dict[str, float]]:
     return ring
 
 
-def _geometry(dtype: type[GeoArrowType], dx: float, *, with_nan: bool = False) -> object:
+def _geometry(
+    dtype: type[GeoArrowType], dx: float, *, with_nan: bool = False
+) -> object:
     ring = _ring(dx, with_nan=with_nan)
     return {
         LineStringXY: ring,
@@ -66,6 +68,7 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         set(),
     ),
     "fix_out_of_bounds": (lambda g: geo.fix_out_of_bounds(g), set()),
+    "snap_to_grid": (lambda g: geo.snap_to_grid(g, (0.5, 0.5)), set()),
     "has_repeats_in_succession": (lambda g: geo.has_repeats_in_succession(g), set()),
     "remove_repeats_in_succession": (
         lambda g: geo.remove_repeats_in_succession(g),

@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         OutOfBounds,
         OutOfBoundsAction,
     )
+    from geopolars.geo.snap_to_grid import RoundMode
 
 
 @pl.api.register_expr_namespace("geo")
@@ -192,6 +193,17 @@ class ExprGeoNameSpace:
         return affine.scale_about_centroid(
             self._expr, xfact=xfact, yfact=yfact, zfact=zfact
         )
+
+    def snap_to_grid(
+        self,
+        spacing: tuple[float, float] | tuple[float, float, float],
+        origin: tuple[float, float] | tuple[float, float, float] = (0.0, 0.0, 0.0),
+        *,
+        mode: RoundMode = "half_to_even",
+    ) -> pl.Expr:
+        from geopolars.geo.snap_to_grid import snap_to_grid
+
+        return snap_to_grid(self._expr, spacing, origin=origin, mode=mode)
 
     def set_crs(self, crs: str, *, force: bool = False) -> pl.Expr:
         from geopolars.geo.crs import set_crs
