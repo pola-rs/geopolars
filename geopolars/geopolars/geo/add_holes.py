@@ -66,6 +66,13 @@ def add_holes(
     | `PolygonXY[ZM]` | `MultiLineStringXY[ZM]` | `PolygonXY[ZM]` |
     | anything else | | refused |
 
+
+    `polygon` and `holes` have the same number of rows,
+    or one of them has a single row, which then goes with every row of the other.
+    With a single linestring as `holes`, every polygon gets that same hole.
+    With a single polygon, the result has one copy of it per row of `holes`,
+    each with the holes of that row.
+
     The result keeps the polygon's dimension and CRS.
     Holes of another dimension, or holes that declare another CRS, are refused.
 

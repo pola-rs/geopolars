@@ -60,6 +60,25 @@ def test_a_single_linestring_is_added_as_a_hole() -> None:
     assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
 
 
+def test_a_single_ring_is_added_to_every_polygon() -> None:
+    df = pl.DataFrame([_polygons([_EXTERIOR], [_EXTERIOR])])
+
+    out = df.select(geo.add_holes("polygon", _lines(_HOLE))).to_series()
+
+    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE], [_EXTERIOR, _HOLE]]
+
+
+def test_a_single_polygon_gets_every_row_of_holes() -> None:
+    df = pl.DataFrame([_lines(_HOLE, _OTHER_HOLE)])
+
+    out = df.select(geo.add_holes(_polygons([_EXTERIOR]), "holes")).to_series()
+
+    assert out.ext.storage().to_list() == [
+        [_EXTERIOR, _HOLE],
+        [_EXTERIOR, _OTHER_HOLE],
+    ]
+
+
 def test_a_list_is_added_after_the_existing_holes() -> None:
     out = _added(
         _polygons([_EXTERIOR, _HOLE], [_EXTERIOR]),

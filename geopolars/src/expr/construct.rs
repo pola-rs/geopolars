@@ -876,13 +876,14 @@ fn chunk_with_added_holes(
 #[polars_expr(output_type_func=kernel_output_type_add_holes)]
 fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> {
     let (geo, listed) = holes_added(&fields_of(inputs))?;
-    let polygons = inputs[0].ext()?.storage().rechunk();
-    let holes = storage_of(&inputs[1])?.rechunk();
-    polars_ensure!(
-        holes.len() == polygons.len(),
-        ShapeMismatch: "the polygons have {} rows but the holes have {}",
-        polygons.len(), holes.len()
-    );
+    let polygons = inputs[0].ext()?.storage();
+    let holes = storage_of(&inputs[1])?;
+    let (polygons, holes) = match (polygons.len(), holes.len()) {
+        (n, m) if n == m => (polygons.rechunk(), holes.rechunk()),
+        (n, 1) => (polygons.rechunk(), holes.new_from_index(0, n).rechunk()),
+        (1, m) => (polygons.new_from_index(0, m).rechunk(), holes.rechunk()),
+        (n, m) => polars_bail!(ShapeMismatch: "the polygons have {n} rows but the holes have {m}"),
+    };
 
     let rows = polygons.list()?.downcast_as_array();
     let chunk = chunk_with_added_holes(rows, holes.chunks()[0].as_ref(), listed, kwargs.close)?;
