@@ -70,13 +70,16 @@ def add_holes(
     Holes of another dimension, or holes that declare another CRS, are refused.
 
     A null polygon gives a null polygon.
-    A null `holes` value, or an empty list, leaves the polygon as it is.
-    A null ring among the holes makes the polygon null.
-    An empty polygon (one without rings) that gets holes is null,
+    A null `holes` value, or an empty list adds no holes.
+    The polygon's own rings are still checked, as described below.
+    A null ring or a null vertex among the holes makes the polygon null.
+    An empty polygon that gets holes is null,
     as it has no exterior to put them in.
 
-    Every ring has to be a ring (see [`is_ring`][geopolars.geo.is_ring]),
+    Every ring of the result has to be a ring (see [`is_ring`][geopolars.geo.is_ring]),
+    the polygon's own existing rings included,
     or the polygon is null.
+    A polygon whose rings are all empty is the exception, and stays as it is.
     With `close=CloseRings(...)`, an open ring is first closed as `close_rings` does.
 
     {closing_rings}

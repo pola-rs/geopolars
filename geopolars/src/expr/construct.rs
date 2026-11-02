@@ -843,6 +843,7 @@ fn kernel_output_type_add_holes(input_fields: &[Field]) -> PolarsResult<Field> {
 
 /// Where a polygon has room for its holes:
 /// everywhere but a polygon without rings that gets some.
+/// Without this, its first hole would become its exterior, and pass validation.
 fn has_room_for_holes(polygons: &PolygonArray, holes: &MultiLineStringArray) -> Bitmap {
     (0..polygons.rows.len())
         .map(|i| {

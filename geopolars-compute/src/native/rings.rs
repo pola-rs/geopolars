@@ -313,8 +313,8 @@ pub fn polygons_with_added_holes(
     let is_valid = |i: usize| validity.as_ref().is_none_or(|validity| validity.get_bit(i));
     const NO_OVERFLOW: &str = "no more items than the input";
 
-    // One pass for everything but the coordinates,
-    // so that no per-row record has to be read back by later passes.
+    // One pass builds the row and ring offsets, and the vertex ranges of each row
+    // The coordinates are copied per axis afterwards from those ranges
     let hole_lines = holes.map_or(0, |holes| holes.lines.len());
     let mut row_offsets = Offsets::<i64>::with_capacity(len);
     let mut ring_offsets = Offsets::<i64>::with_capacity(polygons.rings.len() + hole_lines);
@@ -329,10 +329,11 @@ pub fn polygons_with_added_holes(
         let rings = polygons.rows.range(i);
         let mut ring_count = rings.len();
         // TODO: `try_extend_from_slice` (here and for the holes) is not inlined.
-        // With only a few rings per call, the call overhead dominates.
+        // With only a few rings per call, the call overhead is a large part of its cost.
         // It took ~5.5 ns/row of ~52 in a release profile
         // (1M polygons with 1 exterior + 2-3 holes of 5 vertices).
-        // An inlined loop of our own could win most of that back.
+        // An inlined loop of our own could win most of that back,
+        // or we can contribute upstream?
         ring_offsets
             .try_extend_from_slice(polygons.rings.offsets(), rings.start, rings.len())
             .expect(NO_OVERFLOW);
