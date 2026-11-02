@@ -73,13 +73,13 @@ other
       otherwise linestring).
       Bool flag on deleting repeated overlapping point
 
-## Binary predicates
+## Two-column operations
 
 - [x] Adding additional holes to polygons from linestrings: `add_holes`
 - [ ] equality: (are two shapes the same?)
 - [ ] Adding list[linestring] to multilinestring/list[polygon] to multipolygon etc.
 
-Your classics
+Classic binary predicates:
 
 - [ ] intersect
 - [ ] contains
