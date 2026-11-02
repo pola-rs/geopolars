@@ -10,53 +10,97 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+import pytest
 from polars.testing import assert_frame_equal
 
 from geopolars import geo
 from geopolars.datatypes import BoxXY, PointType, PointXY
 from tests.unit.conftest import Dimension
+from tests.unit.io.conftest import (
+    BOX_BLOCKS_THE_WRITE,
+    STRING_CRS_IS_REFUSED,
+    Parquet,
+    use_backend,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_point_survives_a_parquet_round_trip(
-    coords: pl.DataFrame, dimension: Dimension, tmp_path: Path
+@pytest.fixture(params=["plain", "wrapper", "polars"])
+def parquet(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Parquet:
+    """Also Polars without GeoParquet, which keeps any extension type."""
+    return use_backend(request, monkeypatch)
+
+
+def _m_is_refused(
+    request: pytest.FixtureRequest, parquet: Parquet, dimension: Dimension
 ) -> None:
+    """GeoParquet 1.1 has no M values, so only a plain file can hold them."""
+    if dimension.has_m and parquet.name != "plain":
+        request.applymarker(
+            pytest.mark.xfail(reason="GeoParquet 1.1 cannot store M values")
+        )
+
+
+def test_point_survives_a_parquet_round_trip(
+    request: pytest.FixtureRequest,
+    parquet: Parquet,
+    coords: pl.DataFrame,
+    dimension: Dimension,
+    tmp_path: Path,
+) -> None:
+    _m_is_refused(request, parquet, dimension)
     df = coords.select(dimension.point())
     path = tmp_path / "points.parquet"
-    df.write_parquet(path)
-    back = pl.read_parquet(path)
+    parquet.write(df, path)
+    back = parquet.read(path)
 
     assert back.schema["point"] == dimension.point_dtype()
     assert_frame_equal(back, df)
 
 
 def test_linestring_survives_a_parquet_round_trip(
-    line_coords: pl.DataFrame, dimension: Dimension, tmp_path: Path
+    request: pytest.FixtureRequest,
+    parquet: Parquet,
+    line_coords: pl.DataFrame,
+    dimension: Dimension,
+    tmp_path: Path,
 ) -> None:
+    _m_is_refused(request, parquet, dimension)
     df = dimension.lines(line_coords)
     path = tmp_path / "lines.parquet"
-    df.write_parquet(path)
-    back = pl.read_parquet(path)
+    parquet.write(df, path)
+    back = parquet.read(path)
 
     assert back.schema["line"] == dimension.linestring_dtype()
     assert_frame_equal(back, df)
 
 
 def test_polygon_survives_a_parquet_round_trip(
-    ring_coords: pl.DataFrame, dimension: Dimension, tmp_path: Path
+    request: pytest.FixtureRequest,
+    parquet: Parquet,
+    ring_coords: pl.DataFrame,
+    dimension: Dimension,
+    tmp_path: Path,
 ) -> None:
+    _m_is_refused(request, parquet, dimension)
     df = dimension.polygons(ring_coords)
     path = tmp_path / "polygons.parquet"
-    df.write_parquet(path)
-    back = pl.read_parquet(path)
+    parquet.write(df, path)
+    back = parquet.read(path)
 
     assert back.schema["polygon"] == dimension.polygon_dtype()
     assert_frame_equal(back, df)
 
 
-def test_metadata_survives_a_parquet_round_trip(tmp_path: Path) -> None:
+@STRING_CRS_IS_REFUSED
+@pytest.mark.parquet_xfail(
+    "wrapper", reason="GeoParquet only holds PROJJSON, so the CRS comes back as that"
+)
+def test_metadata_survives_a_parquet_round_trip(
+    parquet: Parquet, tmp_path: Path
+) -> None:
     """The metadata string is the slot `crs` lives in, so losing it on a write
     would silently drop a file's coordinate reference system."""
     metadata = '{"crs":"EPSG:4326"}'
@@ -67,18 +111,22 @@ def test_metadata_survives_a_parquet_round_trip(tmp_path: Path) -> None:
         point=pl.struct("x", "y").ext.to(dtype)
     )
     path = tmp_path / "crs.parquet"
-    df.write_parquet(path)
-    back = pl.read_parquet(path)
+    parquet.write(df, path)
+    back = parquet.read(path)
 
     assert back.schema["point"].ext_metadata() == metadata
     assert back.schema["point"] == dtype
 
 
 def test_a_null_geometry_survives_a_parquet_round_trip(
-    dimension: Dimension, tmp_path: Path
+    request: pytest.FixtureRequest,
+    parquet: Parquet,
+    dimension: Dimension,
+    tmp_path: Path,
 ) -> None:
     """Nulls live at the outermost level only, and that is where a file has to
     put them back: an empty line is not a null one."""
+    _m_is_refused(request, parquet, dimension)
     df = pl.DataFrame(
         {"vertices": [[{name: 1.0 for name in dimension.coords}], [], None]},
         schema={
@@ -86,20 +134,21 @@ def test_a_null_geometry_survives_a_parquet_round_trip(
         },
     ).select(geo.line_string("vertices").alias("line"))
     path = tmp_path / "nulls.parquet"
-    df.write_parquet(path)
-    back = pl.read_parquet(path)
+    parquet.write(df, path)
+    back = parquet.read(path)
 
     assert back["line"].is_null().to_list() == [False, False, True]
     assert_frame_equal(back, df)
 
 
-def test_box_survives_a_parquet_round_trip(tmp_path: Path) -> None:
+@BOX_BLOCKS_THE_WRITE
+def test_box_survives_a_parquet_round_trip(parquet: Parquet, tmp_path: Path) -> None:
     df = pl.DataFrame({"a": [0.0], "b": [1.0], "c": [2.0], "d": [3.0]}).select(
         geo.box("a", "b", "c", "d", crs="EPSG:4326").alias("box")
     )
     path = tmp_path / "boxes.parquet"
-    df.write_parquet(path)
-    back = pl.read_parquet(path)
+    parquet.write(df, path)
+    back = parquet.read(path)
 
     assert back.schema["box"] == BoxXY(crs="EPSG:4326")
     assert_frame_equal(back, df)
