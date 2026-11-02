@@ -9,6 +9,7 @@ from polars.testing import assert_frame_equal
 
 from geopolars import geo
 from geopolars.datatypes import (
+    MultiLineStringXY,
     PolygonXY,
 )
 from tests.unit.conftest import COORDS, Dimension, ring_coordinates
@@ -475,6 +476,21 @@ def test_separate_columns_take_a_list_of_holes() -> None:
     out = _from_separate_rings([_EXTERIOR, _EXTERIOR], [[_HOLE, _HOLE], []])
 
     assert out.dtype == PolygonXY()
+    assert out.ext.storage().to_list() == [
+        [_EXTERIOR, _HOLE, _HOLE],
+        [_EXTERIOR],
+    ]
+
+
+def test_separate_columns_take_a_multilinestring_of_holes() -> None:
+    exteriors = pl.Series("exterior", [_EXTERIOR, _EXTERIOR], dtype=_XY_VERTICES)
+    holes = pl.Series("holes", [[_HOLE, _HOLE], []], dtype=_XY_RINGS)
+    df = pl.DataFrame([exteriors, holes.ext.to(MultiLineStringXY())])
+
+    out = df.select(
+        geo.polygons_from_rings_in_separate_columns("exterior", "holes")
+    ).to_series()
+
     assert out.ext.storage().to_list() == [
         [_EXTERIOR, _HOLE, _HOLE],
         [_EXTERIOR],

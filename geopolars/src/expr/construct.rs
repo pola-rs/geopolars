@@ -643,7 +643,8 @@ fn is_list_of_rings(dtype: &DataType) -> bool {
     }
 }
 
-/// Whether `holes` holds a list of rings per row, rather than one ring.
+/// Whether `holes` holds a list of rings per row (a list or a multilinestring),
+/// rather than one ring.
 /// They have to have the dimension of the `subject` they go into,
 /// and not declare another CRS than its `metadata` does.
 pub(super) fn listed_holes(
@@ -652,10 +653,21 @@ pub(super) fn listed_holes(
     dim: GeoDimension,
     metadata: &ExtensionMetadata,
 ) -> PolarsResult<bool> {
-    let listed = is_list_of_rings(holes.dtype());
-    let (hole_dim, hole_metadata) = match holes.dtype() {
-        DataType::List(inner) if listed => ring_of(inner)?,
-        dtype => ring_of(dtype)?,
+    let refused = |_| {
+        polars_err!(
+            SchemaMismatch: "expected the holes as one ring per row \
+            (a `linestring` or a list of vertices), a list of them, or a `multilinestring`, got: {}",
+            holes.dtype()
+        )
+    };
+    let (listed, (hole_dim, hole_metadata)) = match holes.dtype() {
+        DataType::List(inner) if is_list_of_rings(holes.dtype()) => {
+            (true, ring_of(inner).map_err(refused)?)
+        }
+        dtype => match describe(dtype) {
+            Ok(geo) if geo.kind == Kind::MultiLineString => (true, (geo.dim, geo.metadata.clone())),
+            _ => (false, ring_of(dtype).map_err(refused)?),
+        },
     };
     polars_ensure!(
         hole_dim == dim,

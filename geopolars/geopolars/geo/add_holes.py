@@ -12,9 +12,8 @@ from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
 from geopolars._utils import LIB
-from geopolars.datatypes import MultiLineStringType, PolygonType
+from geopolars.datatypes import PolygonType
 from geopolars.geo._dispatch import _to_expr, on_geometry
-from geopolars.geo.parts import _parts
 
 if TYPE_CHECKING:
     import polars as pl
@@ -22,12 +21,6 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
     from geopolars.geo.close_rings import CloseRings
-
-
-def _as_list_of_rings(holes: pl.Expr, dtype: pl.DataType) -> pl.Expr:
-    if isinstance(dtype, MultiLineStringType):
-        return _parts(holes, dtype)
-    return holes
 
 
 def _add_holes(
@@ -41,7 +34,7 @@ def _add_holes(
         raise TypeError(msg)
     return register_plugin_function(
         plugin_path=LIB,
-        args=[column, _to_expr(holes).pipe_with_dtype(_as_list_of_rings)],
+        args=[column, _to_expr(holes)],
         function_name="add_holes",
         is_elementwise=True,
         kwargs={"close": None if close is None else asdict(close)},

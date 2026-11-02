@@ -207,6 +207,15 @@ def test_holes_in_another_crs_are_refused() -> None:
         lf.collect_schema()
 
 
+def test_holes_of_another_kind_are_refused() -> None:
+    lf = pl.LazyFrame(
+        [_polygons([_EXTERIOR]), _polygons([_HOLE]).alias("holes")]
+    ).select(geo.add_holes("polygon", "holes"))
+
+    with pytest.raises(ComputeError, match="expected the holes as one ring per row"):
+        lf.collect_schema()
+
+
 def test_a_non_polygon_is_refused() -> None:
     df = pl.DataFrame([_lines(_EXTERIOR).alias("polygon"), _lines(_HOLE)])
 
