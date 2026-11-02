@@ -152,6 +152,19 @@ impl ExtensionMetadata {
         }
     }
 
+    pub fn with_projjson_crs(self) -> PolarsResult<Self> {
+        if matches!(
+            self.map.get("crs"),
+            None | Some(Value::Null | Value::Object(_))
+        ) {
+            return Ok(self);
+        }
+        let Some(projjson) = self.projjson()? else {
+            return Ok(self);
+        };
+        Ok(self.with_crs(&Value::Object(projjson).to_string()))
+    }
+
     /// How the edges between coordinates run. `None` means planar.
     pub fn edges(&self) -> PolarsResult<Option<Edges>> {
         self.edges

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from geopolars.datatypes import GEOMETRY_DTYPES, BoxType, GeoArrowType
+from geopolars.datatypes.encoded import EncodedGeometry
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
@@ -122,5 +123,19 @@ def on_box(
 
     def resolved(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
         return _named_after(build(expr, _box_of(dtype)), expr)
+
+    return expr.pipe_with_dtype(resolved)
+
+
+def on_geometry_or_encoded(
+    value: IntoExprColumn,
+    build: Callable[[pl.Expr, GeoArrowType | EncodedGeometry], pl.Expr],
+) -> pl.Expr:
+    """`on_geometry` that also accepts an encoded geometry, such as `Wkb`."""
+    expr = _to_expr(value)
+
+    def resolved(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
+        geometry = dtype if isinstance(dtype, EncodedGeometry) else _geometry_of(dtype)
+        return _named_after(build(expr, geometry), expr)
 
     return expr.pipe_with_dtype(resolved)

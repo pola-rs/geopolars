@@ -210,6 +210,11 @@ class ExprGeoNameSpace:
 
         return set_crs(self._expr, crs, force=force)
 
+    def crs_to_projjson(self) -> pl.Expr:
+        from geopolars.geo.crs import crs_to_projjson
+
+        return crs_to_projjson(self._expr)
+
     def to_crs(
         self,
         crs: str,

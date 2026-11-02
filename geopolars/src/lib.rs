@@ -69,6 +69,17 @@ fn with_crs(metadata: Option<&str>, crs: &str) -> PyResult<Option<String>> {
         .map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
+/// See `GeoArrowType._with_projjson_crs`.
+#[pyfunction]
+#[pyo3(signature = (metadata))]
+fn with_projjson_crs(py: Python<'_>, metadata: Option<&str>) -> PyResult<Option<String>> {
+    geoarrow::crs::ExtensionMetadata::parse(metadata)
+        .map_err(|e| PyValueError::new_err(e.to_string()))?
+        .with_projjson_crs()
+        .map(|metadata| metadata.serialize())
+        .map_err(|e| polars_exception(py, e))
+}
+
 /// See `BoxType._longitude_turn`.
 #[pyfunction]
 #[pyo3(signature = (metadata))]
@@ -179,6 +190,7 @@ fn geopolars(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(crs_label, m)?)?;
     m.add_function(wrap_pyfunction!(crs, m)?)?;
     m.add_function(wrap_pyfunction!(with_crs, m)?)?;
+    m.add_function(wrap_pyfunction!(with_projjson_crs, m)?)?;
     m.add_function(wrap_pyfunction!(longitude_turn, m)?)?;
     m.add_function(wrap_pyfunction!(is_equal_area, m)?)?;
     m.add_function(wrap_pyfunction!(crs_bounds, m)?)?;
