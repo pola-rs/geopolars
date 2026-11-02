@@ -26,9 +26,9 @@ polars-core = { workspace = true, features = ["dtype-extension", "dtype-struct"]
 polars-arrow = { workspace = true }
 
 pyo3-polars = { workspace = true, features = ["derive"] }
-# abi3-py310: one wheel for 3.10+, matching polars' own requires-python.
+# abi3-py311: one wheel for 3.11+, matching polars' own requires-python.
 # extension-module is behind the default feature below, not set here.
-pyo3 = { workspace = true, features = ["abi3-py310"] }
+pyo3 = { workspace = true, features = ["abi3-py311"] }
 
 serde = { workspace = true, features = ["derive"] }
 geo-traits = "0.3.0"

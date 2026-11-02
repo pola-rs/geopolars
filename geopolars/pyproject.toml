@@ -6,7 +6,7 @@ build-backend = "maturin"
 [project]
 name = "geopolars"
 version = "0.0.1"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
   "Programming Language :: Rust",
   "Programming Language :: Python :: Implementation :: CPython",
@@ -20,7 +20,7 @@ dependencies = ["polars>=1.44"]
 python-source = "."
 module-name = "geopolars.geopolars"
 # Local bytecode otherwise might get swept into the wheel
-# interpreter-specific .pyc files in a wheel tagged abi3 for 3.10+.
+# interpreter-specific .pyc files in a wheel tagged abi3 for 3.11+.
 exclude = ["**/__pycache__/**", "tests/**"]
 
 [tool.pytest.ini_options]

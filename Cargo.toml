@@ -43,13 +43,13 @@ codegen-units = 1
 # because cargo only hides # warnings from dependencies that are not path dependencies.
 # Be sure to keep them all the same!
 [patch.crates-io]
-polars = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-polars-arrow = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-polars-buffer = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-polars-core = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-polars-ffi = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-polars-lazy = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-polars-plan = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-polars-utils = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-pyo3-polars = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
-pyo3-polars-derive = { git = "https://github.com/pola-rs/polars", rev = "8a87616112e5c5ee8b862c675bed3cbaa1e202db" }
+polars = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+polars-arrow = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+polars-buffer = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+polars-core = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+polars-ffi = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+polars-lazy = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+polars-plan = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+polars-utils = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+pyo3-polars = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
+pyo3-polars-derive = { git = "https://github.com/pola-rs/polars", rev = "0b47007ab65f0efd39ddc4d5abd5b2e44097a009" }
