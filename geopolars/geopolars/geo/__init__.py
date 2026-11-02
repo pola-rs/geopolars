@@ -47,7 +47,7 @@ from geopolars.geo.construct.polygon import (
 from geopolars.geo.convex_hull import convex_hull
 from geopolars.geo.coordinates import m, x, y, z
 from geopolars.geo.count_coordinates import count_coordinates
-from geopolars.geo.crs import is_geographic, set_crs, to_crs
+from geopolars.geo.crs import crs_to_projjson, is_geographic, set_crs, to_crs
 from geopolars.geo.difference import difference
 from geopolars.geo.distance import distance
 from geopolars.geo.exterior import exterior
@@ -108,6 +108,7 @@ __all__ = [
     "close_rings",
     "convex_hull",
     "count_coordinates",
+    "crs_to_projjson",
     "difference",
     "distance",
     "exterior",

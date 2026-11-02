@@ -555,6 +555,17 @@ def test_set_crs_namespace_matches_the_functional_api() -> None:
     )
 
 
+def test_crs_to_projjson_namespace_matches_the_functional_api() -> None:
+    points = pl.DataFrame({"x": [4.9], "y": [52.4]}).select(
+        geo.point("x", "y", crs="EPSG:4326").alias("point")
+    )
+
+    assert_frame_equal(
+        points.select(gpl.col("point").geo.crs_to_projjson()),
+        points.select(geo.crs_to_projjson("point")),
+    )
+
+
 def test_is_geographic_namespace_matches_the_functional_api() -> None:
     points = pl.DataFrame({"x": [4.9], "y": [52.4]}).select(
         geo.point("x", "y", crs="EPSG:4326").alias("point")
