@@ -70,6 +70,8 @@ fn polygon_shape_is_valid(polygon: &ScalarPolygon) -> bool {
     if polygon.has_empty_exterior() {
         return polygon.rings().all(|ring| ring.vertices.is_empty());
     }
+    // FIXME: allow an empty hole next to a non-empty exterior.
+    // GEOS accepts it, and the OGC spec does not rule it out.
     polygon
         .rings()
         .all(|ring| has_at_least_distinct_vertices(ring.coords, ring.vertices, MIN_RING_VERTICES))

@@ -155,6 +155,12 @@ def test_an_empty_polygon_has_no_room_for_holes() -> None:
     assert out.ext.storage().to_list() == [None, [], []]
 
 
+def test_an_empty_hole_can_be_added_to_an_empty_polygon() -> None:
+    out = _added(_polygons([], [[]]), _lines([], []))
+
+    assert out.ext.storage().to_list() == [[[]], [[], []]]
+
+
 def test_an_open_hole_nulls_the_polygon_unless_closed() -> None:
     polygons, holes = _polygons([_EXTERIOR]), _lines(_OPEN)
 

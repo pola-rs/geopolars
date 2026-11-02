@@ -73,8 +73,9 @@ def add_holes(
     A null `holes` value, or an empty list adds no holes.
     The polygon's own rings are still checked, as described below.
     A null ring or a null vertex among the holes makes the polygon null.
-    An empty polygon that gets holes is null,
+    An empty polygon that gets holes with vertices is null,
     as it has no exterior to put them in.
+    Empty holes can still be added to it, and it stays an empty polygon.
 
     Every ring of the result has to be a ring (see [`is_ring`][geopolars.geo.is_ring]),
     the polygon's own existing rings included,

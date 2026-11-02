@@ -47,14 +47,14 @@ fn kernel_output_type_add_holes(input_fields: &[Field]) -> PolarsResult<Field> {
 }
 
 /// Where a polygon has room for its holes:
-/// everywhere but a polygon without rings that gets some.
+/// everywhere but a polygon without rings that gets holes with vertices.
 /// Without this, its first hole would become its exterior, and pass validation.
 fn has_room_for_holes(polygons: &PolygonArray, holes: &MultiLineStringArray) -> Bitmap {
     (0..polygons.rows.len())
         .map(|i| {
             !polygons.rows.range(i).is_empty()
                 || !holes.rows.is_valid(i)
-                || holes.rows.range(i).is_empty()
+                || holes.lines.span(holes.rows.range(i)).is_empty()
         })
         .collect()
 }
