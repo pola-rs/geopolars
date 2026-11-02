@@ -4,6 +4,7 @@ SHELL=/bin/bash
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
+POLARS_GIT := $(shell sed -n 's/^polars = .*git = "\([^"]*\)".*/\1/p' Cargo.toml)
 POLARS_REV := $(shell sed -n 's/^polars = .*rev = "\([0-9a-f]*\)".*/\1/p' Cargo.toml)
 POLARS_DIR := .polars
 POLARS_STAMP := $(POLARS_DIR)/.rev-$(POLARS_REV)
@@ -118,7 +119,7 @@ polars-src: $(POLARS_STAMP)
 $(POLARS_STAMP):
 	@mkdir -p $(POLARS_DIR)
 	@[ -d $(POLARS_DIR)/.git ] || git -C $(POLARS_DIR) init -q
-	git -C $(POLARS_DIR) fetch --depth 1 https://github.com/pola-rs/polars.git $(POLARS_REV)
+	git -C $(POLARS_DIR) fetch --depth 1 $(POLARS_GIT) $(POLARS_REV)
 	git -C $(POLARS_DIR) checkout -q --force FETCH_HEAD
 	@rm -f $(POLARS_DIR)/.rev-*
 	@touch $(POLARS_DIR)/.reinstall $@
