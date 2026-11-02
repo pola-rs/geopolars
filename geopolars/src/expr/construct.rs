@@ -16,8 +16,8 @@ use geopolars_compute::inner_nulls::{
     propagate_inner_nulls_of_polygons,
 };
 use geopolars_compute::native::{
-    close_open_rings, multi_polygons_have_only_rings, polygons_from_exteriors_and_holes,
-    polygons_have_only_rings,
+    close_open_rings, multi_polygons_have_only_rings, polygons_have_only_rings,
+    polygons_with_added_holes,
 };
 use geopolars_compute::with_const_flags;
 use geopolars_core::{
@@ -194,7 +194,10 @@ pub(super) fn closed_rings(
 
 /// `array` with its open rings closed first if there is a `close`,
 /// and null where it does not have only rings (see [polygons_have_only_rings]).
-fn validated_polygons(mut array: PolygonArray, close: Option<CloseRingsKwargs>) -> Box<dyn Array> {
+pub(super) fn validated_polygons(
+    mut array: PolygonArray,
+    close: Option<CloseRingsKwargs>,
+) -> Box<dyn Array> {
     if let Some((rings, coords)) =
         close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
     {
@@ -487,7 +490,7 @@ fn interleave(columns: &[Series], nesting: u8) -> PolarsResult<Series> {
         .into_series())
 }
 
-fn fields_of(inputs: &[Series]) -> Vec<Field> {
+pub(super) fn fields_of(inputs: &[Series]) -> Vec<Field> {
     inputs
         .iter()
         .map(|s| Field::new(s.name().clone(), s.dtype().clone()))
@@ -640,31 +643,55 @@ fn is_list_of_rings(dtype: &DataType) -> bool {
     }
 }
 
-/// The polygons `polygon_rings_in_separate_columns` builds,
-/// and whether the holes (if passed) are a list of rings per row.
-fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResult<(Geo, bool)> {
-    let (dim, metadata) = ring_of(input_fields[0].dtype())?;
-    let Some(holes) = input_fields.get(1) else {
-        return Ok((Geo::new(Kind::Polygon, dim, kwargs.apply(metadata)?), false));
+/// Whether `holes` holds a list of rings per row (a list or a multilinestring),
+/// rather than one ring.
+/// They have to have the dimension of the `subject` they go into,
+/// and not declare another CRS than its `metadata` does.
+pub(super) fn listed_holes(
+    holes: &Field,
+    subject: &str,
+    dim: GeoDimension,
+    metadata: &ExtensionMetadata,
+) -> PolarsResult<bool> {
+    let refused = |_| {
+        polars_err!(
+            SchemaMismatch: "expected the holes as one ring per row \
+            (a `linestring` or a list of vertices), a list of them, or a `multilinestring`, got: {}",
+            holes.dtype()
+        )
     };
-
-    let listed = is_list_of_rings(holes.dtype());
-    let (hole_dim, hole_metadata) = match holes.dtype() {
-        DataType::List(inner) if listed => ring_of(inner)?,
-        dtype => ring_of(dtype)?,
+    let (listed, (hole_dim, hole_metadata)) = match holes.dtype() {
+        DataType::List(inner) if is_list_of_rings(holes.dtype()) => {
+            (true, ring_of(inner).map_err(refused)?)
+        }
+        dtype => match describe(dtype) {
+            Ok(geo) if geo.kind == Kind::MultiLineString => (true, (geo.dim, geo.metadata.clone())),
+            _ => (false, ring_of(dtype).map_err(refused)?),
+        },
     };
     polars_ensure!(
         hole_dim == dim,
-        SchemaMismatch: "the exterior is {} but the holes are {}", dim.tag(), hole_dim.tag()
+        SchemaMismatch: "the {subject} is {} but the holes are {}", dim.tag(), hole_dim.tag()
     );
     if metadata.declares_crs() && hole_metadata.declares_crs() {
         let (crs, hole_crs) = (metadata.crs()?, hole_metadata.crs()?);
         polars_ensure!(
             crs == hole_crs,
-            SchemaMismatch: "the exterior and the holes declare different CRSs, {crs} and {hole_crs}; \
+            SchemaMismatch: "the {subject} and the holes declare different CRSs, {crs} and {hole_crs}; \
             use `to_crs` to bring one onto the other first"
         );
     }
+    Ok(listed)
+}
+
+/// The polygons `polygon_rings_in_separate_columns` builds,
+/// and whether the holes (if passed) are a list of rings per row.
+fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResult<(Geo, bool)> {
+    let (dim, metadata) = ring_of(input_fields[0].dtype())?;
+    let listed = match input_fields.get(1) {
+        Some(holes) => listed_holes(holes, "exterior", dim, &metadata)?,
+        None => false,
+    };
     Ok((
         Geo::new(Kind::Polygon, dim, kwargs.apply(metadata)?),
         listed,
@@ -679,7 +706,7 @@ fn kernel_output_type_polygon_rings_in_separate_columns(
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-fn storage_of(series: &Series) -> PolarsResult<Series> {
+pub(super) fn storage_of(series: &Series) -> PolarsResult<Series> {
     Ok(match series.dtype() {
         DataType::Extension(..) => series.ext()?.storage().clone(),
         DataType::List(_) => series
@@ -690,21 +717,51 @@ fn storage_of(series: &Series) -> PolarsResult<Series> {
     })
 }
 
-fn one_hole_per_row(holes: LineStringArray) -> MultiLineStringArray {
-    let lengths = std::iter::repeat_n(1, holes.rows.len());
+/// A list of exactly one item per row, null where `rows` is.
+fn one_per_row(rows: &List) -> List {
+    let lengths = std::iter::repeat_n(1, rows.len());
     let offsets = Offsets::try_from_lengths(lengths).expect("one per row");
+    List::from_offsets(offsets.into(), rows.validity().cloned())
+}
+
+fn one_ring_per_row(exteriors: LineStringArray) -> PolygonArray {
+    PolygonArray::from_parts(
+        one_per_row(&exteriors.rows),
+        exteriors.rows.ignoring_validity().clone(),
+        exteriors.coords,
+    )
+}
+
+fn one_hole_per_row(holes: LineStringArray) -> MultiLineStringArray {
     MultiLineStringArray::from_parts(
-        List::from_offsets(offsets.into(), holes.rows.validity().cloned()),
+        one_per_row(&holes.rows),
         holes.rows.ignoring_validity().clone(),
         holes.coords,
     )
 }
 
-/// Which polygons are there: null where the exterior is,
+/// One chunk of holes, holding one ring per row, or with `listed=true` a list of them,
+/// as a list of rings per row.
+/// Also the validity of its rows before inner nulls moved out to them.
+pub(super) fn holes_per_row(
+    holes: &dyn Array,
+    listed: bool,
+) -> PolarsResult<(MultiLineStringArray, Option<Bitmap>)> {
+    let storage = UncheckedStorage::new(holes)?;
+    let given = storage.lists[0].validity().cloned();
+    let holes = if listed {
+        propagate_inner_nulls_of_multi_line_strings(storage)
+    } else {
+        one_hole_per_row(propagate_inner_nulls_of_line_strings(storage))
+    };
+    Ok((holes, given))
+}
+
+/// Which polygons are there: null where `rows` is,
 /// or where the holes of the row were given but something in them was null.
 /// `given` is the validity of the rows of holes before inner nulls moved out to them.
-fn assembled_validity(
-    exteriors: &LineStringArray,
+pub(super) fn assembled_validity(
+    rows: Option<&Bitmap>,
     holes: &MultiLineStringArray,
     given: Option<&Bitmap>,
 ) -> Option<Bitmap> {
@@ -713,7 +770,7 @@ fn assembled_validity(
         None => !kept,
     });
     let not_lost = lost.map(|lost| !&lost);
-    combine_validities_and(exteriors.rows.validity(), not_lost.as_ref())
+    combine_validities_and(rows, not_lost.as_ref())
 }
 
 /// One chunk of polygons out of one chunk of exterior rings, and of holes.
@@ -724,22 +781,24 @@ fn assembled_polygons(
     holes: Option<(&dyn Array, bool)>,
     close: Option<CloseRingsKwargs>,
 ) -> PolarsResult<Box<dyn Array>> {
-    let exteriors = propagate_inner_nulls_of_line_strings(UncheckedStorage::new(exteriors)?);
+    let exteriors = one_ring_per_row(propagate_inner_nulls_of_line_strings(
+        UncheckedStorage::new(exteriors)?,
+    ));
     let Some((holes, listed)) = holes else {
+        // FIXME: this copies every coordinate into new buffers for nothing.
+        // `exteriors` already is a trimmed polygon of one ring per row, without a copy,
+        // so this can be `return Ok(validated_polygons(exteriors, close))`.
+        // `polygons_with_added_holes` can then take `holes` without the `Option`.
+        // This affects `polygons_from_coordinates`,
+        // and `polygons_from_rings_in_separate_columns` without holes.
         let validity = exteriors.rows.validity().cloned();
-        let polygons = polygons_from_exteriors_and_holes(&exteriors, None, validity);
+        let polygons = polygons_with_added_holes(&exteriors, None, validity);
         return Ok(validated_polygons(polygons, close));
     };
 
-    let storage = UncheckedStorage::new(holes)?;
-    let given = storage.lists[0].validity().cloned();
-    let holes = if listed {
-        propagate_inner_nulls_of_multi_line_strings(storage)
-    } else {
-        one_hole_per_row(propagate_inner_nulls_of_line_strings(storage))
-    };
-    let validity = assembled_validity(&exteriors, &holes, given.as_ref());
-    let polygons = polygons_from_exteriors_and_holes(&exteriors, Some(&holes), validity);
+    let (holes, given) = holes_per_row(holes, listed)?;
+    let validity = assembled_validity(exteriors.rows.validity(), &holes, given.as_ref());
+    let polygons = polygons_with_added_holes(&exteriors, Some(&holes), validity);
     Ok(validated_polygons(polygons, close))
 }
 

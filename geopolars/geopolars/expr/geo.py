@@ -349,6 +349,16 @@ class ExprGeoNameSpace:
 
         return boundary(self._expr)
 
+    def add_holes(
+        self,
+        holes: IntoExprColumn,
+        *,
+        close: CloseRings | None = None,
+    ) -> pl.Expr:
+        from geopolars.geo.add_holes import add_holes
+
+        return add_holes(self._expr, holes, close=close)
+
     def parts(self) -> pl.Expr:
         from geopolars.geo.parts import parts
 

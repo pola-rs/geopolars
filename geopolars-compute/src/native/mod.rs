@@ -91,7 +91,7 @@ pub use reverse::{
 };
 pub use rings::{
     close_open_rings, multi_polygon_exteriors, multi_polygon_interiors, polygon_exteriors,
-    polygon_interiors, polygons_from_exteriors_and_holes,
+    polygon_interiors, polygons_with_added_holes,
 };
 pub use selected_coords::{
     line_strings_with_selected, multi_line_strings_with_selected, multi_points_with_selected,

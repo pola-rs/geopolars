@@ -8,6 +8,7 @@
 //! [`geoarrow::describe`](crate::geoarrow::describe) what it was handed and then
 //! matches on the [`Kind`](crate::geoarrow::Kind) exhaustively.
 
+pub mod add_holes;
 pub mod affine;
 pub mod area;
 pub mod bounds;

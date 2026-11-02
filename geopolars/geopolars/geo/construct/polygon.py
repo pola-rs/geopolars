@@ -77,12 +77,12 @@ def polygons_from_rings_in_separate_columns(
 
     `exterior` holds one ring per polygon,
     as a `geoarrow.linestring` or as a bare vertex list.
-    `holes` holds either one ring per polygon, or a list of them.
+    `holes` holds one ring per polygon, a list of them, or a multilinestring.
     Without `holes`, no polygon has holes.
 
     A null exterior gives a null polygon.
     A null `holes` value means the polygon has no holes.
-    A null ring in a list of holes, or a null vertex, makes the polygon null.
+    A null ring among the holes, or a null vertex, makes the polygon null.
     The CRS is the exterior's.
     Rings are checked (and closed with `close`)
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
