@@ -194,7 +194,10 @@ pub(super) fn closed_rings(
 
 /// `array` with its open rings closed first if there is a `close`,
 /// and null where it does not have only rings (see [polygons_have_only_rings]).
-fn validated_polygons(mut array: PolygonArray, close: Option<CloseRingsKwargs>) -> Box<dyn Array> {
+pub(super) fn validated_polygons(
+    mut array: PolygonArray,
+    close: Option<CloseRingsKwargs>,
+) -> Box<dyn Array> {
     if let Some((rings, coords)) =
         close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
     {
@@ -487,7 +490,7 @@ fn interleave(columns: &[Series], nesting: u8) -> PolarsResult<Series> {
         .into_series())
 }
 
-fn fields_of(inputs: &[Series]) -> Vec<Field> {
+pub(super) fn fields_of(inputs: &[Series]) -> Vec<Field> {
     inputs
         .iter()
         .map(|s| Field::new(s.name().clone(), s.dtype().clone()))
@@ -643,7 +646,7 @@ fn is_list_of_rings(dtype: &DataType) -> bool {
 /// Whether `holes` holds a list of rings per row, rather than one ring.
 /// They have to have the dimension of the `subject` they go into,
 /// and not declare another CRS than its `metadata` does.
-fn listed_holes(
+pub(super) fn listed_holes(
     holes: &Field,
     subject: &str,
     dim: GeoDimension,
@@ -691,7 +694,7 @@ fn kernel_output_type_polygon_rings_in_separate_columns(
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-fn storage_of(series: &Series) -> PolarsResult<Series> {
+pub(super) fn storage_of(series: &Series) -> PolarsResult<Series> {
     Ok(match series.dtype() {
         DataType::Extension(..) => series.ext()?.storage().clone(),
         DataType::List(_) => series
@@ -728,7 +731,7 @@ fn one_hole_per_row(holes: LineStringArray) -> MultiLineStringArray {
 /// One chunk of holes, holding one ring per row, or with `listed=true` a list of them,
 /// as a list of rings per row.
 /// Also the validity of its rows before inner nulls moved out to them.
-fn holes_per_row(
+pub(super) fn holes_per_row(
     holes: &dyn Array,
     listed: bool,
 ) -> PolarsResult<(MultiLineStringArray, Option<Bitmap>)> {
@@ -745,7 +748,7 @@ fn holes_per_row(
 /// Which polygons are there: null where `rows` is,
 /// or where the holes of the row were given but something in them was null.
 /// `given` is the validity of the rows of holes before inner nulls moved out to them.
-fn assembled_validity(
+pub(super) fn assembled_validity(
     rows: Option<&Bitmap>,
     holes: &MultiLineStringArray,
     given: Option<&Bitmap>,
@@ -805,88 +808,6 @@ fn polygon_rings_in_separate_columns(
         .as_ref()
         .map(|holes| (holes.chunks()[0].as_ref(), listed));
     let chunk = assembled_polygons(exteriors.chunks()[0].as_ref(), holes_chunk, kwargs.close)?;
-    // SAFETY: the chunk is the storage of a polygon of `geo`'s dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), vec![chunk], &geo.dtype())
-    })
-}
-
-/// The keyword arguments of `add_holes`.
-/// These have to be mirrored on the python side.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct AddHolesKwargs {
-    /// How to close every open ring, as `close_rings` does. `None` closes nothing.
-    pub close: Option<CloseRingsKwargs>,
-}
-
-/// The polygons `add_holes` gives back,
-/// and whether the holes are a list of rings per row.
-fn holes_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
-    let dtype = input_fields[0].dtype();
-    let geo = describe(dtype)?;
-    polars_ensure!(
-        geo.kind == Kind::Polygon,
-        SchemaMismatch: "add_holes expects a polygon column, got: {}", dtype
-    );
-    let listed = listed_holes(&input_fields[1], "polygon", geo.dim, geo.metadata)?;
-    Ok((
-        Geo::new(Kind::Polygon, geo.dim, geo.metadata.clone()),
-        listed,
-    ))
-}
-
-fn kernel_output_type_add_holes(input_fields: &[Field]) -> PolarsResult<Field> {
-    let (geo, _) = holes_added(input_fields)?;
-    Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
-}
-
-/// Where a polygon has room for its holes:
-/// everywhere but a polygon without rings that gets some.
-/// Without this, its first hole would become its exterior, and pass validation.
-fn has_room_for_holes(polygons: &PolygonArray, holes: &MultiLineStringArray) -> Bitmap {
-    (0..polygons.rows.len())
-        .map(|i| {
-            !polygons.rows.range(i).is_empty()
-                || !holes.rows.is_valid(i)
-                || holes.rows.range(i).is_empty()
-        })
-        .collect()
-}
-
-/// One chunk of `polygons` with one chunk of `holes` added.
-/// `holes` holds one ring per row, or with `listed=true` a list of them.
-/// See `add_holes` for the null values.
-fn chunk_with_added_holes(
-    polygons: &ListArray<i64>,
-    holes: &dyn Array,
-    listed: bool,
-    close: Option<CloseRingsKwargs>,
-) -> PolarsResult<Box<dyn Array>> {
-    let polygons = PolygonArray::new(polygons)?;
-    let (holes, given) = holes_per_row(holes, listed)?;
-    let validity = assembled_validity(polygons.rows.validity(), &holes, given.as_ref());
-    let room = has_room_for_holes(&polygons, &holes);
-    let validity = combine_validities_and(validity.as_ref(), Some(&room));
-    let added = polygons_with_added_holes(&polygons, Some(&holes), validity);
-    Ok(validated_polygons(added, close))
-}
-
-/// See `add_holes`.
-#[polars_expr(output_type_func=kernel_output_type_add_holes)]
-fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> {
-    let (geo, listed) = holes_added(&fields_of(inputs))?;
-    let polygons = inputs[0].ext()?.storage();
-    let holes = storage_of(&inputs[1])?;
-    let (polygons, holes) = match (polygons.len(), holes.len()) {
-        (n, m) if n == m => (polygons.rechunk(), holes.rechunk()),
-        (n, 1) => (polygons.rechunk(), holes.new_from_index(0, n).rechunk()),
-        (1, m) => (polygons.new_from_index(0, m).rechunk(), holes.rechunk()),
-        (n, m) => polars_bail!(ShapeMismatch: "the polygons have {n} rows but the holes have {m}"),
-    };
-
-    let rows = polygons.list()?.downcast_as_array();
-    let chunk = chunk_with_added_holes(rows, holes.chunks()[0].as_ref(), listed, kwargs.close)?;
     // SAFETY: the chunk is the storage of a polygon of `geo`'s dimension.
     Ok(unsafe {
         Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), vec![chunk], &geo.dtype())
