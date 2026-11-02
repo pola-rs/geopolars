@@ -14,6 +14,7 @@ from geopolars.datatypes import (
     MultiLineStringXY,
     PolygonXY,
 )
+from tests.unit.conftest import Dimension
 
 RD = "EPSG:28992"
 
@@ -103,6 +104,25 @@ def test_a_multilinestring_is_added_like_a_list() -> None:
     )
 
 
+def test_adding_the_holes_back_rebuilds_the_polygons(
+    ring_coords: pl.DataFrame, dimension: Dimension
+) -> None:
+    exteriors = dimension.polygons(ring_coords.filter(pl.col("ring") == 0))
+    holes = (
+        ring_coords.group_by("polygon", "ring", maintain_order=True)
+        .agg(dimension.point())
+        .select("polygon", "ring", dimension.linestring())
+        .group_by("polygon", maintain_order=True)
+        .agg(pl.col("line").filter(pl.col("ring") > 0).alias("holes"))
+    )
+
+    out = pl.concat([exteriors, holes.select("holes")], how="horizontal").select(
+        geo.add_holes("polygon", "holes")
+    )
+
+    assert_frame_equal(out, dimension.polygons(ring_coords))
+
+
 def test_nulls() -> None:
     out = _added(
         _polygons(None, [_EXTERIOR], [_EXTERIOR], [_EXTERIOR]),
@@ -110,6 +130,23 @@ def test_nulls() -> None:
     )
 
     assert out.ext.storage().to_list() == [None, [_EXTERIOR], [_EXTERIOR], None]
+
+
+def test_sliced_columns() -> None:
+    df = pl.DataFrame(
+        [
+            _polygons([_HOLE], [_EXTERIOR, _HOLE], None, [_EXTERIOR]),
+            _listed_lines([_OTHER_HOLE], [_OTHER_HOLE], [_HOLE], [_THIRD_HOLE, _HOLE]),
+        ]
+    ).slice(1, 3)
+
+    out = df.select(geo.add_holes("polygon", "holes")).to_series()
+
+    assert out.ext.storage().to_list() == [
+        [_EXTERIOR, _HOLE, _OTHER_HOLE],
+        None,
+        [_EXTERIOR, _THIRD_HOLE, _HOLE],
+    ]
 
 
 def test_an_empty_polygon_has_no_room_for_holes() -> None:
@@ -120,6 +157,16 @@ def test_an_empty_polygon_has_no_room_for_holes() -> None:
 
 def test_an_open_hole_nulls_the_polygon_unless_closed() -> None:
     polygons, holes = _polygons([_EXTERIOR]), _lines(_OPEN)
+
+    checked = _added(polygons, holes)
+    closed = _added(polygons, holes, close=geo.CloseRings())
+
+    assert checked.is_null().to_list() == [True]
+    assert closed.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
+def test_an_open_ring_already_in_the_polygon_is_checked_and_closed_too() -> None:
+    polygons, holes = _polygons([_EXTERIOR, _OPEN]), _listed_lines([])
 
     checked = _added(polygons, holes)
     closed = _added(polygons, holes, close=geo.CloseRings())
