@@ -773,6 +773,12 @@ fn assembled_polygons(
         UncheckedStorage::new(exteriors)?,
     ));
     let Some((holes, listed)) = holes else {
+        // FIXME: this copies every coordinate into new buffers for nothing.
+        // `exteriors` already is a trimmed polygon of one ring per row, without a copy,
+        // so this can be `return Ok(validated_polygons(exteriors, close))`.
+        // `polygons_with_added_holes` can then take `holes` without the `Option`.
+        // This affects `polygons_from_coordinates`,
+        // and `polygons_from_rings_in_separate_columns` without holes.
         let validity = exteriors.rows.validity().cloned();
         let polygons = polygons_with_added_holes(&exteriors, None, validity);
         return Ok(validated_polygons(polygons, close));
