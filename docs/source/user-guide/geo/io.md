@@ -152,6 +152,19 @@ rather than as a null box.
 Polars reads it as it is, which breaks GeoArrow's rule on nulls.
 `geo.null_out_invalid_geoarrow("bbox")` makes those boxes null.
 
+### Writing geoparquet
+
+A string CRS like "EPSG:4326" is valid in GeoPolars (following GeoArrow), but it is not allowed in GeoParquet.
+You will have to convert using `geo.crs_to_projjson` before writing a GeoParquet file
+(or an error will remind you).
+
+### Covering bboxes
+
+Polars expects per-row covering bboxes to be supplied in a second column,
+with the `<column that it covers' name>_bbox` as its name.
+
+Use 'with_covering' to write metadata-level covering information.
+
 ## WKT and WKB
 
 WKT (well-known text) and WKB (well-known binary) are the most common ways to write a single geometry.
