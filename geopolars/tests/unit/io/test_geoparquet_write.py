@@ -24,8 +24,7 @@ from geopolars.datatypes import (
     Wkt,
 )
 from tests.unit.io.conftest import (
-    REFUSED_AS_INVALID_OPERATION,
-    STRING_CRS_IS_REFUSED,
+    OTHER_ERRORS_BY_THE_WRAPPER,
     Parquet,
 )
 from tests.unit.io.test_geoparquet import DATA, SPEC_GEOMETRIES
@@ -57,21 +56,20 @@ def _written(parquet: Parquet, tmp_path: Path, dtype: PolarsDataType) -> dict[st
     return _geo_of(path)["columns"]["geometry"]
 
 
-@STRING_CRS_IS_REFUSED
 def test_writes_a_native_column(parquet: Parquet, tmp_path: Path) -> None:
     path = tmp_path / "points.parquet"
     df = pl.DataFrame({"geometry": XY}).select(
         pl.col("geometry").ext.to(PointXY(crs="EPSG:4326"))
     )
-    parquet.write(df, path)
-    geo = _geo_of(path)
+    parquet.write(df.with_columns(geo.crs_to_projjson("geometry")), path)
+    geo_metadata = _geo_of(path)
 
-    assert geo["version"] == "1.1.0"
-    assert geo["primary_column"] == "geometry"
-    column = geo["columns"]["geometry"]
+    assert geo_metadata["version"] == "1.1.0"
+    assert geo_metadata["primary_column"] == "geometry"
+    column = geo_metadata["columns"]["geometry"]
     assert column["encoding"] == "point"
     assert column["geometry_types"] == ["Point"]
-    # Converted by PROJ, as GeoParquet only takes PROJJSON.
+    # Converted by `crs_to_projjson`, as GeoParquet only takes PROJJSON.
     assert column["crs"]["id"] == {"authority": "EPSG", "code": 4326}
     assert "edges" not in column
     assert "epoch" not in column
@@ -112,32 +110,24 @@ def test_writes_wkb_without_geometry_types(parquet: Parquet, tmp_path: Path) -> 
     assert column["geometry_types"] == []
 
 
-@REFUSED_AS_INVALID_OPERATION
+@OTHER_ERRORS_BY_THE_WRAPPER
 @pytest.mark.parametrize(
-    ("dtype", "error", "match"),
+    ("dtype", "match"),
     [
-        (PointXYM(), pl.exceptions.SchemaError, "M values"),
-        (PolygonXYZM(), pl.exceptions.SchemaError, "M values"),
-        (Wkt(), pl.exceptions.SchemaError, "WKT"),
-        (
-            _point('{"crs":"4326","crs_type":"srid"}'),
-            pl.exceptions.ComputeError,
-            "SRID",
-        ),
-        (_point('{"crs":"not a crs"}'), pl.exceptions.ComputeError, "PROJ"),
-        (_point('{"edges":"karney"}'), pl.exceptions.ComputeError, "karney"),
-        (_point('{"edges":"geodesic-ish"}'), pl.exceptions.ComputeError, "edges"),
+        (PointXYM(), "does not match"),
+        (PolygonXYZM(), "does not match"),
+        (Wkt(), "geoarrow.wkt"),
+        (_point('{"crs":"4326","crs_type":"srid"}'), "'srid'"),
+        (_point('{"crs":"not a crs"}'), "PROJJSON"),
+        (_point('{"edges":"karney"}'), "karney"),
+        (_point('{"edges":"geodesic-ish"}'), "edges"),
     ],
 )
 def test_refuses_what_geoparquet_cannot_hold(
-    parquet: Parquet,
-    tmp_path: Path,
-    dtype: PolarsDataType,
-    error: type[Exception],
-    match: str,
+    parquet: Parquet, tmp_path: Path, dtype: PolarsDataType, match: str
 ) -> None:
     path = tmp_path / "refused.parquet"
-    with pytest.raises(error, match=match):
+    with pytest.raises(pl.exceptions.InvalidOperationError, match=match):
         parquet.write(pl.DataFrame(schema={"geometry": dtype}), path)
     assert not path.exists()
 
@@ -190,14 +180,13 @@ def test_round_trips(parquet: Parquet, tmp_path: Path, df: pl.DataFrame) -> None
     assert_frame_equal(pl.read_parquet(path), df)
 
 
-@STRING_CRS_IS_REFUSED
 def test_a_crs_comes_back_as_projjson(parquet: Parquet, tmp_path: Path) -> None:
     """GeoParquet only holds PROJJSON, so that is what a file gives back."""
     path = tmp_path / "epsg.parquet"
     df = pl.DataFrame({"geometry": XY}).select(
         pl.col("geometry").ext.to(PointXY(crs="EPSG:4326"))
     )
-    parquet.write(df, path)
+    parquet.write(df.with_columns(geo.crs_to_projjson("geometry")), path)
     back = parquet.read(path).schema["geometry"]
 
     assert back != df.schema["geometry"]
@@ -228,13 +217,13 @@ def test_sink_writes_the_same_metadata(parquet: Parquet, tmp_path: Path) -> None
     assert_frame_equal(pl.read_parquet(sunk), df)
 
 
-@REFUSED_AS_INVALID_OPERATION
+@OTHER_ERRORS_BY_THE_WRAPPER
 def test_a_lazy_frame_is_refused_before_it_runs(
     parquet: Parquet, tmp_path: Path
 ) -> None:
     path = tmp_path / "refused.parquet"
     lf = pl.LazyFrame(schema={"geometry": PointXYM()})
-    with pytest.raises(pl.exceptions.SchemaError, match="M values"):
+    with pytest.raises(pl.exceptions.InvalidOperationError, match="does not match"):
         parquet.sink(lf, path)
     assert not path.exists()
 

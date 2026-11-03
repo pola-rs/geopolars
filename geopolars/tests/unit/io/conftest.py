@@ -5,6 +5,7 @@ Every GeoParquet test runs against our wrapper and against Polars' own
 Where Polars does not do what the test asks yet, mark the test with
 `@pytest.mark.parquet_xfail("polars", reason=...)`: it is then a strict xfail
 for that backend only, and turns red once Polars catches up.
+Where our wrapper differs from Polars, mark it with `parquet_xfail("wrapper", ...)`.
 """
 
 from __future__ import annotations
@@ -103,9 +104,9 @@ def _polars_xfail(reason: str) -> pytest.MarkDecorator:
     return pytest.mark.parquet_xfail("polars", reason=reason)
 
 
-#: Where Polars' GeoParquet does not do what the GeoParquet spec (and our wrapper) does.
-NOT_REFUSED = _polars_xfail(
-    "Polars does not refuse GeoParquet metadata it cannot honour"
+EPOCH_REFUSED_BY_THE_WRAPPER = pytest.mark.parquet_xfail(
+    "wrapper",
+    reason="our wrapper refuses a coordinate epoch, where Polars keeps it in the metadata",
 )
 #: Where Polars reads the column without its `geo` metadata and warns, so it can be repaired.
 REFUSED_BY_THE_WRAPPER = pytest.mark.parquet_xfail(
@@ -113,20 +114,13 @@ REFUSED_BY_THE_WRAPPER = pytest.mark.parquet_xfail(
     reason="our wrapper refuses GeoParquet metadata it cannot honour, "
     "where Polars reads the plain column with a warning",
 )
-NO_CHECK_EVERY_FILE = _polars_xfail(
-    "Polars only compares the files' dtypes once the query runs, "
-    "and has no `check_every_file` to opt out"
+OTHER_ERRORS_BY_THE_WRAPPER = pytest.mark.parquet_xfail(
+    "wrapper",
+    reason="our wrapper refuses with other error types and messages than Polars",
 )
 COVERING_FIELDS_OUT_OF_ORDER = _polars_xfail(
     "Polars reads a covering whose fields are not in xmin/ymin/xmax/ymax order "
     "as a plain struct, not a box"
-)
-STRING_CRS_IS_REFUSED = _polars_xfail(
-    "Polars only writes a PROJJSON CRS or OGC:CRS84: it refuses any other string one, "
-    "even with `geo` given"
-)
-REFUSED_AS_INVALID_OPERATION = _polars_xfail(
-    "Polars refuses what GeoParquet cannot hold with an InvalidOperationError"
 )
 
 

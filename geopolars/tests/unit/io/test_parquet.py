@@ -17,7 +17,6 @@ from geopolars import geo
 from geopolars.datatypes import BoxXY, PointType, PointXY
 from tests.unit.conftest import Dimension
 from tests.unit.io.conftest import (
-    STRING_CRS_IS_REFUSED,
     Parquet,
     use_backend,
 )
@@ -93,16 +92,13 @@ def test_polygon_survives_a_parquet_round_trip(
     assert_frame_equal(back, df)
 
 
-@STRING_CRS_IS_REFUSED
-@pytest.mark.parquet_xfail(
-    "wrapper", reason="GeoParquet only holds PROJJSON, so the CRS comes back as that"
-)
 def test_metadata_survives_a_parquet_round_trip(
     parquet: Parquet, tmp_path: Path
 ) -> None:
     """The metadata string is the slot `crs` lives in, so losing it on a write
-    would silently drop a file's coordinate reference system."""
-    metadata = '{"crs":"EPSG:4326"}'
+    would silently drop a file's coordinate reference system.
+    PROJJSON, as that is the only CRS GeoParquet holds."""
+    metadata = '{"crs":{"type":"GeographicCRS","name":"WGS 84"}}'
     dtype = PointType.ext_from_params(
         "geoarrow.point", PointXY().ext_storage(), metadata
     )
