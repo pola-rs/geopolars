@@ -30,9 +30,10 @@ from geopolars.datatypes import (
     Wkb,
 )
 from tests.unit.io.conftest import (
+    COVERING_FIELDS_OUT_OF_ORDER,
     NO_CHECK_EVERY_FILE,
-    NO_COVERINGS,
     NOT_REFUSED,
+    NULL_BOUNDS_ARE_NO_NULL_BOX,
     Parquet,
 )
 
@@ -87,7 +88,7 @@ def test_the_spec_test_data_reads_as_its_wkt(
     assert_frame_equal(wkb.with_columns(geo.from_wkb("geometry", geometry)), expected)
 
 
-@NO_COVERINGS
+@COVERING_FIELDS_OUT_OF_ORDER
 def test_the_spec_example_reads(parquet: Parquet) -> None:
     """WKB of polygons and multipolygons, a PROJJSON CRS and a `bbox` covering."""
     df = parquet.read(DATA / "example.parquet")
@@ -332,7 +333,6 @@ def _covering(column: str = "bbox", **paths: list[str]) -> dict[str, Any]:
 _BOUNDS = {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0}
 
 
-@NO_COVERINGS
 def test_a_covering_reads_as_a_box_in_the_geometrys_crs(
     parquet: Parquet, tmp_path: Path
 ) -> None:
@@ -344,7 +344,7 @@ def test_a_covering_reads_as_a_box_in_the_geometrys_crs(
     assert back["bbox"].ext.storage().to_list() == [_BOUNDS, _BOUNDS]
 
 
-@NO_COVERINGS
+@NULL_BOUNDS_ARE_NO_NULL_BOX
 def test_a_covering_without_any_bound_is_a_null_box(
     parquet: Parquet, tmp_path: Path
 ) -> None:
@@ -362,7 +362,6 @@ def test_a_covering_without_any_bound_is_a_null_box(
     assert back["bbox"].ext.storage().to_list() == [_BOUNDS, None]
 
 
-@NO_COVERINGS
 def test_a_covering_with_z_reads_as_a_3d_box(parquet: Parquet, tmp_path: Path) -> None:
     bounds = {
         "xmin": 1.0,
@@ -386,7 +385,7 @@ def test_a_covering_whose_column_is_missing_is_ignored(
     assert parquet.read(path).columns == ["id", "geometry"]
 
 
-@NO_COVERINGS
+@NOT_REFUSED
 @pytest.mark.parametrize(
     ("covering", "match"),
     [
@@ -405,7 +404,7 @@ def test_a_malformed_covering_is_refused(
         parquet.scan(path)
 
 
-@NO_COVERINGS
+@NOT_REFUSED
 def test_a_covering_that_is_not_bounds_is_refused(
     parquet: Parquet, tmp_path: Path
 ) -> None:

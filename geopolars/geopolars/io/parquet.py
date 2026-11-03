@@ -143,8 +143,10 @@ def _geometry_dtypes(geo: str, schema: pl.Schema) -> dict[str, pl.DataType]:
 def with_covering(frame: FrameT) -> FrameT:
     """Add a bbox covering for every geometry column `<name>`.
 
-    The covering is a column `<name>_bbox` with the bounds of each geometry
-    (see `geo.bounds`), which readers can filter on without touching the geometries.
+    The covering is a column `bbox` for a column named `geometry` or `geography`,
+    and `<name>_bbox` for any other, as Polars and geopandas name it.
+    It has the bounds of each geometry (see `geo.bounds`),
+    which readers can filter on without touching the geometries.
     A multi-geometry gets one box around all of its parts.
     A box crossing the antimeridian has `xmin > xmax`.
     WKB has to be decoded with `geo.from_wkb` first, to be bounded.
@@ -184,8 +186,8 @@ def geoparquet_metadata(
     as described under "Writing" in `docs/source/user-guide/geo/io.md`.
     Only the schema is needed, so this refuses before anything is written.
 
-    With `covering`, every geometry column `<name>` is described with the covering
-    `<name>_bbox` that `with_covering` adds.
+    With `covering`, every geometry column is described with the covering
+    that `with_covering` adds.
     """
     schema = frame.collect_schema()
     coverings = _coverings(schema) if covering else {}
@@ -194,8 +196,8 @@ def geoparquet_metadata(
 
 
 def _coverings(schema: pl.Schema) -> dict[str, str]:
-    """The bbox column of every geometry column: `<name>_bbox`."""
-    coverings = {}
+    """The bbox column of every geometry column."""
+    coverings: dict[str, str] = {}
     for name, dtype in schema.items():
         if isinstance(dtype, EncodedGeometry):
             msg = (
@@ -204,5 +206,13 @@ def _coverings(schema: pl.Schema) -> dict[str, str]:
             )
             raise pl.exceptions.SchemaError(msg)
         if isinstance(dtype, GeoArrowType):
-            coverings[name] = f"{name}_bbox"
+            bbox = _covering_name(name)
+            if bbox in coverings.values():
+                msg = f"the coverings of two geometry columns would both be `{bbox}`"
+                raise pl.exceptions.DuplicateError(msg)
+            coverings[name] = bbox
     return coverings
+
+
+def _covering_name(name: str) -> str:
+    return "bbox" if name in ("geometry", "geography") else f"{name}_bbox"
