@@ -3,14 +3,15 @@
 //! See `is_valid_geoarrow` and `is_valid_ogc` in Python for the rules.
 
 use geopolars_compute::geoarrow_validity::{
-    line_strings_are_valid_geoarrow, multi_line_strings_are_valid_geoarrow,
-    multi_points_are_valid_geoarrow, multi_polygons_are_valid_geoarrow, points_are_valid_geoarrow,
-    polygons_are_valid_geoarrow,
+    boxes_are_valid_geoarrow, line_strings_are_valid_geoarrow,
+    multi_line_strings_are_valid_geoarrow, multi_points_are_valid_geoarrow,
+    multi_polygons_are_valid_geoarrow, points_are_valid_geoarrow, polygons_are_valid_geoarrow,
 };
 use geopolars_compute::inner_nulls::{
-    propagate_inner_nulls_of_line_strings, propagate_inner_nulls_of_multi_line_strings,
-    propagate_inner_nulls_of_multi_points, propagate_inner_nulls_of_multi_polygons,
-    propagate_inner_nulls_of_points, propagate_inner_nulls_of_polygons,
+    propagate_inner_nulls_of_boxes, propagate_inner_nulls_of_line_strings,
+    propagate_inner_nulls_of_multi_line_strings, propagate_inner_nulls_of_multi_points,
+    propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_points,
+    propagate_inner_nulls_of_polygons,
 };
 use geopolars_compute::native::{Bounds, CoordinateSelection, NonFinite};
 use geopolars_compute::ogc_validity::{
@@ -19,8 +20,8 @@ use geopolars_compute::ogc_validity::{
     MultiPolygonTopologyChecks, PolygonTopologyChecks,
 };
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray, UncheckedStorage,
+    downcast, BoxArray, Coords, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray, UncheckedBoxes, UncheckedStorage,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, BooleanArray, ListArray};
@@ -28,6 +29,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
+use crate::geoarrow::bbox::is_box;
 use crate::geoarrow::{describe, Kind};
 
 /// See python
@@ -207,10 +209,31 @@ fn are_valid(
     BooleanChunked::try_from_chunk_iter(geometries.name().clone(), chunks)
 }
 
+fn boxes_are_valid(boxes: &Series, kwargs: &IsValidGeoArrowKwargs) -> PolarsResult<BooleanChunked> {
+    polars_ensure!(
+        kwargs.bounds.is_none(),
+        InvalidOperation: "cannot check the bounds of the CRS on a box"
+    );
+    let storage = boxes.ext()?.storage();
+    let chunks = storage.chunks().iter().map(|chunk| {
+        let array = if kwargs.check_null_coordinates {
+            propagate_inner_nulls_of_boxes(UncheckedBoxes::new(chunk.as_ref())?)
+        } else {
+            BoxArray::new(chunk.as_ref())?
+        };
+        let valid = boxes_are_valid_geoarrow(&array, kwargs.check_finite_coordinates);
+        PolarsResult::Ok(valid.with_validity(chunk.validity().cloned()))
+    });
+    BooleanChunked::try_from_chunk_iter(boxes.name().clone(), chunks)
+}
+
 fn are_valid_geoarrow(
     geometries: &Series,
     kwargs: &IsValidGeoArrowKwargs,
 ) -> PolarsResult<BooleanChunked> {
+    if is_box(geometries.dtype()) {
+        return boxes_are_valid(geometries, kwargs);
+    }
     let non_finite = NonFinite {
         select_non_finite: true,
         select_empty: false,
@@ -243,8 +266,25 @@ fn kernel_output_type_is_valid(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(field.name().clone(), DataType::Boolean))
 }
 
+/// [`kernel_output_type_is_valid`], also for a box.
+fn kernel_output_type_is_valid_geoarrow(input_fields: &[Field]) -> PolarsResult<Field> {
+    let field = &input_fields[0];
+    if is_box(field.dtype()) {
+        return Ok(Field::new(field.name().clone(), DataType::Boolean));
+    }
+    kernel_output_type_is_valid(input_fields)
+}
+
+/// [`kernel_output_type_same_geometry`], also for a box.
+fn kernel_output_type_null_out_invalid_geoarrow(input_fields: &[Field]) -> PolarsResult<Field> {
+    if is_box(input_fields[0].dtype()) {
+        return Ok(input_fields[0].clone());
+    }
+    kernel_output_type_same_geometry(input_fields)
+}
+
 /// See `is_valid_geoarrow`.
-#[polars_expr(output_type_func=kernel_output_type_is_valid)]
+#[polars_expr(output_type_func=kernel_output_type_is_valid_geoarrow)]
 fn is_valid_geoarrow(inputs: &[Series], kwargs: IsValidGeoArrowKwargs) -> PolarsResult<Series> {
     Ok(are_valid_geoarrow(&inputs[0], &kwargs)?.into_series())
 }
@@ -262,7 +302,9 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
     if keep.all() {
         return Ok(geometries.clone());
     }
-    let geo = describe(geometries.dtype())?;
+    let DataType::Extension(typ, _) = geometries.dtype() else {
+        polars_bail!(SchemaMismatch: "expected a geometry or box column, got: {}", geometries.dtype());
+    };
     let storage = geometries.ext()?.storage();
     let chunks = storage
         .chunks()
@@ -274,11 +316,11 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
     let storage = unsafe {
         Series::from_chunks_and_dtype_unchecked(storage.name().clone(), chunks, storage.dtype())
     };
-    Ok(storage.into_extension(geo.typ.clone()))
+    Ok(storage.into_extension(typ.clone()))
 }
 
 /// See `null_out_invalid_geoarrow`.
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+#[polars_expr(output_type_func=kernel_output_type_null_out_invalid_geoarrow)]
 fn null_out_invalid_geoarrow(
     inputs: &[Series],
     kwargs: IsValidGeoArrowKwargs,

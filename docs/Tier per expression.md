@@ -75,6 +75,8 @@ the comment says when one without a CRS takes a different tier.
 | `to_wkt` | A | `wkt` crate | A | | A | | A | | A | | A | |
 | `from_wkt` | A | `wkt` crate | A | | A | | A | promotes a point | A | promotes a linestring | A | promotes a poly |
 
+`is_valid_geoarrow` and `null_out_invalid_geoarrow` also take a `geoarrow.box`: A.
+
 In this table:
 
 - GGL = 'geographiclib'

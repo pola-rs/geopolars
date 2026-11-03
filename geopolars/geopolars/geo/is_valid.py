@@ -15,7 +15,8 @@ from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
 from geopolars._utils import LIB
-from geopolars.geo._dispatch import on_geometry
+from geopolars.datatypes import BoxType
+from geopolars.geo._dispatch import on_geometry, on_geometry_or_box
 from geopolars.geo.fix_out_of_bounds import _bounds
 
 if TYPE_CHECKING:
@@ -28,8 +29,11 @@ if TYPE_CHECKING:
 
 def _kernel(
     function_name: str, *, out_of_bounds: OutOfBounds | None, **checks: bool
-) -> Callable[[pl.Expr, GeoArrowType], pl.Expr]:
-    def build(column: pl.Expr, geometry: GeoArrowType) -> pl.Expr:
+) -> Callable[[pl.Expr, GeoArrowType | BoxType], pl.Expr]:
+    def build(column: pl.Expr, geometry: GeoArrowType | BoxType) -> pl.Expr:
+        if isinstance(geometry, BoxType) and out_of_bounds is not None:
+            msg = f"cannot check `out_of_bounds` of a box: {geometry!r}"
+            raise TypeError(msg)
         # PROJ is only asked when there are bounds to check.
         bounds = None if out_of_bounds is None else _bounds(geometry, out_of_bounds)
         return register_plugin_function(
@@ -83,11 +87,18 @@ def is_valid_geoarrow(
     Do not use this unless you know for sure the inner data is valid!
     The rings still have to be closed.
 
+    A `geoarrow.box` is checked too.
+    It is invalid if any of its bounds is null.
+    With `check_finite_coordinates=True`, every range has to be finite,
+    or the empty range `inf` to `-inf`.
+    A finite `xmin > xmax` crosses the antimeridian, and is valid.
+    `out_of_bounds` cannot be given for a box.
+
     ```python
     df.filter(geo.is_valid_geoarrow("parcel"))
     ```
     """
-    return on_geometry(
+    return on_geometry_or_box(
         geometry,
         _kernel(
             "is_valid_geoarrow",
@@ -116,9 +127,17 @@ def null_out_invalid_geoarrow(
     pl.scan_parquet("routes.parquet").select(geo.null_out_invalid_geoarrow("route"))
     ```
 
+    It takes a `geoarrow.box` too.
+    geopandas writes the box of a null geometry with every bound null, but the box itself not null.
+    This makes that box null:
+
+    ```python
+    pl.scan_parquet("places.parquet").with_columns(geo.null_out_invalid_geoarrow("bbox"))
+    ```
+
     On a column that is entirely valid, it copies nothing.
     """
-    return on_geometry(
+    return on_geometry_or_box(
         geometry,
         _kernel(
             "null_out_invalid_geoarrow",

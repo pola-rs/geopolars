@@ -3,6 +3,7 @@
 //!
 //! See the README.
 
+mod boxes;
 mod coords;
 mod dimension;
 mod geotraits;
@@ -17,6 +18,7 @@ mod untrimmed;
 use polars_arrow::array::Array;
 use polars_core::prelude::{polars_err, PolarsResult};
 
+pub use boxes::BoxArray;
 pub use coords::{
     is_close, is_ring, same_place, same_place_within, same_position, AxisArrays, Coords, Tolerance,
     ValidCoords, MIN_RING_VERTICES,
@@ -29,7 +31,7 @@ pub use linestrings::{
 pub use lists::{List, ValidList};
 pub use points::{MultiPointArray, PointArray, ScalarMultiPoint, ScalarPoint};
 pub use polygons::{MultiPolygonArray, PolygonArray, ScalarMultiPolygon, ScalarPolygon};
-pub use unchecked::UncheckedStorage;
+pub use unchecked::{UncheckedBoxes, UncheckedStorage};
 pub use untrimmed::Untrimmed;
 
 /// Downcast one level of the storage to the array it has to be.

@@ -13,6 +13,9 @@ from polars.testing import assert_frame_equal
 import geopolars as gpl
 from geopolars import geo
 from geopolars.datatypes import (
+    BoxType,
+    BoxXY,
+    BoxXYZ,
     GeoArrowType,
     LineStringXY,
     LineStringXYZM,
@@ -353,6 +356,87 @@ def test_without_the_coordinate_checks_the_rings_still_count() -> None:
     assert out == [False]
 
 
+# Boxes.
+
+_BOX = {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0}
+
+
+def _boxes_are_valid(
+    *rows: object, box: BoxType | None = None, **kwargs: object
+) -> list[bool | None]:
+    box = BoxXY() if box is None else box
+    storage = pl.Series("g", list(rows), dtype=box.ext_storage())
+    df = pl.DataFrame(storage.ext.to(box))
+    return df.select(geo.is_valid_geoarrow("g", **kwargs))["g"].to_list()
+
+
+def test_a_box_is_valid() -> None:
+    assert _boxes_are_valid(_BOX) == [True]
+
+
+def test_a_null_box_gives_a_null_result() -> None:
+    assert _boxes_are_valid(None, _BOX) == [None, True]
+
+
+def test_a_box_without_any_bound_is_invalid() -> None:
+    """The way geopandas writes the box of a null geometry."""
+    assert _boxes_are_valid(dict.fromkeys(_BOX)) == [False]
+
+
+def test_a_box_with_a_null_bound_is_invalid() -> None:
+    assert _boxes_are_valid(_BOX | {"ymax": None}, _BOX) == [False, True]
+
+
+def test_without_the_null_check_a_null_bound_is_not_looked_for() -> None:
+    out = _boxes_are_valid(_BOX | {"ymax": None}, check_null_coordinates=False)
+
+    assert out == [True]
+
+
+@pytest.mark.parametrize("value", [NAN, INF, -INF])
+def test_a_box_may_be_non_finite_by_default(value: float) -> None:
+    assert _boxes_are_valid(_BOX | {"xmin": value}) == [True]
+
+
+@pytest.mark.parametrize("bound", ["xmin", "ymax"])
+@pytest.mark.parametrize("value", [NAN, INF, -INF])
+def test_a_non_finite_bound_can_be_refused(bound: str, value: float) -> None:
+    out = _boxes_are_valid(_BOX | {bound: value}, check_finite_coordinates=True)
+
+    assert out == [False]
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_the_empty_range_is_finite(axis: str) -> None:
+    box = _BOX | {f"{axis}min": INF, f"{axis}max": -INF}
+
+    assert _boxes_are_valid(box, check_finite_coordinates=True) == [True]
+
+
+def test_the_empty_range_is_finite_in_z() -> None:
+    box = _BOX | {"zmin": INF, "zmax": -INF}
+
+    assert _boxes_are_valid(box, box=BoxXYZ(), check_finite_coordinates=True) == [True]
+
+
+@pytest.mark.parametrize(("low", "high"), [(-INF, INF), (INF, 3.0), (1.0, -INF)])
+def test_only_inf_to_minus_inf_is_the_empty_range(low: float, high: float) -> None:
+    box = _BOX | {"xmin": low, "xmax": high}
+
+    assert _boxes_are_valid(box, check_finite_coordinates=True) == [False]
+
+
+def test_a_box_crossing_the_antimeridian_is_finite() -> None:
+    box = _BOX | {"xmin": 170.0, "xmax": -170.0}
+
+    assert _boxes_are_valid(box, check_finite_coordinates=True) == [True]
+
+
+def test_a_box_has_no_crs_bounds_to_check() -> None:
+    with pytest.raises(TypeError, match="`out_of_bounds` of a box"):
+        _boxes_are_valid(_BOX, box=BoxXY(crs=WGS84), out_of_bounds=geo.OutOfBounds())
+
+
 # The expression itself.
 
 
@@ -400,6 +484,13 @@ def test_namespace_passes_the_checks_on() -> None:
 
 def test_rejects_a_non_geometry_while_building_the_plan() -> None:
     lf = pl.LazyFrame({"g": [1.0]}).select(geo.is_valid_geoarrow("g"))
+
+    with pytest.raises(TypeError, match="expected a `geoarrow.point`"):
+        lf.collect_schema()
+
+
+def test_is_valid_ogc_still_rejects_a_box() -> None:
+    lf = pl.LazyFrame(schema={"g": BoxXY()}).select(geo.is_valid_ogc("g"))
 
     with pytest.raises(TypeError, match="expected a `geoarrow.point`"):
         lf.collect_schema()

@@ -33,7 +33,6 @@ from tests.unit.io.conftest import (
     COVERING_FIELDS_OUT_OF_ORDER,
     NO_CHECK_EVERY_FILE,
     NOT_REFUSED,
-    NULL_BOUNDS_ARE_NO_NULL_BOX,
     REFUSED_BY_THE_WRAPPER,
     Parquet,
 )
@@ -339,8 +338,7 @@ def test_a_covering_reads_as_a_box_in_the_geometrys_crs(
     assert back["bbox"].ext.storage().to_list() == [_BOUNDS, _BOUNDS]
 
 
-@NULL_BOUNDS_ARE_NO_NULL_BOX
-def test_a_covering_without_any_bound_is_a_null_box(
+def test_a_covering_without_any_bound_can_be_made_a_null_box(
     parquet: Parquet, tmp_path: Path
 ) -> None:
     """The way geopandas writes the bbox of a null geometry."""
@@ -351,7 +349,7 @@ def test_a_covering_without_any_bound_is_a_null_box(
         .otherwise(pl.struct(**{bound: pl.lit(None, pl.Float64) for bound in _BOUNDS})),
     )
     path = _write(tmp_path / "points.parquet", _geo(covering=_covering()), df)
-    back = parquet.read(path)
+    back = parquet.read(path).with_columns(geo.null_out_invalid_geoarrow("bbox"))
 
     assert df["bbox"].null_count() == 0
     assert back["bbox"].ext.storage().to_list() == [_BOUNDS, None]

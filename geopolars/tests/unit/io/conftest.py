@@ -121,9 +121,6 @@ COVERING_FIELDS_OUT_OF_ORDER = _polars_xfail(
     "Polars reads a covering whose fields are not in xmin/ymin/xmax/ymax order "
     "as a plain struct, not a box"
 )
-NULL_BOUNDS_ARE_NO_NULL_BOX = _polars_xfail(
-    "Polars reads a covering with every bound null as a box of nulls, not a null box"
-)
 STRING_CRS_IS_REFUSED = _polars_xfail(
     "Polars only writes a PROJJSON CRS or OGC:CRS84: it refuses any other string one, "
     "even with `geo` given"

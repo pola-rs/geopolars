@@ -4,8 +4,8 @@
 //! This is a separate pass, before any kernel reads the views.
 
 use geopolars_core::{
-    LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
-    PolygonArray, UncheckedStorage, ValidCoords, ValidList,
+    BoxArray, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PointArray, PolygonArray, UncheckedBoxes, UncheckedStorage, ValidCoords, ValidList,
 };
 use polars_arrow::bitmap::Bitmap;
 
@@ -80,4 +80,10 @@ pub fn propagate_inner_nulls_of_multi_polygons(storage: UncheckedStorage) -> Mul
         rings.ignoring_validity().clone(),
         coords,
     )
+}
+
+/// The boxes already combine the validity of the struct and its bounds,
+/// as the coordinates do in [propagate_inner_nulls_of_points].
+pub fn propagate_inner_nulls_of_boxes(storage: UncheckedBoxes) -> BoxArray {
+    storage.boxes
 }
