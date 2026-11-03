@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@pytest.fixture(params=["plain", "wrapper", "polars"])
+@pytest.fixture(params=["plain", "polars"])
 def parquet(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Parquet:
     """Also Polars without GeoParquet, which keeps any extension type."""
     return use_backend(request, monkeypatch)

@@ -15,7 +15,6 @@ import pytest
 import shapely
 from polars.testing import assert_frame_equal
 
-import geopolars as gpl
 from geopolars import geo
 from geopolars.datatypes import (
     BoxXY,
@@ -32,9 +31,6 @@ from geopolars.datatypes import (
 )
 from tests.unit.io.conftest import (
     COVERING_FIELDS_OUT_OF_ORDER,
-    EPOCH_REFUSED_BY_THE_WRAPPER,
-    OTHER_ERRORS_BY_THE_WRAPPER,
-    REFUSED_BY_THE_WRAPPER,
     Parquet,
 )
 
@@ -236,7 +232,6 @@ def test_files_that_agree_read_together(parquet: Parquet, tmp_path: Path) -> Non
         assert back.height == 4
 
 
-@OTHER_ERRORS_BY_THE_WRAPPER
 def test_files_that_disagree_are_refused(parquet: Parquet, tmp_path: Path) -> None:
     _write(tmp_path / "a.parquet", _geo(crs=None))
     _write(tmp_path / "b.parquet", _geo())
@@ -245,18 +240,6 @@ def test_files_that_disagree_are_refused(parquet: Parquet, tmp_path: Path) -> No
         parquet.scan(tmp_path / "*.parquet").collect()
 
 
-def test_the_wrapper_can_trust_the_first_file(tmp_path: Path) -> None:
-    _write(tmp_path / "a.parquet", _geo(crs=None))
-    _write(tmp_path / "b.parquet", _geo())
-    source = tmp_path / "*.parquet"
-
-    trusted = pl.read_parquet(source).pipe(
-        gpl.from_geoparquet, source, check_every_file=False
-    )
-    assert trusted.schema["geometry"] == PointXY()
-
-
-@OTHER_ERRORS_BY_THE_WRAPPER
 def test_files_without_metadata_among_geoparquet_are_refused(
     parquet: Parquet, tmp_path: Path
 ) -> None:
@@ -272,7 +255,6 @@ def test_plain_parquet_is_read_as_is(parquet: Parquet, tmp_path: Path) -> None:
     assert_frame_equal(parquet.read(path), pl.read_parquet(path))
 
 
-@REFUSED_BY_THE_WRAPPER
 def test_a_geometry_column_the_file_lacks_is_ignored(
     parquet: Parquet, tmp_path: Path
 ) -> None:
@@ -281,20 +263,17 @@ def test_a_geometry_column_the_file_lacks_is_ignored(
         assert parquet.read(path).columns == ["id"]
 
 
-@EPOCH_REFUSED_BY_THE_WRAPPER
 def test_an_epoch_is_kept(parquet: Parquet, tmp_path: Path) -> None:
     path = _write(tmp_path / "points.parquet", _geo(epoch=2021.47))
     dtype = parquet.read(path).schema["geometry"]
     assert dtype.ext_metadata() == '{"crs":"OGC:CRS84","epoch":2021.47}'
 
 
-@REFUSED_BY_THE_WRAPPER
 def test_a_primary_column_it_lacks_is_ignored(parquet: Parquet, tmp_path: Path) -> None:
     path = _write(tmp_path / "points.parquet", _geo() | {"primary_column": "elsewhere"})
     assert parquet.read(path).schema["geometry"] == PointXY(crs="OGC:CRS84")
 
 
-@REFUSED_BY_THE_WRAPPER
 @pytest.mark.parametrize(
     ("geo_metadata", "match"),
     [
@@ -331,7 +310,6 @@ def test_spherical_edges_are_kept(parquet: Parquet, tmp_path: Path) -> None:
     assert dtype.ext_metadata() == '{"crs":"OGC:CRS84","edges":"spherical"}'
 
 
-@REFUSED_BY_THE_WRAPPER
 @pytest.mark.parametrize(
     ("encoding", "df", "repair"),
     [
@@ -419,7 +397,6 @@ def test_a_covering_whose_column_is_missing_is_ignored(
     assert parquet.read(path).columns == ["id", "geometry"]
 
 
-@REFUSED_BY_THE_WRAPPER
 @pytest.mark.parametrize(
     "covering",
     [
@@ -447,7 +424,6 @@ def test_a_malformed_covering_is_read_as_a_struct(
     assert repaired.to_series().ext.storage().to_list() == [_BOUNDS, _BOUNDS]
 
 
-@REFUSED_BY_THE_WRAPPER
 def test_a_covering_that_is_not_bounds_is_read_as_a_struct(
     parquet: Parquet, tmp_path: Path
 ) -> None:
