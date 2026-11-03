@@ -11,6 +11,13 @@ and describing them in the file when writing.
 That key says which columns hold geometries, how they are encoded, and in which [CRS](concepts/crs.md).
 GeoPandas, GDAL, DuckDB and many other tools read and write it.
 
+GeoParquet is supported through Polars itself.
+It is experimental, and only switched on by environment variables.
+Use `POLARS_GEOPARQUET_READ=1` to read the `geo` metadata,
+and `POLARS_GEOPARQUET_WRITE=1.0` or `1.1` to write it.
+Without them, files from other tools read as plain structs and binary,
+and written files carry no `geo` metadata.
+
 ### Writing
 
 Polars writes geometry columns to Parquet as they are.
@@ -104,6 +111,13 @@ A `Wkb` column cannot be bounded, so decode it with `from_wkb` first:
 ```
 
 When you read the file back, the box column comes in as a [box](concepts/geometry-types.md#boxes).
+
+### Known limitations
+
+- A `bbox` covering is only read as a box if its fields are `Float64`,
+  in the order `xmin, ymin, [zmin,] xmax, ymax, [zmax]`.
+  Any other covering (such as the one in the GeoParquet spec's own example file)
+  is read as a plain struct, with a warning.
 
 ## WKT and WKB
 
