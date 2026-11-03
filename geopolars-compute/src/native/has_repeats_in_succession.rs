@@ -65,7 +65,7 @@ pub(super) fn coincide<
 }
 
 /// `unique_z` and `unique_m`, only for an axis `coords` has.
-fn unique_axes(coords: &ValidCoords, unique_z: bool, unique_m: bool) -> (bool, bool) {
+pub(super) fn unique_axes(coords: &ValidCoords, unique_z: bool, unique_m: bool) -> (bool, bool) {
     let dim = coords.dim();
     (unique_z && dim.has_z(), unique_m && dim.has_m())
 }

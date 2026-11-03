@@ -21,6 +21,7 @@ the comment says when one without a CRS takes a different tier.
 | `add_holes` | - | | - | | A | holes: linestring(s) or multilinestring | - | | - | | - | |
 | `boundary` | - | | C | | C | every ring | - | | C | LPP | C | LPP |
 | `parts` | - | | - | | - | | C | [^4] | C | [^4] | C | [^4] |
+| `join_line_strings` | - | | - | | - | | - | | A | [^5] | - | |
 | `convex_hull` | - | | B | GEOS [^3], straight=null | B | GEOS [^3] [^1] | B | GEOS [^3] [^1] | B | GEOS [^3] [^1] | B | GEOS[^3] [^1] |
 | `buffer` | B | GEOS; z and m dropped [^1] | B | | B | | B | | B | | B | |
 | `offset_curve` | - | | B | GEOS; z and m dropped [^1] | - | | - | | B | | - | |
@@ -93,3 +94,4 @@ In this table:
 [^3]: Convex hull only cares around the points, not the actual geometry.
       See the implementation in `geopolars-compute`.
 [^4]: Metadata relabeling
+[^5]: Also takes a `list[LineString]`.

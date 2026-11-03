@@ -106,6 +106,14 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
     ),
     "centroid": (lambda g: geo.centroid(g), {MultiPointXY}),
     "bounds": (lambda g: geo.bounds(g), set()),
+    "join_line_strings": (
+        lambda g: geo.join_line_strings(g),
+        {LineStringXY, MultiPointXY, PolygonXY, MultiPolygonXY},
+    ),
+    "join_line_strings split drop": (
+        lambda g: geo.join_line_strings(g, gaps="split", drop_repeated_joins=True),
+        {LineStringXY, MultiPointXY, PolygonXY, MultiPolygonXY},
+    ),
 }
 
 

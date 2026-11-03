@@ -66,13 +66,6 @@ repair:
 - [x] Close rings expr, can use this inside of 'repair'
 - [ ] expression that drops all the repeated points in a geometry (out of order)
 
-other
-
-- [ ] expr that joins `list[linestring]` or multilinestring into one long string.
-      Bool flag on requiring ends to be coinciding (if true, must return multilinestring,
-      otherwise linestring).
-      Bool flag on deleting repeated overlapping point
-
 ## Two-column operations
 
 - [x] Adding additional holes to polygons from linestrings: `add_holes`

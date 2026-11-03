@@ -65,6 +65,7 @@ from geopolars.geo.is_valid import (
     null_out_invalid_geoarrow,
     null_out_invalid_ogc,
 )
+from geopolars.geo.join_line_strings import join_line_strings
 from geopolars.geo.length import length
 from geopolars.geo.mean_coordinate import mean_coordinate
 from geopolars.geo.offset_curve import offset_curve
@@ -116,6 +117,7 @@ __all__ = [
     "is_simple",
     "is_valid_geoarrow",
     "is_valid_ogc",
+    "join_line_strings",
     "length",
     "line_string",
     "line_string_from_columns",
