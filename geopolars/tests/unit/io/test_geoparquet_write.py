@@ -112,8 +112,8 @@ def test_writes_wkb_without_geometry_types(parquet: Parquet, tmp_path: Path) -> 
 @pytest.mark.parametrize(
     ("dtype", "match"),
     [
-        (PointXYM(), "does not match"),
-        (PolygonXYZM(), "does not match"),
+        (PointXYM(), "cannot store M values"),
+        (PolygonXYZM(), "cannot store M values"),
         (Wkt(), "geoarrow.wkt"),
         (_point('{"crs":"4326","crs_type":"srid"}'), "'srid'"),
         (_point('{"crs":"not a crs"}'), "PROJJSON"),
@@ -230,7 +230,9 @@ def test_a_lazy_frame_is_refused_before_it_runs(
 ) -> None:
     path = tmp_path / "refused.parquet"
     lf = pl.LazyFrame(schema={"geometry": PointXYM()})
-    with pytest.raises(pl.exceptions.InvalidOperationError, match="does not match"):
+    with pytest.raises(
+        pl.exceptions.InvalidOperationError, match="cannot store M values"
+    ):
         parquet.sink(lf, path)
     assert not path.exists()
 
