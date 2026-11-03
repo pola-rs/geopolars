@@ -364,6 +364,28 @@ class ExprGeoNameSpace:
 
         return parts(self._expr)
 
+    def join_line_strings(
+        self,
+        *,
+        gaps: Literal["null", "bridge", "split"] = "null",
+        drop_repeated_joins: bool = False,
+        abs_tol: float | None = None,
+        rel_tol: float | None = None,
+        unique_z: bool = True,
+        unique_m: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.join_line_strings import join_line_strings
+
+        return join_line_strings(
+            self._expr,
+            gaps=gaps,
+            drop_repeated_joins=drop_repeated_joins,
+            abs_tol=abs_tol,
+            rel_tol=rel_tol,
+            unique_z=unique_z,
+            unique_m=unique_m,
+        )
+
     def is_ring(self) -> pl.Expr:
         from geopolars.geo.is_ring import is_ring
 
