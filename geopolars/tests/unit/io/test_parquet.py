@@ -17,7 +17,6 @@ from geopolars import geo
 from geopolars.datatypes import BoxXY, PointType, PointXY
 from tests.unit.conftest import Dimension
 from tests.unit.io.conftest import (
-    BOX_BLOCKS_THE_WRITE,
     STRING_CRS_IS_REFUSED,
     Parquet,
     use_backend,
@@ -141,7 +140,6 @@ def test_a_null_geometry_survives_a_parquet_round_trip(
     assert_frame_equal(back, df)
 
 
-@BOX_BLOCKS_THE_WRITE
 def test_box_survives_a_parquet_round_trip(parquet: Parquet, tmp_path: Path) -> None:
     df = pl.DataFrame({"a": [0.0], "b": [1.0], "c": [2.0], "d": [3.0]}).select(
         geo.box("a", "b", "c", "d", crs="EPSG:4326").alias("box")
