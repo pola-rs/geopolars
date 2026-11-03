@@ -147,6 +147,11 @@ Then turn the column into a geometry:
   with `bound = pl.col("bbox").struct.field`.
 - A covering with too few bounds: compute it again with `geo.bounds("geometry")`.
 
+GeoPandas writes the covering of a null geometry as a box with every bound null,
+rather than as a null box.
+Polars reads it as it is, which breaks GeoArrow's rule on nulls.
+`geo.null_out_invalid_geoarrow("bbox")` makes those boxes null.
+
 ## WKT and WKB
 
 WKT (well-known text) and WKB (well-known binary) are the most common ways to write a single geometry.

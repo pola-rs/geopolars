@@ -155,3 +155,17 @@ def on_geometry_or_encoded(
         return _named_after(build(expr, geometry), expr)
 
     return expr.pipe_with_dtype(resolved)
+
+
+def on_geometry_or_box(
+    value: IntoExprColumn,
+    build: Callable[[pl.Expr, GeoArrowType | BoxType], pl.Expr],
+) -> pl.Expr:
+    """`on_geometry` that also accepts a `geoarrow.box`."""
+    expr = _to_expr(value)
+
+    def resolved(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
+        geometry = dtype if isinstance(dtype, BoxType) else _geometry_of(dtype)
+        return _named_after(build(expr, geometry), expr)
+
+    return expr.pipe_with_dtype(resolved)

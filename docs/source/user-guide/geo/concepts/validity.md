@@ -71,10 +71,10 @@ Without an x, the check only runs when that argument is given.
 
 | Check | Geometry | Standalone | `is_valid_geoarrow` | `is_valid_ogc` | Repair |
 | - | - | - | - | - | - |
-| Nulls only exist at the outer level (no part, ring, coordinate or axis) | all (Point: only its axes) | | x (`check_null_coordinates`) | x (`check_null_coordinates`) | |
+| Nulls only exist at the outer level (no part, ring, coordinate or axis) | all (Point: only its axes) + Box (bounds) | | x (`check_null_coordinates`) | x (`check_null_coordinates`) | |
 | Every ring is closed: its last vertex is its first, in x, y and z | Polygon, MultiPolygon | | x | x | `close_rings` |
 | x and y lie inside the bounds of the CRS | all | | `out_of_bounds` | `out_of_bounds` | `fix_out_of_bounds` |
-| There are no NaN/inf values in the coordinates (except 'empty', see geoarrow) | all | | `check_finite_coordinates=True` | x | `filter_coordinates` |
+| There are no NaN/inf values in the coordinates (except 'empty', see geoarrow) | all + Box | | `check_finite_coordinates=True` | x | `filter_coordinates` |
 | There are no empty coordinates | all but Point, MultiPoint | | | only allowed in multipoints | `filter_coordinates` |
 | A linestring's vertices do not all lie at one place in x and y (`[A, A]` is invalid) (exception: empty) | LineString, MultiLineString[^1] | | | x | |
 | Every ring is empty, or every ring has at least 4 vertices that lie elsewhere in x and y than the vertex before (`[A, B, B, A]` is invalid) | Polygon, MultiPolygon[^1] | | | x | |

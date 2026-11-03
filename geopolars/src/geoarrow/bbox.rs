@@ -22,7 +22,7 @@ pub const NAME: &str = "geoarrow.box";
 ///
 /// Its storage is a flat struct of bounds rather than nested coordinates,
 /// so it is deliberately not a [`Kind`](geopolars_views::Kind):
-/// [`describe`](super::describe) refuses it, and so does every expression.
+/// [`describe`](super::describe) refuses it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GeoBox {
     dim: GeoDimension,
@@ -127,6 +127,12 @@ impl ExtensionTypeImpl for UnsupportedBox {
     fn dyn_debug(&self) -> Cow<'_, str> {
         Cow::Owned(format!("UnsupportedBox({:?})", self.storage))
     }
+}
+
+/// Whether `dtype` is a `geoarrow.box` with a layout we recognise.
+pub fn is_box(dtype: &DataType) -> bool {
+    matches!(dtype, DataType::Extension(typ, _)
+        if (typ.0.as_ref() as &dyn Any).downcast_ref::<GeoBox>().is_some())
 }
 
 /// Reads the dimension off a box's storage.

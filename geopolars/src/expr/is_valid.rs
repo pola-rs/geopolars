@@ -5,13 +5,14 @@
 
 use geopolars_compute::native::{Bounds, CoordinateSelection, NonFinite};
 use geopolars_compute::ogc_validity::{MultiPolygonTopologyChecks, PolygonTopologyChecks};
-use geopolars_core::{are_valid, ValidityCheck};
+use geopolars_core::{are_valid, boxes_are_valid, ValidityCheck};
 use geopolars_views::GeometryArray;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_wrapper_same_geometry;
+use crate::geoarrow::bbox::is_box;
 use crate::geoarrow::{describe, geometry_series};
 
 /// The keyword arguments of the Python `is_valid_geoarrow` and `null_out_invalid_geoarrow`.
@@ -84,10 +85,32 @@ fn are_valid_per_chunk(
     BooleanChunked::try_from_chunk_iter(geometries.name().clone(), chunks)
 }
 
+fn boxes_are_valid_per_chunk(
+    boxes: &Series,
+    kwargs: &IsValidGeoArrowKwargs,
+) -> PolarsResult<BooleanChunked> {
+    polars_ensure!(
+        kwargs.bounds.is_none(),
+        InvalidOperation: "cannot check the bounds of the CRS on a box"
+    );
+    let storage = boxes.ext()?.storage();
+    let chunks = storage.chunks().iter().map(|chunk| {
+        boxes_are_valid(
+            chunk.as_ref(),
+            kwargs.check_null_coordinates,
+            kwargs.check_finite_coordinates,
+        )
+    });
+    BooleanChunked::try_from_chunk_iter(boxes.name().clone(), chunks)
+}
+
 fn are_valid_geoarrow(
     geometries: &Series,
     kwargs: &IsValidGeoArrowKwargs,
 ) -> PolarsResult<BooleanChunked> {
+    if is_box(geometries.dtype()) {
+        return boxes_are_valid_per_chunk(geometries, kwargs);
+    }
     let non_finite = NonFinite {
         select_non_finite: true,
         select_empty: false,
@@ -119,10 +142,15 @@ fn kernel_output_type_wrapper_is_valid(input_fields: &[Field]) -> PolarsResult<F
     Ok(Field::new(field.name().clone(), DataType::Boolean))
 }
 
+/// [`kernel_output_type_wrapper_is_valid`], also for a box.
 fn kernel_output_type_is_valid_geoarrow(
     input_fields: &[Field],
     _kwargs: IsValidGeoArrowKwargs,
 ) -> PolarsResult<Field> {
+    let field = &input_fields[0];
+    if is_box(field.dtype()) {
+        return Ok(Field::new(field.name().clone(), DataType::Boolean));
+    }
     kernel_output_type_wrapper_is_valid(input_fields)
 }
 
@@ -149,6 +177,9 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
     if keep.all() {
         return Ok(geometries.clone());
     }
+    if is_box(geometries.dtype()) {
+        return keep_boxes(geometries, keep);
+    }
     let geo = describe(geometries.dtype())?;
     let storage = geometries.ext()?.storage();
     let chunks = storage
@@ -163,10 +194,33 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
     geometry_series(storage.name().clone(), geo.geo(), chunks)
 }
 
+/// [`keep_rows`] for a box, which has no [`GeometryArray`].
+fn keep_boxes(boxes: &Series, keep: &BooleanChunked) -> PolarsResult<Series> {
+    let DataType::Extension(typ, _) = boxes.dtype() else {
+        polars_bail!(SchemaMismatch: "expected a box column, got: {}", boxes.dtype());
+    };
+    let storage = boxes.ext()?.storage();
+    let chunks = storage
+        .chunks()
+        .iter()
+        .zip(keep.downcast_iter())
+        .map(|(chunk, keep)| chunk.with_validity(Some(keep.values().clone())))
+        .collect();
+    // SAFETY: only the outer validity changed, so every chunk is still the storage.
+    let storage = unsafe {
+        Series::from_chunks_and_dtype_unchecked(storage.name().clone(), chunks, storage.dtype())
+    };
+    Ok(storage.into_extension(typ.clone()))
+}
+
+/// [`kernel_output_type_wrapper_same_geometry`], also for a box.
 fn kernel_output_type_null_out_invalid_geoarrow(
     input_fields: &[Field],
     _kwargs: IsValidGeoArrowKwargs,
 ) -> PolarsResult<Field> {
+    if is_box(input_fields[0].dtype()) {
+        return Ok(input_fields[0].clone());
+    }
     kernel_output_type_wrapper_same_geometry(input_fields)
 }
 
