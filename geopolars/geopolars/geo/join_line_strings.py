@@ -59,7 +59,7 @@ def join_line_strings(
     {coincidence_tolerance}
 
     A null row gives a null row.
-    So does a null linestring or a null vertex in the list.
+    So does a null linestring or a null vertex in it.
     An empty list, or one of only empty linestrings, gives an empty linestring
     (or an empty multilinestring with `"split"`).
 

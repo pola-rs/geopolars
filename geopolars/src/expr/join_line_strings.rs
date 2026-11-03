@@ -71,7 +71,7 @@ fn kernel_output_type_join_line_strings(
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-/// [`join_line_strings`] for one chunk of the storage of a list of linestrings.
+/// [`join_line_strings`] for one chunk of the input's storage.
 fn chunk_join_line_strings(
     chunk: &dyn Array,
     kwargs: &JoinLineStringsKwargs,
@@ -92,7 +92,7 @@ fn chunk_join_line_strings(
     })
 }
 
-/// See `join_line_strings`.
+/// See `join_line_strings` in Python.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_join_line_strings)]
 fn join_line_strings(inputs: &[Series], kwargs: JoinLineStringsKwargs) -> PolarsResult<Series> {
     let geo = joined_type(inputs[0].dtype(), &kwargs)?;
@@ -101,7 +101,8 @@ fn join_line_strings(inputs: &[Series], kwargs: JoinLineStringsKwargs) -> Polars
         .iter()
         .map(|chunk| chunk_join_line_strings(chunk.as_ref(), &kwargs))
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: the chunks are the storage of `geo`, of the input's dimension.
+    // SAFETY: `joined_type` and `chunk_join_line_strings` both pick the kind from `kwargs.gaps`,
+    // and the kernels keep the input's coordinates, so each chunk is the storage of `geo`.
     Ok(unsafe {
         Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &geo.dtype())
     })

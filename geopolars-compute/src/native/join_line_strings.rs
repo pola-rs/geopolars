@@ -3,11 +3,11 @@
 //!
 //! The parts of a row already lie one after the other in the coordinates,
 //! so a join only needs new offsets, and the coordinates are shared.
-//! Only `drop_repeated_joins` copies them, as in [super::selected_coords](mod@super::selected_coords).
+//! Only `drop_repeated_joins` copies them, through [super::selected_coords](mod@super::selected_coords).
 //!
 //! # Const generic flags
 //!
-//! [for_each_join] passes `TOLERANCE_COINCIDENCE`, `UNIQUE_Z` and `UNIQUE_M` on to [coincide].
+//! [for_each_join_with] passes `TOLERANCE_COINCIDENCE`, `UNIQUE_Z` and `UNIQUE_M` on to [coincide].
 //! See [super::has_repeats_in_succession](mod@super::has_repeats_in_succession) for them.
 
 use std::iter::Peekable;
@@ -23,7 +23,8 @@ use super::too_short::TooShort;
 
 /// What [multi_line_strings_joined] does at a gap: a join whose two vertices do not coincide.
 /// See `gaps` of `join_line_strings` in Python.
-/// `gaps="split"` has no variant here, as it gives multilinestrings: it is [multi_line_strings_split_at_gaps].
+/// `gaps="split"` gives multilinestrings, so it has no variant here.
+/// See [multi_line_strings_split_at_gaps] for it.
 #[derive(Debug, Clone, Copy)]
 pub enum Gaps {
     Null,
@@ -87,7 +88,8 @@ fn vertices_per_row(array: &MultiLineStringArray) -> ValidList {
     let lines = array.lines.offsets().buffer();
     let offsets = array.rows.ignoring_validity().offsets().buffer();
     let offsets = offsets.iter().map(|&row| lines[row as usize]).collect();
-    // SAFETY: the offsets of the lines grow, and so do those of the rows that index them.
+    // SAFETY: the row offsets never decrease, and neither do the line offsets they index,
+    // so the line offset at each row offset never decreases either.
     ValidList::from_offsets(unsafe { Offsets::new_unchecked(offsets) }.into())
 }
 
@@ -129,14 +131,17 @@ pub fn multi_line_strings_joined(
         List::from_offsets(rows.offsets().clone(), validity),
         array.coords.clone(),
     );
+    // Only the first vertex of a later part is dropped, so a line keeps every vertex of its first part.
+    // It is only too short if that part already was.
     match dropped {
         Some(dropped) => line_strings_without_selected(&joined, &dropped.freeze(), TooShort::Keep),
         None => joined,
     }
 }
 
-/// The offsets of the lines `array` is split into at the vertices `gaps` gives, as `(row, start)` in order.
-/// Each row with vertices gets one line more than it has gaps, and one without gets none.
+/// The row and line offsets of `rows`, split into a new line at each gap.
+/// `gaps` holds `(row, first vertex after the gap)`, in order.
+/// A row with vertices gets one line more than it has gaps. An empty row gets none.
 fn lines_split_at(
     array: &MultiLineStringArray,
     rows: &ValidList,
@@ -144,7 +149,7 @@ fn lines_split_at(
 ) -> (List, ValidList) {
     let mut row_offsets = Offsets::<i64>::with_capacity(rows.len());
     let mut line_offsets = Offsets::<i64>::with_capacity(array.lines.len());
-    const NO_OVERFLOW: &str = "no more lines than vertices";
+    const NO_OVERFLOW: &str = "no more lines or vertices than the input's offsets index";
     for (row, vertices) in rows.ranges().enumerate() {
         let mut line_start = vertices.start;
         let mut lines = 0;
@@ -169,8 +174,7 @@ fn lines_split_at(
     )
 }
 
-/// `array` with the parts of each row joined where they coincide, and split at each gap.
-/// See [multi_line_strings_joined] for `drop_repeated_joins`.
+/// [multi_line_strings_joined], but starting a new part at each gap.
 pub fn multi_line_strings_split_at_gaps(
     array: &MultiLineStringArray,
     tolerance: Option<Tolerance>,
@@ -195,6 +199,7 @@ pub fn multi_line_strings_split_at_gaps(
     let (rows, lines) =
         lines_split_at(array, &vertices_per_row(array), gaps.into_iter().peekable());
     let joined = MultiLineStringArray::from_parts(rows, lines, array.coords.clone());
+    // See `multi_line_strings_joined` on `TooShort::Keep`. A split line starts at a gap, which is never dropped.
     match dropped {
         Some(dropped) => {
             multi_line_strings_without_selected(&joined, &dropped.freeze(), TooShort::Keep)
