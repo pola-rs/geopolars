@@ -171,15 +171,6 @@ impl ExtensionMetadata {
             .clone()
             .map_err(|e| polars_err!(ComputeError: "{e}"))
     }
-
-    /// Consuming setter for edges.
-    pub fn with_edges(self, edges: Edges) -> Self {
-        // A unit variant always serialises.
-        let edges = serde_json::to_value(edges).unwrap();
-        let mut map = self.map;
-        map.insert("edges".to_owned(), edges);
-        Self::from_map(map)
-    }
 }
 
 /// What [`ExtensionMetadata::crs`] gives for `map`, with the error as a message.

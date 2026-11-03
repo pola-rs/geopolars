@@ -1,13 +1,10 @@
-use std::collections::HashMap;
-
-use polars::prelude::{DataFrame, IntoColumn, PolarsError, Series};
+use polars::prelude::PolarsError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3_polars::{PolarsAllocator, PyDataFrame};
+use pyo3_polars::PolarsAllocator;
 
 mod expr;
 mod geoarrow;
-mod geoparquet;
 mod proj;
 
 #[global_allocator]
@@ -131,39 +128,6 @@ fn is_equal_area(py: Python<'_>, metadata: Option<&str>) -> PyResult<bool> {
         .map_err(|e| polars_exception(py, e))
 }
 
-/// See `geopolars.io.parquet._geometry_dtypes`.
-///
-/// Dtypes cross as an empty frame:
-/// pyo3-polars cannot convert an extension dtype on its own, but a series carries it.
-#[pyfunction]
-#[pyo3(signature = (geo, schema))]
-fn geoparquet_dtypes(py: Python<'_>, geo: &str, schema: PyDataFrame) -> PyResult<PyDataFrame> {
-    let fields = geoparquet::GeoParquetMetadata::parse(geo)
-        .and_then(|metadata| metadata.dtypes(schema.0.schema()))
-        .map_err(|e| polars_exception(py, e))?;
-    let columns = fields
-        .iter()
-        .map(|field| Series::new_empty(field.name().clone(), field.dtype()).into_column())
-        .collect();
-    DataFrame::new(0, columns)
-        .map(PyDataFrame)
-        .map_err(|e| polars_exception(py, e))
-}
-
-/// See `geopolars.io.parquet._with_geo_metadata`.
-/// `None` if the schema has no geometry columns.
-#[pyfunction]
-#[pyo3(signature = (schema, coverings = HashMap::new()))]
-fn geoparquet_metadata(
-    py: Python<'_>,
-    schema: PyDataFrame,
-    coverings: HashMap<String, String>,
-) -> PyResult<Option<String>> {
-    geoparquet::GeoParquetMetadata::from_schema(schema.0.schema(), &coverings)
-        .map(|metadata| metadata.map(|metadata| metadata.to_json()))
-        .map_err(|e| polars_exception(py, e))
-}
-
 /// `err` as the matching exception of the host `polars` package,
 /// so that it can be caught as, say, `pl.exceptions.ComputeError`.
 fn polars_exception(py: Python<'_>, err: PolarsError) -> PyErr {
@@ -194,8 +158,6 @@ fn geopolars(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(longitude_turn, m)?)?;
     m.add_function(wrap_pyfunction!(is_equal_area, m)?)?;
     m.add_function(wrap_pyfunction!(crs_bounds, m)?)?;
-    m.add_function(wrap_pyfunction!(geoparquet_dtypes, m)?)?;
-    m.add_function(wrap_pyfunction!(geoparquet_metadata, m)?)?;
     geoarrow::register().map_err(|e| {
         pyo3::exceptions::PyRuntimeError::new_err(format!(
             "failed to register geoarrow extension types: {e}"

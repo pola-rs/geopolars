@@ -51,5 +51,3 @@ wkb = "0.9.2"
 wkt = { version = "0.14.0", default-features = false }
 # for maximum interoperability, we should not reshuffle keys when (re-)constructing metadata.
 serde_json = { version = "1", features = ["preserve_order"] }
-# Keeps a GeoParquet file's geometry columns in schema order, for the same reason.
-indexmap = { version = "2", features = ["serde"] }

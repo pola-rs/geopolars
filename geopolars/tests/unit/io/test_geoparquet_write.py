@@ -24,7 +24,6 @@ from geopolars.datatypes import (
     Wkt,
 )
 from tests.unit.io.conftest import (
-    OTHER_ERRORS_BY_THE_WRAPPER,
     Parquet,
 )
 from tests.unit.io.test_geoparquet import DATA, SPEC_GEOMETRIES
@@ -110,7 +109,6 @@ def test_writes_wkb_without_geometry_types(parquet: Parquet, tmp_path: Path) -> 
     assert column["geometry_types"] == []
 
 
-@OTHER_ERRORS_BY_THE_WRAPPER
 @pytest.mark.parametrize(
     ("dtype", "match"),
     [
@@ -217,7 +215,6 @@ def test_sink_writes_the_same_metadata(parquet: Parquet, tmp_path: Path) -> None
     assert_frame_equal(pl.read_parquet(sunk), df)
 
 
-@OTHER_ERRORS_BY_THE_WRAPPER
 def test_a_lazy_frame_is_refused_before_it_runs(
     parquet: Parquet, tmp_path: Path
 ) -> None:
@@ -349,16 +346,9 @@ def test_a_covering_refuses_wkb() -> None:
     df = pl.DataFrame(schema={"geometry": Wkb()})
     with pytest.raises(pl.exceptions.SchemaError, match="from_wkb"):
         gpl.with_covering(df)
-    with pytest.raises(pl.exceptions.SchemaError, match="from_wkb"):
-        gpl.geoparquet_metadata(df, covering=True)
 
 
 def test_a_covering_refuses_a_taken_name() -> None:
     df = _lines().with_columns(bbox=pl.lit(1))
     with pytest.raises(pl.exceptions.DuplicateError, match="bbox"):
         gpl.with_covering(df)
-
-
-def test_a_covering_has_to_be_added_to_be_described() -> None:
-    with pytest.raises(pl.exceptions.SchemaError, match="bbox"):
-        gpl.geoparquet_metadata(_lines(), covering=True)

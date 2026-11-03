@@ -854,7 +854,6 @@ dependencies = [
  "geoarrow-schema",
  "geopolars-compute",
  "geopolars-core",
- "indexmap",
  "polars",
  "polars-arrow",
  "polars-core",
