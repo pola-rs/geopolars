@@ -66,17 +66,6 @@ repair:
 - [x] Close rings expr, can use this inside of 'repair'
 - [ ] expression that drops all the repeated points in a geometry (out of order)
 
-other
-
-- [x] expr that joins `list[linestring]` or multilinestring into one long string: `join_line_strings`.
-      `gaps: Literal["null", "bridge", "split"] = "null"` for when a part's end does not coincide
-      with the next part's start:
-      `"null"` nulls the row, `"bridge"` joins them with a straight segment (both return linestring),
-      `"split"` starts a new part (returns multilinestring).
-      `drop_repeated_joins: bool = False` keeps only one of the two coinciding vertices at a join.
-      Coincidence takes `abs_tol`, `rel_tol`, `unique_z` and `unique_m`
-      (plus their doc stubs) from `remove_repeats_in_succession`.
-
 ## Two-column operations
 
 - [x] Adding additional holes to polygons from linestrings: `add_holes`

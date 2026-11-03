@@ -39,8 +39,6 @@ pub struct JoinLineStringsKwargs {
     drop_repeated_joins: bool,
 }
 
-/// The geometry `join_line_strings` gives back:
-/// a linestring, or a multilinestring with `gaps="split"`.
 fn joined_type(dtype: &DataType, kwargs: &JoinLineStringsKwargs) -> PolarsResult<Geo> {
     let parts = match dtype {
         DataType::List(inner) => describe(inner)

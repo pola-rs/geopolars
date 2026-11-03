@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 Gaps = Literal["null", "bridge", "split"]
 
 
-@doc()
+@doc(output="result")
 def join_line_strings(
     line_strings: IntoExprColumn,
     *,
@@ -35,7 +35,7 @@ def join_line_strings(
     | `MultiLineStringXY[ZM]` | `LineStringXY[ZM]` | `MultiLineStringXY[ZM]` |
     | anything else | refused | refused |
 
-    The result keeps the input's dimension and CRS.
+    {keeps_dimension_and_crs}
 
     At each join, the last vertex of a linestring is compared with the first vertex of the next.
     Empty linestrings have no vertices to join, and are skipped.
@@ -58,10 +58,9 @@ def join_line_strings(
     {coincidence_axes}
     {coincidence_tolerance}
 
-    A null row gives a null row.
-    So does a null linestring or a null vertex in it.
-    An empty list, or one of only empty linestrings, gives an empty linestring
-    (or an empty multilinestring with `"split"`).
+    {empty_and_null}
+    A null linestring or a null vertex in it also gives a null result.
+    An empty list, or one of only empty linestrings, counts as empty.
 
     ```python
     df.select(geo.join_line_strings("legs", gaps="bridge"))

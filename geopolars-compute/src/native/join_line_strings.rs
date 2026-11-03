@@ -62,9 +62,7 @@ fn for_each_join_with<
     }
 }
 
-/// Calls `on_join(row, start, coincides)` for every join, in order.
-/// A join is the last vertex of a non-empty part followed by the first vertex `start` of the next non-empty part.
-/// Empty parts have no vertices to join, and are skipped.
+/// Calls `on_join(row, start, coincides)` for every join
 fn for_each_join(
     array: &MultiLineStringArray,
     tolerance: Option<Tolerance>,
@@ -83,7 +81,6 @@ fn for_each_join(
     )
 }
 
-/// The vertices of all parts of each row, as one list per row.
 fn vertices_per_row(array: &MultiLineStringArray) -> ValidList {
     let lines = array.lines.offsets().buffer();
     let offsets = array.rows.ignoring_validity().offsets().buffer();
@@ -140,7 +137,7 @@ pub fn multi_line_strings_joined(
 }
 
 /// The row and line offsets of `rows`, split into a new line at each gap.
-/// `gaps` holds `(row, first vertex after the gap)`, in order.
+/// `gaps` holds `(row, first vertex after the gap)`.
 /// A row with vertices gets one line more than it has gaps. An empty row gets none.
 fn lines_split_at(
     array: &MultiLineStringArray,

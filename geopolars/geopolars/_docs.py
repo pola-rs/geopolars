@@ -87,6 +87,8 @@ but it might not be valid by `is_valid_ogc`, nor simple (see `is_simple`).""",
 An empty geometry gives an empty {output}, and a null one a null {output}.""",
     "keeps_type_dimension_and_crs": """\
 The type, dimension and CRS of the output geometry are kept from the input.""",
+    "keeps_dimension_and_crs": """\
+The result keeps the input's dimension and CRS.""",
     "ignores_empty_and_invalid": """\
 This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",
