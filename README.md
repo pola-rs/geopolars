@@ -154,7 +154,21 @@ Without an x, the check only runs when that argument is given.
 
 Things that cross the antimeridian can be represented as having points >180° or <-180°.
 
-## Geometry Operations
+## GeoParquet
+
+GeoParquet is supported through Polars itself.
+It is experimental, and only switched on by environment variables.
+Use `POLARS_GEOPARQUET_READ=1` to read the `geo` metadata,
+and `POLARS_GEOPARQUET_WRITE=1.0` or `1.1` to write it.
+Without them, files from other tools read as plain structs and binary,
+and written files carry no `geo` metadata.
+
+### Known limitations
+
+- A `bbox` covering is only read as a box if its fields are `Float64`,
+  in the order `xmin, ymin, [zmin,] xmax, ymax, [zmax]`.
+  Any other covering (such as the one in the GeoParquet spec's own example file)
+  is read as a plain struct, with a warning.
 
 ## User-defined functions
 
