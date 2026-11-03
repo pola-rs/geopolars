@@ -31,24 +31,22 @@ def parquet(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> 
     return use_backend(request, monkeypatch)
 
 
-def _m_is_refused(
-    request: pytest.FixtureRequest, parquet: Parquet, dimension: Dimension
-) -> None:
+def _m_is_refused(parquet: Parquet, dimension: Dimension) -> None:
     """GeoParquet 1.1 has no M values, so only a plain file can hold them."""
     if dimension.has_m and parquet.name != "plain":
-        request.applymarker(
-            pytest.mark.xfail(reason="GeoParquet 1.1 cannot store M values")
+        pytest.skip(
+            "GeoParquet 1.1 cannot store M values; "
+            "see test_refuses_what_geoparquet_cannot_hold"
         )
 
 
 def test_point_survives_a_parquet_round_trip(
-    request: pytest.FixtureRequest,
     parquet: Parquet,
     coords: pl.DataFrame,
     dimension: Dimension,
     tmp_path: Path,
 ) -> None:
-    _m_is_refused(request, parquet, dimension)
+    _m_is_refused(parquet, dimension)
     df = coords.select(dimension.point())
     path = tmp_path / "points.parquet"
     parquet.write(df, path)
@@ -59,13 +57,12 @@ def test_point_survives_a_parquet_round_trip(
 
 
 def test_linestring_survives_a_parquet_round_trip(
-    request: pytest.FixtureRequest,
     parquet: Parquet,
     line_coords: pl.DataFrame,
     dimension: Dimension,
     tmp_path: Path,
 ) -> None:
-    _m_is_refused(request, parquet, dimension)
+    _m_is_refused(parquet, dimension)
     df = dimension.lines(line_coords)
     path = tmp_path / "lines.parquet"
     parquet.write(df, path)
@@ -76,13 +73,12 @@ def test_linestring_survives_a_parquet_round_trip(
 
 
 def test_polygon_survives_a_parquet_round_trip(
-    request: pytest.FixtureRequest,
     parquet: Parquet,
     ring_coords: pl.DataFrame,
     dimension: Dimension,
     tmp_path: Path,
 ) -> None:
-    _m_is_refused(request, parquet, dimension)
+    _m_is_refused(parquet, dimension)
     df = dimension.polygons(ring_coords)
     path = tmp_path / "polygons.parquet"
     parquet.write(df, path)
@@ -114,14 +110,13 @@ def test_metadata_survives_a_parquet_round_trip(
 
 
 def test_a_null_geometry_survives_a_parquet_round_trip(
-    request: pytest.FixtureRequest,
     parquet: Parquet,
     dimension: Dimension,
     tmp_path: Path,
 ) -> None:
     """Nulls live at the outermost level only, and that is where a file has to
     put them back: an empty line is not a null one."""
-    _m_is_refused(request, parquet, dimension)
+    _m_is_refused(parquet, dimension)
     df = pl.DataFrame(
         {"vertices": [[{name: 1.0 for name in dimension.coords}], [], None]},
         schema={
