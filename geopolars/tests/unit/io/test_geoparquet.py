@@ -34,6 +34,7 @@ from tests.unit.io.conftest import (
     NO_CHECK_EVERY_FILE,
     NOT_REFUSED,
     NULL_BOUNDS_ARE_NO_NULL_BOX,
+    REFUSED_BY_THE_WRAPPER,
     Parquet,
 )
 
@@ -263,31 +264,46 @@ def test_plain_parquet_is_read_as_is(parquet: Parquet, tmp_path: Path) -> None:
     assert_frame_equal(parquet.read(path), pl.read_parquet(path))
 
 
-@NOT_REFUSED
-def test_a_geometry_column_the_file_lacks_is_refused(
+@REFUSED_BY_THE_WRAPPER
+def test_a_geometry_column_the_file_lacks_is_ignored(
     parquet: Parquet, tmp_path: Path
 ) -> None:
     path = _write(tmp_path / "points.parquet", _geo(), POINTS.select("id"))
-    with pytest.raises(pl.exceptions.ColumnNotFoundError, match="geometry"):
-        parquet.scan(path)
+    with pytest.warns(UserWarning, match="column not found"):
+        assert parquet.read(path).columns == ["id"]
 
 
 @NOT_REFUSED
+def test_an_epoch_is_refused(parquet: Parquet, tmp_path: Path) -> None:
+    path = _write(tmp_path / "points.parquet", _geo(epoch=2021.47))
+    with pytest.raises(pl.exceptions.ComputeError, match="epoch"):
+        parquet.scan(path)
+
+
+@REFUSED_BY_THE_WRAPPER
+def test_a_primary_column_it_lacks_is_ignored(parquet: Parquet, tmp_path: Path) -> None:
+    path = _write(tmp_path / "points.parquet", _geo() | {"primary_column": "elsewhere"})
+    assert parquet.read(path).schema["geometry"] == PointXY(crs="OGC:CRS84")
+
+
+@REFUSED_BY_THE_WRAPPER
 @pytest.mark.parametrize(
     ("geo_metadata", "match"),
     [
-        (_geo(epoch=2021.47), "epoch"),
-        (_geo() | {"version": "2.0.0"}, "2.0.0"),
-        (_geo(encoding="geometry"), "encoding"),
-        (_geo() | {"primary_column": "elsewhere"}, "elsewhere"),
+        (_geo() | {"version": "2.0.0"}, "unsupported version '2.0.0'"),
+        (_geo(encoding="geometry"), "unknown encoding 'geometry'"),
     ],
 )
-def test_metadata_it_cannot_honour_is_refused(
+def test_metadata_it_cannot_honour_is_read_as_plain_storage(
     parquet: Parquet, tmp_path: Path, geo_metadata: dict[str, Any], match: str
 ) -> None:
     path = _write(tmp_path / "points.parquet", geo_metadata)
-    with pytest.raises(pl.exceptions.ComputeError, match=match):
-        parquet.scan(path)
+    with pytest.warns(UserWarning, match=match):
+        df = parquet.read(path)
+
+    assert df.schema["geometry"] == POINTS.schema["geometry"]
+    repaired = df.select(pl.col("geometry").ext.to(PointXY(crs="OGC:CRS84")))
+    assert repaired.schema["geometry"] == PointXY(crs="OGC:CRS84")
 
 
 def test_fields_it_does_not_use_are_ignored(parquet: Parquet, tmp_path: Path) -> None:
@@ -307,21 +323,32 @@ def test_spherical_edges_are_kept(parquet: Parquet, tmp_path: Path) -> None:
     assert dtype.ext_metadata() == '{"crs":"OGC:CRS84","edges":"spherical"}'
 
 
-@NOT_REFUSED
+@REFUSED_BY_THE_WRAPPER
 @pytest.mark.parametrize(
-    ("encoding", "df"),
+    ("encoding", "df", "repair"),
     [
         # Points, but stored as a linestring.
-        ("point", pl.DataFrame({"geometry": [[{"x": 1.0, "y": 2.0}]]})),
-        ("WKB", pl.DataFrame({"geometry": ["POINT (1 2)"]})),
+        (
+            "point",
+            pl.DataFrame({"geometry": [[{"x": 1.0, "y": 2.0}]]}),
+            pl.col("geometry").list.first().ext.to(PointXY(crs="OGC:CRS84")),
+        ),
+        (
+            "WKB",
+            pl.DataFrame({"geometry": ["POINT (1 2)"]}),
+            geo.from_wkt("geometry", PointXY, crs="OGC:CRS84"),
+        ),
     ],
 )
-def test_storage_that_does_not_match_the_encoding_is_refused(
-    parquet: Parquet, tmp_path: Path, encoding: str, df: pl.DataFrame
+def test_storage_that_does_not_match_the_encoding_is_read_as_is(
+    parquet: Parquet, tmp_path: Path, encoding: str, df: pl.DataFrame, repair: pl.Expr
 ) -> None:
     path = _write(tmp_path / "points.parquet", _geo(encoding=encoding), df)
-    with pytest.raises(pl.exceptions.SchemaError, match="stored as"):
-        parquet.scan(path)
+    with pytest.warns(UserWarning, match=f"does not match encoding '{encoding}'"):
+        back = parquet.read(path)
+
+    assert back.schema == df.schema
+    assert back.select(repair).to_dicts() == [{"geometry": {"x": 1.0, "y": 2.0}}]
 
 
 def _covering(column: str = "bbox", **paths: list[str]) -> dict[str, Any]:
@@ -385,30 +412,44 @@ def test_a_covering_whose_column_is_missing_is_ignored(
     assert parquet.read(path).columns == ["id", "geometry"]
 
 
-@NOT_REFUSED
+@REFUSED_BY_THE_WRAPPER
 @pytest.mark.parametrize(
-    ("covering", "match"),
+    "covering",
     [
-        (_covering(ymax=["elsewhere", "ymax"]), "same column"),
-        (_covering(ymax=["bbox", "maxy"]), "its field `ymax`"),
-        (_covering(zmin=["bbox", "zmin"]), "`zmin` and `zmax`"),
-        (_covering(xmin=["bbox"]), "invalid GeoParquet metadata"),
+        _covering(ymax=["elsewhere", "ymax"]),
+        _covering(ymax=["bbox", "maxy"]),
+        _covering(zmin=["bbox", "zmin"]),
+        _covering(xmin=["bbox"]),
     ],
 )
-def test_a_malformed_covering_is_refused(
-    parquet: Parquet, tmp_path: Path, covering: dict[str, Any], match: str
+def test_a_malformed_covering_is_read_as_a_struct(
+    parquet: Parquet, tmp_path: Path, covering: dict[str, Any]
 ) -> None:
     df = POINTS.with_columns(bbox=pl.lit(_BOUNDS))
     path = _write(tmp_path / "points.parquet", _geo(covering=covering), df)
-    with pytest.raises(pl.exceptions.ComputeError, match=match):
-        parquet.scan(path)
+    with pytest.warns(UserWarning, match="invalid bbox paths"):
+        back = parquet.read(path)
+
+    assert back.schema["bbox"] == df.schema["bbox"]
+    bound = pl.col("bbox").struct.field
+    repaired = back.select(
+        geo.box(
+            bound("xmin"), bound("ymin"), bound("xmax"), bound("ymax"), crs="OGC:CRS84"
+        )
+    )
+    assert repaired.to_series().ext.storage().to_list() == [_BOUNDS, _BOUNDS]
 
 
-@NOT_REFUSED
-def test_a_covering_that_is_not_bounds_is_refused(
+@REFUSED_BY_THE_WRAPPER
+def test_a_covering_that_is_not_bounds_is_read_as_a_struct(
     parquet: Parquet, tmp_path: Path
 ) -> None:
     df = POINTS.with_columns(bbox=pl.lit({"xmin": 1.0, "ymin": 2.0}))
     path = _write(tmp_path / "points.parquet", _geo(covering=_covering()), df)
-    with pytest.raises(pl.exceptions.SchemaError, match="xmin/ymin/xmax/ymax"):
-        parquet.scan(path)
+    with pytest.warns(UserWarning, match="is not a struct of Float64 fields"):
+        back = parquet.read(path)
+
+    assert back.schema["bbox"] == df.schema["bbox"]
+    # Too few bounds to repair from, but the geometries can be bounded again.
+    repaired = back.with_columns(geo.bounds("geometry").alias("bbox"))
+    assert repaired.schema["bbox"] == BoxXY(crs="OGC:CRS84")

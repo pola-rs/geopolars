@@ -119,6 +119,34 @@ When you read the file back, the box column comes in as a [box](concepts/geometr
   Any other covering (such as the one in the GeoParquet spec's own example file)
   is read as a plain struct, with a warning.
 
+### Repairing what Polars does not read
+
+When Polars cannot honour the `geo` metadata of a column,
+it does not refuse the file.
+It reads the column as plain Polars data instead, and warns.
+This happens with an unknown encoding or version,
+storage that does not match the encoding, or a malformed covering.
+
+The plain column has lost its CRS, so first read it from the file yourself.
+In GeoParquet, a missing `crs` means `OGC:CRS84`, and `null` means unknown.
+
+```python
+import json
+
+column = json.loads(pl.read_parquet_metadata(path)["geo"])["columns"]["geometry"]
+crs = column.get("crs", "OGC:CRS84")
+crs = json.dumps(crs) if isinstance(crs, dict) else crs
+```
+
+Then turn the column into a geometry:
+
+- Storage that already fits a GeoPolars type: `pl.col("geometry").ext.to(PointXY(crs=crs))`.
+- Other storage: the matching constructor or decoder, such as `geo.from_wkt("geometry", PointXY, crs=crs)`.
+- A covering with all its bounds:
+  `geo.box(bound("xmin"), bound("ymin"), bound("xmax"), bound("ymax"), crs=crs)`,
+  with `bound = pl.col("bbox").struct.field`.
+- A covering with too few bounds: compute it again with `geo.bounds("geometry")`.
+
 ## WKT and WKB
 
 WKT (well-known text) and WKB (well-known binary) are the most common ways to write a single geometry.
