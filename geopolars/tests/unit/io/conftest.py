@@ -107,6 +107,12 @@ def _polars_xfail(reason: str) -> pytest.MarkDecorator:
 NOT_REFUSED = _polars_xfail(
     "Polars does not refuse GeoParquet metadata it cannot honour"
 )
+#: Where Polars reads the column without its `geo` metadata and warns, so it can be repaired.
+REFUSED_BY_THE_WRAPPER = pytest.mark.parquet_xfail(
+    "wrapper",
+    reason="our wrapper refuses GeoParquet metadata it cannot honour, "
+    "where Polars reads the plain column with a warning",
+)
 NO_CHECK_EVERY_FILE = _polars_xfail(
     "Polars only compares the files' dtypes once the query runs, "
     "and has no `check_every_file` to opt out"
