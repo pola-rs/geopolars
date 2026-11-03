@@ -9,20 +9,11 @@ from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
 from geopolars._utils import LIB
-from geopolars.datatypes import LineStringType, MultiLineStringType
-from geopolars.geo._dispatch import _named_after, _to_expr
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
 
 Gaps = Literal["null", "bridge", "split"]
-
-
-def _is_list_of_line_strings(dtype: pl.DataType) -> bool:
-    is_list = isinstance(dtype, pl.List)
-    return (is_list and isinstance(dtype.inner, LineStringType)) or isinstance(
-        dtype, MultiLineStringType
-    )
 
 
 @doc()
@@ -80,27 +71,17 @@ def join_line_strings(
         msg = f"`gaps` must be one of {list(get_args(Gaps))}, got {gaps!r}"
         raise ValueError(msg)
 
-    def build(column: pl.Expr, dtype: pl.DataType) -> pl.Expr:
-        if not _is_list_of_line_strings(dtype):
-            msg = (
-                "join_line_strings expects a list of linestrings "
-                f"or a multilinestring column, got: {dtype!r}"
-            )
-            raise TypeError(msg)
-        joined = register_plugin_function(
-            plugin_path=LIB,
-            args=[column],
-            function_name="join_line_strings",
-            is_elementwise=True,
-            kwargs={
-                "abs_tol": abs_tol,
-                "rel_tol": rel_tol,
-                "unique_z": unique_z,
-                "unique_m": unique_m,
-                "gaps": gaps,
-                "drop_repeated_joins": drop_repeated_joins,
-            },
-        )
-        return _named_after(joined, column)
-
-    return _to_expr(line_strings).pipe_with_dtype(build)
+    return register_plugin_function(
+        plugin_path=LIB,
+        args=[line_strings],
+        function_name="join_line_strings",
+        is_elementwise=True,
+        kwargs={
+            "abs_tol": abs_tol,
+            "rel_tol": rel_tol,
+            "unique_z": unique_z,
+            "unique_m": unique_m,
+            "gaps": gaps,
+            "drop_repeated_joins": drop_repeated_joins,
+        },
+    )

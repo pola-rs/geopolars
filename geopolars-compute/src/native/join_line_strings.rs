@@ -21,9 +21,9 @@ use super::has_repeats_in_succession::{coincide, unique_axes};
 use super::selected_coords::{line_strings_without_selected, multi_line_strings_without_selected};
 use super::too_short::TooShort;
 
-/// What a joined linestring does at a gap, a join that does not coincide.
+/// What [multi_line_strings_joined] does at a gap: a join whose two vertices do not coincide.
 /// See `gaps` of `join_line_strings` in Python.
-/// Its `"split"` is [line_strings_joined_where_coinciding].
+/// `gaps="split"` has no variant here, as it gives multilinestrings: it is [multi_line_strings_split_at_gaps].
 #[derive(Debug, Clone, Copy)]
 pub enum Gaps {
     Null,
@@ -94,7 +94,7 @@ fn vertices_per_row(array: &MultiLineStringArray) -> ValidList {
 /// One linestring per row of `array`, out of all its parts.
 /// A row with a gap is null with [Gaps::Null].
 /// With `drop_repeated_joins=true`, the first vertex of a part is dropped where it coincides with the end of the one before.
-pub fn joined_line_strings(
+pub fn multi_line_strings_joined(
     array: &MultiLineStringArray,
     tolerance: Option<Tolerance>,
     unique_z: bool,
@@ -170,8 +170,8 @@ fn lines_split_at(
 }
 
 /// `array` with the parts of each row joined where they coincide, and split at each gap.
-/// See [joined_line_strings] for `drop_repeated_joins`.
-pub fn line_strings_joined_where_coinciding(
+/// See [multi_line_strings_joined] for `drop_repeated_joins`.
+pub fn multi_line_strings_split_at_gaps(
     array: &MultiLineStringArray,
     tolerance: Option<Tolerance>,
     unique_z: bool,

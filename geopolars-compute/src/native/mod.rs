@@ -81,7 +81,7 @@ pub(crate) use is_valid::rings_are_closed;
 #[cfg(feature = "geos")]
 pub(crate) use is_valid::{line_shapes_are_valid, polygon_shapes_are_valid};
 pub use join_line_strings::{
-    joined_line_strings, line_strings_joined_where_coinciding, Gaps,
+    multi_line_strings_joined, multi_line_strings_split_at_gaps, Gaps,
 };
 pub use length::{line_string_lengths, multi_line_string_lengths, LengthMetric};
 pub use remove_repeats_in_succession::{

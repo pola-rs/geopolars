@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from polars.exceptions import ComputeError
 
 from geopolars import geo
 from geopolars.datatypes import (
+    GeoArrowType,
     LineStringXY,
     MultiLineStringXY,
     MultiLineStringXYZM,
@@ -137,20 +139,55 @@ def test_empty_parts_are_skipped() -> None:
 
 
 @pytest.mark.parametrize(
-    ("gaps", "empty"), [("null", []), ("bridge", []), ("split", [])]
+    ("gaps", "joined"),
+    [
+        ("null", LineStringXY()),
+        ("bridge", LineStringXY()),
+        ("split", MultiLineStringXY()),
+    ],
 )
-def test_nothing_to_join_gives_an_empty_result(gaps: str, empty: list) -> None:
-    assert _join([], [[], []], None, gaps=gaps) == [empty, empty, None]
+def test_nothing_to_join_gives_an_empty_result(gaps: str, joined: GeoArrowType) -> None:
+    out = _multilines([], [[], []], None).select(geo.join_line_strings("g", gaps=gaps))
+
+    assert out.schema["g"] == joined
+    assert _storage(out) == [[], [], None]
 
 
-def test_a_list_of_line_strings_joins_as_a_multilinestring_does() -> None:
+def test_split_skips_empty_parts() -> None:
+    assert _join([[], _AB, _BC, []], [_AB, [], _DE], gaps="split") == [
+        [_line((0, 0), (1, 0), (1, 0), (1, 1))],
+        [_AB, _DE],
+    ]
+
+
+@pytest.mark.parametrize(
+    ("gaps", "joined"),
+    [
+        ("null", LineStringXY(crs=RD)),
+        ("bridge", LineStringXY(crs=RD)),
+        ("split", MultiLineStringXY(crs=RD)),
+    ],
+)
+def test_a_list_of_line_strings_joins_as_a_multilinestring_does(
+    gaps: str, joined: GeoArrowType
+) -> None:
     df = _multilines([_AB, _BC], [_AB, _DE], None, crs=RD)
     listed = df.select(geo.parts("g"))
 
-    out = listed.select(geo.join_line_strings("g"))
+    out = listed.select(geo.join_line_strings("g", gaps=gaps))
 
-    assert out.schema["g"] == LineStringXY(crs=RD)
-    assert _storage(out) == _storage(df.select(geo.join_line_strings("g")))
+    assert out.schema["g"] == joined
+    assert _storage(out) == _storage(df.select(geo.join_line_strings("g", gaps=gaps)))
+
+
+def test_split_keeps_the_dimension() -> None:
+    vertex = {"x": 0.0, "y": 0.0, "z": 1.0, "m": 2.0}
+    storage = pl.Series("g", [[[vertex, vertex]]], dtype=pl.List(pl.List(_XYZM)))
+    df = pl.DataFrame(storage.ext.to(MultiLineStringXYZM()))
+
+    out = df.select(geo.join_line_strings("g", gaps="split"))
+
+    assert out.schema["g"] == MultiLineStringXYZM()
 
 
 def test_a_null_line_string_in_the_list_nulls_the_row() -> None:
@@ -161,6 +198,35 @@ def test_a_null_line_string_in_the_list_nulls_the_row() -> None:
     out = pl.DataFrame(listed).select(geo.join_line_strings("g"))
 
     assert _storage(out) == [None, _line((0, 0), (1, 0), (1, 0), (1, 1))]
+
+
+_ABC = _line((0, 0), (1, 0), (1, 0), (1, 1))
+_ABC_DROPPED = _line((0, 0), (1, 0), (1, 1))
+
+
+@pytest.mark.parametrize(
+    ("gaps", "drop_repeated_joins", "last"),
+    [
+        ("null", False, None),
+        ("null", True, None),
+        ("bridge", False, [*_ABC, *_DE]),
+        ("bridge", True, [*_ABC_DROPPED, *_DE]),
+        ("split", False, [_ABC, _DE]),
+        ("split", True, [_ABC_DROPPED, _DE]),
+    ],
+)
+def test_null_rows_stay_null_and_leave_the_next_row_alone(
+    gaps: str, drop_repeated_joins: bool, last: object
+) -> None:
+    listed = pl.Series(
+        "g", [[_AB, _DE, None], None, [_AB, _BC, _DE]], dtype=pl.List(pl.List(_XY))
+    ).list.eval(pl.element().ext.to(LineStringXY()))
+
+    out = pl.DataFrame(listed).select(
+        geo.join_line_strings("g", gaps=gaps, drop_repeated_joins=drop_repeated_joins)
+    )
+
+    assert _storage(out) == [None, None, last]
 
 
 def test_a_sliced_input_is_joined_by_its_own_rows() -> None:
@@ -196,8 +262,8 @@ def test_the_namespace_method_forwards() -> None:
 def test_other_dtypes_are_refused(dtype: pl.DataType) -> None:
     df = pl.DataFrame({"g": pl.Series([], dtype=dtype)})
 
-    with pytest.raises(TypeError, match="list of linestrings"):
-        df.select(geo.join_line_strings("g"))
+    with pytest.raises(ComputeError, match="expects a list of"):
+        df.lazy().select(geo.join_line_strings("g")).collect_schema()
 
 
 def test_an_unknown_gaps_mode_is_refused() -> None:

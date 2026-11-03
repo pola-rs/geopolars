@@ -1,10 +1,13 @@
-//! Joining a list of linestrings, or the parts of a multilinestring, into one linestring,
-//! through `geopolars_compute::native::joined_line_strings`
-//! and `geopolars_compute::native::line_strings_joined_where_coinciding`.
+//! Joining a list of linestrings, or the parts of a multilinestring, into one linestring per row,
+//! or with `gaps="split"` into one multilinestring split at each gap,
+//! through `geopolars_compute::native::multi_line_strings_joined`
+//! and `geopolars_compute::native::multi_line_strings_split_at_gaps`.
 //! See `join_line_strings` in Python for the rules.
 
 use geopolars_compute::inner_nulls::propagate_inner_nulls_of_multi_line_strings;
-use geopolars_compute::native::{joined_line_strings, line_strings_joined_where_coinciding, Gaps};
+use geopolars_compute::native::{
+    multi_line_strings_joined, multi_line_strings_split_at_gaps, Gaps,
+};
 use geopolars_core::UncheckedStorage;
 use polars::prelude::*;
 use polars_arrow::array::Array;
@@ -76,12 +79,13 @@ fn chunk_join_line_strings(
     let array = propagate_inner_nulls_of_multi_line_strings(UncheckedStorage::new(chunk)?);
     let tolerance = tolerance(kwargs.abs_tol, kwargs.rel_tol);
     let (unique_z, unique_m, drop) = (kwargs.unique_z, kwargs.unique_m, kwargs.drop_repeated_joins);
-    let joined = |gaps| joined_line_strings(&array, tolerance, unique_z, unique_m, gaps, drop);
+    let joined =
+        |gaps| multi_line_strings_joined(&array, tolerance, unique_z, unique_m, gaps, drop);
     Ok(match kwargs.gaps {
         GapsKwarg::Null => joined(Gaps::Null).into_list_array().boxed(),
         GapsKwarg::Bridge => joined(Gaps::Bridge).into_list_array().boxed(),
         GapsKwarg::Split => {
-            line_strings_joined_where_coinciding(&array, tolerance, unique_z, unique_m, drop)
+            multi_line_strings_split_at_gaps(&array, tolerance, unique_z, unique_m, drop)
                 .into_list_array()
                 .boxed()
         }
