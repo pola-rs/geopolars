@@ -33,6 +33,8 @@ pub struct ExtensionMetadata {
     /// Cache of `map`: the CRS in a form PROJ accepts, or why there is none.
     crs: Result<String, String>,
     /// Cache of `map`: how the edges run, or why they are invalid.
+    // Unused until an operation depends on the edges.
+    #[allow(dead_code)]
     edges: Result<Option<Edges>, String>,
     /// Cache of `map`: a short name for the CRS, to display. `None` without one.
     crs_label: Option<String>,
@@ -166,6 +168,8 @@ impl ExtensionMetadata {
     }
 
     /// How the edges between coordinates run. `None` means planar.
+    // Unused until an operation depends on the edges.
+    #[allow(dead_code)]
     pub fn edges(&self) -> PolarsResult<Option<Edges>> {
         self.edges
             .clone()
