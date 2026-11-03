@@ -44,13 +44,13 @@ codegen-units = 1
 # because cargo only hides # warnings from dependencies that are not path dependencies.
 # Be sure to keep them all the same!
 [patch.crates-io]
-polars = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-polars-arrow = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-polars-buffer = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-polars-core = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-polars-ffi = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-polars-lazy = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-polars-plan = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-polars-utils = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-pyo3-polars = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
-pyo3-polars-derive = { git = "https://github.com/Aidavdw/polars", rev = "5470bbc334c17bea15024953f62c7f40c6662dad" }
+polars = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+polars-arrow = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+polars-buffer = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+polars-core = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+polars-ffi = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+polars-lazy = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+polars-plan = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+polars-utils = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+pyo3-polars = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }
+pyo3-polars-derive = { git = "https://github.com/Aidavdw/polars", rev = "b562a4a6cc833486c4b28ee06da41befc83ec674" }

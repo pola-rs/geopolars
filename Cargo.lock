@@ -1864,7 +1864,7 @@ dependencies = [
 [[package]]
 name = "polars"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.4.3",
@@ -1887,7 +1887,7 @@ dependencies = [
 [[package]]
 name = "polars-arrow"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "bitflags",
  "bytemuck",
@@ -1928,7 +1928,7 @@ dependencies = [
 [[package]]
 name = "polars-async"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "atomic-waker",
  "crossbeam-channel",
@@ -1947,7 +1947,7 @@ dependencies = [
 [[package]]
 name = "polars-buffer"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "bytemuck",
  "either",
@@ -1959,7 +1959,7 @@ dependencies = [
 [[package]]
 name = "polars-compute"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "atoi_simd",
  "bytemuck",
@@ -1983,7 +1983,7 @@ dependencies = [
 [[package]]
 name = "polars-config"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "polars-error",
  "serde",
@@ -1993,7 +1993,7 @@ dependencies = [
 [[package]]
 name = "polars-core"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "atoi_simd",
  "bitflags",
@@ -2032,7 +2032,7 @@ dependencies = [
 [[package]]
 name = "polars-defs"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "chrono",
  "polars-arrow",
@@ -2047,7 +2047,7 @@ dependencies = [
 [[package]]
 name = "polars-descriptions"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "serde",
  "strum_macros",
@@ -2056,7 +2056,7 @@ dependencies = [
 [[package]]
 name = "polars-dtype"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "boxcar",
  "hashbrown 0.17.1",
@@ -2070,7 +2070,7 @@ dependencies = [
 [[package]]
 name = "polars-error"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "object_store",
  "parking_lot",
@@ -2084,7 +2084,7 @@ dependencies = [
 [[package]]
 name = "polars-expr"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "bitflags",
  "hashbrown 0.17.1",
@@ -2109,7 +2109,7 @@ dependencies = [
 [[package]]
 name = "polars-ffi"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "polars-arrow",
  "polars-core",
@@ -2118,7 +2118,7 @@ dependencies = [
 [[package]]
 name = "polars-io"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "async-trait",
  "atoi_simd",
@@ -2167,7 +2167,7 @@ dependencies = [
 [[package]]
 name = "polars-lazy"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "bitflags",
  "chrono",
@@ -2195,7 +2195,7 @@ dependencies = [
 [[package]]
 name = "polars-mem-engine"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "memmap2",
  "polars-arrow",
@@ -2217,7 +2217,7 @@ dependencies = [
 [[package]]
 name = "polars-observer"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "parking_lot",
  "polars-descriptions",
@@ -2227,7 +2227,7 @@ dependencies = [
 [[package]]
 name = "polars-ooc"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "async-trait",
  "boxcar",
@@ -2248,7 +2248,7 @@ dependencies = [
 [[package]]
 name = "polars-ops"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "argminmax",
  "bytemuck",
@@ -2276,7 +2276,7 @@ dependencies = [
 [[package]]
 name = "polars-parquet"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "async-stream",
  "aws-lc-rs",
@@ -2313,7 +2313,7 @@ dependencies = [
 [[package]]
 name = "polars-plan"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "bitflags",
  "blake3",
@@ -2356,7 +2356,7 @@ dependencies = [
 [[package]]
 name = "polars-row"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "bitflags",
  "bytemuck",
@@ -2372,7 +2372,7 @@ dependencies = [
 [[package]]
 name = "polars-schema"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "indexmap",
  "polars-error",
@@ -2384,7 +2384,7 @@ dependencies = [
 [[package]]
 name = "polars-stream"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -2432,7 +2432,7 @@ dependencies = [
 [[package]]
 name = "polars-time"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "bytemuck",
  "chrono",
@@ -2453,7 +2453,7 @@ dependencies = [
 [[package]]
 name = "polars-utils"
 version = "0.55.1"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "argminmax",
  "bincode",
@@ -2632,7 +2632,7 @@ dependencies = [
 [[package]]
 name = "pyo3-polars"
 version = "0.28.0"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "libc",
  "once_cell",
@@ -2653,7 +2653,7 @@ dependencies = [
 [[package]]
 name = "pyo3-polars-derive"
 version = "0.22.0"
-source = "git+https://github.com/Aidavdw/polars?rev=5470bbc334c17bea15024953f62c7f40c6662dad#5470bbc334c17bea15024953f62c7f40c6662dad"
+source = "git+https://github.com/Aidavdw/polars?rev=b562a4a6cc833486c4b28ee06da41befc83ec674#b562a4a6cc833486c4b28ee06da41befc83ec674"
 dependencies = [
  "polars-arrow",
  "polars-core",
