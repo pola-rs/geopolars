@@ -38,8 +38,8 @@ use polars_arrow::datatypes::ArrowDataType;
 
 use crate::passing::valid_rows_passing;
 
-/// When two points coincide, out of the `abs_tol` and `rel_tol` of an expression.
-/// Each set of tolerances has exactly one variant, which [Coincidence::new] picks.
+/// When two points coincide, given the `abs_tol` and `rel_tol` of an expression.
+/// Build it with [Coincidence::new]: each variant relies on the tolerance range its doc gives.
 #[derive(Debug, Clone, Copy)]
 pub enum Coincidence {
     /// At exactly the same place.

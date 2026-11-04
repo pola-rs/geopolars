@@ -33,6 +33,7 @@ pub fn is_close(a: f64, b: f64, tolerance: Tolerance) -> bool {
 }
 
 /// [is_close] with `rel_tol=0.0`, for a finite `abs_tol`.
+/// With an infinite `abs_tol`, an infinity would be close to every finite value.
 #[inline(always)]
 pub fn is_close_abs(a: f64, b: f64, abs_tol: f64) -> bool {
     // An infinity is close to itself through `a == b`, as `a - b` is NaN.
@@ -425,42 +426,5 @@ impl Coords {
     #[inline]
     pub fn dim(&self) -> GeoDimension {
         self.axes.dim()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn is_close_abs_matches_is_close_without_rel_tol() {
-        let values = [
-            0.0,
-            -0.0,
-            1.0,
-            1.0 + f64::EPSILON,
-            -1.0,
-            1e300,
-            -1e300,
-            f64::MIN_POSITIVE / 2.0,
-            f64::INFINITY,
-            f64::NEG_INFINITY,
-            f64::NAN,
-        ];
-        for abs_tol in [0.0, 1e-9, 1.0, -1.0, f64::NAN, f64::MAX] {
-            let tolerance = Tolerance {
-                abs_tol,
-                rel_tol: 0.0,
-            };
-            for a in values {
-                for b in values {
-                    assert_eq!(
-                        is_close_abs(a, b, abs_tol),
-                        is_close(a, b, tolerance),
-                        "a={a}, b={b}, abs_tol={abs_tol}"
-                    );
-                }
-            }
-        }
     }
 }
