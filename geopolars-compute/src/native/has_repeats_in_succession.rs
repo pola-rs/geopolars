@@ -5,25 +5,17 @@
 //! The kernels here fold that mask up to the rows.
 //! [super::remove_repeats_in_succession](mod@super::remove_repeats_in_succession) drops them.
 //!
-//! # Coinciding points
-//!
-//! Each variant of [Coincidence] has its own comparison:
-//! [coincide_exactly], [coincide_within_abs], and [coincide_within_rel].
-//! [with_coincide!] picks one once per call.
-//! The passes take it as a closure, so each variant gets its own copy of a pass,
-//! with no per-vertex match on the variant.
-//!
 //! # Const generic flags
+//!
+//! [coincide_exactly], [coincide_within_abs], and [coincide_within_rel] are generic over `UNIQUE_Z` and `UNIQUE_M`.
 //!
 //! ## `UNIQUE_Z`
 //!
-//! The comparisons are generic over `UNIQUE_Z`.
 //! If `UNIQUE_Z=true`, two points only coincide when their z values do too.
 //! A runtime `unique_z` is ignored for coordinates without a z.
 //!
 //! ## `UNIQUE_M`
 //!
-//! The comparisons are generic over `UNIQUE_M`.
 //! If `UNIQUE_M=true`, two points only coincide when their m values do too.
 //! A runtime `unique_m` is ignored for coordinates without an m.
 
@@ -39,7 +31,8 @@ use polars_arrow::datatypes::ArrowDataType;
 use crate::passing::valid_rows_passing;
 
 /// When two points coincide, given the `abs_tol` and `rel_tol` of an expression.
-/// Build it with [Coincidence::new]: each variant relies on the tolerance range its doc gives.
+/// Build it with [Coincidence::new].
+/// Each variant relies on the tolerance range in its doc.
 #[derive(Debug, Clone, Copy)]
 pub enum Coincidence {
     /// At exactly the same place.
@@ -47,14 +40,13 @@ pub enum Coincidence {
     /// [is_close_abs] on every axis, with a finite, positive `abs_tol`.
     WithinAbs(f64),
     /// [is_close] on every axis, with a positive `rel_tol` or an infinite `abs_tol`.
-    /// An infinite `abs_tol` is not [Coincidence::WithinAbs],
-    /// as [is_close_abs] would make an infinity close to every finite value.
+    /// An infinite `abs_tol` is not [Coincidence::WithinAbs], see [is_close_abs].
     WithinRel(Tolerance),
 }
 
 impl Coincidence {
     /// A tolerance that is not given counts as `0.0`.
-    /// The Python API has already checked that neither is negative or NaN.
+    /// Neither tolerance may be negative or NaN.
     pub fn new(abs_tol: Option<f64>, rel_tol: Option<f64>) -> Self {
         let abs_tol = abs_tol.unwrap_or(0.0);
         let rel_tol = rel_tol.unwrap_or(0.0);
@@ -127,6 +119,8 @@ pub(super) fn unique_axes(coords: &ValidCoords, unique_z: bool, unique_m: bool) 
 /// Evaluates `$body` with `$coincide` bound to a closure `|i, j| -> bool`:
 /// whether coordinates `i` and `j` of `$coords` coincide by `$coincidence`.
 /// `$unique_z` and `$unique_m` only count for an axis `$coords` has ([unique_axes]).
+/// `$body` is expanded once per variant of [Coincidence],
+/// so a pass that takes the closure has no per-vertex match on the variant.
 macro_rules! with_coincide {
     (
         $coords:expr, $coincidence:expr, $unique_z:expr, $unique_m:expr;
@@ -166,7 +160,7 @@ pub(super) use with_coincide;
 // TODO: Not yet a SIMD pass, but is a minor candidate for it.
 // With `Coincidence::Exact`, coinciding is transitive.
 // A vertex then coincides with the last unset one before it exactly when it coincides with the one right before it.
-// So the mask could be built by `bitmap_from_fn` from `coincide(i - 1, i)`, as `selected_coords` is.
+// So the mask could be built by `bitmap_from_fn` from `coincide_exactly(i - 1, i)`, as `selected_coords` is.
 // Afterwards, only the first vertex of every list needs to be unset.
 fn repeats_in_succession_with(
     lists: &ValidList,

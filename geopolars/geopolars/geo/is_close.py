@@ -34,7 +34,7 @@ def is_close(
     """Whether two geometries are almost coincident or the same.
     Every coordinate has to be close to the one at the same position in the other, on every compared axis.
     This operation runs row by row, returning a `bool`.
-    This is meant to complement pl.Expr.is_close` with `abs_tol`, `rel_tol` and `nans_equal`.
+    This is meant to complement `pl.Expr.is_close` with `abs_tol`, `rel_tol`, and `nans_equal`.
 
     | `a` and `b` | out |
     | - | - |
