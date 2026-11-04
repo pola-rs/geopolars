@@ -35,9 +35,11 @@
 
 mod buffer;
 mod convex_hull;
+mod interpolate;
 mod is_simple;
 mod linestrings;
 mod offset_curve;
+mod points;
 mod polygons;
 mod rings_overlap;
 mod simplify;
@@ -50,6 +52,9 @@ pub use buffer::{
 pub use convex_hull::{
     line_string_convex_hulls, multi_line_string_convex_hulls, multi_point_convex_hulls,
     multi_polygon_convex_hulls, polygon_convex_hulls,
+};
+pub use interpolate::{
+    interpolate_line_strings, interpolate_multi_line_strings, InterpolateMode,
 };
 pub use is_simple::{
     line_strings_are_simple, multi_line_strings_are_simple, multi_polygons_are_simple,

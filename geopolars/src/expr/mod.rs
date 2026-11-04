@@ -24,6 +24,7 @@ pub mod distance;
 pub mod filter_coordinates;
 pub mod fix_out_of_bounds;
 pub mod has_repeats_in_succession;
+pub mod interpolate;
 pub mod is_ccw;
 pub mod is_close;
 pub mod is_empty;
