@@ -8,7 +8,7 @@
 //! # Coinciding points
 //!
 //! Each variant of [Coincidence] has its own comparison:
-//! [coincide_exactly], [coincide_within_abs], and [coincide_within_rel].
+//! [coincide_exactly], [coincide_within_abs], [coincide_within_rel], and [coincide_if_finite].
 //! [with_coincide!] picks one once per call.
 //! The passes take it as a closure, so each variant gets its own copy of a pass,
 //! with no per-vertex match on the variant.
@@ -49,17 +49,23 @@ pub enum Coincidence {
     /// [is_close] on every axis, with a finite, positive `rel_tol`.
     /// Its `abs_tol` is finite and non-negative.
     WithinRel(Tolerance),
+    /// [is_close] on every axis, with an infinite `abs_tol` or `rel_tol`:
+    /// any two finite values are close, and an infinity only to itself.
+    /// [is_close_abs] would make an infinity close to every finite value.
+    AllFinite,
 }
 
 impl Coincidence {
     /// A tolerance that is not given counts as `0.0`.
-    /// The Python API has already checked that each is finite and non-negative.
+    /// The Python API has already checked that neither is negative or NaN.
     pub fn new(abs_tol: Option<f64>, rel_tol: Option<f64>) -> Self {
         let abs_tol = abs_tol.unwrap_or(0.0);
         let rel_tol = rel_tol.unwrap_or(0.0);
-        debug_assert!(abs_tol.is_finite() && abs_tol >= 0.0, "abs_tol={abs_tol}");
-        debug_assert!(rel_tol.is_finite() && rel_tol >= 0.0, "rel_tol={rel_tol}");
-        if rel_tol > 0.0 {
+        debug_assert!(abs_tol >= 0.0, "abs_tol={abs_tol}");
+        debug_assert!(rel_tol >= 0.0, "rel_tol={rel_tol}");
+        if abs_tol.is_infinite() || rel_tol.is_infinite() {
+            Self::AllFinite
+        } else if rel_tol > 0.0 {
             Self::WithinRel(Tolerance { abs_tol, rel_tol })
         } else if abs_tol > 0.0 {
             Self::WithinAbs(abs_tol)
@@ -117,6 +123,23 @@ pub(super) fn coincide_within_rel<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
         })
 }
 
+/// See [Coincidence::AllFinite].
+#[inline(always)]
+pub(super) fn coincide_if_finite<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
+    coords: &ValidCoords,
+    i: usize,
+    j: usize,
+) -> bool {
+    let close = |values: &[f64]| {
+        let (a, b) = (values[i], values[j]);
+        a == b || (a.is_finite() && b.is_finite())
+    };
+    close(coords.x())
+        && close(coords.y())
+        && (!UNIQUE_Z || close(coords.z().expect("a z, with `UNIQUE_Z`")))
+        && (!UNIQUE_M || close(m_values(coords)))
+}
+
 /// `unique_z` and `unique_m`, only for an axis `coords` has.
 pub(super) fn unique_axes(coords: &ValidCoords, unique_z: bool, unique_m: bool) -> (bool, bool) {
     let dim = coords.dim();
@@ -132,7 +155,7 @@ macro_rules! with_coincide {
         |$coincide:ident| $body:expr
     ) => {{
         use $crate::native::has_repeats_in_succession::{
-            coincide_exactly, Coincidence, coincide_within_abs, coincide_within_rel, unique_axes,
+            coincide_exactly, coincide_if_finite, Coincidence, coincide_within_abs, coincide_within_rel, unique_axes,
         };
         let coords: &geopolars_core::ValidCoords = $coords;
         let (unique_z, unique_m) = unique_axes(coords, $unique_z, $unique_m);
@@ -154,6 +177,11 @@ macro_rules! with_coincide {
                     let $coincide = move |i, j| {
                         coincide_within_rel::<UNIQUE_Z, UNIQUE_M>(coords, i, j, tolerance)
                     };
+                    $body
+                }
+                Coincidence::AllFinite => {
+                    let $coincide =
+                        move |i, j| coincide_if_finite::<UNIQUE_Z, UNIQUE_M>(coords, i, j);
                     $body
                 }
             }

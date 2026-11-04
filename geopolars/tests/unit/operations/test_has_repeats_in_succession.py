@@ -105,10 +105,51 @@ def test_a_compared_z_or_m_has_to_be_within_the_tolerance(
     assert out == [repeated]
 
 
-@pytest.mark.parametrize("value", [-1.0, math.nan, math.inf])
+_INFINITE_TOLERANCES = [{"abs_tol": math.inf}, {"rel_tol": math.inf}]
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "repeated"),
+    [
+        ((-1e308, 0), (1e308, 0), True),
+        ((0, 0), (math.inf, 0), False),
+        ((math.inf, 0), (math.inf, 0), True),
+        ((math.inf, 0), (-math.inf, 0), False),
+        ((math.nan, 0), (math.nan, 0), False),
+    ],
+    ids=["finite", "finite-inf", "inf-inf", "inf-neg-inf", "nan-nan"],
+)
+@pytest.mark.parametrize("tolerance", _INFINITE_TOLERANCES)
+def test_an_infinite_tolerance_makes_finite_values_close_and_an_infinity_only_itself(
+    tolerance: dict[str, float],
+    a: tuple[float, float],
+    b: tuple[float, float],
+    repeated: bool,
+) -> None:
+    line = _line(a, b)
+
+    assert _has_repeats_in_succession(LineStringXY(), line, **tolerance) == [repeated]
+
+
+@pytest.mark.parametrize(("value", "repeated"), [(1e300, True), (math.inf, False)])
+@pytest.mark.parametrize("axis", ["z", "m"])
+@pytest.mark.parametrize("tolerance", _INFINITE_TOLERANCES)
+def test_an_infinite_tolerance_also_holds_for_a_compared_z_or_m(
+    tolerance: dict[str, float], axis: str, value: float, repeated: bool
+) -> None:
+    a = {"x": 1.0, "y": 1.0, "z": 1.0, "m": 1.0}
+    b = a | {axis: value}
+
+    out = _has_repeats_in_succession(
+        LineStringXYZM(), [a, b], unique_m=True, **tolerance
+    )
+    assert out == [repeated]
+
+
+@pytest.mark.parametrize("value", [-1.0, math.nan])
 @pytest.mark.parametrize("name", ["abs_tol", "rel_tol"])
-def test_a_tolerance_has_to_be_finite_and_non_negative(name: str, value: float) -> None:
-    with pytest.raises(ValueError, match=f"`{name}` must be finite and non-negative"):
+def test_a_tolerance_cannot_be_negative_or_nan(name: str, value: float) -> None:
+    with pytest.raises(ValueError, match=f"`{name}` must be non-negative and not NaN"):
         geo.has_repeats_in_succession("g", **{name: value})
 
 

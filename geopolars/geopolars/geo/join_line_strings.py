@@ -57,6 +57,7 @@ def join_line_strings(
 
     {coincidence_axes}
     {coincidence_tolerance}
+    {tolerance_range}
 
     {empty_and_null}
     A null linestring or a null vertex in it also gives a null result.

@@ -51,7 +51,7 @@ def is_close(
     The same goes for the parts of a multi-geometry, even though they have no order of their own.
 
     {coincidence_axes}
-    A tolerance has to be finite and non-negative.
+    {tolerance_range}
     The empty point (NaN in x and y) is only close to another one with `nans_equal=True`.
 
     Equal lengths are compared row by row.

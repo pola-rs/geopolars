@@ -53,6 +53,7 @@ def remove_repeats_in_succession(
 
     {coincidence_axes}
     {coincidence_tolerance}
+    {tolerance_range}
 
     `collapsed_lines` says what a linestring keeps when all its vertices lie at one place.
     With `"keep_ends"`, it keeps its first and last vertex, as GEOS does.

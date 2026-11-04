@@ -74,10 +74,10 @@ def test_vertices_that_are_almost_the_same_need_a_tolerance(
     assert _remove(LineStringXY(), line, **tolerance) == [expected]
 
 
-@pytest.mark.parametrize("value", [-1.0, math.nan, math.inf])
+@pytest.mark.parametrize("value", [-1.0, math.nan])
 @pytest.mark.parametrize("name", ["abs_tol", "rel_tol"])
-def test_a_tolerance_has_to_be_finite_and_non_negative(name: str, value: float) -> None:
-    with pytest.raises(ValueError, match=f"`{name}` must be finite and non-negative"):
+def test_a_tolerance_cannot_be_negative_or_nan(name: str, value: float) -> None:
+    with pytest.raises(ValueError, match=f"`{name}` must be non-negative and not NaN"):
         geo.remove_repeats_in_succession("g", **{name: value})
 
 

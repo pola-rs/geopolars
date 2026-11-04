@@ -42,6 +42,7 @@ def has_repeats_in_succession(
 
     {coincidence_axes}
     {coincidence_tolerance}
+    {tolerance_range}
 
     Repeated points are valid, also by OGC (see `is_valid_ogc`), but some tools may stumble over them.
 
