@@ -53,7 +53,7 @@ impl ToGeos for ScalarMultiLineString<'_> {
     type Geos = Geometry;
 
     fn to_geos(&self) -> GeoComputeResult<Geometry> {
-        multi_line_string_to_geos(&axes(self.coords), self.lines, self.parts.clone())
+        multi_line_string_to_geos(&axes(self.coords), self.lines, self.parts.clone(), false)
     }
 }
 
@@ -63,21 +63,32 @@ impl ToGeosRows for MultiLineStringArray {
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
-        let axes = axes(&self.coords);
-        let size_hint = SizeHint {
-            coords: self.coords.len(),
-            parts: [self.lines.len(), 0],
-        };
-        rows_to_geos(
-            &self.rows,
-            &axes,
-            size_hint,
-            ignore_per_row_errors,
-            early_finite_check,
-            |parts| self.lines.span(parts),
-            |parts| multi_line_string_to_geos(&axes, &self.lines, parts),
-        )
+        multi_line_strings_to_geos_rows(self, false, ignore_per_row_errors, early_finite_check)
     }
+}
+
+/// Like [`ToGeosRows::to_geos_rows`].
+/// If `drop_empty_parts=true`, a part without vertices is left out.
+pub(super) fn multi_line_strings_to_geos_rows(
+    array: &MultiLineStringArray,
+    drop_empty_parts: bool,
+    ignore_per_row_errors: bool,
+    early_finite_check: bool,
+) -> GeoComputeResult<GeosGeometries> {
+    let axes = axes(&array.coords);
+    let size_hint = SizeHint {
+        coords: array.coords.len(),
+        parts: [array.lines.len(), 0],
+    };
+    rows_to_geos(
+        &array.rows,
+        &axes,
+        size_hint,
+        ignore_per_row_errors,
+        early_finite_check,
+        |parts| array.lines.span(parts),
+        |parts| multi_line_string_to_geos(&axes, &array.lines, parts, drop_empty_parts),
+    )
 }
 
 /// Can copy from axes in one go.
@@ -91,16 +102,22 @@ pub(super) fn line_string_to_geos(
 }
 
 /// No parts gives an empty multilinestring.
+/// If `drop_empty_parts=true`, a part without vertices is left out.
 #[inline(always)]
 pub(super) fn multi_line_string_to_geos(
     axes: &Axes,
     lines: &ValidList,
     parts: Range<usize>,
+    drop_empty_parts: bool,
 ) -> GeoComputeResult<Geometry> {
     // GEOS takes ownership of the parts, so they can't share a buffer across rows.
     let mut line_strings = Vec::with_capacity(parts.len());
     for j in parts {
-        line_strings.push(line_string_to_geos(axes, lines.range(j))?);
+        let vertices = lines.range(j);
+        if drop_empty_parts && vertices.is_empty() {
+            continue;
+        }
+        line_strings.push(line_string_to_geos(axes, vertices)?);
     }
     Ok(Geometry::create_multiline_string(line_strings)?)
 }

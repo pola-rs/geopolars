@@ -47,7 +47,7 @@ affine transforms:
 
 transfer transforms
 
-- [ ] interpolate
+- [x] line_interpolate_point
 - [ ] project
 
 geometry editing

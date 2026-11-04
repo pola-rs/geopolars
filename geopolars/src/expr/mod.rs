@@ -32,6 +32,7 @@ pub mod is_simple;
 pub mod is_valid;
 pub mod join_line_strings;
 pub mod length;
+pub mod line_interpolate_point;
 pub mod offset_curve;
 pub mod remove_repeats_in_succession;
 pub mod reverse;

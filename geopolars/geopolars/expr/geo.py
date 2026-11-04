@@ -326,6 +326,24 @@ class ExprGeoNameSpace:
             early_finite_check=early_finite_check,
         )
 
+    def line_interpolate_point(
+        self,
+        distance: float | IntoExprColumn,
+        *,
+        mode: Literal["absolute", "normalized"] = "absolute",
+        ignore_per_row_errors: bool = False,
+        early_finite_check: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.line_interpolate_point import line_interpolate_point
+
+        return line_interpolate_point(
+            self._expr,
+            distance,
+            mode=mode,
+            ignore_per_row_errors=ignore_per_row_errors,
+            early_finite_check=early_finite_check,
+        )
+
     def simplify(
         self,
         tolerance: float,

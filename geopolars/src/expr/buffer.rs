@@ -180,17 +180,19 @@ fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
 /// Every chunk of the geometries, the first input, through `chunk`.
 /// `distance` is `None` when the distances are a column, the second input.
 /// Then the geometries are rechunked into one chunk, to line up with the distances.
-pub(super) fn chunks_by_distance(
+pub(super) fn chunks_by_distance<A: Array>(
     inputs: &[Series],
     distance: Option<f64>,
-    chunk: impl Fn(&dyn Array, BufferDistance) -> PolarsResult<ListArray<i64>>,
+    chunk: impl Fn(&dyn Array, BufferDistance) -> PolarsResult<A>,
 ) -> PolarsResult<Vec<ArrayRef>> {
     let storage = inputs[0].ext()?.storage();
     match distance {
         Some(distance) => storage
             .chunks()
             .iter()
-            .map(|rows| Ok(chunk(rows.as_ref(), BufferDistance::Constant(distance))?.boxed()))
+            .map(|rows| {
+                Ok(Box::new(chunk(rows.as_ref(), BufferDistance::Constant(distance))?) as ArrayRef)
+            })
             .collect(),
         None => {
             let storage = storage.rechunk();
@@ -204,7 +206,7 @@ pub(super) fn chunks_by_distance(
             );
             let distance = BufferDistance::PerRow(distances.f64()?.downcast_as_array());
             let rows = storage.chunks()[0].as_ref();
-            Ok(vec![chunk(rows, distance)?.boxed()])
+            Ok(vec![Box::new(chunk(rows, distance)?)])
         }
     }
 }

@@ -189,3 +189,6 @@ Two things in this snippet are easy to get wrong:
 - The CRS can be lost. `PolygonXY()` produces a polygon column with no CRS. An existing CRS can be retained by using `df.schema["g"]`.
 
 TODO: add helper function to set the CRS of the original column and describe it here.
+
+TODO: setting for accepting/refusing trivial cases (e.g. 'remove duplicate points' for single point)?
+or an envvar? or not at all?

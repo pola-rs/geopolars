@@ -67,6 +67,7 @@ from geopolars.geo.is_valid import (
 )
 from geopolars.geo.join_line_strings import join_line_strings
 from geopolars.geo.length import length
+from geopolars.geo.line_interpolate_point import line_interpolate_point
 from geopolars.geo.mean_coordinate import mean_coordinate
 from geopolars.geo.offset_curve import offset_curve
 from geopolars.geo.parts import parts
@@ -119,6 +120,7 @@ __all__ = [
     "is_valid_ogc",
     "join_line_strings",
     "length",
+    "line_interpolate_point",
     "line_string",
     "line_string_from_columns",
     "line_string_from_vertices",

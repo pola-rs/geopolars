@@ -24,7 +24,7 @@
 //!
 //! ## `Z`
 //!
-//! Copying coordinates out of GEOS, and the convex hulls, are generic over `Z`.
+//! Copying linestrings and polygons out of GEOS, and the convex hulls, are generic over `Z`.
 //! If `Z=true`, the z values are copied too.
 //!
 //! ## `REVERSED`
@@ -35,9 +35,11 @@
 
 mod buffer;
 mod convex_hull;
+mod interpolate;
 mod is_simple;
 mod linestrings;
 mod offset_curve;
+mod points;
 mod polygons;
 mod rings_overlap;
 mod simplify;
@@ -51,6 +53,7 @@ pub use convex_hull::{
     line_string_convex_hulls, multi_line_string_convex_hulls, multi_point_convex_hulls,
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
+pub use interpolate::{interpolate_line_strings, interpolate_multi_line_strings, InterpolateMode};
 pub use is_simple::{
     line_strings_are_simple, multi_line_strings_are_simple, multi_polygons_are_simple,
     polygons_are_simple,
@@ -399,8 +402,8 @@ impl ValidityBuilder {
     }
 }
 
-/// The coordinates the conversions copy out of GEOS.
-/// GEOS never gives m values.
+/// The coordinates the linestring and polygon conversions copy out of GEOS.
+/// They drop m, although GEOS can give it (see `into_point_array`).
 struct CoordsBuilder {
     x: Vec<f64>,
     y: Vec<f64>,
