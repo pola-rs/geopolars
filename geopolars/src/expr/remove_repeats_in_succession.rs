@@ -8,8 +8,8 @@ use geopolars_compute::native::{
     polygons_without_repeats_in_succession, CollapsedLines, LineOptions, TooShort,
 };
 use geopolars_core::{
-    downcast, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PolygonArray,
+    downcast, Coincidence, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
@@ -17,7 +17,6 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use super::has_repeats_in_succession::tolerance;
 use crate::geoarrow::{describe, Kind};
 
 #[derive(Deserialize)]
@@ -56,7 +55,7 @@ fn chunk_without_repeats_in_succession(
     kwargs: &RemoveRepeatsInSuccessionKwargs,
 ) -> PolarsResult<Box<dyn Array>> {
     let rows = || downcast::<ListArray<i64>>(chunk, "a list of parts");
-    let tolerance = tolerance(kwargs.abs_tol, kwargs.rel_tol);
+    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol)?;
     let (unique_z, unique_m, too_short) = (kwargs.unique_z, kwargs.unique_m, kwargs.too_short);
     let options = LineOptions {
         collapsed_lines: kwargs.collapsed_lines,
@@ -66,7 +65,7 @@ fn chunk_without_repeats_in_succession(
         Kind::Point => chunk.to_boxed(),
         Kind::LineString => line_strings_without_repeats_in_succession(
             &LineStringArray::new(rows()?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             options,
@@ -75,7 +74,7 @@ fn chunk_without_repeats_in_succession(
         .boxed(),
         Kind::MultiPoint => multi_points_without_repeats_in_succession(
             &MultiPointArray::new(rows()?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
         )
@@ -83,7 +82,7 @@ fn chunk_without_repeats_in_succession(
         .boxed(),
         Kind::Polygon => polygons_without_repeats_in_succession(
             &PolygonArray::new(rows()?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             too_short,
@@ -92,7 +91,7 @@ fn chunk_without_repeats_in_succession(
         .boxed(),
         Kind::MultiLineString => multi_line_strings_without_repeats_in_succession(
             &MultiLineStringArray::new(rows()?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             options,
@@ -101,7 +100,7 @@ fn chunk_without_repeats_in_succession(
         .boxed(),
         Kind::MultiPolygon => multi_polygons_without_repeats_in_succession(
             &MultiPolygonArray::new(rows()?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             too_short,

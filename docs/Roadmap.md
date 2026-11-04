@@ -64,7 +64,6 @@ repair:
 
 - [ ] repair: drop overlaps, with the options for reltol etc.
 - [x] Close rings expr, can use this inside of 'repair'
-- [ ] expression that drops all the repeated points in a geometry (out of order)
 
 ## Two-column operations
 
@@ -90,3 +89,9 @@ creating new geometries
 - [ ] intersection
 - [ ] union
 - [ ] difference
+
+## Spatial hashing
+
+- [ ] Make a fast spatial hash that works with arrow directly
+- [ ] expression that drops all the repeated points in a geometry (out of order)
+- [ ] Expression to get neighbours

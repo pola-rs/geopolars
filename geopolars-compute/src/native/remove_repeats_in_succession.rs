@@ -10,8 +10,8 @@
 use std::ops::Range;
 
 use geopolars_core::{
-    LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
-    Tolerance, ValidList,
+    Coincidence, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PolygonArray, ValidList,
 };
 use polars_arrow::bitmap::MutableBitmap;
 
@@ -66,13 +66,13 @@ fn keep_last_vertices(lists: &ValidList, repeated: &mut MutableBitmap, keeps_bot
 
 pub fn line_strings_without_repeats_in_succession(
     array: &LineStringArray,
-    tolerance: Option<Tolerance>,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     options: LineOptions,
 ) -> LineStringArray {
     let rows = array.rows.ignoring_validity();
-    let mut repeated = repeats_in_succession(rows, &array.coords, tolerance, unique_z, unique_m);
+    let mut repeated = repeats_in_succession(rows, &array.coords, coincidence, unique_z, unique_m);
     keep_last_vertices(
         rows,
         &mut repeated,
@@ -84,38 +84,38 @@ pub fn line_strings_without_repeats_in_succession(
 /// The points of a multipoint have no ends to keep, and are never too short.
 pub fn multi_points_without_repeats_in_succession(
     array: &MultiPointArray,
-    tolerance: Option<Tolerance>,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
 ) -> MultiPointArray {
     let rows = array.rows.ignoring_validity();
-    let repeated = repeats_in_succession(rows, &array.coords, tolerance, unique_z, unique_m);
+    let repeated = repeats_in_succession(rows, &array.coords, coincidence, unique_z, unique_m);
     multi_points_without_selected(array, &repeated.freeze(), TooShort::Keep)
 }
 
 /// Rings always keep both ends, so they stay closed.
 pub fn polygons_without_repeats_in_succession(
     array: &PolygonArray,
-    tolerance: Option<Tolerance>,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     too_short: TooShort,
 ) -> PolygonArray {
     let rings = &array.rings;
-    let mut repeated = repeats_in_succession(rings, &array.coords, tolerance, unique_z, unique_m);
+    let mut repeated = repeats_in_succession(rings, &array.coords, coincidence, unique_z, unique_m);
     keep_last_vertices(rings, &mut repeated, true);
     polygons_without_selected(array, &repeated.freeze(), too_short, false)
 }
 
 pub fn multi_line_strings_without_repeats_in_succession(
     array: &MultiLineStringArray,
-    tolerance: Option<Tolerance>,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     options: LineOptions,
 ) -> MultiLineStringArray {
     let lines = &array.lines;
-    let mut repeated = repeats_in_succession(lines, &array.coords, tolerance, unique_z, unique_m);
+    let mut repeated = repeats_in_succession(lines, &array.coords, coincidence, unique_z, unique_m);
     keep_last_vertices(
         lines,
         &mut repeated,
@@ -127,13 +127,13 @@ pub fn multi_line_strings_without_repeats_in_succession(
 /// Rings always keep both ends, so they stay closed.
 pub fn multi_polygons_without_repeats_in_succession(
     array: &MultiPolygonArray,
-    tolerance: Option<Tolerance>,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     too_short: TooShort,
 ) -> MultiPolygonArray {
     let rings = &array.rings;
-    let mut repeated = repeats_in_succession(rings, &array.coords, tolerance, unique_z, unique_m);
+    let mut repeated = repeats_in_succession(rings, &array.coords, coincidence, unique_z, unique_m);
     keep_last_vertices(rings, &mut repeated, true);
     multi_polygons_without_selected(array, &repeated.freeze(), too_short, false)
 }

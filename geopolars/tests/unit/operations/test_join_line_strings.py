@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import polars as pl
 import pytest
 from polars.exceptions import ComputeError
@@ -105,6 +107,13 @@ def test_ends_that_are_almost_the_same_need_a_tolerance(
     expected = [*_AB, *next_part] if joined else None
 
     assert _join([_AB, next_part], **tolerance) == [expected]
+
+
+@pytest.mark.parametrize("value", [-1.0, math.nan, math.inf])
+@pytest.mark.parametrize("name", ["abs_tol", "rel_tol"])
+def test_a_tolerance_has_to_be_finite_and_non_negative(name: str, value: float) -> None:
+    with pytest.raises(ValueError, match=f"`{name}` must be finite and non-negative"):
+        geo.join_line_strings("g", **{name: value})
 
 
 def _xyzm(x: float, z: float, m: float) -> Coord:

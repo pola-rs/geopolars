@@ -4,20 +4,15 @@
 //! The parts of a row already lie one after the other in the coordinates,
 //! so a join only needs new offsets, and the coordinates are shared.
 //! Only `drop_repeated_joins` copies them, through [super::selected_coords](mod@super::selected_coords).
-//!
-//! # Const generic flags
-//!
-//! [for_each_join_with] passes `TOLERANCE_COINCIDENCE`, `UNIQUE_Z` and `UNIQUE_M` on to [coincide].
-//! See [super::has_repeats_in_succession](mod@super::has_repeats_in_succession) for them.
 
 use std::iter::Peekable;
 
-use geopolars_core::{LineStringArray, List, MultiLineStringArray, Tolerance, ValidList};
+use geopolars_core::{Coincidence, LineStringArray, List, MultiLineStringArray, ValidList};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::Offsets;
 
-use super::has_repeats_in_succession::{coincide, unique_axes};
+use super::has_repeats_in_succession::with_coincide;
 use super::selected_coords::{line_strings_without_selected, multi_line_strings_without_selected};
 use super::too_short::TooShort;
 
@@ -31,13 +26,9 @@ pub enum Gaps {
     Bridge,
 }
 
-fn for_each_join_with<
-    const TOLERANCE_COINCIDENCE: bool,
-    const UNIQUE_Z: bool,
-    const UNIQUE_M: bool,
->(
+fn for_each_join_with(
     array: &MultiLineStringArray,
-    tolerance: Tolerance,
+    coincide: impl Fn(usize, usize) -> bool,
     mut on_join: impl FnMut(usize, usize, bool),
 ) {
     let rows = array.rows.ignoring_validity();
@@ -49,13 +40,7 @@ fn for_each_join_with<
                 continue;
             }
             if let Some(last_end) = last_end {
-                let coincides = coincide::<TOLERANCE_COINCIDENCE, UNIQUE_Z, UNIQUE_M>(
-                    &array.coords,
-                    last_end,
-                    vertices.start,
-                    tolerance,
-                );
-                on_join(row, vertices.start, coincides);
+                on_join(row, vertices.start, coincide(last_end, vertices.start));
             }
             last_end = Some(vertices.end - 1);
         }
@@ -65,20 +50,14 @@ fn for_each_join_with<
 /// Calls `on_join(row, start, coincides)` for every join
 fn for_each_join(
     array: &MultiLineStringArray,
-    tolerance: Option<Tolerance>,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     on_join: impl FnMut(usize, usize, bool),
 ) {
-    let (unique_z, unique_m) = unique_axes(&array.coords, unique_z, unique_m);
-    with_const_flags!(
-        TOLERANCE_COINCIDENCE = tolerance.is_some(), UNIQUE_Z = unique_z, UNIQUE_M = unique_m;
-        for_each_join_with::<TOLERANCE_COINCIDENCE, UNIQUE_Z, UNIQUE_M>(
-            array,
-            tolerance.unwrap_or_default(),
-            on_join,
-        )
-    )
+    with_coincide!(&array.coords, coincidence, unique_z, unique_m; |coincide| {
+        for_each_join_with(array, coincide, on_join)
+    })
 }
 
 fn vertices_per_row(array: &MultiLineStringArray) -> ValidList {
@@ -95,7 +74,7 @@ fn vertices_per_row(array: &MultiLineStringArray) -> ValidList {
 /// With `drop_repeated_joins=true`, the first vertex of a part is dropped where it coincides with the end of the one before.
 pub fn multi_line_strings_joined(
     array: &MultiLineStringArray,
-    tolerance: Option<Tolerance>,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     gaps: Gaps,
@@ -113,7 +92,7 @@ pub fn multi_line_strings_joined(
         drop_repeated_joins.then(|| MutableBitmap::from_len_zeroed(array.coords.len()));
     for_each_join(
         array,
-        tolerance,
+        coincidence,
         unique_z,
         unique_m,
         |row, start, coincides| match (coincides, &mut gapless, &mut dropped) {
@@ -174,7 +153,7 @@ fn lines_split_at(
 /// [multi_line_strings_joined], but starting a new part at each gap.
 pub fn multi_line_strings_split_at_gaps(
     array: &MultiLineStringArray,
-    tolerance: Option<Tolerance>,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     drop_repeated_joins: bool,
@@ -184,7 +163,7 @@ pub fn multi_line_strings_split_at_gaps(
         drop_repeated_joins.then(|| MutableBitmap::from_len_zeroed(array.coords.len()));
     for_each_join(
         array,
-        tolerance,
+        coincidence,
         unique_z,
         unique_m,
         |row, start, coincides| match (coincides, &mut dropped) {

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
@@ -70,6 +72,13 @@ def test_vertices_that_are_almost_the_same_need_a_tolerance(
     expected = _line((0, 0), (1, 1), (2, 0)) if removed else line
 
     assert _remove(LineStringXY(), line, **tolerance) == [expected]
+
+
+@pytest.mark.parametrize("value", [-1.0, math.nan, math.inf])
+@pytest.mark.parametrize("name", ["abs_tol", "rel_tol"])
+def test_a_tolerance_has_to_be_finite_and_non_negative(name: str, value: float) -> None:
+    with pytest.raises(ValueError, match=f"`{name}` must be finite and non-negative"):
+        geo.remove_repeats_in_succession("g", **{name: value})
 
 
 def test_a_vertex_is_compared_with_the_vertex_kept_before_it() -> None:

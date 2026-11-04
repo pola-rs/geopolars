@@ -8,7 +8,7 @@ import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_coincidence_tolerances
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
@@ -69,6 +69,7 @@ def join_line_strings(
     if gaps not in get_args(Gaps):
         msg = f"`gaps` must be one of {list(get_args(Gaps))}, got {gaps!r}"
         raise ValueError(msg)
+    validate_coincidence_tolerances(abs_tol, rel_tol)
 
     return register_plugin_function(
         plugin_path=LIB,

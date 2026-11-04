@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
@@ -70,6 +72,13 @@ def test_vertices_in_a_row_that_are_almost_the_same_need_a_tolerance(
     line = _line((0, 0), (1, 1), (1 + 1e-12, 1), (2, 0))
 
     assert _has_repeats_in_succession(LineStringXY(), line, **tolerance) == [repeated]
+
+
+@pytest.mark.parametrize("value", [-1.0, math.nan, math.inf])
+@pytest.mark.parametrize("name", ["abs_tol", "rel_tol"])
+def test_a_tolerance_has_to_be_finite_and_non_negative(name: str, value: float) -> None:
+    with pytest.raises(ValueError, match=f"`{name}` must be finite and non-negative"):
+        geo.has_repeats_in_succession("g", **{name: value})
 
 
 def test_vertices_in_a_row_that_differ_only_in_m_are_repeated_unless_m_is_unique() -> (
