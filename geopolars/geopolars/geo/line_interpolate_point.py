@@ -43,10 +43,11 @@ def line_interpolate_point(
     A `distance` beyond either end gives that end.
     `distance` is one number for every geometry,
     or a column (or expression) with one distance per geometry.
-    A null distance gives a null point.
+    A null distance gives a null point, also for an empty geometry.
     A NaN or infinite distance in a column raises.
     With `ignore_per_row_errors=True`, such a row gives a null point instead.
-    An empty geometry still gives an empty point, whatever its distance.
+    A linestring without vertices or a multilinestring without parts
+    still gives an empty point for such a distance.
 
     Only linestrings and multilinestrings are accepted.
     A multilinestring is walked part after part,
@@ -59,6 +60,8 @@ def line_interpolate_point(
     {geos_errors}
 
     {geos_non_finite}
+    GEOS then does not raise, but gives a wrong point for most distances:
+    often the end of the line, or a point with a NaN or infinite coordinate.
     {early_finite_check}
 
     ```python

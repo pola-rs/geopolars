@@ -53,9 +53,7 @@ pub use convex_hull::{
     line_string_convex_hulls, multi_line_string_convex_hulls, multi_point_convex_hulls,
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
-pub use interpolate::{
-    interpolate_line_strings, interpolate_multi_line_strings, InterpolateMode,
-};
+pub use interpolate::{interpolate_line_strings, interpolate_multi_line_strings, InterpolateMode};
 pub use is_simple::{
     line_strings_are_simple, multi_line_strings_are_simple, multi_polygons_are_simple,
     polygons_are_simple,
@@ -406,6 +404,7 @@ impl ValidityBuilder {
 
 /// The coordinates the linestring and polygon conversions copy out of GEOS.
 /// They drop m, although GEOS can give it (see `into_point_array`).
+// TODO: find out whether the operations using these lose an m that GEOS gives.
 struct CoordsBuilder {
     x: Vec<f64>,
     y: Vec<f64>,

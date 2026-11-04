@@ -171,6 +171,34 @@ def test_a_null_or_empty_geometry_gives_a_null_or_empty_point(
     assert _is_empty(empty)
 
 
+def test_an_empty_geometry_with_a_null_distance_gives_null() -> None:
+    df = _column(LineStringXY, [], []).with_columns(d=pl.Series([None, math.nan]))
+
+    [null, empty] = _interpolate(df, "d")
+
+    assert null is None
+    assert _is_empty(empty)
+
+
+@pytest.mark.parametrize(
+    ("dtype", "geometry", "line"),
+    [
+        (LineStringXY, _line((1, 1)), _SEGMENT),
+        (MultiLineStringXY, [_line((1, 1)), _SEGMENT], [_SEGMENT]),
+    ],
+)
+def test_a_geometry_geos_fails_on_raises_or_is_null(
+    dtype: type[GeoArrowType], geometry: object, line: object
+) -> None:
+    # GEOS cannot build a linestring of one vertex.
+    df = _column(dtype, geometry, line)
+
+    with pytest.raises(ComputeError, match="point array"):
+        _interpolate(df, 1.0)
+
+    assert _interpolate(df, 1.0, ignore_per_row_errors=True) == [None, _point(1, 0)]
+
+
 def test_a_multilinestring_of_empty_parts_gives_an_empty_point() -> None:
     [point] = _interpolate(_column(MultiLineStringXY, [[]]), 1.0)
 
@@ -231,12 +259,20 @@ def test_a_distance_column_of_another_length_raises(engine: EngineType) -> None:
 
 
 @pytest.mark.parametrize("engine", ["in-memory", "streaming"])
-@pytest.mark.parametrize("distance", [1.0, "d"])
-def test_every_chunk_is_interpolated(engine: EngineType, distance: str | float) -> None:
+@pytest.mark.parametrize(
+    ("distance", "expected"),
+    [
+        (1.0, [_point(1, 0), None, _point(1, 0)]),
+        ("d", [_point(1, 0), None, _point(4, 2)]),
+    ],
+)
+def test_every_chunk_is_interpolated(
+    engine: EngineType, distance: str | float, expected: list
+) -> None:
     df = pl.concat(
         [_column(LineStringXY, _SEGMENT), _column(LineStringXY, None, _CORNER)],
         rechunk=False,
-    ).with_columns(d=pl.lit(1.0))
+    ).with_columns(d=pl.Series([1.0, 2.0, 6.0]))
     assert df.n_chunks() == 2
 
     out = (
@@ -245,18 +281,15 @@ def test_every_chunk_is_interpolated(engine: EngineType, distance: str | float) 
         .collect(engine=engine)
     )
 
-    assert out.to_series().ext.storage().to_list() == [
-        _point(1, 0),
-        None,
-        _point(1, 0),
-    ]
+    assert out.to_series().ext.storage().to_list() == expected
 
 
 def test_a_non_finite_vertex_goes_to_geos_or_is_caught_early() -> None:
     df = _column(LineStringXY, _line((0, 0), (math.nan, 0), (4, 0)), _SEGMENT)
 
-    # GEOS can't measure a NaN segment, so it ends up at the end of the line.
-    assert _interpolate(df, 1.0) == [_point(4, 0), _point(1, 0)]
+    # The length GEOS walks becomes NaN, so it falls through to the end of the line,
+    # even for a distance before the NaN vertex.
+    assert _interpolate(df, 0.5) == [_point(4, 0), _point(0.5, 0)]
     with pytest.raises(ComputeError, match="finite"):
         _interpolate(df, 1.0, early_finite_check=True)
     assert _interpolate(
