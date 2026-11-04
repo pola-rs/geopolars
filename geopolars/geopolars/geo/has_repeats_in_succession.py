@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_coincidence_tolerances
 from geopolars.geo._dispatch import on_geometry
 
 if TYPE_CHECKING:
@@ -42,6 +42,7 @@ def has_repeats_in_succession(
 
     {coincidence_axes}
     {coincidence_tolerance}
+    {tolerance_range}
 
     Repeated points are valid, also by OGC (see `is_valid_ogc`), but some tools may stumble over them.
 
@@ -49,6 +50,7 @@ def has_repeats_in_succession(
     df.filter(~geo.has_repeats_in_succession("route"))
     ```
     """
+    validate_coincidence_tolerances(abs_tol, rel_tol)
 
     def build(column: pl.Expr, _geometry: GeoArrowType) -> pl.Expr:
         return register_plugin_function(

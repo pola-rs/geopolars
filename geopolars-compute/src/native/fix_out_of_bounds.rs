@@ -4,7 +4,7 @@
 //! Every kernel only rewrites x and y, and keeps every offset.
 //! The other actions select the coordinates outside the bounds
 //! ([CoordinateSelection::bounds](super::CoordinateSelection::bounds)),
-//! then act on them as in [super::selected_coords].
+//! then act on them as in [super::selected_coords](mod@super::selected_coords).
 
 use geopolars_core::{
     Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,

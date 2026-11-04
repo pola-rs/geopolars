@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_coincidence_tolerances
 from geopolars.geo._dispatch import on_geometry_pair
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ def is_close(
     """Whether two geometries are almost coincident or the same.
     Every coordinate has to be close to the one at the same position in the other, on every compared axis.
     This operation runs row by row, returning a `bool`.
-    This is meant to complement pl.Expr.is_close` with `abs_tol`, `rel_tol` and `nans_equal`.
+    This is meant to complement `pl.Expr.is_close` with `abs_tol`, `rel_tol`, and `nans_equal`.
 
     | `a` and `b` | out |
     | - | - |
@@ -51,6 +51,7 @@ def is_close(
     The same goes for the parts of a multi-geometry, even though they have no order of their own.
 
     {coincidence_axes}
+    {tolerance_range}
     The empty point (NaN in x and y) is only close to another one with `nans_equal=True`.
 
     Equal lengths are compared row by row.
@@ -61,6 +62,7 @@ def is_close(
     df.filter(geo.is_close("parcel", "surveyed", abs_tol=0.01))
     ```
     """
+    validate_coincidence_tolerances(abs_tol, rel_tol)
 
     def build(
         a: pl.Expr, a_dtype: GeoArrowType, b: pl.Expr, b_dtype: GeoArrowType

@@ -3,30 +3,20 @@
 
 use std::ops::Range;
 
-use geopolars_core::{MultiPointArray, PointArray, Tolerance, ValidCoords};
+use geopolars_core::{MultiPointArray, PointArray};
 use polars_arrow::array::BooleanArray;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::datatypes::ArrowDataType;
 
-use super::has_repeats_in_succession::coincide;
+use super::has_repeats_in_succession::coincide_exactly;
 use crate::per_row::per_row_bool;
 
 // TODO: turn this into its own expression (whether all points of a geometry are unique).
-/// Whether any two of `points` [coincide].
 #[inline(always)]
-fn has_coinciding_points<
-    const TOLERANCE_COINCIDENCE: bool,
-    const UNIQUE_Z: bool,
-    const UNIQUE_M: bool,
->(
-    coords: &ValidCoords,
-    points: Range<usize>,
-    tolerance: Tolerance,
-) -> bool {
-    points.clone().any(|i| {
-        (i + 1..points.end)
-            .any(|j| coincide::<TOLERANCE_COINCIDENCE, UNIQUE_Z, UNIQUE_M>(coords, i, j, tolerance))
-    })
+fn has_coinciding_points(points: Range<usize>, coincide: impl Fn(usize, usize) -> bool) -> bool {
+    points
+        .clone()
+        .any(|i| (i + 1..points.end).any(|j| coincide(i, j)))
 }
 
 /// Every point is simple, so this is `true` for every point that is there.
@@ -38,10 +28,8 @@ pub fn points_are_simple(array: &PointArray) -> BooleanArray {
 
 pub fn multi_points_are_simple(array: &MultiPointArray) -> BooleanArray {
     per_row_bool(&array.rows, |i| {
-        !has_coinciding_points::<false, false, false>(
-            &array.coords,
-            array.rows.range(i),
-            Tolerance::default(),
-        )
+        !has_coinciding_points(array.rows.range(i), |i, j| {
+            coincide_exactly::<false, false>(&array.coords, i, j)
+        })
     })
 }

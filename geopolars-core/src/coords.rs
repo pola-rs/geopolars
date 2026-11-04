@@ -32,6 +32,14 @@ pub fn is_close(a: f64, b: f64, tolerance: Tolerance) -> bool {
     (a - b).abs() <= (tolerance.rel_tol * a.abs().max(b.abs())).max(tolerance.abs_tol)
 }
 
+/// used if `rel_tol=0.0` (abs_tol only)
+#[inline(always)]
+pub fn is_close_abs(a: f64, b: f64, abs_tol: f64) -> bool {
+    // With an infinite `abs_tol`, an infinity would be close to every finite value.
+    // An infinity is close to itself through `a == b`, as `a - b` is NaN.
+    a == b || (a - b).abs() <= abs_tol
+}
+
 /// Whether two [positions](ValidCoords::position) are equal on every axis.
 #[inline(always)]
 pub fn same_position(a: [f64; 3], b: [f64; 3]) -> bool {
@@ -64,6 +72,21 @@ pub fn same_place_within<const Z: bool>(
         && (!Z || {
             let z = coords.z().expect("a z, with `Z`");
             is_close(z[i], z[j], tolerance)
+        })
+}
+
+#[inline(always)]
+pub fn same_place_within_abs<const Z: bool>(
+    coords: &ValidCoords,
+    i: usize,
+    j: usize,
+    abs_tol: f64,
+) -> bool {
+    is_close_abs(coords.x()[i], coords.x()[j], abs_tol)
+        && is_close_abs(coords.y()[i], coords.y()[j], abs_tol)
+        && (!Z || {
+            let z = coords.z().expect("a z, with `Z`");
+            is_close_abs(z[i], z[j], abs_tol)
         })
 }
 

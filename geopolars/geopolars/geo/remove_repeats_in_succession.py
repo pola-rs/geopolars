@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal, get_args
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_coincidence_tolerances
 from geopolars.geo._dispatch import on_geometry
 
 if TYPE_CHECKING:
@@ -53,6 +53,7 @@ def remove_repeats_in_succession(
 
     {coincidence_axes}
     {coincidence_tolerance}
+    {tolerance_range}
 
     `collapsed_lines` says what a linestring keeps when all its vertices lie at one place.
     With `"keep_ends"`, it keeps its first and last vertex, as GEOS does.
@@ -83,6 +84,7 @@ def remove_repeats_in_succession(
             f"`too_short` must be one of {list(get_args(TooShort))}, got {too_short!r}"
         )
         raise ValueError(msg)
+    validate_coincidence_tolerances(abs_tol, rel_tol)
 
     def build(column: pl.Expr, _geometry: GeoArrowType) -> pl.Expr:
         return register_plugin_function(

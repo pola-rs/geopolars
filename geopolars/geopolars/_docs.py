@@ -33,6 +33,9 @@ Either flag is ignored for a geometry without that axis.""",
 With `abs_tol=None` and `rel_tol=None`, the default, the coordinates have to be exactly equal.
 Otherwise they only have to be close on every compared axis, as in `pl.Expr.is_close` (see `geo.is_close`).
 A tolerance that is not given then counts as `0.0`.""",
+    "tolerance_range": """\
+A tolerance cannot be negative or NaN.
+An infinite one makes any two finite values close, but an infinity only close to itself.""",
     "closing_rings": """\
 For a ring with the first vertex as F and the last as L:
 
