@@ -26,7 +26,7 @@ pub enum InterpolateMode {
     Normalized,
 }
 
-/// The point of every row at `distance` along it, forwarded to GEOS.
+/// Gets a point on the line, at `distance` from the start.
 /// A negative distance counts back from the end.
 /// A `distance` beyond either end gives that end.
 /// A NaN or infinite distance fails like a GEOS error.
@@ -45,13 +45,12 @@ pub fn interpolate_line_strings(
         mode,
         ignore_per_row_errors,
     )?
-    .into_point_array(array.coords.dim(), ignore_per_row_errors)
+    .into_point_array(array.coords.dim())
 }
 
 /// Like [`interpolate_line_strings`], along the parts one after the other.
 /// The gaps between the parts don't count.
 /// An empty part is skipped:
-/// GEOS reads a vertex of every part it walks, beyond the end of an empty one.
 pub fn interpolate_multi_line_strings(
     array: &MultiLineStringArray,
     distance: BufferDistance,
@@ -59,13 +58,14 @@ pub fn interpolate_multi_line_strings(
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 ) -> GeoComputeResult<PointArray> {
+    // GEOS reads a vertex of every part it walks, beyond the end of an empty one.
     interpolate_via_geos(
         multi_line_strings_to_geos_rows(array, true, ignore_per_row_errors, early_finite_check)?,
         distance,
         mode,
         ignore_per_row_errors,
     )?
-    .into_point_array(array.coords.dim(), ignore_per_row_errors)
+    .into_point_array(array.coords.dim())
 }
 
 /// See [`by_distance_via_geos`].

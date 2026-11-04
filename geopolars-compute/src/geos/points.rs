@@ -1,22 +1,14 @@
-//! Points out of GEOS.
-
 use geopolars_core::{Coords, GeoDimension, PointArray, ValidCoords};
 use geos::{Geom, GeometryTypes};
 
-use super::{coord_type, wrong_kind, GeosGeometries, GeosRow, ValidityBuilder};
+use super::{coord_type, GeosGeometries, GeosRow, ValidityBuilder};
 use crate::GeoComputeResult;
 
 impl GeosGeometries {
-    /// Our point array of the geometries, one row each, with the axes of `dim`.
     /// Every GEOS geometry is freed once it is copied.
     /// An empty row or point gives an empty point (NaN on every axis).
     /// A geometry that is not a point is an error.
-    /// If `ignore_per_row_errors=true`, its row is null instead.
-    pub fn into_point_array(
-        self,
-        dim: GeoDimension,
-        ignore_per_row_errors: bool,
-    ) -> GeoComputeResult<PointArray> {
+    pub fn into_point_array(self, dim: GeoDimension) -> GeoComputeResult<PointArray> {
         let rows = self.geometries.len();
         let width = dim.field_names().len();
         let empty = [f64::NAN; 4];
@@ -43,7 +35,10 @@ impl GeosGeometries {
                         push(&point.get_coord_seq()?.as_buffer(Some(coord_type(dim)))?);
                         true
                     }
-                    other => wrong_kind("point", other, ignore_per_row_errors)?,
+                    other => {
+                        let message = format!("expected a point, got a {other:?}");
+                        return Err(geos::Error::ConversionError(message).into());
+                    }
                 },
             };
             if !is_valid {

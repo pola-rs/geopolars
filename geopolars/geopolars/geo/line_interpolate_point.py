@@ -34,7 +34,8 @@ def line_interpolate_point(
     ignore_per_row_errors: bool = False,
     early_finite_check: bool = False,
 ) -> pl.Expr:
-    """The point `distance` along every line, from its start.
+    """
+    Creates a point at `distance` along every line, from its start.
     With `mode="absolute"` (default), `distance` is in the units of the coordinates
     (degrees for longitude/latitude).
     With `mode="normalized"`, it is a fraction of the length of the line:

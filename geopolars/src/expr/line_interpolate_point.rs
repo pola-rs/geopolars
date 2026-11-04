@@ -1,5 +1,3 @@
-//! The point at a distance along a linestring or multilinestring, forwarded to GEOS.
-
 use geopolars_compute::geos::{
     interpolate_line_strings, interpolate_multi_line_strings, BufferDistance, InterpolateMode,
 };
@@ -88,7 +86,10 @@ fn chunk_interpolated(
 
 /// See `line_interpolate_point`.
 #[polars_expr(output_type_func=kernel_output_type_line_interpolate_point)]
-fn line_interpolate_point(inputs: &[Series], kwargs: LineInterpolatePointKwargs) -> PolarsResult<Series> {
+fn line_interpolate_point(
+    inputs: &[Series],
+    kwargs: LineInterpolatePointKwargs,
+) -> PolarsResult<Series> {
     let (dtype, kind) = line_interpolate_point_type(inputs[0].dtype())?;
     let chunks = chunks_by_distance(inputs, kwargs.distance, |rows, distance| {
         chunk_interpolated(rows, kind, distance, &kwargs)
