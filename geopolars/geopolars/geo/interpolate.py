@@ -40,7 +40,7 @@ def interpolate(
     With `mode="normalized"`, it is a fraction of the length of the line:
     `0.5` gives the point halfway.
     A negative `distance` counts back from the end.
-    One beyond either end gives that end.
+    A `distance` beyond either end gives that end.
     `distance` is one number for every geometry,
     or a column (or expression) with one distance per geometry.
     A null distance gives a null point.

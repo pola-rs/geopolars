@@ -7,12 +7,14 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
-from polars.exceptions import ComputeError
+from polars.exceptions import ComputeError, ShapeError
 
 from geopolars import geo
 from geopolars.datatypes import (
     GeoArrowType,
     LineStringXY,
+    LineStringXYM,
+    LineStringXYZ,
     LineStringXYZM,
     MultiLineStringXY,
     MultiPointXY,
@@ -21,6 +23,8 @@ from geopolars.datatypes import (
 )
 
 if TYPE_CHECKING:
+    from polars._typing import EngineType
+
     from tests.unit.conftest import Dimension
 
 Line = list[dict[str, float]]
@@ -113,15 +117,30 @@ def test_a_normalized_distance_is_a_fraction_of_the_length(
     assert _interpolate(df, fraction, mode="normalized") == [expected]
 
 
-def test_z_and_m_are_interpolated() -> None:
-    line = [
-        {"x": 0.0, "y": 0.0, "z": 10.0, "m": 0.0},
-        {"x": 4.0, "y": 0.0, "z": 14.0, "m": 8.0},
-    ]
+@pytest.mark.parametrize(
+    ("dtype", "start", "end", "expected"),
+    [
+        (LineStringXYZ, {"z": 10.0}, {"z": 14.0}, {"z": 11.0}),
+        (LineStringXYM, {"m": 0.0}, {"m": 8.0}, {"m": 2.0}),
+        (
+            LineStringXYZM,
+            {"z": 10.0, "m": 0.0},
+            {"z": 14.0, "m": 8.0},
+            {"z": 11.0, "m": 2.0},
+        ),
+    ],
+)
+def test_z_and_m_are_interpolated(
+    dtype: type[GeoArrowType],
+    start: dict[str, float],
+    end: dict[str, float],
+    expected: dict[str, float],
+) -> None:
+    line = [{"x": 0.0, "y": 0.0, **start}, {"x": 4.0, "y": 0.0, **end}]
 
-    [point] = _interpolate(_column(LineStringXYZM, line), 1.0)
+    [point] = _interpolate(_column(dtype, line), 1.0)
 
-    assert point == {"x": 1.0, "y": 0.0, "z": 11.0, "m": 2.0}
+    assert point == {"x": 1.0, "y": 0.0, **expected}
 
 
 @pytest.mark.parametrize(
@@ -158,7 +177,6 @@ def test_a_multilinestring_of_empty_parts_gives_an_empty_point() -> None:
     assert _is_empty(point)
 
 
-
 @pytest.mark.parametrize(
     ("parts", "distance", "expected"),
     [
@@ -184,15 +202,60 @@ def test_a_distance_column_gives_every_row_its_own_distance() -> None:
     assert _interpolate(df, "d") == [_point(1, 0), _point(3, 0), None]
 
 
-def test_a_non_finite_row_distance_raises_or_is_null() -> None:
+@pytest.mark.parametrize("distance", [math.nan, math.inf])
+def test_a_non_finite_row_distance_raises_or_is_null(distance: float) -> None:
     df = _column(LineStringXY, _SEGMENT, _SEGMENT).with_columns(
-        d=pl.Series([math.nan, 1.0])
+        d=pl.Series([distance, 1.0])
     )
 
     with pytest.raises(ComputeError, match="finite"):
         _interpolate(df, "d")
 
     assert _interpolate(df, "d", ignore_per_row_errors=True) == [None, _point(1, 0)]
+
+
+def test_a_distance_series_of_one_value_is_broadcast() -> None:
+    df = _column(LineStringXY, _SEGMENT, _SEGMENT)
+
+    assert _interpolate(df, pl.Series([1.0])) == [_point(1, 0)] * 2
+
+
+@pytest.mark.parametrize("engine", ["in-memory", "streaming"])
+def test_a_distance_column_of_another_length_raises(engine: EngineType) -> None:
+    lf = _column(LineStringXY, _SEGMENT, _SEGMENT, _SEGMENT).lazy()
+
+    with pytest.raises(ShapeError):
+        lf.select(geo.interpolate("geom", pl.Series([1.0, 2.0]))).collect(engine=engine)
+
+
+@pytest.mark.parametrize("engine", ["in-memory", "streaming"])
+@pytest.mark.parametrize("distance", [1.0, "d"])
+def test_every_chunk_is_interpolated(engine: EngineType, distance: str | float) -> None:
+    df = pl.concat(
+        [_column(LineStringXY, _SEGMENT), _column(LineStringXY, None, _CORNER)],
+        rechunk=False,
+    ).with_columns(d=pl.lit(1.0))
+    assert df.n_chunks() == 2
+
+    out = df.lazy().select(geo.interpolate("geom", distance)).collect(engine=engine)
+
+    assert out.to_series().ext.storage().to_list() == [
+        _point(1, 0),
+        None,
+        _point(1, 0),
+    ]
+
+
+def test_a_non_finite_vertex_goes_to_geos_or_is_caught_early() -> None:
+    df = _column(LineStringXY, _line((0, 0), (math.nan, 0), (4, 0)), _SEGMENT)
+
+    # GEOS can't measure a NaN segment, so it ends up at the end of the line.
+    assert _interpolate(df, 1.0) == [_point(4, 0), _point(1, 0)]
+    with pytest.raises(ComputeError, match="finite"):
+        _interpolate(df, 1.0, early_finite_check=True)
+    assert _interpolate(
+        df, 1.0, early_finite_check=True, ignore_per_row_errors=True
+    ) == [None, _point(1, 0)]
 
 
 def test_the_namespace_forwards() -> None:

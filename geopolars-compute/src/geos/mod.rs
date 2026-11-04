@@ -24,7 +24,7 @@
 //!
 //! ## `Z`
 //!
-//! Copying coordinates out of GEOS, and the convex hulls, are generic over `Z`.
+//! Copying linestrings and polygons out of GEOS, and the convex hulls, are generic over `Z`.
 //! If `Z=true`, the z values are copied too.
 //!
 //! ## `REVERSED`
@@ -404,8 +404,8 @@ impl ValidityBuilder {
     }
 }
 
-/// The coordinates the conversions copy out of GEOS.
-/// GEOS never gives m values.
+/// The coordinates the linestring and polygon conversions copy out of GEOS.
+/// They drop m, although GEOS can give it (see `into_point_array`).
 struct CoordsBuilder {
     x: Vec<f64>,
     y: Vec<f64>,

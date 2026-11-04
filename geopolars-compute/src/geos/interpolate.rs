@@ -28,7 +28,7 @@ pub enum InterpolateMode {
 
 /// The point of every row at `distance` along it, forwarded to GEOS.
 /// A negative distance counts back from the end.
-/// One beyond either end gives that end.
+/// A `distance` beyond either end gives that end.
 /// A NaN or infinite distance fails like a GEOS error.
 /// A line without vertices gives an empty point.
 pub fn interpolate_line_strings(
