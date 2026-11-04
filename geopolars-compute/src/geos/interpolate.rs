@@ -30,7 +30,7 @@ pub enum InterpolateMode {
 /// A negative distance counts back from the end.
 /// A `distance` beyond either end gives that end.
 /// A NaN or infinite distance fails like a GEOS error.
-/// A line without vertices gives an empty point.
+/// A line without vertices gives an empty point, whatever its distance.
 pub fn interpolate_line_strings(
     array: &LineStringArray,
     distance: BufferDistance,

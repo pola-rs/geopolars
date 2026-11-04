@@ -46,6 +46,7 @@ def line_interpolate_point(
     A null distance gives a null point.
     A NaN or infinite distance in a column raises.
     With `ignore_per_row_errors=True`, such a row gives a null point instead.
+    An empty geometry still gives an empty point, whatever its distance.
 
     Only linestrings and multilinestrings are accepted.
     A multilinestring is walked part after part,
