@@ -10,12 +10,12 @@
 use std::ops::Range;
 
 use geopolars_core::{
-    Coincidence, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PolygonArray, ValidList,
+    LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
+    ValidList,
 };
 use polars_arrow::bitmap::MutableBitmap;
 
-use super::has_repeats_in_succession::repeats_in_succession;
+use super::has_repeats_in_succession::{repeats_in_succession, Coincidence};
 use super::selected_coords::{
     line_strings_without_selected, multi_line_strings_without_selected,
     multi_points_without_selected, multi_polygons_without_selected, polygons_without_selected,

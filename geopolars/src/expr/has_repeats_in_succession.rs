@@ -5,11 +5,11 @@
 use geopolars_compute::native::{
     line_strings_have_repeats_in_succession, multi_line_strings_have_repeats_in_succession,
     multi_points_have_repeats_in_succession, multi_polygons_have_repeats_in_succession,
-    points_have_repeats_in_succession, polygons_have_repeats_in_succession,
+    points_have_repeats_in_succession, polygons_have_repeats_in_succession, Coincidence,
 };
 use geopolars_core::{
-    downcast, Coincidence, Coords, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PointArray, PolygonArray,
+    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, BooleanArray, ListArray};
@@ -87,7 +87,7 @@ fn has_repeats_in_succession(
 ) -> PolarsResult<Series> {
     let geometries = &inputs[0];
     let kind = describe(geometries.dtype())?.kind;
-    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol)?;
+    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol);
     let storage = geometries.ext()?.storage();
     let chunks = storage.chunks().iter().map(|chunk| {
         chunk_has_repeats_in_succession(

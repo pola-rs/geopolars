@@ -19,7 +19,7 @@ use polars_core::prelude::{polars_err, PolarsResult};
 
 pub use coords::{
     is_close, is_close_abs, is_ring, same_place, same_place_within, same_place_within_abs,
-    same_position, AxisArrays, Coincidence, Coords, Tolerance, ValidCoords, MIN_RING_VERTICES,
+    same_position, AxisArrays, Coords, Tolerance, ValidCoords, MIN_RING_VERTICES,
 };
 pub use dimension::GeoDimension;
 pub use geotraits::{Coord, Geometry};

@@ -5,11 +5,11 @@
 use geopolars_compute::native::{
     line_strings_without_repeats_in_succession, multi_line_strings_without_repeats_in_succession,
     multi_points_without_repeats_in_succession, multi_polygons_without_repeats_in_succession,
-    polygons_without_repeats_in_succession, CollapsedLines, LineOptions, TooShort,
+    polygons_without_repeats_in_succession, Coincidence, CollapsedLines, LineOptions, TooShort,
 };
 use geopolars_core::{
-    downcast, Coincidence, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PolygonArray,
+    downcast, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
@@ -55,7 +55,7 @@ fn chunk_without_repeats_in_succession(
     kwargs: &RemoveRepeatsInSuccessionKwargs,
 ) -> PolarsResult<Box<dyn Array>> {
     let rows = || downcast::<ListArray<i64>>(chunk, "a list of parts");
-    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol)?;
+    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol);
     let (unique_z, unique_m, too_short) = (kwargs.unique_z, kwargs.unique_m, kwargs.too_short);
     let options = LineOptions {
         collapsed_lines: kwargs.collapsed_lines,

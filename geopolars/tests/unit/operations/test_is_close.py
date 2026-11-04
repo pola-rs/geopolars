@@ -190,6 +190,13 @@ def test_infinities_are_only_close_to_themselves() -> None:
     ]
 
 
+@pytest.mark.parametrize("value", [-1.0, math.nan, math.inf])
+@pytest.mark.parametrize("name", ["abs_tol", "rel_tol"])
+def test_a_tolerance_has_to_be_finite_and_non_negative(name: str, value: float) -> None:
+    with pytest.raises(ValueError, match=f"`{name}` must be finite and non-negative"):
+        geo.is_close("a", "b", **{name: value})
+
+
 def test_different_types_are_refused() -> None:
     df = pl.DataFrame(
         [

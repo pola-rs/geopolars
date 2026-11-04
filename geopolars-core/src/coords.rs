@@ -5,7 +5,7 @@ use std::ops::Range;
 use polars_arrow::array::{Array, PrimitiveArray, StructArray};
 use polars_arrow::bitmap::Bitmap;
 use polars_buffer::Buffer;
-use polars_core::prelude::{polars_ensure, PolarsResult};
+use polars_core::prelude::PolarsResult;
 
 use crate::output::{BufferAxes, OwnedAxes};
 use crate::{downcast, GeoDimension};
@@ -15,7 +15,7 @@ pub const MIN_RING_VERTICES: usize = 4;
 
 /// As `pl.Expr.is_close`'s `abs_tol` and `rel_tol`.
 /// The default, both `0.0`, only lets equal values be close.
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Tolerance {
     pub abs_tol: f64,
     pub rel_tol: f64,
@@ -37,44 +37,6 @@ pub fn is_close(a: f64, b: f64, tolerance: Tolerance) -> bool {
 pub fn is_close_abs(a: f64, b: f64, abs_tol: f64) -> bool {
     // An infinity is close to itself through `a == b`, as `a - b` is NaN.
     a == b || (a - b).abs() <= abs_tol
-}
-
-/// When two points coincide, out of the `abs_tol` and `rel_tol` of an expression.
-/// Each set of tolerances has exactly one variant, which [Coincidence::new] picks.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Coincidence {
-    /// At exactly the same place.
-    Exact,
-    /// [is_close_abs] on every axis, with a finite, positive `abs_tol`.
-    WithinAbs(f64),
-    /// [is_close] on every axis, with a finite, positive `rel_tol`.
-    /// Its `abs_tol` is finite and non-negative.
-    WithinRel(Tolerance),
-}
-
-impl Coincidence {
-    /// A tolerance that is not given counts as `0.0`.
-    /// Fails for a tolerance that is negative, NaN, or infinite.
-    pub fn new(abs_tol: Option<f64>, rel_tol: Option<f64>) -> PolarsResult<Self> {
-        let abs_tol = checked_tolerance("abs_tol", abs_tol)?;
-        let rel_tol = checked_tolerance("rel_tol", rel_tol)?;
-        Ok(if rel_tol > 0.0 {
-            Self::WithinRel(Tolerance { abs_tol, rel_tol })
-        } else if abs_tol > 0.0 {
-            Self::WithinAbs(abs_tol)
-        } else {
-            Self::Exact
-        })
-    }
-}
-
-fn checked_tolerance(name: &str, tolerance: Option<f64>) -> PolarsResult<f64> {
-    let tolerance = tolerance.unwrap_or(0.0);
-    polars_ensure!(
-        tolerance.is_finite() && tolerance >= 0.0,
-        ComputeError: "`{name}` must be finite and non-negative but got {tolerance}"
-    );
-    Ok(tolerance)
 }
 
 /// Whether two [positions](ValidCoords::position) are equal on every axis.
@@ -499,27 +461,6 @@ mod tests {
                     );
                 }
             }
-        }
-    }
-
-    #[test]
-    fn coincidence_new_picks_one_variant_per_tolerance() {
-        let new = |abs_tol, rel_tol| Coincidence::new(abs_tol, rel_tol).unwrap();
-        let within_rel = |abs_tol, rel_tol| Coincidence::WithinRel(Tolerance { abs_tol, rel_tol });
-        assert_eq!(new(None, None), Coincidence::Exact);
-        assert_eq!(new(Some(0.0), None), Coincidence::Exact);
-        assert_eq!(new(None, Some(0.0)), Coincidence::Exact);
-        assert_eq!(new(Some(0.5), None), Coincidence::WithinAbs(0.5));
-        assert_eq!(new(Some(0.5), Some(0.0)), Coincidence::WithinAbs(0.5));
-        assert_eq!(new(None, Some(1e-9)), within_rel(0.0, 1e-9));
-        assert_eq!(new(Some(0.5), Some(1e-9)), within_rel(0.5, 1e-9));
-    }
-
-    #[test]
-    fn coincidence_new_rejects_negative_nan_and_infinite_tolerances() {
-        for tolerance in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Coincidence::new(Some(tolerance), None).is_err());
-            assert!(Coincidence::new(None, Some(tolerance)).is_err());
         }
     }
 }

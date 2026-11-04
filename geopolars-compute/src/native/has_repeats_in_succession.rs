@@ -10,8 +10,10 @@
 //! Each variant of [Coincidence] has its own comparison:
 //! [coincide_exactly], [coincide_within_abs], and [coincide_within_rel].
 //! [with_coincide!] picks one once per call.
-//! The passes take it as a closure, so they are compiled once per comparison,
-//! and never branch on the tolerance.
+//! The passes take it as a closure, so each variant gets its own copy of a pass,
+//! with no per-vertex match on the variant.
+//!
+//! # Const generic flags
 //!
 //! ## `UNIQUE_Z`
 //!
@@ -26,15 +28,46 @@
 //! A runtime `unique_m` is ignored for coordinates without an m.
 
 use geopolars_core::{
-    is_close, is_close_abs, same_place, same_place_within, same_place_within_abs, Coincidence,
-    LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
-    PolygonArray, Tolerance, ValidCoords, ValidList,
+    is_close, is_close_abs, same_place, same_place_within, same_place_within_abs, LineStringArray,
+    List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray, PolygonArray,
+    Tolerance, ValidCoords, ValidList,
 };
 use polars_arrow::array::BooleanArray;
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::datatypes::ArrowDataType;
 
 use crate::passing::valid_rows_passing;
+
+/// When two points coincide, out of the `abs_tol` and `rel_tol` of an expression.
+/// Each set of tolerances has exactly one variant, which [Coincidence::new] picks.
+#[derive(Debug, Clone, Copy)]
+pub enum Coincidence {
+    /// At exactly the same place.
+    Exact,
+    /// [is_close_abs] on every axis, with a finite, positive `abs_tol`.
+    WithinAbs(f64),
+    /// [is_close] on every axis, with a finite, positive `rel_tol`.
+    /// Its `abs_tol` is finite and non-negative.
+    WithinRel(Tolerance),
+}
+
+impl Coincidence {
+    /// A tolerance that is not given counts as `0.0`.
+    /// The Python API has already checked that each is finite and non-negative.
+    pub fn new(abs_tol: Option<f64>, rel_tol: Option<f64>) -> Self {
+        let abs_tol = abs_tol.unwrap_or(0.0);
+        let rel_tol = rel_tol.unwrap_or(0.0);
+        debug_assert!(abs_tol.is_finite() && abs_tol >= 0.0, "abs_tol={abs_tol}");
+        debug_assert!(rel_tol.is_finite() && rel_tol >= 0.0, "rel_tol={rel_tol}");
+        if rel_tol > 0.0 {
+            Self::WithinRel(Tolerance { abs_tol, rel_tol })
+        } else if abs_tol > 0.0 {
+            Self::WithinAbs(abs_tol)
+        } else {
+            Self::Exact
+        }
+    }
+}
 
 fn m_values(coords: &ValidCoords) -> &[f64] {
     coords.m().expect("an m, with `UNIQUE_M`")
@@ -98,9 +131,8 @@ macro_rules! with_coincide {
         $coords:expr, $coincidence:expr, $unique_z:expr, $unique_m:expr;
         |$coincide:ident| $body:expr
     ) => {{
-        use geopolars_core::Coincidence;
         use $crate::native::has_repeats_in_succession::{
-            coincide_exactly, coincide_within_abs, coincide_within_rel, unique_axes,
+            coincide_exactly, Coincidence, coincide_within_abs, coincide_within_rel, unique_axes,
         };
         let coords: &geopolars_core::ValidCoords = $coords;
         let (unique_z, unique_m) = unique_axes(coords, $unique_z, $unique_m);

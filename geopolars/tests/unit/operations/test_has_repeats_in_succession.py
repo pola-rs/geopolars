@@ -74,6 +74,37 @@ def test_vertices_in_a_row_that_are_almost_the_same_need_a_tolerance(
     assert _has_repeats_in_succession(LineStringXY(), line, **tolerance) == [repeated]
 
 
+@pytest.mark.parametrize(
+    ("line", "tolerance", "repeated"),
+    [
+        (_line((1e6, 0), (1e6 + 1e-4, 0)), {"rel_tol": 1e-9}, True),
+        (_line((1e6, 0), (1e6 + 1e-4, 0)), {"abs_tol": 1e-9}, False),
+        (_line((0, 0), (1e-12, 0)), {"rel_tol": 1e-9}, False),
+        (_line((0, 0), (1e-12, 0)), {"abs_tol": 1e-9, "rel_tol": 1e-9}, True),
+    ],
+    ids=["rel_tol-large", "abs_tol-large", "rel_tol-near-zero", "both-near-zero"],
+)
+def test_rel_tol_scales_with_the_values_and_abs_tol_still_counts_beside_it(
+    line: Line, tolerance: dict[str, float], repeated: bool
+) -> None:
+    assert _has_repeats_in_succession(LineStringXY(), line, **tolerance) == [repeated]
+
+
+@pytest.mark.parametrize(("offset", "repeated"), [(1e-12, True), (1.0, False)])
+@pytest.mark.parametrize("axis", ["z", "m"])
+@pytest.mark.parametrize("tolerance", [{"abs_tol": 1e-9}, {"rel_tol": 1e-9}])
+def test_a_compared_z_or_m_has_to_be_within_the_tolerance(
+    tolerance: dict[str, float], axis: str, offset: float, repeated: bool
+) -> None:
+    a = {"x": 1.0, "y": 1.0, "z": 1.0, "m": 1.0}
+    b = a | {axis: 1.0 + offset}
+
+    out = _has_repeats_in_succession(
+        LineStringXYZM(), [a, b], unique_m=True, **tolerance
+    )
+    assert out == [repeated]
+
+
 @pytest.mark.parametrize("value", [-1.0, math.nan, math.inf])
 @pytest.mark.parametrize("name", ["abs_tol", "rel_tol"])
 def test_a_tolerance_has_to_be_finite_and_non_negative(name: str, value: float) -> None:

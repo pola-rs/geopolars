@@ -6,9 +6,9 @@
 
 use geopolars_compute::inner_nulls::propagate_inner_nulls_of_multi_line_strings;
 use geopolars_compute::native::{
-    multi_line_strings_joined, multi_line_strings_split_at_gaps, Gaps,
+    multi_line_strings_joined, multi_line_strings_split_at_gaps, Coincidence, Gaps,
 };
-use geopolars_core::{Coincidence, UncheckedStorage};
+use geopolars_core::UncheckedStorage;
 use polars::prelude::*;
 use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
@@ -74,7 +74,7 @@ fn chunk_join_line_strings(
     kwargs: &JoinLineStringsKwargs,
 ) -> PolarsResult<Box<dyn Array>> {
     let array = propagate_inner_nulls_of_multi_line_strings(UncheckedStorage::new(chunk)?);
-    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol)?;
+    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol);
     let (unique_z, unique_m, drop) = (kwargs.unique_z, kwargs.unique_m, kwargs.drop_repeated_joins);
     let joined =
         |gaps| multi_line_strings_joined(&array, coincidence, unique_z, unique_m, gaps, drop);

@@ -7,12 +7,12 @@
 
 use std::iter::Peekable;
 
-use geopolars_core::{Coincidence, LineStringArray, List, MultiLineStringArray, ValidList};
+use geopolars_core::{LineStringArray, List, MultiLineStringArray, ValidList};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::Offsets;
 
-use super::has_repeats_in_succession::with_coincide;
+use super::has_repeats_in_succession::{with_coincide, Coincidence};
 use super::selected_coords::{line_strings_without_selected, multi_line_strings_without_selected};
 use super::too_short::TooShort;
 
