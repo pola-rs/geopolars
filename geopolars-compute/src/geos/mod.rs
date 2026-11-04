@@ -404,7 +404,6 @@ impl ValidityBuilder {
 
 /// The coordinates the linestring and polygon conversions copy out of GEOS.
 /// They drop m, although GEOS can give it (see `into_point_array`).
-// TODO: find out whether the operations using these lose an m that GEOS gives.
 struct CoordsBuilder {
     x: Vec<f64>,
     y: Vec<f64>,

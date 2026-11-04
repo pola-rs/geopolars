@@ -10,8 +10,10 @@
 //! A part of a multipolygon, or a hole, smaller than `tolerance` is dropped.
 //! GEOS repairs a polygon that ends up crossing itself, which can split it into more parts.
 //! A polygon column can't hold those, so that row fails.
+//! GEOS keeps z and m for Douglas-Peucker, but m does not reach the output yet (see the TODO).
 //! If `PRESERVE_TOPOLOGY=true`, GEOS's topology-preserving simplifier is used.
 //! Then no linestring or ring crosses itself or another, and every part and ring is kept.
+//! GEOS keeps z, but drops m for topology-preserving simplification.
 //!
 //! ## `EARLY_FINITE_CHECK`
 //!
@@ -25,7 +27,8 @@ use crate::GeoComputeResult;
 
 /// Every row simplified to within `tolerance`, forwarded to GEOS.
 /// The endpoints are always kept.
-/// GEOS keeps z, but drops m.
+/// GEOS keeps z, but drops m for topology-preserving simplification.
+/// For Douglas-Peucker, m does not reach the output yet either.
 /// If `ignore_per_row_errors=true`, a row GEOS fails on is null;
 /// otherwise its error is returned.
 pub fn simplify_line_strings(
@@ -49,7 +52,8 @@ pub fn simplify_line_strings(
 
 /// Every row simplified to within `tolerance`, forwarded to GEOS.
 /// The endpoints of every part are always kept, but an empty part is dropped.
-/// GEOS keeps z, but drops m.
+/// GEOS keeps z, but drops m for topology-preserving simplification.
+/// For Douglas-Peucker, m does not reach the output yet either.
 /// If `ignore_per_row_errors=true`, a row GEOS fails on is null;
 /// otherwise its error is returned.
 pub fn simplify_multi_line_strings(
@@ -72,7 +76,8 @@ pub fn simplify_multi_line_strings(
 }
 
 /// Every row simplified to within `tolerance`, forwarded to GEOS.
-/// GEOS keeps z, but drops m.
+/// GEOS keeps z, but drops m for topology-preserving simplification.
+/// For Douglas-Peucker, m does not reach the output yet either.
 /// If `ignore_per_row_errors=true`, a row GEOS fails on is null;
 /// otherwise its error is returned.
 pub fn simplify_polygons(
@@ -92,7 +97,8 @@ pub fn simplify_polygons(
 }
 
 /// Every row simplified to within `tolerance`, forwarded to GEOS.
-/// GEOS keeps z, but drops m.
+/// GEOS keeps z, but drops m for topology-preserving simplification.
+/// For Douglas-Peucker, m does not reach the output yet either.
 /// If `ignore_per_row_errors=true`, a row GEOS fails on is null;
 /// otherwise its error is returned.
 pub fn simplify_multi_polygons(
@@ -148,6 +154,7 @@ fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
         let simplified = if PRESERVE_TOPOLOGY {
             input.topology_preserve_simplify(tolerance)
         } else {
+            // TODO: GEOS keeps m here, but the `into_*_array` conversions drop it.
             input.simplify(tolerance)
         };
         *geometry = match simplified {

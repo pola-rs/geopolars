@@ -27,7 +27,7 @@ the comment says when one without a CRS takes a different tier.
 | `offset_curve` | - | | B | GEOS; z and m dropped [^1] | - | | - | | B | | - | |
 | `line_interpolate_point` | - | | B | GEOS; keeps z and m | - | | - | | B | parts walked in order | - | |
 | `reverse` | - | | A | | A | `reverse_holes` | A | ignores `nested` | A | `nested` | A | `nested`, `reverse_holes` |
-| `simplify` | C | returns the point | B | GEOS; z kept, m dropped | B | split by `buffer(0)` is a per-row error | C | returns the multipoint | B | | B | |
+| `simplify` | C | returns the point | B | GEOS; z kept, m dropped [^6] | B | split by `buffer(0)` is a per-row error | C | returns the multipoint | B | | B | |
 | `is_ring` | - | | A | ≥ 4 vertices, ends = x/y/z | - | | - | | A | parts chained into one ring | - | |
 | `is_simple` | A | always `True` | B | GEOS; x/y only | B | every ring as a line; GEOS | A | no two points equal in x/y | B | GEOS, as a whole | B | every ring as a line; GEOS |
 | `rings_overlap` | - | | B | hacked as polygon; GEOS | - | | - | | - | | - | |
@@ -96,3 +96,5 @@ In this table:
       See the implementation in `geopolars-compute`.
 [^4]: Metadata relabeling
 [^5]: Also takes a `list[LineString]`.
+[^6]: GEOS keeps z, but drops m for topology-preserving simplification (`preserve_topology=True`).
+      For Douglas-Peucker (the default), GEOS keeps m, but it does not reach the output yet.
