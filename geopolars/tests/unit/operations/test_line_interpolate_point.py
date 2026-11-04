@@ -48,7 +48,7 @@ def _column(
 
 
 def _interpolate(df: pl.DataFrame, distance: object, **kwargs: object) -> list:
-    out = df.select(geo.interpolate("geom", distance, **kwargs))  # type: ignore[arg-type]
+    out = df.select(geo.line_interpolate_point("geom", distance, **kwargs))  # type: ignore[arg-type]
     return out.to_series().ext.storage().to_list()
 
 
@@ -68,7 +68,7 @@ def test_the_output_is_a_point_of_the_input_dimension(
         dimension.lines(line_coords),
         dimension.multilinestrings(ring_coords),
     ):
-        point = geo.interpolate(df.columns[0], 1.0)
+        point = geo.line_interpolate_point(df.columns[0], 1.0)
 
         assert df.select(point).schema[df.columns[0]] == dimension.point_dtype()
 
@@ -76,7 +76,7 @@ def test_the_output_is_a_point_of_the_input_dimension(
 def test_the_crs_is_carried_over() -> None:
     df = _column(LineStringXY, _SEGMENT, crs="EPSG:28992")
 
-    out = df.select(geo.interpolate("geom", 1.0))
+    out = df.select(geo.line_interpolate_point("geom", 1.0))
 
     assert out.schema["geom"] == PointXY(crs="EPSG:28992")
 
@@ -225,7 +225,9 @@ def test_a_distance_column_of_another_length_raises(engine: EngineType) -> None:
     lf = _column(LineStringXY, _SEGMENT, _SEGMENT, _SEGMENT).lazy()
 
     with pytest.raises(ShapeError):
-        lf.select(geo.interpolate("geom", pl.Series([1.0, 2.0]))).collect(engine=engine)
+        lf.select(geo.line_interpolate_point("geom", pl.Series([1.0, 2.0]))).collect(
+            engine=engine
+        )
 
 
 @pytest.mark.parametrize("engine", ["in-memory", "streaming"])
@@ -237,7 +239,11 @@ def test_every_chunk_is_interpolated(engine: EngineType, distance: str | float) 
     ).with_columns(d=pl.lit(1.0))
     assert df.n_chunks() == 2
 
-    out = df.lazy().select(geo.interpolate("geom", distance)).collect(engine=engine)
+    out = (
+        df.lazy()
+        .select(geo.line_interpolate_point("geom", distance))
+        .collect(engine=engine)
+    )
 
     assert out.to_series().ext.storage().to_list() == [
         _point(1, 0),
@@ -261,7 +267,7 @@ def test_a_non_finite_vertex_goes_to_geos_or_is_caught_early() -> None:
 def test_the_namespace_forwards() -> None:
     df = _column(LineStringXY, _CORNER)
 
-    out = df.select(pl.col("geom").geo.interpolate(0.5, mode="normalized"))
+    out = df.select(pl.col("geom").geo.line_interpolate_point(0.5, mode="normalized"))
 
     assert out.to_series().ext.storage().to_list() == [_point(4, 0)]
 
@@ -277,8 +283,8 @@ def test_the_namespace_forwards() -> None:
 def test_invalid_options_are_refused(kwargs: dict[str, object]) -> None:
     distance = kwargs.pop("distance", 1.0)
 
-    with pytest.raises(ValueError, match="interpolate"):
-        geo.interpolate("geom", distance, **kwargs)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="line_interpolate_point"):
+        geo.line_interpolate_point("geom", distance, **kwargs)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -292,5 +298,5 @@ def test_invalid_options_are_refused(kwargs: dict[str, object]) -> None:
 def test_anything_but_lines_is_refused(
     dtype: type[GeoArrowType], geometry: object
 ) -> None:
-    with pytest.raises(TypeError, match="interpolate expects a linestring"):
+    with pytest.raises(TypeError, match="line_interpolate_point expects a linestring"):
         _interpolate(_column(dtype, geometry), 1.0)

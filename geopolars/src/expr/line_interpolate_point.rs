@@ -15,14 +15,14 @@ use crate::geoarrow::{describe, Geo, Kind};
 
 /// A point with the input's dimension and metadata.
 /// Also the kind of the input.
-fn interpolate_type(dtype: &DataType) -> PolarsResult<(DataType, Kind)> {
+fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(DataType, Kind)> {
     let geo = describe(dtype)?;
     match geo.kind {
         Kind::LineString | Kind::MultiLineString => {}
         // Python refuses any other kind, so it never gets here.
         Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon => polars_bail!(
             SchemaMismatch:
-            "interpolate expects a linestring or multilinestring column, got: {}",
+            "line_interpolate_point expects a linestring or multilinestring column, got: {}",
             dtype
         ),
     }
@@ -30,9 +30,9 @@ fn interpolate_type(dtype: &DataType) -> PolarsResult<(DataType, Kind)> {
     Ok((dtype, geo.kind))
 }
 
-/// For [`interpolate`].
-fn kernel_output_type_interpolate(input_fields: &[Field]) -> PolarsResult<Field> {
-    let (dtype, _) = interpolate_type(input_fields[0].dtype())?;
+/// For [`line_interpolate_point`].
+fn kernel_output_type_line_interpolate_point(input_fields: &[Field]) -> PolarsResult<Field> {
+    let (dtype, _) = line_interpolate_point_type(input_fields[0].dtype())?;
     Ok(Field::new(input_fields[0].name().clone(), dtype))
 }
 
@@ -46,7 +46,7 @@ enum InterpolateModeDef {
 /// See python docs for details.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct InterpolateKwargs {
+pub struct LineInterpolatePointKwargs {
     /// `None` when the distances are a column, the second input.
     distance: Option<f64>,
     #[serde(with = "InterpolateModeDef")]
@@ -60,9 +60,9 @@ fn chunk_interpolated(
     chunk: &dyn Array,
     kind: Kind,
     distance: BufferDistance,
-    kwargs: &InterpolateKwargs,
+    kwargs: &LineInterpolatePointKwargs,
 ) -> PolarsResult<StructArray> {
-    let InterpolateKwargs {
+    let LineInterpolatePointKwargs {
         distance: _,
         mode,
         ignore_per_row_errors,
@@ -79,17 +79,17 @@ fn chunk_interpolated(
             interpolate_multi_line_strings(&array, distance, mode, ignore, early)
         }
         Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon => {
-            unreachable!("refused by `interpolate_type`")
+            unreachable!("refused by `line_interpolate_point_type`")
         }
     }
     .map(PointArray::into_struct_array)
     .into_polars()
 }
 
-/// See `interpolate`.
-#[polars_expr(output_type_func=kernel_output_type_interpolate)]
-fn interpolate(inputs: &[Series], kwargs: InterpolateKwargs) -> PolarsResult<Series> {
-    let (dtype, kind) = interpolate_type(inputs[0].dtype())?;
+/// See `line_interpolate_point`.
+#[polars_expr(output_type_func=kernel_output_type_line_interpolate_point)]
+fn line_interpolate_point(inputs: &[Series], kwargs: LineInterpolatePointKwargs) -> PolarsResult<Series> {
+    let (dtype, kind) = line_interpolate_point_type(inputs[0].dtype())?;
     let chunks = chunks_by_distance(inputs, kwargs.distance, |rows, distance| {
         chunk_interpolated(rows, kind, distance, &kwargs)
     })?;

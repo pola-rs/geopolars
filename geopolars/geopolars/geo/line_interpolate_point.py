@@ -1,5 +1,5 @@
 """The point at a distance along a line.
-
+Deliberately not called 'interpolate', which would match geopandas etc, but clash with Polars itself.
 Forwarded to GEOS (B-tier).
 """
 
@@ -26,7 +26,7 @@ _MODES = ("absolute", "normalized")
 
 
 @doc(output="point")
-def interpolate(
+def line_interpolate_point(
     geometry: IntoExprColumn,
     distance: float | IntoExprColumn,
     *,
@@ -61,20 +61,20 @@ def interpolate(
     {early_finite_check}
 
     ```python
-    df.select(geo.interpolate("road", 100.0))
-    df.select(geo.interpolate("road", 0.5, mode="normalized"))
+    df.select(geo.line_interpolate_point("road", 100.0))
+    df.select(geo.line_interpolate_point("road", 0.5, mode="normalized"))
     ```
     """
     constant = isinstance(distance, int | float)
     if constant and not math.isfinite(distance):
-        msg = f"interpolate expects a finite distance, got: {distance!r}"
+        msg = f"line_interpolate_point expects a finite distance, got: {distance!r}"
         raise ValueError(msg)
-    _check_one_of("interpolate", "mode", mode, _MODES)
+    _check_one_of("line_interpolate_point", "mode", mode, _MODES)
 
     def build(column: pl.Expr, dtype: GeoArrowType) -> pl.Expr:
         if not isinstance(dtype, LineStringType | MultiLineStringType):
             msg = (
-                "interpolate expects a linestring or multilinestring column,"
+                "line_interpolate_point expects a linestring or multilinestring column,"
                 f" got: {dtype!r}"
             )
             raise TypeError(msg)
@@ -82,7 +82,7 @@ def interpolate(
         return register_plugin_function(
             plugin_path=LIB,
             args=args,
-            function_name="interpolate",
+            function_name="line_interpolate_point",
             kwargs={
                 # `None` when the distances are the second argument.
                 "distance": float(distance) if constant else None,

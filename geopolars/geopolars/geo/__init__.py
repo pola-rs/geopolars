@@ -54,7 +54,6 @@ from geopolars.geo.fix_out_of_bounds import OutOfBounds, fix_out_of_bounds
 from geopolars.geo.force_dimension import force_2d, force_3d, force_m, without_m
 from geopolars.geo.has_repeats_in_succession import has_repeats_in_succession
 from geopolars.geo.interior import interior
-from geopolars.geo.interpolate import interpolate
 from geopolars.geo.is_ccw import is_ccw
 from geopolars.geo.is_close import is_close
 from geopolars.geo.is_empty import is_empty
@@ -68,6 +67,7 @@ from geopolars.geo.is_valid import (
 )
 from geopolars.geo.join_line_strings import join_line_strings
 from geopolars.geo.length import length
+from geopolars.geo.line_interpolate_point import line_interpolate_point
 from geopolars.geo.mean_coordinate import mean_coordinate
 from geopolars.geo.offset_curve import offset_curve
 from geopolars.geo.parts import parts
@@ -110,7 +110,6 @@ __all__ = [
     "from_wkt",
     "has_repeats_in_succession",
     "interior",
-    "interpolate",
     "is_ccw",
     "is_close",
     "is_empty",
@@ -121,6 +120,7 @@ __all__ = [
     "is_valid_ogc",
     "join_line_strings",
     "length",
+    "line_interpolate_point",
     "line_string",
     "line_string_from_columns",
     "line_string_from_vertices",

@@ -326,7 +326,7 @@ class ExprGeoNameSpace:
             early_finite_check=early_finite_check,
         )
 
-    def interpolate(
+    def line_interpolate_point(
         self,
         distance: float | IntoExprColumn,
         *,
@@ -334,9 +334,9 @@ class ExprGeoNameSpace:
         ignore_per_row_errors: bool = False,
         early_finite_check: bool = False,
     ) -> pl.Expr:
-        from geopolars.geo.interpolate import interpolate
+        from geopolars.geo.line_interpolate_point import line_interpolate_point
 
-        return interpolate(
+        return line_interpolate_point(
             self._expr,
             distance,
             mode=mode,

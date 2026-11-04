@@ -25,7 +25,7 @@ the comment says when one without a CRS takes a different tier.
 | `convex_hull` | - | | B | GEOS [^3], straight=null | B | GEOS [^3] [^1] | B | GEOS [^3] [^1] | B | GEOS [^3] [^1] | B | GEOS[^3] [^1] |
 | `buffer` | B | GEOS; z and m dropped [^1] | B | | B | | B | | B | | B | |
 | `offset_curve` | - | | B | GEOS; z and m dropped [^1] | - | | - | | B | | - | |
-| `interpolate` | - | | B | GEOS; keeps z and m | - | | - | | B | parts walked in order | - | |
+| `line_interpolate_point` | - | | B | GEOS; keeps z and m | - | | - | | B | parts walked in order | - | |
 | `reverse` | - | | A | | A | `reverse_holes` | A | ignores `nested` | A | `nested` | A | `nested`, `reverse_holes` |
 | `simplify` | C | returns the point | B | GEOS; z kept, m dropped | B | split by `buffer(0)` is a per-row error | C | returns the multipoint | B | | B | |
 | `is_ring` | - | | A | ≥ 4 vertices, ends = x/y/z | - | | - | | A | parts chained into one ring | - | |
