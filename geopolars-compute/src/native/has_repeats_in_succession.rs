@@ -30,8 +30,6 @@ use polars_arrow::datatypes::ArrowDataType;
 
 use crate::passing::valid_rows_passing;
 
-/// When two points coincide, given the `abs_tol` and `rel_tol` of an expression.
-/// Build it with [Coincidence::new].
 /// Each variant relies on the tolerance range in its doc.
 #[derive(Debug, Clone, Copy)]
 pub enum Coincidence {
@@ -80,7 +78,6 @@ pub(super) fn coincide_exactly<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
         })
 }
 
-/// See [Coincidence::WithinAbs].
 #[inline(always)]
 pub(super) fn coincide_within_abs<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
     coords: &ValidCoords,
@@ -95,7 +92,6 @@ pub(super) fn coincide_within_abs<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
         })
 }
 
-/// See [Coincidence::WithinRel].
 #[inline(always)]
 pub(super) fn coincide_within_rel<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
     coords: &ValidCoords,

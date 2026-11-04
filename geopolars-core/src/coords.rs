@@ -32,10 +32,10 @@ pub fn is_close(a: f64, b: f64, tolerance: Tolerance) -> bool {
     (a - b).abs() <= (tolerance.rel_tol * a.abs().max(b.abs())).max(tolerance.abs_tol)
 }
 
-/// [is_close] with `rel_tol=0.0`, for a finite `abs_tol`.
-/// With an infinite `abs_tol`, an infinity would be close to every finite value.
+/// used if `rel_tol=0.0` (abs_tol only)
 #[inline(always)]
 pub fn is_close_abs(a: f64, b: f64, abs_tol: f64) -> bool {
+    // With an infinite `abs_tol`, an infinity would be close to every finite value.
     // An infinity is close to itself through `a == b`, as `a - b` is NaN.
     a == b || (a - b).abs() <= abs_tol
 }
@@ -75,7 +75,6 @@ pub fn same_place_within<const Z: bool>(
         })
 }
 
-/// [same_place_within], with [is_close_abs] on every axis.
 #[inline(always)]
 pub fn same_place_within_abs<const Z: bool>(
     coords: &ValidCoords,
