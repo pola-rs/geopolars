@@ -320,7 +320,8 @@ impl RingEntry for RingStart {
     }
 }
 
-/// Picks the [RingEntry] of `ROTATE_RINGS`: a [RingStart] if `ROTATE_RINGS=true`, otherwise a plain index.
+/// Picks the [RingEntry] of `ROTATE_RINGS`.
+/// This is a [RingStart] if `ROTATE_RINGS=true`, otherwise a plain index.
 struct Rings<const ROTATE_RINGS: bool>;
 
 trait RingEntryOf {
@@ -572,7 +573,7 @@ impl PartSorter {
         }));
     }
 
-    /// [push_polygon_order](Self::push_polygon_order), with the rings rotated as `ring_order` says.
+    /// [push_polygon_order](Self::push_polygon_order), with the rings rotated as `ring_order`.
     /// `ring_order` is pushed by [push_rotated_hole_order](Self::push_rotated_hole_order).
     pub fn push_rotated_polygon_order<const Z: bool, const M: bool, const DESCENDING: bool>(
         &mut self,
@@ -614,14 +615,7 @@ impl PartSorter {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SortOptions {
     pub descending: bool,
-    /// Rotates every ring to its smallest rotation before the parts are compared.
-    /// A rotated ring takes its last vertex to repeat the first.
-    /// That vertex is never a start, and is dropped when the ring is rotated.
-    /// A ring that is not closed would therefore lose a vertex.
-    /// So every ring has to be closed or empty.
-    /// A row with any other ring is an error, or null with `ignore_per_row_errors=true`.
     pub rotate_rings: bool,
-    /// Ignored with `rotate_rings=false`, as only rotated rings are checked.
     pub ignore_per_row_errors: bool,
 }
 
