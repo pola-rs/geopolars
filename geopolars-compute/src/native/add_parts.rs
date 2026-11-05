@@ -231,28 +231,27 @@ fn kept_runs(keep: &Bitmap, items: Range<usize>) -> impl Iterator<Item = Range<u
     })
 }
 
-/// A view whose parts may hold null values, and a mask of the parts that do not.
-/// A kernel taking it reads only the parts set in the mask,
+/// A view and a mask of the parts of it to read.
+/// The parts with a null value in the input are unset in it,
+/// and after [without_empty_parts](NullPartsMarked::without_empty_parts) the empty ones too.
+/// The unset parts may hold arbitrary values,
 /// so the view is not handed out as a plain one.
 pub struct NullPartsMarked<T> {
     pub(crate) view: T,
     /// One bit per part. `None` when every part is set.
-    pub(crate) passing: Option<Bitmap>,
+    pub(crate) keep: Option<Bitmap>,
 }
 
 /// A plain view has no null values below its rows, so every part is set.
 impl<T> From<T> for NullPartsMarked<T> {
     fn from(view: T) -> Self {
-        Self {
-            view,
-            passing: None,
-        }
+        Self { view, keep: None }
     }
 }
 
-/// `passing` with the parts `empty` holds as `true` unset too.
-fn passing_without_empty(passing: Option<Bitmap>, empty: BooleanArray) -> Option<Bitmap> {
-    combine_validities_and(passing.as_ref(), Some(&!empty.values()))
+/// `keep`, with every part that `empty` holds as `true` unset as well.
+fn keep_without_empty(keep: Option<Bitmap>, empty: BooleanArray) -> Option<Bitmap> {
+    combine_validities_and(keep.as_ref(), Some(&!empty.values()))
 }
 
 impl NullPartsMarked<MultiPointArray> {
@@ -264,8 +263,8 @@ impl NullPartsMarked<MultiPointArray> {
     /// Unsets the empty points (every axis NaN) in the mask too.
     pub fn without_empty_parts(self) -> Self {
         let points = PointArray::new(Coords::from_valid(self.view.coords.clone(), None));
-        let passing = passing_without_empty(self.passing, points_are_empty(&points));
-        Self { passing, ..self }
+        let keep = keep_without_empty(self.keep, points_are_empty(&points));
+        Self { keep, ..self }
     }
 }
 
@@ -282,8 +281,8 @@ impl NullPartsMarked<MultiLineStringArray> {
             self.view.coords.clone(),
         );
         let empty = line_strings_are_empty::<false>(&lines.into());
-        let passing = passing_without_empty(self.passing, empty);
-        Self { passing, ..self }
+        let keep = keep_without_empty(self.keep, empty);
+        Self { keep, ..self }
     }
 }
 
@@ -301,8 +300,8 @@ impl NullPartsMarked<MultiPolygonArray> {
             self.view.coords.clone(),
         );
         let empty = polygons_are_empty::<false>(&polygons.into());
-        let passing = passing_without_empty(self.passing, empty);
-        Self { passing, ..self }
+        let keep = keep_without_empty(self.keep, empty);
+        Self { keep, ..self }
     }
 }
 
@@ -313,7 +312,7 @@ pub fn multi_points_with_added_parts(
     added: &NullPartsMarked<MultiPointArray>,
     validity: Option<Bitmap>,
 ) -> MultiPointArray {
-    let keep = added.passing.as_ref();
+    let keep = added.keep.as_ref();
     let Built { rows, coords, .. } =
         concatenated(base.into(), Some((&added.view).into()), keep, validity);
     MultiPointArray::from_parts(rows, coords)
@@ -331,7 +330,7 @@ pub fn multi_line_strings_with_added_parts(
     added: &NullPartsMarked<MultiLineStringArray>,
     validity: Option<Bitmap>,
 ) -> MultiLineStringArray {
-    let keep = added.passing.as_ref();
+    let keep = added.keep.as_ref();
     let Built {
         rows,
         levels: [lines],
@@ -347,7 +346,7 @@ pub fn multi_polygons_with_added_parts(
     added: &NullPartsMarked<MultiPolygonArray>,
     validity: Option<Bitmap>,
 ) -> MultiPolygonArray {
-    let keep = added.passing.as_ref();
+    let keep = added.keep.as_ref();
     let Built {
         rows,
         levels: [polygons, rings],

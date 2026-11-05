@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
-NullParts = Literal["skip", "null"]
-EmptyParts = Literal["keep", "skip"]
+NullParts = Literal["drop", "null"]
+EmptyParts = Literal["keep", "drop"]
 
 
 def _add_parts(
@@ -50,7 +50,7 @@ def add_parts(
     geometry: IntoExprColumn,
     parts: IntoExprColumn,
     *,
-    null_parts: NullParts = "skip",
+    null_parts: NullParts = "drop",
     empty_parts: EmptyParts = "keep",
 ) -> pl.Expr:
     """Add the parts of `parts` to each geometry, after the parts it already has.
@@ -76,7 +76,7 @@ def add_parts(
     Parts of another dimension are refused.
     {same_crs}
 
-    Nothing is checked: the parts are copied as they are.
+    The parts are not checked for validity: they are copied as they are.
 
     A null geometry gives a null result.
     What a null among the parts does is set by `null_parts`.
@@ -85,10 +85,10 @@ def add_parts(
 
     | `null_parts` | a null part |
     | - | - |
-    | `"skip"` | is left out; the other parts of the row are still added |
+    | `"drop"` | is left out; the other parts of the row are still added |
     | `"null"` | makes the result null |
 
-    `"skip"` suits a list of parts aggregated from rows of which some are null.
+    `"drop"` suits a list of parts aggregated from rows of which some are null.
 
     What an empty part (a point with every axis NaN, or a part without vertices)
     does is set by `empty_parts`.
@@ -97,7 +97,7 @@ def add_parts(
     | `empty_parts` | an empty part |
     | - | - |
     | `"keep"` | is added like any other part |
-    | `"skip"` | is left out |
+    | `"drop"` | is left out |
 
     ```python
     df.select(geo.add_parts("roads", "new_roads"))

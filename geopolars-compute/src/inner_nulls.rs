@@ -2,7 +2,8 @@
 //! so that the views hold to GeoArrow's rule on null values:
 //! nulls only at the outermost level.
 //! Of a multi-geometry, the parts with a null value can be marked in a mask instead.
-//! They stay in the view, which is wrapped in a [NullPartsMarked] so that only a kernel taking the mask reads it.
+//! They stay in the view with arbitrary values,
+//! which is wrapped in a [NullPartsMarked] so that only a kernel taking the mask reads it.
 //! This is a separate pass, before any kernel reads the views.
 
 use geopolars_core::{
@@ -39,7 +40,7 @@ fn propagate_inner_nulls_of_lists<const N: usize>(
     (lists, coords)
 }
 
-/// The `N` list levels of `storage` as they are, and its coordinates.
+/// The `N` list levels of `storage` with their validity, and its coordinates without theirs.
 /// Storage with another number of list levels is a bug.
 fn levels_of<const N: usize>(storage: UncheckedStorage) -> ([List; N], ValidCoords) {
     let coords = storage.coords.ignoring_validity().clone();
@@ -114,11 +115,11 @@ pub fn propagate_inner_nulls_of_multi_polygons(storage: UncheckedStorage) -> Mul
 pub fn multi_points_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> NullPartsMarked<MultiPointArray> {
-    let passing = parts_passing(&storage);
+    let keep = parts_passing(&storage);
     let ([rows], coords) = levels_of(storage);
     NullPartsMarked {
         view: MultiPointArray::from_parts(rows, coords),
-        passing,
+        keep,
     }
 }
 
@@ -126,17 +127,17 @@ pub fn multi_points_with_null_parts_marked(
 pub fn multi_line_strings_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> NullPartsMarked<MultiLineStringArray> {
-    let passing = parts_passing(&storage);
+    let keep = parts_passing(&storage);
     let ([rows, lines], coords) = levels_of(storage);
     let view = MultiLineStringArray::from_parts(rows, lines.ignoring_validity().clone(), coords);
-    NullPartsMarked { view, passing }
+    NullPartsMarked { view, keep }
 }
 
 #[cfg(feature = "native")]
 pub fn multi_polygons_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> NullPartsMarked<MultiPolygonArray> {
-    let passing = parts_passing(&storage);
+    let keep = parts_passing(&storage);
     let ([rows, polygons, rings], coords) = levels_of(storage);
     let view = MultiPolygonArray::from_parts(
         rows,
@@ -144,5 +145,5 @@ pub fn multi_polygons_with_null_parts_marked(
         rings.ignoring_validity().clone(),
         coords,
     );
-    NullPartsMarked { view, passing }
+    NullPartsMarked { view, keep }
 }
