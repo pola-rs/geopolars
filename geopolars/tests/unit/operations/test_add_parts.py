@@ -242,14 +242,14 @@ def test_bare_coordinates_take_the_crs_of_the_geometry() -> None:
     assert out.dtype == MultiLineStringXY(crs=RD)
 
 
-def test_a_null_point_in_a_part_of_points_is_ignored_or_propagates() -> None:
+def test_a_null_point_in_a_part_of_points_is_skipped_or_nulls_the_result() -> None:
     geometry, parts = _lines(_A, _A), _of_points([_B, [_B[0], None]], 1)
 
-    ignored = _added(geometry, parts)
-    propagated = _added(geometry, parts, null_behavior="propagate")
+    skipped = _added(geometry, parts)
+    nulled = _added(geometry, parts, null_parts="null")
 
-    assert ignored.ext.storage().to_list() == [[_A, _B], [_A]]
-    assert propagated.ext.storage().to_list() == [[_A, _B], None]
+    assert skipped.ext.storage().to_list() == [[_A, _B], [_A]]
+    assert nulled.ext.storage().to_list() == [[_A, _B], None]
 
 
 def test_parts_are_not_checked() -> None:
@@ -320,7 +320,7 @@ def test_adding_the_parts_back_rebuilds_the_multipolygons(
     assert_frame_equal(out, dimension.multipolygons(multipolygon_coords))
 
 
-def test_null_parts_are_ignored() -> None:
+def test_null_parts_are_skipped() -> None:
     out = _added(
         _lines(None, _A, _A, _A, _A, _A),
         _listed_lines([_B], None, [], [_B, None, _C], [None], [_B, [None], _C]),  # type: ignore[list-item]
@@ -336,7 +336,7 @@ def test_null_parts_are_ignored() -> None:
     ]
 
 
-def test_a_null_single_part_is_ignored() -> None:
+def test_a_null_single_part_is_skipped() -> None:
     parts = pl.Series("parts", [None, [_vertex(1, 1), None]], dtype=pl.List(_XY))
 
     out = _added(_lines(_A, _A), parts.ext.to(LineStringXY()))
@@ -344,41 +344,41 @@ def test_a_null_single_part_is_ignored() -> None:
     assert out.ext.storage().to_list() == [[_A], [_A]]
 
 
-def test_null_parts_propagate() -> None:
+def test_null_parts_null_the_result() -> None:
     out = _added(
         _lines(None, _A, _A, _A, _A),
         _listed_lines([_B], None, [], [_B, None], [_B, [None]]),  # type: ignore[list-item]
-        null_behavior="propagate",
+        null_parts="null",
     )
 
     assert out.ext.storage().to_list() == [None, None, [_A], None, None]
 
 
-def test_null_points_are_ignored_or_propagate() -> None:
+def test_null_points_are_skipped_or_null_the_result() -> None:
     geometry, parts = _points(_A[0], _A[0]), _listed_points([None, _B[0]], None)
 
-    ignored = _added(geometry, parts)
-    propagated = _added(geometry, parts, null_behavior="propagate")
+    skipped = _added(geometry, parts)
+    nulled = _added(geometry, parts, null_parts="null")
 
-    assert ignored.ext.storage().to_list() == [[_A[0], _B[0]], [_A[0]]]
-    assert propagated.ext.storage().to_list() == [None, None]
+    assert skipped.ext.storage().to_list() == [[_A[0], _B[0]], [_A[0]]]
+    assert nulled.ext.storage().to_list() == [None, None]
 
 
-def test_null_polygons_are_ignored() -> None:
+def test_null_polygons_are_skipped() -> None:
     out = _added(_multi_polygons([_P]), _listed_polygons([None, _Q, [[None]]]))  # type: ignore[list-item]
 
     assert out.ext.storage().to_list() == [[_P, _Q]]
 
 
-def test_null_rings_are_ignored_or_propagate() -> None:
+def test_null_rings_are_skipped_or_null_the_result() -> None:
     geometry = _polygons(_P, _P)
     parts = _listed_polygons([[None], _Q], [_Q, [_P[0], None]])  # type: ignore[list-item]
 
-    ignored = _added(geometry, parts)
-    propagated = _added(geometry, parts, null_behavior="propagate")
+    skipped = _added(geometry, parts)
+    nulled = _added(geometry, parts, null_parts="null")
 
-    assert ignored.ext.storage().to_list() == [[_P, _Q], [_P, _Q]]
-    assert propagated.ext.storage().to_list() == [None, None]
+    assert skipped.ext.storage().to_list() == [[_P, _Q], [_P, _Q]]
+    assert nulled.ext.storage().to_list() == [None, None]
 
 
 def test_parts_aggregated_from_rows_with_nulls() -> None:
@@ -400,7 +400,7 @@ def test_empty_parts_are_kept_or_skipped() -> None:
     geometry, parts = _multi_lines([[]]), _listed_lines([[], _B, []])
 
     kept = _added(geometry, parts)
-    skipped = _added(geometry, parts, empty_behavior="skip")
+    skipped = _added(geometry, parts, empty_parts="skip")
 
     assert kept.ext.storage().to_list() == [[[], [], _B, []]]
     # The geometry's own empty part stays.
@@ -408,21 +408,21 @@ def test_empty_parts_are_kept_or_skipped() -> None:
 
 
 def test_an_empty_single_part_is_skipped() -> None:
-    out = _added(_lines(_A, _A), _lines([], _B, name="parts"), empty_behavior="skip")
+    out = _added(_lines(_A, _A), _lines([], _B, name="parts"), empty_parts="skip")
 
     assert out.ext.storage().to_list() == [[_A], [_A, _B]]
 
 
 def test_empty_points_are_skipped() -> None:
     out = _added(
-        _points(_A[0]), _listed_points([_EMPTY_POINT, _B[0]]), empty_behavior="skip"
+        _points(_A[0]), _listed_points([_EMPTY_POINT, _B[0]]), empty_parts="skip"
     )
 
     assert out.ext.storage().to_list() == [[_A[0], _B[0]]]
 
 
 def test_empty_polygons_are_skipped() -> None:
-    out = _added(_polygons(_P), _listed_polygons([[], _Q, [[]]]), empty_behavior="skip")
+    out = _added(_polygons(_P), _listed_polygons([[], _Q, [[]]]), empty_parts="skip")
 
     assert out.ext.storage().to_list() == [[_P, _Q]]
 
@@ -431,7 +431,7 @@ def test_null_and_empty_parts_are_both_left_out() -> None:
     out = _added(
         _lines(_A),
         _listed_lines([None, _B, [], _C, None]),
-        empty_behavior="skip",
+        empty_parts="skip",
     )
 
     assert out.ext.storage().to_list() == [[_A, _B, _C]]
@@ -457,7 +457,7 @@ def test_a_single_list_of_parts_with_nulls_and_empties_is_added_to_every_row() -
     df = pl.DataFrame([_lines(_A, _B)])
     parts = _listed_lines([None, _C, []])  # type: ignore[list-item]
 
-    out = df.select(geo.add_parts("geometry", parts, empty_behavior="skip")).to_series()
+    out = df.select(geo.add_parts("geometry", parts, empty_parts="skip")).to_series()
 
     assert out.ext.storage().to_list() == [[_A, _C], [_B, _C]]
 
@@ -489,7 +489,7 @@ def test_sliced_columns_with_empty_parts_skipped() -> None:
         [_lines(_A, _A), _listed_lines([[]], [_B, [], _C]).alias("parts")]
     ).slice(1, 1)
 
-    out = df.select(geo.add_parts("geometry", "parts", empty_behavior="skip"))
+    out = df.select(geo.add_parts("geometry", "parts", empty_parts="skip"))
 
     assert out.to_series().ext.storage().to_list() == [[_A, _B, _C]]
 
@@ -514,8 +514,8 @@ def test_the_namespace_forwards() -> None:
     df = pl.DataFrame([_lines(_A), _listed_lines([_B]).alias("parts")])
 
     assert_frame_equal(
-        df.select(pl.col("geometry").geo.add_parts("parts", empty_behavior="skip")),
-        df.select(geo.add_parts("geometry", "parts", empty_behavior="skip")),
+        df.select(pl.col("geometry").geo.add_parts("parts", empty_parts="skip")),
+        df.select(geo.add_parts("geometry", "parts", empty_parts="skip")),
     )
 
 
@@ -576,9 +576,7 @@ def test_parts_of_another_kind_are_refused(
         lf.collect_schema()
 
 
-@pytest.mark.parametrize(
-    "kwargs", [{"null_behavior": "drop"}, {"empty_behavior": "ignore"}]
-)
-def test_unknown_behaviors_are_refused(kwargs: dict[str, str]) -> None:
+@pytest.mark.parametrize("kwargs", [{"null_parts": "drop"}, {"empty_parts": "null"}])
+def test_unknown_modes_are_refused(kwargs: dict[str, str]) -> None:
     with pytest.raises(ValueError, match="must be one of"):
         geo.add_parts("geometry", "parts", **kwargs)  # type: ignore[arg-type]

@@ -19,23 +19,23 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
-NullBehavior = Literal["ignore", "propagate"]
-EmptyBehavior = Literal["keep", "skip"]
+NullParts = Literal["skip", "null"]
+EmptyParts = Literal["keep", "skip"]
 
 
 def _add_parts(
     column: pl.Expr,
     geometry: GeoArrowType,
     parts: IntoExprColumn,
-    null_behavior: NullBehavior,
-    empty_behavior: EmptyBehavior,
+    null_parts: NullParts,
+    empty_parts: EmptyParts,
 ) -> pl.Expr:
     return register_plugin_function(
         plugin_path=LIB,
         args=[column, _to_expr(parts)],
         function_name="add_parts",
         is_elementwise=True,
-        kwargs={"null_behavior": null_behavior, "empty_behavior": empty_behavior},
+        kwargs={"null_parts": null_parts, "empty_parts": empty_parts},
     )
 
 
@@ -50,8 +50,8 @@ def add_parts(
     geometry: IntoExprColumn,
     parts: IntoExprColumn,
     *,
-    null_behavior: NullBehavior = "ignore",
-    empty_behavior: EmptyBehavior = "keep",
+    null_parts: NullParts = "skip",
+    empty_parts: EmptyParts = "keep",
 ) -> pl.Expr:
     """Add the parts of `parts` to each geometry, after the parts it already has.
     The result is always a multi-geometry.
@@ -80,22 +80,22 @@ def add_parts(
     Nothing is checked: the parts are copied as they are.
 
     A null geometry gives a null result.
-    What a null among the parts does is set by `null_behavior`.
+    What a null among the parts does is set by `null_parts`.
     A null part is a null row of `parts`, a null in a list of parts,
     or a part with a null vertex in it.
 
-    | `null_behavior` | a null part |
+    | `null_parts` | a null part |
     | - | - |
-    | `"ignore"` | is left out; the other parts of the row are still added |
-    | `"propagate"` | makes the result null |
+    | `"skip"` | is left out; the other parts of the row are still added |
+    | `"null"` | makes the result null |
 
-    `"ignore"` suits a list of parts aggregated from rows of which some are null.
+    `"skip"` suits a list of parts aggregated from rows of which some are null.
 
     What an empty part (a point with every axis NaN, or a part without vertices)
-    does is set by `empty_behavior`.
+    does is set by `empty_parts`.
     It only applies to the parts that are added: those the geometry has are kept.
 
-    | `empty_behavior` | an empty part |
+    | `empty_parts` | an empty part |
     | - | - |
     | `"keep"` | is added like any other part |
     | `"skip"` | is left out |
@@ -108,11 +108,9 @@ def add_parts(
     highways.join(roads_per_region, on="region").select(geo.add_parts("highway", "road"))
     ```
     """
-    _ensure_one_of("null_behavior", null_behavior, NullBehavior)
-    _ensure_one_of("empty_behavior", empty_behavior, EmptyBehavior)
+    _ensure_one_of("null_parts", null_parts, NullParts)
+    _ensure_one_of("empty_parts", empty_parts, EmptyParts)
     return on_geometry(
         geometry,
-        lambda column, dtype: _add_parts(
-            column, dtype, parts, null_behavior, empty_behavior
-        ),
+        lambda column, dtype: _add_parts(column, dtype, parts, null_parts, empty_parts),
     )
