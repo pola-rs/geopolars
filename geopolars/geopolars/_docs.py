@@ -92,6 +92,9 @@ An empty geometry gives an empty {output}, and a null one a null {output}.""",
 The type, dimension and CRS of the output geometry are kept from the input.""",
     "keeps_dimension_and_crs": """\
 The result keeps the input's dimension and CRS.""",
+    "paired_rows": """\
+`{geometry}` and `{parts}` have the same number of rows,
+or one of them has a single row, which then goes with every row of the other.""",
     "same_crs": """\
 `{parts}` have to declare the CRS of `{geometry}`;
 a CRS declared on only one of the two is refused too.

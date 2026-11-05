@@ -60,8 +60,7 @@ def add_holes(
     | anything else | | refused |
 
 
-    `polygon` and `holes` have the same number of rows,
-    or one of them has a single row, which then goes with every row of the other.
+    {paired_rows}
     With a single linestring as `holes`, every polygon gets that same hole.
     With a single polygon, the result has one copy of it per row of `holes`,
     each with the holes of that row.

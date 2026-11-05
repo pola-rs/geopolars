@@ -5,12 +5,12 @@ A native kernel (A-tier) copies the geometries and their new parts into new buff
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import _to_expr, on_geometry
 
 if TYPE_CHECKING:
@@ -39,12 +39,6 @@ def _add_parts(
     )
 
 
-def _ensure_one_of(name: str, value: str, options: object) -> None:
-    if value not in get_args(options):
-        msg = f"`{name}` must be one of {list(get_args(options))}, got {value!r}"
-        raise ValueError(msg)
-
-
 @doc(parts="parts", geometry="geometry")
 def add_parts(
     geometry: IntoExprColumn,
@@ -64,13 +58,12 @@ def add_parts(
     | anything else | | refused |
 
     A part can also be given as its vertices, as points nested in lists in its shape:
-    a linestring as `list[PointXY]`, a polygon as `list[list[PointXY]]`.
-    A polygon can also be given as its rings, as `list[LineStringXY]`.
+    a linestring as `list[PointXY]` or `MultiPointXY`, a polygon as `list[list[PointXY]]`.
+    A polygon can also be given as its rings, as `list[LineStringXY]` or `MultiLineStringXY`.
     Bare coordinates (the storage of points) work in place of the points.
     A list of parts is then a list of those.
 
-    `geometry` and `parts` have the same number of rows,
-    or one of them has a single row, which then goes with every row of the other.
+    {paired_rows}
 
     {keeps_dimension_and_crs}
     Parts of another dimension are refused.
@@ -82,6 +75,7 @@ def add_parts(
     What a null among the parts does is set by `null_parts`.
     A null part is a null row of `parts`, a null in a list of parts,
     or a part with a null vertex in it.
+    An untyped null (`pl.lit(None)`) as `parts` is a null row on every row.
 
     | `null_parts` | a null part |
     | - | - |
@@ -107,8 +101,8 @@ def add_parts(
     highways.join(roads_per_region, on="region").select(geo.add_parts("highway", "road"))
     ```
     """
-    _ensure_one_of("null_parts", null_parts, NullParts)
-    _ensure_one_of("empty_parts", empty_parts, EmptyParts)
+    validate_one_of("null_parts", null_parts, NullParts)
+    validate_one_of("empty_parts", empty_parts, EmptyParts)
     return on_geometry(
         geometry,
         lambda column, dtype: _add_parts(column, dtype, parts, null_parts, empty_parts),

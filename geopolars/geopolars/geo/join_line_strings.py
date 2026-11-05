@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB, validate_coincidence_tolerances
+from geopolars._utils import LIB, validate_coincidence_tolerances, validate_one_of
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
@@ -67,9 +67,7 @@ def join_line_strings(
     df.select(geo.join_line_strings("legs", gaps="bridge"))
     ```
     """
-    if gaps not in get_args(Gaps):
-        msg = f"`gaps` must be one of {list(get_args(Gaps))}, got {gaps!r}"
-        raise ValueError(msg)
+    validate_one_of("gaps", gaps, Gaps)
     validate_coincidence_tolerances(abs_tol, rel_tol)
 
     return register_plugin_function(

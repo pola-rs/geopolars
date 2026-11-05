@@ -221,12 +221,24 @@ def test_polygons(
         (_lines(_A), _of_points([[_B, _C]], 2), [[_A, _B, _C]]),
         (_lines(_A), _bare([_B], 1), [[_A, _B]]),
         (_lines(_A), _bare([[_B, _C]], 2), [[_A, _B, _C]]),
+        (_lines(_A), _multi_points(_B, name="parts"), [[_A, _B]]),
+        (
+            _lines(_A),
+            _nested([[_B, _C]], pl.List(_XY), MultiPointXY(), 1),
+            [[_A, _B, _C]],
+        ),
         (_polygons(_P), _of_points([_Q], 2), [[_P, _Q]]),
         (_polygons(_P), _of_points([[_Q, _P]], 3), [[_P, _Q, _P]]),
         (_polygons(_P), _listed_lines(_Q), [[_P, _Q]]),
         (_polygons(_P), _nested([[_Q]], pl.List(_XY), LineStringXY(), 2), [[_P, _Q]]),
         (_polygons(_P), _bare([_Q], 2), [[_P, _Q]]),
         (_polygons(_P), _bare([[_Q, _P]], 3), [[_P, _Q, _P]]),
+        (_polygons(_P), _multi_lines(_Q, name="parts"), [[_P, _Q]]),
+        (
+            _polygons(_P),
+            _nested([[_Q, _P]], pl.List(pl.List(_XY)), MultiLineStringXY(), 1),
+            [[_P, _Q, _P]],
+        ),
     ],
 )
 def test_parts_as_their_points_or_rings(
@@ -343,6 +355,19 @@ def test_a_null_single_part_is_dropped() -> None:
     out = _added(_lines(_A, _A), parts.ext.to(LineStringXY()))
 
     assert out.ext.storage().to_list() == [[_A], [_A]]
+
+
+def test_an_untyped_null_adds_nothing_or_nulls_the_result() -> None:
+    df = pl.DataFrame([_lines(_A, None)])
+
+    dropped = df.select(geo.add_parts("geometry", pl.lit(None))).to_series()
+    nulled = df.select(
+        geo.add_parts("geometry", pl.lit(None), null_parts="null")
+    ).to_series()
+
+    assert dropped.dtype == MultiLineStringXY()
+    assert dropped.ext.storage().to_list() == [[_A], None]
+    assert nulled.ext.storage().to_list() == [None, None]
 
 
 def test_null_parts_null_the_result() -> None:
@@ -634,7 +659,7 @@ def test_parts_in_another_crs_are_refused(
     [
         (_lines(_A), _polygons(_P, name="parts")),
         (_points(_A[0]), _lines(_A, name="parts")),
-        (_lines(_A), _multi_points(_A, name="parts")),
+        (_polygons(_P), _multi_points(_A, name="parts")),
         (_polygons(_P), _of_points([_A], 1)),
         (_lines(_A), _of_points([[[_A]]], 3)),
         (_lines(_A), _bare([[[_A]]], 3)),

@@ -63,18 +63,37 @@ fn part_kinds(kind: Kind) -> (Kind, Kind) {
     }
 }
 
+/// The kinds that can also hold a single `part`, as the multi-geometry of its items:
+/// a linestring as a multipoint, a polygon as a linestring or multilinestring of its rings.
+fn items_of(part: Kind) -> &'static [Kind] {
+    match part {
+        Kind::LineString => &[Kind::MultiPoint],
+        Kind::Polygon => &[Kind::LineString, Kind::MultiLineString],
+        _ => &[],
+    }
+}
+
 /// The multi-geometries `add_parts` gives back,
 /// and whether the parts are a list of them per row rather than one part.
 fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     let geo = describe(input_fields[0].dtype())?;
     let (part, multi) = part_kinds(geo.kind);
     let parts = input_fields[1].dtype();
+    let multi_geo = Geo::new(multi, geo.dim, geo.metadata.clone());
+    // An untyped null (`pl.lit(None)`) is a null list of parts on every row.
+    if matches!(parts, DataType::Null) {
+        return Ok((multi_geo, true));
+    }
     let refused = || {
         polars_err!(
             SchemaMismatch: "expected the parts as one `{}` per row, a list of them, or a `{}`; \
             a part can also be the list of its points (or of their bare coordinates){}, got: {}",
             part.display(), multi.display(),
-            if part == Kind::Polygon { ", or of its rings as linestrings" } else { "" },
+            match part {
+                Kind::LineString => ", or a `multipoint`",
+                Kind::Polygon => ", or of its rings as linestrings, or a `multilinestring`",
+                _ => "",
+            },
             parts
         )
     };
@@ -82,8 +101,8 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     let (nesting, dim, metadata) = match inner {
         DataType::Extension(..) => {
             let found = describe(inner).map_err(|_| refused())?;
-            let is_ring = part == Kind::Polygon && found.kind == Kind::LineString;
-            let accepted = [part, multi, Kind::Point].contains(&found.kind) || is_ring;
+            let accepted = [part, multi, Kind::Point].contains(&found.kind)
+                || items_of(part).contains(&found.kind);
             if !accepted {
                 return Err(refused());
             }
@@ -101,7 +120,7 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
         dim == geo.dim,
         SchemaMismatch: "the geometry is {} but the parts are {}", geo.dim.tag(), dim.tag()
     );
-    Ok((Geo::new(multi, geo.dim, geo.metadata.clone()), listed))
+    Ok((multi_geo, listed))
 }
 
 fn kernel_output_type_add_parts(input_fields: &[Field]) -> PolarsResult<Field> {
@@ -225,7 +244,13 @@ fn add_parts(inputs: &[Series], kwargs: AddPartsKwargs) -> PolarsResult<Series> 
     let (geo, listed) = parts_added(&fields_of(inputs))?;
     let kind = describe(inputs[0].dtype())?.kind;
     let base = inputs[0].ext()?.storage();
-    let parts = storage_of(&inputs[1])?;
+    let parts = match inputs[1].dtype() {
+        DataType::Null => {
+            let storage = geo.dim().storage(geo.kind().nesting());
+            Series::full_null(inputs[1].name().clone(), inputs[1].len(), &storage)
+        }
+        _ => storage_of(&inputs[1])?,
+    };
     let (base, parts) = paired_rows(base, &parts, ("geometries", "parts"))?;
 
     let chunk = chunk_with_added_parts(

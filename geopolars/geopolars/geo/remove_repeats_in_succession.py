@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB, validate_coincidence_tolerances
+from geopolars._utils import LIB, validate_coincidence_tolerances, validate_one_of
 from geopolars.geo._dispatch import on_geometry
 
 if TYPE_CHECKING:
@@ -73,17 +73,8 @@ def remove_repeats_in_succession(
     ```
     """
 
-    if collapsed_lines not in get_args(CollapsedLines):
-        msg = (
-            f"`collapsed_lines` must be one of {list(get_args(CollapsedLines))}, "
-            f"got {collapsed_lines!r}"
-        )
-        raise ValueError(msg)
-    if too_short not in get_args(TooShort):
-        msg = (
-            f"`too_short` must be one of {list(get_args(TooShort))}, got {too_short!r}"
-        )
-        raise ValueError(msg)
+    validate_one_of("collapsed_lines", collapsed_lines, CollapsedLines)
+    validate_one_of("too_short", too_short, TooShort)
     validate_coincidence_tolerances(abs_tol, rel_tol)
 
     def build(column: pl.Expr, _geometry: GeoArrowType) -> pl.Expr:
