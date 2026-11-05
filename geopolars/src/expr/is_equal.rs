@@ -246,7 +246,8 @@ fn is_equal_topological(
 ) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let chunks = match (a.len(), b.len()) {
-        // The kinds can differ, so the chunks of both sides are not split alike.
+        // `aligned_chunks` takes two storages of one physical type, and the kinds can differ,
+        // so both sides are made a single chunk instead, as in `rings_overlap`.
         (n, m) if n == m => {
             let (a, b) = (series_to_geos_rows(a, &kwargs)?, series_to_geos_rows(b, &kwargs)?);
             vec![topologically_equal_pairwise(&a, &b, kwargs.ignore_per_row_errors).into_polars()?]

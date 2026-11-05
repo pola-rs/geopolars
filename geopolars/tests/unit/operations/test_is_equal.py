@@ -15,7 +15,9 @@ from geopolars import geo
 from geopolars.datatypes import (
     GeoArrowType,
     LineStringXY,
+    LineStringXYM,
     MultiLineStringXY,
+    MultiLineStringXYZM,
     MultiPointXY,
     MultiPolygonXY,
     MultiPolygonXYZ,
@@ -25,6 +27,7 @@ from geopolars.datatypes import (
     PointXYZM,
     PolygonXY,
     PolygonXYZ,
+    PolygonXYZM,
 )
 
 _XY = pl.Struct({"x": pl.Float64, "y": pl.Float64})
@@ -199,11 +202,11 @@ def test_the_same_rings_in_other_polygons_are_not_close() -> None:
     assert _is_close(MultiPolygonXY(), [a], [b]) == [False]
 
 
-def test_empty_points_are_only_close_with_nans_equal() -> None:
+def test_empty_points_are_equal_unless_nans_equal_is_false() -> None:
     empty = {"x": math.nan, "y": math.nan}
 
-    assert _is_close(PointXY(), [empty], [empty]) == [False]
-    assert _is_close(PointXY(), [empty], [empty], nans_equal=True) == [True]
+    assert _is_equal(PointXY(), [empty], [empty]) == [True]
+    assert _is_equal(PointXY(), [empty], [empty], nans_equal=False) == [False]
 
 
 def test_m_is_only_compared_when_unique() -> None:
@@ -291,13 +294,16 @@ _NON_FINITE_IDS = ["finite-inf", "inf-inf", "inf-neg-inf", "nan-nan"]
     [{}, {"abs_tol": 1e-9}, {"rel_tol": 1e-9}],
     ids=["exact", "abs_tol", "rel_tol"],
 )
-def test_an_infinity_is_only_equal_to_itself_and_nan_to_nothing(
+def test_an_infinity_is_only_equal_to_itself_and_nan_to_nothing_without_nans_equal(
     tolerance: dict[str, float],
     a: tuple[float, float],
     b: tuple[float, float],
     equal: bool,
 ) -> None:
-    assert _is_equal(PointXY(), [_point(*a)], [_point(*b)], **tolerance) == [equal]
+    out = _is_equal(
+        PointXY(), [_point(*a)], [_point(*b)], nans_equal=False, **tolerance
+    )
+    assert out == [equal]
 
 
 @pytest.mark.parametrize(
@@ -305,13 +311,13 @@ def test_an_infinity_is_only_equal_to_itself_and_nan_to_nothing(
     [{}, {"abs_tol": 1e-9}, {"rel_tol": 1e-9}],
     ids=["exact", "abs_tol", "rel_tol"],
 )
-def test_nans_equal_makes_nan_equal_to_nan_whatever_the_tolerance(
+def test_a_nan_is_equal_to_a_nan_by_default_whatever_the_tolerance(
     tolerance: dict[str, float],
 ) -> None:
     a = [_point(math.nan, 0), _point(math.nan, 0)]
     b = [_point(math.nan, 0), _point(0, 0)]
 
-    assert _is_equal(PointXY(), a, b, nans_equal=True, **tolerance) == [True, False]
+    assert _is_equal(PointXY(), a, b, **tolerance) == [True, False]
 
 
 @pytest.mark.parametrize(
@@ -326,7 +332,58 @@ def test_an_infinite_tolerance_makes_finite_values_equal_and_an_infinity_only_it
     b: tuple[float, float],
     equal: bool,
 ) -> None:
-    assert _is_equal(PointXY(), [_point(*a)], [_point(*b)], **tolerance) == [equal]
+    out = _is_equal(
+        PointXY(), [_point(*a)], [_point(*b)], nans_equal=False, **tolerance
+    )
+    assert out == [equal]
+
+
+def _chunked(series: list[pl.Series]) -> pl.Series:
+    out = pl.concat(series, rechunk=False)
+    assert out.n_chunks() == len(series)
+    return out
+
+
+def test_a_chunked_column_is_compared_against_a_single_geometry() -> None:
+    dtype, same, nudged, moved = _KINDS["linestring"]
+    many = _chunked(
+        [
+            _series("many", dtype, [same, nudged]),
+            _series("many", dtype, [None, moved, same]),
+        ]
+    )
+    one = _series("one", dtype, [same])
+    df = pl.DataFrame(many)
+    expected = [True, False, None, False, True]
+
+    assert df.select(geo.is_equal("many", one))["many"].to_list() == expected
+    assert df.select(geo.is_equal(one, "many")).to_series().to_list() == expected
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({}, [True, False, False, False]),
+        ({"abs_tol": 1e-9}, [True, True, False, False]),
+        ({"mode": "topological"}, [True, False, False, True]),
+    ],
+    ids=["exact", "abs_tol", "topological"],
+)
+def test_the_namespace_method_passes_its_options_on(
+    kwargs: dict[str, Any], expected: list[bool]
+) -> None:
+    dtype, same, nudged, moved = _KINDS["polygon"]
+    reversed_ring = [same[0][::-1]]
+    df = pl.DataFrame(
+        [
+            _series("a", dtype, [same] * 4),
+            _series("b", dtype, [same, nudged, moved, reversed_ring]),
+        ]
+    )
+
+    out = df.select(pl.col("a").geo.is_equal("b", **kwargs))
+
+    assert out["a"].to_list() == expected
 
 
 @pytest.mark.parametrize("value", [-1.0, math.nan])
@@ -525,14 +582,42 @@ def test_against_a_single_null_geometry_everything_is_topologically_null() -> No
     assert out["many"].to_list() == [None, None]
 
 
-def test_a_chunked_column_is_compared_against_a_single_chunk() -> None:
-    a = pl.concat([_wkt("a", PolygonXY(), [_SQUARE]), _wkt("a", PolygonXY(), [None])])
+def test_columns_chunked_differently_are_compared_row_by_row() -> None:
+    a = _chunked([_wkt("a", PolygonXY(), [_SQUARE]), _wkt("a", PolygonXY(), [None])])
     b = _wkt("b", MultiPolygonXY(), [f"MULTIPOLYGON ({_SQUARE[7:]})", None])
-    assert a.n_chunks() == 2
 
     out = pl.DataFrame([a, b]).select(geo.is_equal("a", "b", mode="topological"))
 
     assert out["a"].to_list() == [True, None]
+
+
+def test_a_chunked_column_is_compared_topologically_against_a_single_geometry() -> None:
+    reversed_square = "POLYGON ((0 0, 0 1, 1 1, 1 0, 0 0))"
+    moved = "POLYGON ((0 0, 2 0, 2 1, 0 1, 0 0))"
+    many = _chunked(
+        [
+            _wkt("many", PolygonXY(), [_SQUARE, moved]),
+            _wkt("many", PolygonXY(), [None, reversed_square, "POLYGON EMPTY"]),
+        ]
+    )
+    one = _wkt("one", MultiPolygonXY(), [f"MULTIPOLYGON ({_SQUARE[7:]})"])
+    df = pl.DataFrame(many)
+    expected = [True, False, None, True, False]
+
+    out = df.select(geo.is_equal("many", one, mode="topological"))
+    assert out["many"].to_list() == expected
+    out = df.select(geo.is_equal(one, "many", mode="topological"))
+    assert out.to_series().to_list() == expected
+
+
+def test_m_is_not_compared_topologically() -> None:
+    a = (PolygonXYZM(), ["POLYGON ZM ((0 0 1 1, 1 0 1 2, 1 1 1 3, 0 1 1 4, 0 0 1 1))"])
+    b = (MultiPolygonXY(), [f"MULTIPOLYGON ({_SQUARE[7:]})"])
+
+    assert _topologically_equal(a, b) == [True]
+    line = (LineStringXYM(), ["LINESTRING M (0 0 1, 1 1 2)"])
+    reversed_line = (MultiLineStringXYZM(), ["MULTILINESTRING ZM ((1 1 0 9, 0 0 0 9))"])
+    assert _topologically_equal(line, reversed_line) == [True]
 
 
 # GEOS raises on this one, but not on every geometry that is not finite.
@@ -540,11 +625,10 @@ _NOT_FINITE_LINE = _xy((0, 0), (math.nan, 1), (2, 2))
 
 
 def _not_finite_lines(**kwargs: bool) -> list[bool | None]:
+    """A line that is not finite, then one that is, each compared with itself."""
+    rows = [_NOT_FINITE_LINE, _LINE]
     df = pl.DataFrame(
-        [
-            _series("a", LineStringXY(), [_NOT_FINITE_LINE]),
-            _series("b", LineStringXY(), [_NOT_FINITE_LINE]),
-        ]
+        [_series("a", LineStringXY(), rows), _series("b", LineStringXY(), rows)]
     )
     return df.select(geo.is_equal("a", "b", mode="topological", **kwargs))[
         "a"
@@ -557,14 +641,15 @@ def test_geos_raises_on_a_line_that_is_not_finite() -> None:
 
 
 def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
-    assert _not_finite_lines(ignore_per_row_errors=True) == [None]
+    assert _not_finite_lines(ignore_per_row_errors=True) == [None, True]
 
 
 def test_the_early_finite_check_raises_before_geos() -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         _not_finite_lines(early_finite_check=True)
     assert _not_finite_lines(early_finite_check=True, ignore_per_row_errors=True) == [
-        None
+        None,
+        True,
     ]
 
 
@@ -591,7 +676,7 @@ def test_topological_refuses_a_tolerance(option: str) -> None:
 @pytest.mark.parametrize(
     ("option", "reason"),
     [
-        ({"nans_equal": True}, "no option to treat NaNs as equal"),
+        ({"nans_equal": False}, "no option for how NaNs compare"),
         ({"unique_z": False}, "compares x and y only"),
         ({"unique_m": True}, "compares x and y only"),
     ],
@@ -604,7 +689,7 @@ def test_topological_refuses_changed_axis_options(
 
 
 def test_topological_takes_the_axis_options_at_their_defaults() -> None:
-    defaults = {"nans_equal": False, "unique_z": True, "unique_m": False}
+    defaults = {"nans_equal": True, "unique_z": True, "unique_m": False}
 
     out = _topologically_equal(
         (PolygonXY(), [_SQUARE]), (PolygonXY(), [_SQUARE]), **defaults

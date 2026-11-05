@@ -478,7 +478,7 @@ class ExprGeoNameSpace:
         mode: Literal["identical", "topological"] = "identical",
         abs_tol: float | None = None,
         rel_tol: float | None = None,
-        nans_equal: bool = False,
+        nans_equal: bool = True,
         unique_z: bool = True,
         unique_m: bool = False,
         ignore_per_row_errors: bool = False,

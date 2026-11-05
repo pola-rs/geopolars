@@ -33,7 +33,7 @@ def is_equal(
     mode: Literal["identical", "topological"] = "identical",
     abs_tol: float | None = None,
     rel_tol: float | None = None,
-    nans_equal: bool = False,
+    nans_equal: bool = True,
     unique_z: bool = True,
     unique_m: bool = False,
     ignore_per_row_errors: bool = False,
@@ -60,12 +60,13 @@ def is_equal(
     The coordinates are compared in the order they are stored,
     so a ring that starts at another vertex, or runs the other way, is not equal.
     The same goes for the parts of a multi-geometry, even though they have no order of their own.
-    This complements `pl.Expr.is_close` with `abs_tol`, `rel_tol`, and `nans_equal`.
 
     {coincidence_axes}
     {coincidence_tolerance}
     {tolerance_range}
-    The empty point (NaN in x and y) is only equal to another one with `nans_equal=True`.
+    With `nans_equal=True`, the default, a NaN is equal to a NaN, as in `==` in Polars.
+    So the empty point (NaN in x and y) is equal to another one.
+    With `nans_equal=False`, a NaN is equal to nothing, as in `pl.Expr.is_close` by default.
 
     **Topological**
 
@@ -85,7 +86,8 @@ def is_equal(
     {geos_non_finite}
     GEOS then gives no meaningful answer: depending on where the vertex is, it raises,
     or gives `True` or `False`, even for two of the same geometry.
-    A single point is the exception, which GEOS compares as it is, with NaN equal to NaN.
+    A point (not a multipoint) is the exception.
+    GEOS compares its coordinates as they are, with NaN equal to NaN and an infinity equal to itself.
     {early_finite_check}
 
     ```python
@@ -154,7 +156,7 @@ def _check_topological_options(
         )
         raise ValueError(msg)
     changed = {
-        "nans_equal=True": (nans_equal, "GEOS has no option to treat NaNs as equal"),
+        "nans_equal=False": (not nans_equal, "GEOS has no option for how NaNs compare"),
         "unique_z=False": (not unique_z, "GEOS compares x and y only"),
         "unique_m=True": (unique_m, "GEOS compares x and y only"),
     }
