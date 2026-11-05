@@ -20,8 +20,8 @@ use super::is_empty::{line_strings_are_empty, points_are_empty, polygons_are_emp
 
 const NO_OVERFLOW: &str = "no more items than the input";
 
-/// A geometry array: its rows, the `N` list levels between them and the coordinates, outermost first,
-/// and the coordinates.
+/// A geometry array as its rows, the `N` list levels below them (outermost first),
+/// and its coordinates.
 pub(super) struct Nested<'a, const N: usize> {
     rows: &'a List,
     levels: [&'a ValidList; N],
@@ -102,7 +102,10 @@ fn offsets_with_capacity<const N: usize>(capacity: impl Fn(usize) -> usize) -> [
     array::from_fn(|level| Offsets::with_capacity(capacity(level)))
 }
 
-/// The vertices one valid row of [concatenated] copies.
+/// A slice of the base's vertices followed by a slice of the added parts' vertices,
+/// as [concatenated] copies them.
+/// A valid row takes one, and one more for each later run of kept parts (see [kept_runs]).
+/// Those have an empty `base`.
 struct CopiedVertices {
     /// In the coordinates of the base.
     base: Range<usize>,
@@ -125,11 +128,11 @@ fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: u
 /// A null row of `added` adds nothing.
 /// With `keep`, only the items of `added` set in it are added (one bit per item).
 /// Without `added`, `base` is copied as it is.
-/// The rows are null where `validity` says,
-/// which has to cover the null rows of `base`.
+/// The rows are null where `validity` says.
+/// Every null row of `base` has to be null in it too.
 ///
 /// `base` and `added` have to have the same length and dimension.
-/// The vertices are copied into new buffers, as one slice per axis per row of each.
+/// The vertices are copied into new buffers, one slice per axis per [CopiedVertices].
 pub(super) fn concatenated<const N: usize>(
     base: Nested<N>,
     added: Option<Nested<N>>,
@@ -148,7 +151,7 @@ pub(super) fn concatenated<const N: usize>(
     }
     let is_valid = |i: usize| validity.as_ref().is_none_or(|validity| validity.get_bit(i));
 
-    // One pass builds the offsets of every level, and the vertex ranges of each row.
+    // One pass builds the offsets of every level, and the vertex ranges to copy.
     // The coordinates are copied per axis afterwards from those ranges.
     let added_items = |level: usize| added.as_ref().map_or(0, |added| added.levels[level].len());
     let mut row_offsets = Offsets::<i64>::with_capacity(len);
@@ -183,7 +186,7 @@ pub(super) fn concatenated<const N: usize>(
             copies.push(copy);
             continue;
         };
-        // The first run goes with the base, every later run is a copy of its own.
+        // The first run shares the base's `CopiedVertices`, every later run gets one of its own.
         let mut runs = kept_runs(keep, added.rows.range(i));
         if let Some(run) = runs.next() {
             item_count += run.len();
@@ -319,8 +322,8 @@ pub fn multi_points_with_added_parts(
 /// `base`, each followed by the linestrings on the same row of `added`.
 /// A null row of `added` adds nothing.
 /// Only the linestrings of `added` set in its mask are added.
-/// The rows are null where `validity` says,
-/// which has to cover the null rows of `base`.
+/// The rows are null where `validity` says.
+/// Every null row of `base` has to be null in it too.
 ///
 /// `base` and `added` have to have the same length and dimension.
 pub fn multi_line_strings_with_added_parts(

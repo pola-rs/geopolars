@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
@@ -20,6 +21,9 @@ from geopolars.datatypes import (
     PolygonXY,
 )
 from tests.unit.conftest import Dimension
+
+if TYPE_CHECKING:
+    from polars._typing import EngineType
 
 RD = "EPSG:28992"
 
@@ -301,6 +305,17 @@ def test_null_polygons_are_ignored() -> None:
     assert out.ext.storage().to_list() == [[_P, _Q]]
 
 
+def test_null_rings_are_ignored_or_propagate() -> None:
+    geometry = _polygons(_P, _P)
+    parts = _listed_polygons([[None], _Q], [_Q, [_P[0], None]])  # type: ignore[list-item]
+
+    ignored = _added(geometry, parts)
+    propagated = _added(geometry, parts, null_behavior="propagate")
+
+    assert ignored.ext.storage().to_list() == [[_P, _Q], [_P, _Q]]
+    assert propagated.ext.storage().to_list() == [None, None]
+
+
 def test_parts_aggregated_from_rows_with_nulls() -> None:
     roads = pl.DataFrame({"region": ["n", "n", "s", "s"]}).with_columns(
         _lines(_B, None, None, _C, name="road")
@@ -373,6 +388,15 @@ def test_a_single_geometry_gets_every_row_of_parts() -> None:
     assert out.ext.storage().to_list() == [[_A, _B], [_A, _C]]
 
 
+def test_a_single_list_of_parts_with_nulls_and_empties_is_added_to_every_row() -> None:
+    df = pl.DataFrame([_lines(_A, _B)])
+    parts = _listed_lines([None, _C, []])  # type: ignore[list-item]
+
+    out = df.select(geo.add_parts("geometry", parts, empty_behavior="skip")).to_series()
+
+    assert out.ext.storage().to_list() == [[_A, _C], [_B, _C]]
+
+
 def test_rows_of_different_lengths_are_refused() -> None:
     df = pl.DataFrame([_lines(_A, _B)])
 
@@ -391,6 +415,34 @@ def test_sliced_columns() -> None:
     out = df.select(geo.add_parts("geometry", "parts")).to_series()
 
     assert out.ext.storage().to_list() == [[_A, _B, _C], None, [_B, _A]]
+
+
+def test_sliced_columns_with_empty_parts_skipped() -> None:
+    # The empty part before the slice shifts every part after it by one,
+    # until the parts are trimmed to the slice.
+    df = pl.DataFrame(
+        [_lines(_A, _A), _listed_lines([[]], [_B, [], _C]).alias("parts")]
+    ).slice(1, 1)
+
+    out = df.select(geo.add_parts("geometry", "parts", empty_behavior="skip"))
+
+    assert out.to_series().ext.storage().to_list() == [[_A, _B, _C]]
+
+
+@pytest.mark.parametrize("engine", ["in-memory", "streaming"])
+def test_every_chunk_gets_its_parts(engine: EngineType) -> None:
+    df = pl.concat(
+        [
+            pl.DataFrame([_lines(_A), _listed_lines([_B, None])]),  # type: ignore[list-item]
+            pl.DataFrame([_lines(None, _B), _listed_lines([_C], [_C])]),
+        ],
+        rechunk=False,
+    )
+    assert df.n_chunks() == 2
+
+    out = df.lazy().select(geo.add_parts("geometry", "parts")).collect(engine=engine)
+
+    assert out.to_series().ext.storage().to_list() == [[_A, _B], None, [_B, _C]]
 
 
 def test_the_namespace_forwards() -> None:

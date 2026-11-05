@@ -95,9 +95,9 @@ def add_parts(
     ```python
     df.select(geo.add_parts("roads", "new_roads"))
 
-    # Every road of a region added to that region's highways.
-    roads = df.group_by("region").agg(pl.col("road"))
-    highways.join(roads, on="region").select(geo.add_parts("highways", "road"))
+    # Every road of a region added to that region's highway.
+    roads_per_region = roads.group_by("region").agg("road")
+    highways.join(roads_per_region, on="region").select(geo.add_parts("highway", "road"))
     ```
     """
     _ensure_one_of("null_behavior", null_behavior, NullBehavior)
