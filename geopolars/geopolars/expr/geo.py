@@ -471,26 +471,32 @@ class ExprGeoNameSpace:
             ignore_per_row_errors=ignore_per_row_errors,
         )
 
-    def is_close(
+    def is_equal(
         self,
         other: IntoExprColumn,
         *,
-        abs_tol: float = 0.0,
-        rel_tol: float = 1e-09,
-        nans_equal: bool = False,
-        unique_z: bool = True,
-        unique_m: bool = False,
+        mode: Literal["identical", "topological"] = "identical",
+        abs_tol: float | None = None,
+        rel_tol: float | None = None,
+        nans_equal: bool | None = None,
+        unique_z: bool | None = None,
+        unique_m: bool | None = None,
+        ignore_per_row_errors: bool = False,
+        early_finite_check: bool = False,
     ) -> pl.Expr:
-        from geopolars.geo.is_close import is_close
+        from geopolars.geo.is_equal import is_equal
 
-        return is_close(
+        return is_equal(
             self._expr,
             other,
+            mode=mode,
             abs_tol=abs_tol,
             rel_tol=rel_tol,
             nans_equal=nans_equal,
             unique_z=unique_z,
             unique_m=unique_m,
+            ignore_per_row_errors=ignore_per_row_errors,
+            early_finite_check=early_finite_check,
         )
 
     def is_ccw(self, *, holes_cw: bool = True) -> pl.Expr:

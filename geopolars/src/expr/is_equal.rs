@@ -1,6 +1,12 @@
-//! Whether two geometries are almost the same
+//! Whether two geometries are equal.
+//! `is_equal_identical` compares the coordinates natively
 //! (see [`geopolars_compute::native::points_are_close`] and the kernels of the other kinds).
+//! `is_equal_topological` forwards to GEOS
+//! (see [`geopolars_compute::geos::topologically_equal_pairwise`]).
 
+use geopolars_compute::geos::{
+    topologically_equal_against_one, topologically_equal_pairwise, GeosGeometries, ToGeosRows,
+};
 use geopolars_compute::native::{
     line_strings_are_close, multi_line_strings_are_close, multi_points_are_close,
     multi_polygons_are_close, points_are_close, polygons_are_close,
@@ -15,12 +21,13 @@ use polars_core::utils::align_chunks_binary;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
+use super::IntoPolarsResult;
 use crate::geoarrow::{describe, ensure_same_crs, Kind};
 
 /// See python
 #[derive(Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct IsCloseKwargs {
+pub struct IsEqualIdenticalKwargs {
     abs_tol: f64,
     rel_tol: f64,
     nans_equal: bool,
@@ -28,7 +35,7 @@ pub struct IsCloseKwargs {
     unique_m: bool,
 }
 
-impl Default for IsCloseKwargs {
+impl Default for IsEqualIdenticalKwargs {
     fn default() -> Self {
         Self {
             abs_tol: 0.0,
@@ -40,17 +47,17 @@ impl Default for IsCloseKwargs {
     }
 }
 
-/// For [`is_close`]: a `bool`, named after the first geometry.
+/// For [`is_equal_identical`]: a `bool`, named after the first geometry.
 ///
 /// Both have to be the same kind and dimension, in the same CRS (or neither declaring one).
-fn kernel_output_type_is_close(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_is_equal_identical(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
-        polars_bail!(ComputeError: "is_close takes two geometries, got {} inputs", input_fields.len());
+        polars_bail!(ComputeError: "is_equal takes two geometries, got {} inputs", input_fields.len());
     };
     let (geo_a, geo_b) = (describe(a.dtype())?, describe(b.dtype())?);
     polars_ensure!(
         geo_a.kind == geo_b.kind && geo_a.dim == geo_b.dim,
-        SchemaMismatch: "is_close expects two geometries of the same type, got: {} and {}",
+        SchemaMismatch: "is_equal with mode=\"identical\" expects two geometries of the same type, got: {} and {}",
         a.dtype(), b.dtype()
     );
     ensure_same_crs(&geo_a, &geo_b)?;
@@ -63,7 +70,7 @@ fn chunk_is_close(
     a: &dyn Array,
     b: &dyn Array,
     kind: Kind,
-    kwargs: &IsCloseKwargs,
+    kwargs: &IsEqualIdenticalKwargs,
 ) -> PolarsResult<BooleanArray> {
     let tolerance = Tolerance {
         abs_tol: kwargs.abs_tol,
@@ -142,11 +149,11 @@ fn aligned_chunks(a: &Series, b: &Series) -> PolarsResult<Vec<(ArrayRef, ArrayRe
 
 /// [chunk_is_close] for every chunk of `many`, against the single row of `one`.
 /// Closeness goes both ways, so this serves a single geometry on either side.
-fn every_against_one(
+fn every_is_close_to_one(
     one: &Series,
     many: &Series,
     kind: Kind,
-    kwargs: &IsCloseKwargs,
+    kwargs: &IsEqualIdenticalKwargs,
 ) -> PolarsResult<Vec<BooleanArray>> {
     let one = one.ext()?.storage().rechunk();
     let one = one.chunks()[0].as_ref();
@@ -158,9 +165,9 @@ fn every_against_one(
         .collect()
 }
 
-/// See `is_close`.
-#[polars_expr(output_type_func=kernel_output_type_is_close)]
-fn is_close(inputs: &[Series], kwargs: IsCloseKwargs) -> PolarsResult<Series> {
+/// See `is_equal`, with `mode="identical"`.
+#[polars_expr(output_type_func=kernel_output_type_is_equal_identical)]
+fn is_equal_identical(inputs: &[Series], kwargs: IsEqualIdenticalKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let kind = describe(a.dtype())?.kind;
     let chunks = match (a.len(), b.len()) {
@@ -168,8 +175,99 @@ fn is_close(inputs: &[Series], kwargs: IsCloseKwargs) -> PolarsResult<Series> {
             .iter()
             .map(|(a, b)| chunk_is_close(a.as_ref(), b.as_ref(), kind, &kwargs))
             .collect::<PolarsResult<Vec<_>>>()?,
-        (1, _) => every_against_one(a, b, kind, &kwargs)?,
-        (_, 1) => every_against_one(b, a, kind, &kwargs)?,
+        (1, _) => every_is_close_to_one(a, b, kind, &kwargs)?,
+        (_, 1) => every_is_close_to_one(b, a, kind, &kwargs)?,
+        (n, m) => polars_bail!(ShapeMismatch: "cannot compare {n} geometries against {m}"),
+    };
+    Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
+}
+
+/// See python
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct IsEqualTopologicalKwargs {
+    ignore_per_row_errors: bool,
+    early_finite_check: bool,
+}
+
+/// For [`is_equal_topological`]: a `bool`, named after the first geometry.
+///
+/// Both can be of any kind and dimension, in the same CRS (or neither declaring one).
+fn kernel_output_type_is_equal_topological(input_fields: &[Field]) -> PolarsResult<Field> {
+    let [a, b] = input_fields else {
+        polars_bail!(ComputeError: "is_equal takes two geometries, got {} inputs", input_fields.len());
+    };
+    ensure_same_crs(&describe(a.dtype())?, &describe(b.dtype())?)?;
+    Ok(Field::new(a.name().clone(), DataType::Boolean))
+}
+
+/// One chunk of the storage of a `kind`, converted for GEOS.
+fn chunk_to_geos_rows(
+    chunk: &dyn Array,
+    kind: Kind,
+    kwargs: &IsEqualTopologicalKwargs,
+) -> PolarsResult<GeosGeometries> {
+    let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
+    let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
+    match kind {
+        Kind::Point => PointArray::new(Coords::new(chunk)?).to_geos_rows(ignore, early),
+        Kind::MultiPoint => MultiPointArray::new(rows(chunk)?)?.to_geos_rows(ignore, early),
+        Kind::LineString => LineStringArray::new(rows(chunk)?)?.to_geos_rows(ignore, early),
+        Kind::MultiLineString => {
+            MultiLineStringArray::new(rows(chunk)?)?.to_geos_rows(ignore, early)
+        }
+        Kind::Polygon => PolygonArray::new(rows(chunk)?)?.to_geos_rows(ignore, early),
+        Kind::MultiPolygon => MultiPolygonArray::new(rows(chunk)?)?.to_geos_rows(ignore, early),
+    }
+    .into_polars()
+}
+
+/// `geometries` as a single chunk, converted for GEOS.
+fn series_to_geos_rows(
+    geometries: &Series,
+    kwargs: &IsEqualTopologicalKwargs,
+) -> PolarsResult<GeosGeometries> {
+    let kind = describe(geometries.dtype())?.kind;
+    let storage = geometries.ext()?.storage().rechunk();
+    chunk_to_geos_rows(storage.chunks()[0].as_ref(), kind, kwargs)
+}
+
+/// [topologically_equal_against_one] for every chunk of `many`, against the single row of `one`.
+fn every_topologically_equal_to_one(
+    one: &Series,
+    many: &Series,
+    kwargs: &IsEqualTopologicalKwargs,
+) -> PolarsResult<Vec<BooleanArray>> {
+    let one = series_to_geos_rows(one, kwargs)?;
+    let one = &one.geometries[0];
+    let kind = describe(many.dtype())?.kind;
+    many.ext()?
+        .storage()
+        .chunks()
+        .iter()
+        .map(|many| {
+            let many = chunk_to_geos_rows(many.as_ref(), kind, kwargs)?;
+            topologically_equal_against_one(one, &many, kwargs.ignore_per_row_errors)
+                .into_polars()
+        })
+        .collect()
+}
+
+/// See `is_equal`, with `mode="topological"`.
+#[polars_expr(output_type_func=kernel_output_type_is_equal_topological)]
+fn is_equal_topological(
+    inputs: &[Series],
+    kwargs: IsEqualTopologicalKwargs,
+) -> PolarsResult<Series> {
+    let (a, b) = (&inputs[0], &inputs[1]);
+    let chunks = match (a.len(), b.len()) {
+        // The kinds can differ, so the chunks of both sides are not split alike.
+        (n, m) if n == m => {
+            let (a, b) = (series_to_geos_rows(a, &kwargs)?, series_to_geos_rows(b, &kwargs)?);
+            vec![topologically_equal_pairwise(&a, &b, kwargs.ignore_per_row_errors).into_polars()?]
+        }
+        (1, _) => every_topologically_equal_to_one(a, b, &kwargs)?,
+        (_, 1) => every_topologically_equal_to_one(b, a, &kwargs)?,
         (n, m) => polars_bail!(ShapeMismatch: "cannot compare {n} geometries against {m}"),
     };
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
