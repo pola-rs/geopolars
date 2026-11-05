@@ -1,9 +1,13 @@
 //! Whether two geometries are almost coincident/the same.
-//! See `is_close` in Python for the rules.
+//! See `is_equal` with `mode="identical"` in Python for the rules.
 //!
 //! Every kernel takes `a`, and `b` of the same length (row by row) or of a single row (against every row of `a`).
 //! Every comparison stops at the first part length or value that does not match.
 //!
+//! Every kernel takes a [Coincidence], matched once in `are_close!`.
+//! The `*_are_close_with` kernels are then generic over the closure `close`,
+//! which says whether two values coincide by that variant.
+//! So a kernel has no per-value match on the variant.
 //!
 //! # Const generic flags
 //!
@@ -32,21 +36,26 @@
 use std::ops::Range;
 
 use geopolars_core::{
-    is_close, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray, Tolerance, Untrimmed, ValidCoords, ValidList,
+    is_close, is_close_abs, LineStringArray, List, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray, Untrimmed, ValidCoords, ValidList,
 };
 use polars_arrow::array::BooleanArray;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::datatypes::ArrowDataType;
 
+use super::has_repeats_in_succession::Coincidence;
 use crate::per_row::per_row_bool;
 
 #[inline(always)]
-fn values_are_close<const NANS_EQUAL: bool>(a: &[f64], b: &[f64], tolerance: Tolerance) -> bool {
+fn values_are_close<const NANS_EQUAL: bool>(
+    a: &[f64],
+    b: &[f64],
+    close: impl Fn(f64, f64) -> bool,
+) -> bool {
     a.iter()
         .zip(b)
-        .all(|(&a, &b)| is_close(a, b, tolerance) || (NANS_EQUAL && a.is_nan() && b.is_nan()))
+        .all(|(&a, &b)| close(a, b) || (NANS_EQUAL && a.is_nan() && b.is_nan()))
 }
 
 /// Whether there are as many coordinates in `a_vertices` as in `b_vertices`,
@@ -57,10 +66,10 @@ fn coordinates_are_close<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_
     a_vertices: Range<usize>,
     b: &ValidCoords,
     b_vertices: Range<usize>,
-    tolerance: Tolerance,
+    close: impl Fn(f64, f64) -> bool + Copy,
 ) -> bool {
     let axis_is_close = |a: &[f64], b: &[f64]| {
-        values_are_close::<NANS_EQUAL>(&a[a_vertices.clone()], &b[b_vertices.clone()], tolerance)
+        values_are_close::<NANS_EQUAL>(&a[a_vertices.clone()], &b[b_vertices.clone()], close)
     };
     a_vertices.len() == b_vertices.len()
         && axis_is_close(a.x(), b.x())
@@ -116,7 +125,7 @@ fn per_compared_row(a: &List, b: &List, test: impl Fn(usize, usize) -> bool) -> 
 fn points_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_EQUAL: bool>(
     a: &PointArray,
     b: &PointArray,
-    tolerance: Tolerance,
+    close: impl Fn(f64, f64) -> bool + Copy,
 ) -> BooleanArray {
     let (a, b) = (&a.coords, &b.coords);
     let len = a.len();
@@ -125,20 +134,20 @@ fn points_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_
         "`b` has to be as long as `a`, or a single row"
     );
     let (a_coords, b_coords) = (a.ignoring_validity(), b.ignoring_validity());
-    let close = |i: usize, j: usize| {
+    let rows_are_close = |i: usize, j: usize| {
         coordinates_are_close::<UNIQUE_Z, UNIQUE_M, NANS_EQUAL>(
             a_coords,
             i..i + 1,
             b_coords,
             j..j + 1,
-            tolerance,
+            close,
         )
     };
     // A null point is compared too, but its result is masked by the validity.
     let values = if b.len() == len {
-        Bitmap::from_iter((0..len).map(|i| close(i, i)))
+        Bitmap::from_iter((0..len).map(|i| rows_are_close(i, i)))
     } else {
-        Bitmap::from_iter((0..len).map(|i| close(i, 0)))
+        Bitmap::from_iter((0..len).map(|i| rows_are_close(i, 0)))
     };
     let validity = compared_validity(a.validity(), b.validity(), len);
     BooleanArray::new(ArrowDataType::Boolean, values, validity)
@@ -151,7 +160,7 @@ fn line_strings_are_close_with<
 >(
     a: &Untrimmed<LineStringArray>,
     b: &Untrimmed<LineStringArray>,
-    tolerance: Tolerance,
+    close: impl Fn(f64, f64) -> bool + Copy,
 ) -> BooleanArray {
     per_compared_row(a.rows(), b.rows(), |i, j| {
         coordinates_are_close::<UNIQUE_Z, UNIQUE_M, NANS_EQUAL>(
@@ -159,7 +168,7 @@ fn line_strings_are_close_with<
             a.rows().range(i),
             b.coords(),
             b.rows().range(j),
-            tolerance,
+            close,
         )
     })
 }
@@ -171,7 +180,7 @@ fn multi_points_are_close_with<
 >(
     a: &Untrimmed<MultiPointArray>,
     b: &Untrimmed<MultiPointArray>,
-    tolerance: Tolerance,
+    close: impl Fn(f64, f64) -> bool + Copy,
 ) -> BooleanArray {
     per_compared_row(a.rows(), b.rows(), |i, j| {
         coordinates_are_close::<UNIQUE_Z, UNIQUE_M, NANS_EQUAL>(
@@ -179,7 +188,7 @@ fn multi_points_are_close_with<
             a.rows().range(i),
             b.coords(),
             b.rows().range(j),
-            tolerance,
+            close,
         )
     })
 }
@@ -191,7 +200,7 @@ fn multi_line_strings_are_close_with<
 >(
     a: &Untrimmed<MultiLineStringArray>,
     b: &Untrimmed<MultiLineStringArray>,
-    tolerance: Tolerance,
+    close: impl Fn(f64, f64) -> bool + Copy,
 ) -> BooleanArray {
     per_compared_row(a.rows(), b.rows(), |i, j| {
         let (a_parts, b_parts) = (a.rows().range(i), b.rows().range(j));
@@ -201,7 +210,7 @@ fn multi_line_strings_are_close_with<
                 a.lines().span(a_parts),
                 b.coords(),
                 b.lines().span(b_parts),
-                tolerance,
+                close,
             )
     })
 }
@@ -209,7 +218,7 @@ fn multi_line_strings_are_close_with<
 fn polygons_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_EQUAL: bool>(
     a: &Untrimmed<PolygonArray>,
     b: &Untrimmed<PolygonArray>,
-    tolerance: Tolerance,
+    close: impl Fn(f64, f64) -> bool + Copy,
 ) -> BooleanArray {
     per_compared_row(a.rows(), b.rows(), |i, j| {
         let (a_rings, b_rings) = (a.rows().range(i), b.rows().range(j));
@@ -219,7 +228,7 @@ fn polygons_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NAN
                 a.rings().span(a_rings),
                 b.coords(),
                 b.rings().span(b_rings),
-                tolerance,
+                close,
             )
     })
 }
@@ -231,7 +240,7 @@ fn multi_polygons_are_close_with<
 >(
     a: &Untrimmed<MultiPolygonArray>,
     b: &Untrimmed<MultiPolygonArray>,
-    tolerance: Tolerance,
+    close: impl Fn(f64, f64) -> bool + Copy,
 ) -> BooleanArray {
     per_compared_row(a.rows(), b.rows(), |i, j| {
         let (a_polygons, b_polygons) = (a.rows().range(i), b.rows().range(j));
@@ -250,21 +259,35 @@ fn multi_polygons_are_close_with<
                 a.rings().span(a_rings),
                 b.coords(),
                 b.rings().span(b_rings),
-                tolerance,
+                close,
             )
     })
 }
 
 /// Dispatches a `*_are_close_with` kernel on `unique_z` and `unique_m`
-/// (each only for an axis in `$dim`) and `nans_equal`.
+/// (each only for an axis in `$dim`), `nans_equal`, and the variant of `$coincidence`.
 macro_rules! are_close {
-    ($kernel:ident, $dim:expr, $a:expr, $b:expr, $tolerance:expr, $unique_z:expr, $unique_m:expr, $nans_equal:expr) => {{
+    ($kernel:ident, $dim:expr, $a:expr, $b:expr, $coincidence:expr, $unique_z:expr, $unique_m:expr, $nans_equal:expr) => {{
         let dim = $dim;
         with_const_flags!(
             UNIQUE_Z = $unique_z && dim.has_z(),
             UNIQUE_M = $unique_m && dim.has_m(),
             NANS_EQUAL = $nans_equal;
-            $kernel::<UNIQUE_Z, UNIQUE_M, NANS_EQUAL>($a, $b, $tolerance)
+            match $coincidence {
+                Coincidence::Exact => {
+                    $kernel::<UNIQUE_Z, UNIQUE_M, NANS_EQUAL>($a, $b, |a: f64, b: f64| a == b)
+                }
+                Coincidence::WithinAbs(abs_tol) => {
+                    $kernel::<UNIQUE_Z, UNIQUE_M, NANS_EQUAL>($a, $b, move |a, b| {
+                        is_close_abs(a, b, abs_tol)
+                    })
+                }
+                Coincidence::WithinRel(tolerance) => {
+                    $kernel::<UNIQUE_Z, UNIQUE_M, NANS_EQUAL>($a, $b, move |a, b| {
+                        is_close(a, b, tolerance)
+                    })
+                }
+            }
         )
     }};
 }
@@ -272,7 +295,7 @@ macro_rules! are_close {
 pub fn points_are_close(
     a: &PointArray,
     b: &PointArray,
-    tolerance: Tolerance,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     nans_equal: bool,
@@ -282,7 +305,7 @@ pub fn points_are_close(
         a.coords.dim(),
         a,
         b,
-        tolerance,
+        coincidence,
         unique_z,
         unique_m,
         nans_equal
@@ -292,7 +315,7 @@ pub fn points_are_close(
 pub fn multi_points_are_close(
     a: &Untrimmed<MultiPointArray>,
     b: &Untrimmed<MultiPointArray>,
-    tolerance: Tolerance,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     nans_equal: bool,
@@ -302,7 +325,7 @@ pub fn multi_points_are_close(
         a.coords().dim(),
         a,
         b,
-        tolerance,
+        coincidence,
         unique_z,
         unique_m,
         nans_equal
@@ -312,7 +335,7 @@ pub fn multi_points_are_close(
 pub fn line_strings_are_close(
     a: &Untrimmed<LineStringArray>,
     b: &Untrimmed<LineStringArray>,
-    tolerance: Tolerance,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     nans_equal: bool,
@@ -322,7 +345,7 @@ pub fn line_strings_are_close(
         a.coords().dim(),
         a,
         b,
-        tolerance,
+        coincidence,
         unique_z,
         unique_m,
         nans_equal
@@ -333,7 +356,7 @@ pub fn line_strings_are_close(
 pub fn multi_line_strings_are_close(
     a: &Untrimmed<MultiLineStringArray>,
     b: &Untrimmed<MultiLineStringArray>,
-    tolerance: Tolerance,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     nans_equal: bool,
@@ -343,7 +366,7 @@ pub fn multi_line_strings_are_close(
         a.coords().dim(),
         a,
         b,
-        tolerance,
+        coincidence,
         unique_z,
         unique_m,
         nans_equal
@@ -354,7 +377,7 @@ pub fn multi_line_strings_are_close(
 pub fn polygons_are_close(
     a: &Untrimmed<PolygonArray>,
     b: &Untrimmed<PolygonArray>,
-    tolerance: Tolerance,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     nans_equal: bool,
@@ -364,7 +387,7 @@ pub fn polygons_are_close(
         a.coords().dim(),
         a,
         b,
-        tolerance,
+        coincidence,
         unique_z,
         unique_m,
         nans_equal
@@ -375,7 +398,7 @@ pub fn polygons_are_close(
 pub fn multi_polygons_are_close(
     a: &Untrimmed<MultiPolygonArray>,
     b: &Untrimmed<MultiPolygonArray>,
-    tolerance: Tolerance,
+    coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
     nans_equal: bool,
@@ -385,7 +408,7 @@ pub fn multi_polygons_are_close(
         a.coords().dim(),
         a,
         b,
-        tolerance,
+        coincidence,
         unique_z,
         unique_m,
         nans_equal

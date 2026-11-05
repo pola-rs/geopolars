@@ -9,11 +9,11 @@ use geopolars_compute::geos::{
 };
 use geopolars_compute::native::{
     line_strings_are_close, multi_line_strings_are_close, multi_points_are_close,
-    multi_polygons_are_close, points_are_close, polygons_are_close,
+    multi_polygons_are_close, points_are_close, polygons_are_close, Coincidence,
 };
 use geopolars_core::{
     downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray, Tolerance,
+    PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, BooleanArray, ListArray};
@@ -26,25 +26,13 @@ use crate::geoarrow::{describe, ensure_same_crs, Kind};
 
 /// See python
 #[derive(Debug, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct IsEqualIdenticalKwargs {
-    abs_tol: f64,
-    rel_tol: f64,
+    abs_tol: Option<f64>,
+    rel_tol: Option<f64>,
     nans_equal: bool,
     unique_z: bool,
     unique_m: bool,
-}
-
-impl Default for IsEqualIdenticalKwargs {
-    fn default() -> Self {
-        Self {
-            abs_tol: 0.0,
-            rel_tol: 1e-9,
-            nans_equal: false,
-            unique_z: true,
-            unique_m: false,
-        }
-    }
 }
 
 /// For [`is_equal_identical`]: a `bool`, named after the first geometry.
@@ -72,17 +60,14 @@ fn chunk_is_close(
     kind: Kind,
     kwargs: &IsEqualIdenticalKwargs,
 ) -> PolarsResult<BooleanArray> {
-    let tolerance = Tolerance {
-        abs_tol: kwargs.abs_tol,
-        rel_tol: kwargs.rel_tol,
-    };
+    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol);
     let (unique_z, unique_m, nans_equal) = (kwargs.unique_z, kwargs.unique_m, kwargs.nans_equal);
     let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
     Ok(match kind {
         Kind::Point => points_are_close(
             &PointArray::new(Coords::new(a)?),
             &PointArray::new(Coords::new(b)?),
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             nans_equal,
@@ -90,7 +75,7 @@ fn chunk_is_close(
         Kind::MultiPoint => multi_points_are_close(
             &MultiPointArray::new_untrimmed(rows(a)?)?,
             &MultiPointArray::new_untrimmed(rows(b)?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             nans_equal,
@@ -98,7 +83,7 @@ fn chunk_is_close(
         Kind::LineString => line_strings_are_close(
             &LineStringArray::new_untrimmed(rows(a)?)?,
             &LineStringArray::new_untrimmed(rows(b)?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             nans_equal,
@@ -106,7 +91,7 @@ fn chunk_is_close(
         Kind::MultiLineString => multi_line_strings_are_close(
             &MultiLineStringArray::new_untrimmed(rows(a)?)?,
             &MultiLineStringArray::new_untrimmed(rows(b)?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             nans_equal,
@@ -114,7 +99,7 @@ fn chunk_is_close(
         Kind::Polygon => polygons_are_close(
             &PolygonArray::new_untrimmed(rows(a)?)?,
             &PolygonArray::new_untrimmed(rows(b)?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             nans_equal,
@@ -122,7 +107,7 @@ fn chunk_is_close(
         Kind::MultiPolygon => multi_polygons_are_close(
             &MultiPolygonArray::new_untrimmed(rows(a)?)?,
             &MultiPolygonArray::new_untrimmed(rows(b)?)?,
-            tolerance,
+            coincidence,
             unique_z,
             unique_m,
             nans_equal,

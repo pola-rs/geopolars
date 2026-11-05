@@ -22,6 +22,7 @@ from geopolars.datatypes import (
     PointXY,
     PointXYM,
     PointXYZ,
+    PointXYZM,
     PolygonXY,
     PolygonXYZ,
 )
@@ -29,6 +30,7 @@ from geopolars.datatypes import (
 _XY = pl.Struct({"x": pl.Float64, "y": pl.Float64})
 _XYZ = pl.Struct({"x": pl.Float64, "y": pl.Float64, "z": pl.Float64})
 _XYM = pl.Struct({"x": pl.Float64, "y": pl.Float64, "m": pl.Float64})
+_XYZM = pl.Struct({"x": pl.Float64, "y": pl.Float64, "z": pl.Float64, "m": pl.Float64})
 
 Coord = dict[str, float]
 
@@ -38,19 +40,24 @@ def _xy(*xy: tuple[float, float]) -> list[Coord]:
 
 
 def _series(name: str, dtype: GeoArrowType, rows: list[object]) -> pl.Series:
-    storage = {PointXYZ: _XYZ, PointXYM: _XYM}.get(type(dtype), _XY)
+    storage = {PointXYZ: _XYZ, PointXYM: _XYM, PointXYZM: _XYZM}.get(type(dtype), _XY)
     for _ in range(dtype._nesting):
         storage = pl.List(storage)
     return pl.Series(name, rows, dtype=storage).ext.to(dtype)
+
+
+def _is_equal(
+    dtype: GeoArrowType, a: list[object], b: list[object], **kwargs: float | bool
+) -> list[bool | None]:
+    df = pl.DataFrame([_series("a", dtype, a), _series("b", dtype, b)])
+    return df.select(geo.is_equal("a", "b", **kwargs))["a"].to_list()
 
 
 def _is_close(
     dtype: GeoArrowType, a: list[object], b: list[object], **kwargs: float | bool
 ) -> list[bool | None]:
     """`is_equal` in identical mode, with `rel_tol=1e-9` unless given."""
-    kwargs = {"rel_tol": 1e-9} | kwargs
-    df = pl.DataFrame([_series("a", dtype, a), _series("b", dtype, b)])
-    return df.select(geo.is_equal("a", "b", **kwargs))["a"].to_list()
+    return _is_equal(dtype, a, b, **({"rel_tol": 1e-9} | kwargs))
 
 
 _LINE = _xy((1e6, 0), (2e6, 0), (2e6, 1))
@@ -102,6 +109,21 @@ def test_without_a_tolerance_only_the_same_geometry_is_equal(kind: str) -> None:
     )
 
     assert df.select(geo.is_equal("a", "b"))["a"].to_list() == [True, False]
+
+
+@pytest.mark.parametrize(
+    "tolerance",
+    [{}, {"abs_tol": 1e-9}, {"rel_tol": 1e-9}, {"abs_tol": 1e-9, "rel_tol": 1e-9}],
+    ids=["exact", "abs_tol", "rel_tol", "both"],
+)
+@pytest.mark.parametrize("kind", _KINDS)
+def test_either_tolerance_on_its_own_lets_a_nudged_geometry_be_equal(
+    kind: str, tolerance: dict[str, float]
+) -> None:
+    dtype, same, nudged, moved = _KINDS[kind]
+
+    out = _is_equal(dtype, [same, same, same], [same, nudged, moved], **tolerance)
+    assert out == [True, bool(tolerance), False]
 
 
 @pytest.mark.parametrize("kind", _KINDS)
@@ -207,6 +229,104 @@ def test_infinities_are_only_close_to_themselves() -> None:
         True,
         False,
     ]
+
+
+def _point(x: float, y: float) -> Coord:
+    return {"x": x, "y": y}
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "tolerance", "equal"),
+    [
+        ((1e6, 0), (1e6 + 1e-4, 0), {"rel_tol": 1e-9}, True),
+        ((1e6, 0), (1e6 + 1e-4, 0), {"abs_tol": 1e-9}, False),
+        ((0, 0), (1e-12, 0), {"rel_tol": 1e-9}, False),
+        ((0, 0), (1e-12, 0), {"abs_tol": 1e-9, "rel_tol": 1e-9}, True),
+        ((1e6, 0), (1e6 + 1e-4, 0), {"abs_tol": 1e-9, "rel_tol": 1e-9}, True),
+    ],
+    ids=[
+        "rel_tol-large",
+        "abs_tol-large",
+        "rel_tol-near-zero",
+        "both-near-zero",
+        "both-large",
+    ],
+)
+def test_rel_tol_scales_with_the_values_and_each_tolerance_counts_beside_the_other(
+    a: tuple[float, float],
+    b: tuple[float, float],
+    tolerance: dict[str, float],
+    equal: bool,
+) -> None:
+    assert _is_equal(PointXY(), [_point(*a)], [_point(*b)], **tolerance) == [equal]
+
+
+@pytest.mark.parametrize(("offset", "equal"), [(1e-12, True), (1.0, False)])
+@pytest.mark.parametrize("axis", ["z", "m"])
+@pytest.mark.parametrize("tolerance", [{"abs_tol": 1e-9}, {"rel_tol": 1e-9}])
+def test_a_compared_z_or_m_has_to_be_within_the_tolerance(
+    tolerance: dict[str, float], axis: str, offset: float, equal: bool
+) -> None:
+    a = {"x": 1.0, "y": 1.0, "z": 1.0, "m": 1.0}
+    b = a | {axis: 1.0 + offset}
+
+    out = _is_equal(PointXYZM(), [a], [b], unique_m=True, **tolerance)
+    assert out == [equal]
+
+
+_INFINITE_TOLERANCES = [{"abs_tol": math.inf}, {"rel_tol": math.inf}]
+
+_NON_FINITE_PAIRS = [
+    ((0, 0), (math.inf, 0), False),
+    ((math.inf, 0), (math.inf, 0), True),
+    ((math.inf, 0), (-math.inf, 0), False),
+    ((math.nan, 0), (math.nan, 0), False),
+]
+_NON_FINITE_IDS = ["finite-inf", "inf-inf", "inf-neg-inf", "nan-nan"]
+
+
+@pytest.mark.parametrize(("a", "b", "equal"), _NON_FINITE_PAIRS, ids=_NON_FINITE_IDS)
+@pytest.mark.parametrize(
+    "tolerance",
+    [{}, {"abs_tol": 1e-9}, {"rel_tol": 1e-9}],
+    ids=["exact", "abs_tol", "rel_tol"],
+)
+def test_an_infinity_is_only_equal_to_itself_and_nan_to_nothing(
+    tolerance: dict[str, float],
+    a: tuple[float, float],
+    b: tuple[float, float],
+    equal: bool,
+) -> None:
+    assert _is_equal(PointXY(), [_point(*a)], [_point(*b)], **tolerance) == [equal]
+
+
+@pytest.mark.parametrize(
+    "tolerance",
+    [{}, {"abs_tol": 1e-9}, {"rel_tol": 1e-9}],
+    ids=["exact", "abs_tol", "rel_tol"],
+)
+def test_nans_equal_makes_nan_equal_to_nan_whatever_the_tolerance(
+    tolerance: dict[str, float],
+) -> None:
+    a = [_point(math.nan, 0), _point(math.nan, 0)]
+    b = [_point(math.nan, 0), _point(0, 0)]
+
+    assert _is_equal(PointXY(), a, b, nans_equal=True, **tolerance) == [True, False]
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "equal"),
+    [((-1e308, 0), (1e308, 0), True), *_NON_FINITE_PAIRS],
+    ids=["finite", *_NON_FINITE_IDS],
+)
+@pytest.mark.parametrize("tolerance", _INFINITE_TOLERANCES)
+def test_an_infinite_tolerance_makes_finite_values_equal_and_an_infinity_only_itself(
+    tolerance: dict[str, float],
+    a: tuple[float, float],
+    b: tuple[float, float],
+    equal: bool,
+) -> None:
+    assert _is_equal(PointXY(), [_point(*a)], [_point(*b)], **tolerance) == [equal]
 
 
 @pytest.mark.parametrize("value", [-1.0, math.nan])
@@ -468,11 +588,28 @@ def test_topological_refuses_a_tolerance(option: str) -> None:
         geo.is_equal("a", "b", mode="topological", **{option: 0.1})
 
 
-@pytest.mark.parametrize("option", ["nans_equal", "unique_z", "unique_m"])
-@pytest.mark.parametrize("value", [True, False])
-def test_topological_refuses_the_axis_options(option: str, value: bool) -> None:
-    with pytest.raises(ValueError, match="compares x and y only"):
-        geo.is_equal("a", "b", mode="topological", **{option: value})
+@pytest.mark.parametrize(
+    ("option", "reason"),
+    [
+        ({"nans_equal": True}, "no option to treat NaNs as equal"),
+        ({"unique_z": False}, "compares x and y only"),
+        ({"unique_m": True}, "compares x and y only"),
+    ],
+)
+def test_topological_refuses_changed_axis_options(
+    option: dict[str, bool], reason: str
+) -> None:
+    with pytest.raises(ValueError, match=reason):
+        geo.is_equal("a", "b", mode="topological", **option)
+
+
+def test_topological_takes_the_axis_options_at_their_defaults() -> None:
+    defaults = {"nans_equal": False, "unique_z": True, "unique_m": False}
+
+    out = _topologically_equal(
+        (PolygonXY(), [_SQUARE]), (PolygonXY(), [_SQUARE]), **defaults
+    )
+    assert out == [True]
 
 
 def test_topological_refuses_different_crss() -> None:

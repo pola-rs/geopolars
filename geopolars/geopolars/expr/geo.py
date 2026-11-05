@@ -478,9 +478,9 @@ class ExprGeoNameSpace:
         mode: Literal["identical", "topological"] = "identical",
         abs_tol: float | None = None,
         rel_tol: float | None = None,
-        nans_equal: bool | None = None,
-        unique_z: bool | None = None,
-        unique_m: bool | None = None,
+        nans_equal: bool = False,
+        unique_z: bool = True,
+        unique_m: bool = False,
         ignore_per_row_errors: bool = False,
         early_finite_check: bool = False,
     ) -> pl.Expr:

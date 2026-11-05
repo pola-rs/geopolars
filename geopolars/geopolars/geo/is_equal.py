@@ -33,9 +33,9 @@ def is_equal(
     mode: Literal["identical", "topological"] = "identical",
     abs_tol: float | None = None,
     rel_tol: float | None = None,
-    nans_equal: bool | None = None,
-    unique_z: bool | None = None,
-    unique_m: bool | None = None,
+    nans_equal: bool = False,
+    unique_z: bool = True,
+    unique_m: bool = False,
     ignore_per_row_errors: bool = False,
     early_finite_check: bool = False,
 ) -> pl.Expr:
@@ -66,7 +66,6 @@ def is_equal(
     {coincidence_tolerance}
     {tolerance_range}
     The empty point (NaN in x and y) is only equal to another one with `nans_equal=True`.
-    `nans_equal`, `unique_z` and `unique_m` default to `False`, `True` and `False`.
 
     **Topological**
 
@@ -79,7 +78,7 @@ def is_equal(
     Any two empty geometries are equal, whatever their kinds.
 
     Computed by GEOS, in x and y only.
-    It takes no tolerance, and none of `nans_equal`, `unique_z`, or `unique_m`.
+    It takes no tolerance, and `nans_equal`, `unique_z`, and `unique_m` have to keep their defaults.
 
     {geos_errors}
 
@@ -99,7 +98,7 @@ def is_equal(
     if mode == "topological":
         _check_topological_options(abs_tol, rel_tol, nans_equal, unique_z, unique_m)
         function_name = "is_equal_topological"
-        kwargs: dict[str, float | bool] = {
+        kwargs: dict[str, float | bool | None] = {
             "ignore_per_row_errors": ignore_per_row_errors,
             "early_finite_check": early_finite_check,
         }
@@ -107,11 +106,11 @@ def is_equal(
         _check_identical_options(ignore_per_row_errors, early_finite_check)
         function_name = "is_equal_identical"
         kwargs = {
-            "abs_tol": 0.0 if abs_tol is None else abs_tol,
-            "rel_tol": 0.0 if rel_tol is None else rel_tol,
-            "nans_equal": bool(nans_equal),
-            "unique_z": True if unique_z is None else unique_z,
-            "unique_m": bool(unique_m),
+            "abs_tol": abs_tol,
+            "rel_tol": rel_tol,
+            "nans_equal": nans_equal,
+            "unique_z": unique_z,
+            "unique_m": unique_m,
         }
 
     def build(
@@ -144,9 +143,9 @@ def is_equal(
 def _check_topological_options(
     abs_tol: float | None,
     rel_tol: float | None,
-    nans_equal: bool | None,
-    unique_z: bool | None,
-    unique_m: bool | None,
+    nans_equal: bool,
+    unique_z: bool,
+    unique_m: bool,
 ) -> None:
     if abs_tol is not None or rel_tol is not None:
         msg = (
@@ -154,17 +153,14 @@ def _check_topological_options(
             " GEOS's topological equality does not support a tolerance"
         )
         raise ValueError(msg)
-    given = {
-        "nans_equal": nans_equal,
-        "unique_z": unique_z,
-        "unique_m": unique_m,
+    changed = {
+        "nans_equal=True": (nans_equal, "GEOS has no option to treat NaNs as equal"),
+        "unique_z=False": (not unique_z, "GEOS compares x and y only"),
+        "unique_m=True": (unique_m, "GEOS compares x and y only"),
     }
-    for name, value in given.items():
-        if value is not None:
-            msg = (
-                f'is_equal with mode="topological" takes no `{name}`:'
-                " GEOS compares x and y only"
-            )
+    for option, (is_given, reason) in changed.items():
+        if is_given:
+            msg = f'is_equal with mode="topological" takes no `{option}`: {reason}'
             raise ValueError(msg)
 
 
