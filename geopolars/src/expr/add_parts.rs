@@ -24,10 +24,10 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::construct::{
-    ensure_same_crs_unless_bare, fields_of, one_line_per_row, one_point_per_row,
-    one_polygon_per_row, paired_rows, storage_of, under_lists,
+    fields_of, one_line_per_row, one_point_per_row, one_polygon_per_row, paired_rows, storage_of,
+    under_lists,
 };
-use crate::geoarrow::{coord, describe, Geo, Kind};
+use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, Kind};
 
 /// `null_parts` of `add_parts`.
 #[derive(Debug, Clone, Copy, Deserialize)]

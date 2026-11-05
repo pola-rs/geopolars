@@ -94,19 +94,40 @@ pub fn describe(dtype: &DataType) -> PolarsResult<GeoColumn<'_>> {
 /// Errors unless `a` and `b` declare the same CRS, or neither declares one.
 /// Should be used as a backup, as this is runtime, not plan time.
 pub fn ensure_same_crs(a: &GeoColumn, b: &GeoColumn) -> PolarsResult<()> {
-    match (a.metadata.declares_crs(), b.metadata.declares_crs()) {
+    ensure_same_crs_unless_bare(
+        Some(a.metadata),
+        Some(b.metadata),
+        ("first geometry", "second geometry"),
+    )
+}
+
+/// Errors unless `a` and `b` declare the same CRS, or neither declares one.
+/// `None` is bare coordinates, which declare no CRS and so pass with any.
+/// The caller decides the CRS of the result.
+/// They are called `names` in the error message.
+pub fn ensure_same_crs_unless_bare(
+    a: Option<&ExtensionMetadata>,
+    b: Option<&ExtensionMetadata>,
+    names: (&str, &str),
+) -> PolarsResult<()> {
+    let (Some(a), Some(b)) = (a, b) else {
+        return Ok(());
+    };
+    let (name_a, name_b) = names;
+    match (a.declares_crs(), b.declares_crs()) {
         (false, false) => Ok(()),
         (true, true) => {
-            let (crs_a, crs_b) = (a.metadata.crs()?, b.metadata.crs()?);
+            let (crs_a, crs_b) = (a.crs()?, b.crs()?);
             polars_ensure!(
                 crs_a == crs_b,
-                SchemaMismatch: "the geometries declare different CRSs, {crs_a} and {crs_b}; \
+                SchemaMismatch: "the {name_a} and the {name_b} declare different CRSs, {crs_a} and {crs_b}; \
                 use `to_crs` to bring one onto the other first"
             );
             Ok(())
         }
         (true, false) | (false, true) => polars_bail!(
-            SchemaMismatch: "only one of the geometries declares a CRS; declare the same one on both"
+            SchemaMismatch: "only one of the {name_a} and the {name_b} declares a CRS; \
+            declare the same one on both"
         ),
     }
 }

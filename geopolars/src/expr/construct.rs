@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
-use crate::geoarrow::{coord, describe, Geo, GeoDimension, Kind};
+use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, GeoDimension, Kind};
 use geopolars_compute::inner_nulls::{
     propagate_inner_nulls_of_line_strings, propagate_inner_nulls_of_multi_line_strings,
     propagate_inner_nulls_of_multi_points, propagate_inner_nulls_of_multi_polygons,
@@ -654,54 +654,23 @@ pub(super) fn under_lists(mut dtype: &DataType) -> (&DataType, u8) {
 }
 
 /// `metadata` of a column of `dtype`, or `None` when it holds bare coordinates.
-pub(super) fn declared_metadata<'a>(
+fn declared_metadata(
     dtype: &DataType,
-    metadata: &'a ExtensionMetadata,
-) -> Option<&'a ExtensionMetadata> {
+    metadata: Arc<ExtensionMetadata>,
+) -> Option<Arc<ExtensionMetadata>> {
     let (inner, _) = under_lists(dtype);
     matches!(inner, DataType::Extension(..)).then_some(metadata)
 }
 
-/// Errors unless `a` and `b` declare the same CRS, or neither declares one.
-/// `None` is bare coordinates, which declare no CRS and take that of the other.
-/// They are called `names` in the error message.
-pub(super) fn ensure_same_crs_unless_bare(
-    a: Option<&ExtensionMetadata>,
-    b: Option<&ExtensionMetadata>,
-    names: (&str, &str),
-) -> PolarsResult<()> {
-    let (Some(a), Some(b)) = (a, b) else {
-        return Ok(());
-    };
-    let (name_a, name_b) = names;
-    match (a.declares_crs(), b.declares_crs()) {
-        (false, false) => Ok(()),
-        (true, true) => {
-            let (crs_a, crs_b) = (a.crs()?, b.crs()?);
-            polars_ensure!(
-                crs_a == crs_b,
-                SchemaMismatch: "the {name_a} and the {name_b} declare different CRSs, {crs_a} and {crs_b}; \
-                use `to_crs` to bring one onto the other first"
-            );
-            Ok(())
-        }
-        (true, false) | (false, true) => polars_bail!(
-            SchemaMismatch: "only one of the {name_a} and the {name_b} declares a CRS; \
-            declare the same one on both"
-        ),
-    }
-}
-
 /// Whether `holes` holds a list of rings per row (a list or a multilinestring),
-/// rather than one ring.
-/// They have to have the dimension of the `subject` they go into,
-/// and declare the CRS its `metadata` does (see [ensure_same_crs_unless_bare]).
+/// rather than one ring, and its metadata (`None` for bare coordinates).
+/// They have to have the dimension of the `subject` they go into.
+/// Their CRS is left for the caller to check.
 pub(super) fn listed_holes(
     holes: &Field,
     subject: &str,
     dim: GeoDimension,
-    metadata: Option<&ExtensionMetadata>,
-) -> PolarsResult<bool> {
+) -> PolarsResult<(bool, Option<Arc<ExtensionMetadata>>)> {
     let refused = |_| {
         polars_err!(
             SchemaMismatch: "expected the holes as one ring per row \
@@ -722,27 +691,28 @@ pub(super) fn listed_holes(
         hole_dim == dim,
         SchemaMismatch: "the {subject} is {} but the holes are {}", dim.tag(), hole_dim.tag()
     );
-    let hole_metadata = declared_metadata(holes.dtype(), &hole_metadata);
-    ensure_same_crs_unless_bare(metadata, hole_metadata, (subject, "holes"))?;
-    Ok(listed)
+    Ok((listed, declared_metadata(holes.dtype(), hole_metadata)))
 }
 
 /// The polygons `polygon_rings_in_separate_columns` builds,
 /// and whether the holes (if passed) are a list of rings per row.
+/// The holes are checked against the CRS the polygons get.
 fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResult<(Geo, bool)> {
     let exterior = input_fields[0].dtype();
     let (dim, metadata) = ring_of(exterior)?;
-    let listed = match input_fields.get(1) {
-        Some(holes) => {
-            let declared = declared_metadata(exterior, &metadata);
-            listed_holes(holes, "exterior", dim, declared)?
-        }
-        None => false,
+    let (listed, holes_metadata) = match input_fields.get(1) {
+        Some(holes) => listed_holes(holes, "exterior", dim)?,
+        None => (false, None),
     };
-    Ok((
-        Geo::new(Kind::Polygon, dim, kwargs.apply(metadata)?),
-        listed,
-    ))
+    // A bare exterior takes the metadata of the holes.
+    let declared = declared_metadata(exterior, metadata.clone()).or(holes_metadata.clone());
+    let metadata = kwargs.apply(declared.unwrap_or(metadata))?;
+    ensure_same_crs_unless_bare(
+        Some(&metadata),
+        holes_metadata.as_deref(),
+        ("exterior", "holes"),
+    )?;
+    Ok((Geo::new(Kind::Polygon, dim, metadata), listed))
 }
 
 fn kernel_output_type_polygon_rings_in_separate_columns(

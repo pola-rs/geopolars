@@ -84,7 +84,8 @@ def polygons_from_rings_in_separate_columns(
     A null exterior gives a null polygon.
     A null `holes` value means the polygon has no holes.
     A null ring among the holes, or a null vertex, makes the polygon null.
-    The CRS is the exterior's.
+    The CRS is `crs`, or else the exterior's,
+    or else that of the holes when the exterior is bare coordinates.
     {same_crs}
     Rings are checked (and closed with `close`)
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].

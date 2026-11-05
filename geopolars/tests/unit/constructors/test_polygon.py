@@ -525,17 +525,53 @@ def test_separate_columns_take_linestrings() -> None:
     assert single["polygon"].ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
 
 
-def test_a_bare_exterior_goes_with_holes_in_any_crs() -> None:
-    df = pl.DataFrame(
+def _bare_exterior_and_hole() -> pl.DataFrame:
+    return pl.DataFrame(
         {"exterior": [_EXTERIOR], "hole": [_HOLE]},
         schema={"exterior": _XY_VERTICES, "hole": _XY_VERTICES},
-    ).with_columns(geo.line_string("hole", crs="EPSG:4326"))
+    )
+
+
+def test_a_bare_exterior_takes_the_crs_of_the_holes() -> None:
+    df = _bare_exterior_and_hole().with_columns(
+        geo.line_string("hole", crs="EPSG:4326")
+    )
 
     out = df.select(
         geo.polygons_from_rings_in_separate_columns("exterior", "hole")
     ).to_series()
 
+    assert out.dtype == PolygonXY(crs="EPSG:4326")
     assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
+def test_holes_in_the_crs_passed_for_the_exterior_are_accepted() -> None:
+    df = _bare_exterior_and_hole().select(
+        geo.line_string("exterior"), geo.line_string("hole", crs="EPSG:4326")
+    )
+
+    out = df.select(
+        geo.polygons_from_rings_in_separate_columns("exterior", "hole", crs="EPSG:4326")
+    ).to_series()
+
+    assert out.dtype == PolygonXY(crs="EPSG:4326")
+    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
+def test_holes_in_another_crs_than_the_one_passed_are_refused() -> None:
+    lf = (
+        _bare_exterior_and_hole()
+        .lazy()
+        .with_columns(geo.line_string("hole", crs="EPSG:4326"))
+        .select(
+            geo.polygons_from_rings_in_separate_columns(
+                "exterior", "hole", crs="EPSG:28992"
+            )
+        )
+    )
+
+    with pytest.raises(ComputeError, match="already declare the CRS"):
+        lf.collect_schema()
 
 
 def test_separate_columns_without_holes_build_the_exterior_alone() -> None:

@@ -15,7 +15,7 @@ use super::construct::{
     assembled_validity, fields_of, holes_per_row, listed_holes, paired_rows, storage_of,
     validated_polygons,
 };
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo, Kind};
 
 /// The keyword arguments of `add_holes`.
 /// These have to be mirrored on the python side.
@@ -35,7 +35,12 @@ fn holes_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
         geo.kind == Kind::Polygon,
         SchemaMismatch: "add_holes expects a polygon column, got: {}", dtype
     );
-    let listed = listed_holes(&input_fields[1], "polygon", geo.dim, Some(geo.metadata))?;
+    let (listed, holes_metadata) = listed_holes(&input_fields[1], "polygon", geo.dim)?;
+    ensure_same_crs_unless_bare(
+        Some(geo.metadata),
+        holes_metadata.as_deref(),
+        ("polygon", "holes"),
+    )?;
     Ok((
         Geo::new(Kind::Polygon, geo.dim, geo.metadata.clone()),
         listed,
