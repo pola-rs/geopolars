@@ -382,10 +382,21 @@ class ExprGeoNameSpace:
 
         return parts(self._expr)
 
-    def sort_parts(self, *, descending: bool = False) -> pl.Expr:
+    def sort_parts(
+        self,
+        *,
+        descending: bool = False,
+        rings: Literal["keep", "rotate"] = "keep",
+        ignore_per_row_errors: bool = False,
+    ) -> pl.Expr:
         from geopolars.geo.sort_parts import sort_parts
 
-        return sort_parts(self._expr, descending=descending)
+        return sort_parts(
+            self._expr,
+            descending=descending,
+            rings=rings,
+            ignore_per_row_errors=ignore_per_row_errors,
+        )
 
     def join_line_strings(
         self,

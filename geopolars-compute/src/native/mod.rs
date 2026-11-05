@@ -106,7 +106,7 @@ pub use snap_to_grid::{
     RoundMode,
 };
 pub use sort_parts::{
-    multi_line_strings_sorted, multi_points_sorted, multi_polygons_sorted,
-    polygons_with_holes_sorted, PartSorter,
+    line_strings_with_rings_rotated, multi_line_strings_sorted, multi_points_sorted,
+    multi_polygons_sorted, polygons_with_holes_sorted, PartSorter, RingStart, SortOptions,
 };
 pub use too_short::TooShort;

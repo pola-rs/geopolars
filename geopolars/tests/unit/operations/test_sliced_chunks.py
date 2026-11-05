@@ -77,6 +77,7 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
     "reverse": (lambda g: geo.reverse(g), set()),
     "sort_parts": (lambda g: geo.sort_parts(g), set()),
     "sort_parts descending": (lambda g: geo.sort_parts(g, descending=True), set()),
+    "sort_parts rotate": (lambda g: geo.sort_parts(g, rings="rotate"), set()),
     "to_ccw": (lambda g: geo.to_ccw(g), {MultiPointXY}),
     "close_rings": (lambda g: geo.close_rings(g), {MultiPointXY}),
     "is_valid_geoarrow": (

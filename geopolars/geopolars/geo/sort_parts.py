@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, get_args
 
 from polars.plugins import register_plugin_function
 
@@ -18,38 +18,57 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
+Rings = Literal["keep", "rotate"]
+
 
 def _sort_parts(
-    column: pl.Expr, geometry: GeoArrowType, *, descending: bool
+    column: pl.Expr,
+    geometry: GeoArrowType,
+    *,
+    descending: bool,
+    rings: Rings,
+    ignore_per_row_errors: bool,
 ) -> pl.Expr:
-    if isinstance(geometry, (PointType, LineStringType)):
+    if isinstance(geometry, PointType) or (
+        isinstance(geometry, LineStringType) and rings == "keep"
+    ):
         return column
     return register_plugin_function(
         plugin_path=LIB,
         args=[column],
         function_name="sort_parts",
-        kwargs={"descending": descending},
+        kwargs={
+            "descending": descending,
+            "rings": rings,
+            "ignore_per_row_errors": ignore_per_row_errors,
+        },
         is_elementwise=True,
     )
 
 
 @doc()
-def sort_parts(geometry: IntoExprColumn, *, descending: bool = False) -> pl.Expr:
+def sort_parts(
+    geometry: IntoExprColumn,
+    *,
+    descending: bool = False,
+    rings: Rings = "keep",
+    ignore_per_row_errors: bool = False,
+) -> pl.Expr:
     """The geometry with its parts sorted.
     {keeps_type_dimension_and_crs}
 
-    | in | sorted |
-    | - | - |
-    | `PointXY[ZM]` | nothing, returned as it is |
-    | `LineStringXY[ZM]` | nothing, returned as it is |
-    | `PolygonXY[ZM]` | its holes (the exterior stays first) |
-    | `MultiPointXY[ZM]` | its points |
-    | `MultiLineStringXY[ZM]` | its linestrings |
-    | `MultiPolygonXY[ZM]` | the holes of every polygon, then its polygons |
+    | in | sorted | rotated with `rings="rotate"` |
+    | - | - | - |
+    | `PointXY[ZM]` | nothing, returned as it is | nothing |
+    | `LineStringXY[ZM]` | nothing, returned as it is | the linestring |
+    | `PolygonXY[ZM]` | its holes (the exterior stays first) | every ring |
+    | `MultiPointXY[ZM]` | its points | nothing |
+    | `MultiLineStringXY[ZM]` | its linestrings | every linestring |
+    | `MultiPolygonXY[ZM]` | the holes of every polygon, then its polygons | every ring |
 
     Two geometries that only differ in the order of their parts
     come out the same, so they can be compared part by part.
-    The vertices of a part keep their order.
+    The vertices of a part keep their order, unless rings are rotated.
 
     Parts are ordered as Polars sorts a geometry column.
     They are compared vertex by vertex,
@@ -61,10 +80,33 @@ def sort_parts(geometry: IntoExprColumn, *, descending: bool = False) -> pl.Expr
     With `descending=True`, the parts are sorted from greatest to smallest.
     Equal parts keep their order either way.
 
+    With `rings="rotate"`, every ring first starts at the vertex
+    that makes it smallest in the order above, keeping its direction.
+    Of starts that make it equally small, the earliest is kept.
+    The parts are then compared as they are once rotated.
+    A rotated ring is closed again by its new first vertex,
+    which replaces the old closing vertex (and so its m).
+    The start does not depend on `descending`.
+    A linestring has to be a ring (see `is_ring`), or empty.
+    Otherwise this raises, or with `ignore_per_row_errors=True`,
+    makes its row null.
+    The rings of a polygon are assumed to be closed already (see `close_rings`).
+
     A null geometry stays null, and an empty one stays empty.
 
     ```python
-    df.select(geo.sort_parts("islands"))
+    df.select(geo.sort_parts("islands", rings="rotate"))
     ```
     """
-    return on_geometry(geometry, partial(_sort_parts, descending=descending))
+    if rings not in get_args(Rings):
+        msg = f"`rings` must be one of {list(get_args(Rings))}, got {rings!r}"
+        raise ValueError(msg)
+    return on_geometry(
+        geometry,
+        partial(
+            _sort_parts,
+            descending=descending,
+            rings=rings,
+            ignore_per_row_errors=ignore_per_row_errors,
+        ),
+    )

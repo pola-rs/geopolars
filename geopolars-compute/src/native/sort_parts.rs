@@ -7,6 +7,10 @@
 //! The kernels here then copy the parts into that order.
 //! The rows keep their offsets.
 //!
+//! Rings can also be rotated to start at their smallest rotation, before the parts are compared.
+//! An order map then holds a [RingStart] per ring: the ring, and the vertex it starts at.
+//! Every part has to be a ring or empty for this (see [is_ring]).
+//!
 //! # Const generic flags
 //!
 //! ## `Z`
@@ -21,16 +25,25 @@
 //!
 //! If `DESCENDING=true`, the parts are sorted from greatest to smallest.
 //! Equal parts keep their order either way.
+//!
+//! ## `ROTATE_RINGS`
+//!
+//! The kernels of every kind with rings are generic over `ROTATE_RINGS`.
+//! If `ROTATE_RINGS=true`, every ring is rotated first, and the parts are compared as they are then.
 
 use std::cmp::Ordering;
+use std::ops::Range;
 
 use geopolars_core::{
-    List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
-    ScalarMultiLineString, ScalarMultiPoint, ScalarMultiPolygon, ScalarPolygon, ValidCoords,
-    ValidList,
+    is_ring, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PolygonArray, ScalarLineString, ScalarMultiLineString, ScalarMultiPoint, ScalarMultiPolygon,
+    ScalarPolygon, ValidCoords, ValidList,
 };
+use polars_arrow::bitmap::{Bitmap, MutableBitmap};
+use polars_arrow::compute::utils::combine_validities_and;
 
 use super::rings::offsets_of;
+use crate::{GeoComputeError, GeoComputeResult};
 
 /// Where to look next in parts that are equal up to here.
 /// For a linestring or a point, `ring` stays `0`.
@@ -129,31 +142,208 @@ fn in_direction<const DESCENDING: bool>(ordering: Ordering) -> Ordering {
     }
 }
 
+/// Where vertex `v` of the ring at `vertices` sits in the coordinates, once it begins at `start`.
+/// A ring with `start = 0` is left as it is, so it keeps its own closing vertex.
+/// A rotated ring is closed again by its new first vertex.
 #[inline(always)]
-fn line_token(lines: &ValidList, line: usize, cursor: Cursor) -> Token {
-    let vertices = lines.range(line);
-    if cursor.vertex < vertices.len() {
-        Token::Vertex(vertices.start + cursor.vertex)
+fn rotated_vertex(vertices: &Range<usize>, start: usize, v: usize) -> usize {
+    if start == 0 {
+        return vertices.start + v;
+    }
+    let distinct = vertices.len() - 1;
+    let k = if v == distinct {
+        start
+    } else if start + v >= distinct {
+        start + v - distinct
     } else {
-        Token::End
+        start + v
+    };
+    vertices.start + k
+}
+
+/// The token of the ring at `vertices` at `cursor`, once it begins at `start`.
+/// Past its last vertex, the ring has `past_end`.
+#[inline(always)]
+fn ring_token(vertices: Range<usize>, start: usize, cursor: Cursor, past_end: Token) -> Token {
+    if cursor.vertex < vertices.len() {
+        Token::Vertex(rotated_vertex(&vertices, start, cursor.vertex))
+    } else {
+        past_end
     }
 }
 
-/// Builds the order maps of [the module](self), one row at a time.
-/// Each `push_*_order` pushes the index of every part of one geometry onto `order`, in sorted order.
-/// An index is that of the part in its level of the storage
-/// (the coordinates of a multipoint, the rings of a polygon, ...).
-///
-/// Reuse one sorter for every row: it keeps its scratch space between them.
+/// A ring of an order map, rotated to begin at its vertex `start`.
+/// A ring that is not rotated has `start = 0`, as does an empty one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RingStart {
+    pub ring: usize,
+    pub start: usize,
+}
+
+/// What an order map holds per ring.
+/// A plain index is a ring that is never rotated.
+trait RingEntry: Copy {
+    fn ring(self) -> usize;
+    fn start(self) -> usize;
+    fn unrotated(ring: usize) -> Self;
+
+    /// The ranges of the coordinates of this ring of `lists` to copy, in order.
+    fn pieces(self, lists: &ValidList) -> impl Iterator<Item = Range<usize>> + Clone;
+
+    fn push_line_string_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        multi: ScalarMultiLineString,
+        order: &mut Vec<Self>,
+    );
+
+    fn push_hole_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        polygon: ScalarPolygon,
+        order: &mut Vec<Self>,
+    );
+
+    fn push_polygon_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        multi: ScalarMultiPolygon,
+        ring_order: &[Self],
+        order: &mut Vec<usize>,
+    );
+}
+
+impl RingEntry for usize {
+    #[inline(always)]
+    fn ring(self) -> usize {
+        self
+    }
+
+    #[inline(always)]
+    fn start(self) -> usize {
+        0
+    }
+
+    #[inline(always)]
+    fn unrotated(ring: usize) -> Self {
+        ring
+    }
+
+    #[inline(always)]
+    fn pieces(self, lists: &ValidList) -> impl Iterator<Item = Range<usize>> + Clone {
+        std::iter::once(lists.range(self))
+    }
+
+    fn push_line_string_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        multi: ScalarMultiLineString,
+        order: &mut Vec<Self>,
+    ) {
+        sorter.push_line_string_order::<Z, M, DESCENDING>(multi, order);
+    }
+
+    fn push_hole_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        polygon: ScalarPolygon,
+        order: &mut Vec<Self>,
+    ) {
+        sorter.push_hole_order::<Z, M, DESCENDING>(polygon, order);
+    }
+
+    fn push_polygon_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        multi: ScalarMultiPolygon,
+        ring_order: &[Self],
+        order: &mut Vec<usize>,
+    ) {
+        sorter.push_polygon_order::<Z, M, DESCENDING>(multi, ring_order, order);
+    }
+}
+
+impl RingEntry for RingStart {
+    #[inline(always)]
+    fn ring(self) -> usize {
+        self.ring
+    }
+
+    #[inline(always)]
+    fn start(self) -> usize {
+        self.start
+    }
+
+    #[inline(always)]
+    fn unrotated(ring: usize) -> Self {
+        RingStart { ring, start: 0 }
+    }
+
+    /// From the start to the old closing vertex (left out), then from the first vertex to the start,
+    /// then the start again to close it.
+    #[inline(always)]
+    fn pieces(self, lists: &ValidList) -> impl Iterator<Item = Range<usize>> + Clone {
+        let vertices = lists.range(self.ring);
+        let first = vertices.start + self.start;
+        let pieces = if self.start == 0 {
+            [vertices, 0..0, 0..0]
+        } else {
+            [
+                first..vertices.end - 1,
+                vertices.start..first,
+                first..first + 1,
+            ]
+        };
+        pieces.into_iter().filter(|piece| !piece.is_empty())
+    }
+
+    fn push_line_string_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        multi: ScalarMultiLineString,
+        order: &mut Vec<Self>,
+    ) {
+        sorter.push_rotated_line_string_order::<Z, M, DESCENDING>(multi, order);
+    }
+
+    fn push_hole_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        polygon: ScalarPolygon,
+        order: &mut Vec<Self>,
+    ) {
+        sorter.push_rotated_hole_order::<Z, M, DESCENDING>(polygon, order);
+    }
+
+    fn push_polygon_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        sorter: &mut PartSorter,
+        multi: ScalarMultiPolygon,
+        ring_order: &[Self],
+        order: &mut Vec<usize>,
+    ) {
+        sorter.push_rotated_polygon_order::<Z, M, DESCENDING>(multi, ring_order, order);
+    }
+}
+
+/// Picks the [RingEntry] of `ROTATE_RINGS`: a [RingStart] if `ROTATE_RINGS=true`, otherwise a plain index.
+struct Rings<const ROTATE_RINGS: bool>;
+
+trait RingEntryOf {
+    type Entry: RingEntry;
+}
+
+impl RingEntryOf for Rings<false> {
+    type Entry = usize;
+}
+
+impl RingEntryOf for Rings<true> {
+    type Entry = RingStart;
+}
+
+type Entry<const ROTATE_RINGS: bool> = <Rings<ROTATE_RINGS> as RingEntryOf>::Entry;
+
+/// Sorts runs of parts by their tokens, one cursor at a time.
 #[derive(Default)]
-pub struct PartSorter {
+struct Runs {
     /// Runs of parts that are equal up to the cursor, as a range of the parts being sorted.
-    open: Vec<(std::ops::Range<usize>, Cursor)>,
+    open: Vec<(Range<usize>, Cursor)>,
     /// The token at the cursor of every part of the run being sorted, with that part.
     keyed: Vec<(Token, usize)>,
 }
 
-impl PartSorter {
+impl Runs {
     /// Sorts `parts` by the tokens `token_at` gives them, one cursor at a time.
     /// Only the parts that are still equal up to a cursor are looked at past it.
     fn sort<const Z: bool, const M: bool, const DESCENDING: bool>(
@@ -194,7 +384,28 @@ impl PartSorter {
             }
         }
     }
+}
 
+/// Builds the order maps of [the module](self), one row at a time.
+/// Each `push_*_order` pushes the index of every part of one geometry onto `order`, in sorted order.
+/// An index is that of the part in its level of the storage
+/// (the coordinates of a multipoint, the rings of a polygon, ...).
+/// Each `push_rotated_*_order` pushes a [RingStart] per ring instead,
+/// with the parts compared as they are once rotated.
+///
+/// Reuse one sorter for every row: it keeps its scratch space between them.
+#[derive(Default)]
+pub struct PartSorter {
+    runs: Runs,
+    /// The candidates of [ring_start](Self::ring_start) still tied for the smallest rotation.
+    candidates: Vec<usize>,
+    /// The start of every ring of the geometry being sorted, from its first ring on.
+    starts: Vec<usize>,
+    /// The rings of the geometry being sorted, for a `push_rotated_*_order`.
+    rings: Vec<usize>,
+}
+
+impl PartSorter {
     pub fn push_point_order<const Z: bool, const M: bool, const DESCENDING: bool>(
         &mut self,
         multi: ScalarMultiPoint,
@@ -215,9 +426,11 @@ impl PartSorter {
     ) {
         let first = order.len();
         order.extend(multi.parts);
-        self.sort::<Z, M, DESCENDING>(&mut order[first..], multi.coords, |line, cursor| {
-            line_token(multi.lines, line, cursor)
-        });
+        let lines = multi.lines;
+        self.runs
+            .sort::<Z, M, DESCENDING>(&mut order[first..], multi.coords, |line, cursor| {
+                ring_token(lines.range(line), 0, cursor, Token::End)
+            });
     }
 
     /// The exterior stays first.
@@ -228,10 +441,12 @@ impl PartSorter {
     ) {
         let holes_start = order.len() + 1;
         order.extend(polygon.parts);
+        let rings = polygon.rings;
         if let Some(holes) = order.get_mut(holes_start..) {
-            self.sort::<Z, M, DESCENDING>(holes, polygon.coords, |ring, cursor| {
-                line_token(polygon.rings, ring, cursor)
-            });
+            self.runs
+                .sort::<Z, M, DESCENDING>(holes, polygon.coords, |ring, cursor| {
+                    ring_token(rings.range(ring), 0, cursor, Token::End)
+                });
         }
     }
 
@@ -244,59 +459,240 @@ impl PartSorter {
         ring_order: &[usize],
         order: &mut Vec<usize>,
     ) {
+        self.push_polygon_order_of::<Z, M, DESCENDING, usize>(multi, ring_order, order);
+    }
+
+    /// The offset of the vertex `ring` starts at once rotated to its smallest rotation,
+    /// as compared in [the module](self).
+    /// Of rotations that are equal, the earliest is taken.
+    /// `ring` has to be a ring or empty (see [is_ring]).
+    pub fn ring_start<const Z: bool, const M: bool>(&mut self, ring: ScalarLineString) -> usize {
+        let (vertices, coords) = (ring.vertices, ring.coords);
+        // The closing vertex repeats the first, so it is not a place to start.
+        let distinct = vertices.len().saturating_sub(1);
+        if distinct < 2 {
+            return 0;
+        }
+        let at = |k: usize, depth: usize| vertices.start + (k + depth) % distinct;
+        let candidates = &mut self.candidates;
+        candidates.clear();
+        candidates.push(0);
+        // Nothing wraps round yet, so this needs no `at`.
+        for k in 1..distinct {
+            let smallest = vertices.start + candidates[0];
+            match cmp_coordinates::<Z, M>(coords, vertices.start + k, smallest) {
+                Ordering::Less => {
+                    candidates.clear();
+                    candidates.push(k);
+                }
+                Ordering::Equal => candidates.push(k),
+                Ordering::Greater => {}
+            }
+        }
+        // PERF: a ring that repeats a pattern keeps its candidates tied up to its full length,
+        // which is quadratic in that length.
+        // Booth's or Zhou's minimal rotation is linear, but reads every vertex.
+        let mut depth = 1;
+        while candidates.len() > 1 && depth < distinct {
+            let mut smallest = candidates[0];
+            let mut kept = 1;
+            for c in 1..candidates.len() {
+                let k = candidates[c];
+                match cmp_coordinates::<Z, M>(coords, at(k, depth), at(smallest, depth)) {
+                    Ordering::Less => {
+                        smallest = k;
+                        candidates[0] = k;
+                        kept = 1;
+                    }
+                    Ordering::Equal => {
+                        candidates[kept] = k;
+                        kept += 1;
+                    }
+                    Ordering::Greater => {}
+                }
+            }
+            candidates.truncate(kept);
+            depth += 1;
+        }
+        candidates[0]
+    }
+
+    /// [push_line_string_order](Self::push_line_string_order), with every linestring rotated.
+    /// Each linestring of `multi` has to be a ring or empty (see [is_ring]).
+    pub fn push_rotated_line_string_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        &mut self,
+        multi: ScalarMultiLineString,
+        order: &mut Vec<RingStart>,
+    ) {
+        let first = multi.parts.start;
+        self.starts.clear();
+        for line in multi.line_strings() {
+            let start = self.ring_start::<Z, M>(line);
+            self.starts.push(start);
+        }
+        self.rings.clear();
+        self.rings.extend(multi.parts.clone());
+        let (lines, starts) = (multi.lines, &self.starts);
+        self.runs
+            .sort::<Z, M, DESCENDING>(&mut self.rings, multi.coords, |line, cursor| {
+                ring_token(lines.range(line), starts[line - first], cursor, Token::End)
+            });
+        order.extend(self.rings.iter().map(|&ring| RingStart {
+            ring,
+            start: self.starts[ring - first],
+        }));
+    }
+
+    /// [push_hole_order](Self::push_hole_order), with every ring rotated, the exterior too.
+    /// The rings of `polygon` are assumed to be rings or empty (see [is_ring]).
+    pub fn push_rotated_hole_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        &mut self,
+        polygon: ScalarPolygon,
+        order: &mut Vec<RingStart>,
+    ) {
+        let first = polygon.parts.start;
+        self.starts.clear();
+        for ring in polygon.rings() {
+            debug_assert!(
+                ring.vertices.is_empty() || is_ring::<Z>(ring.coords, ring.vertices.clone()),
+                "a polygon ring that is not closed"
+            );
+            let start = self.ring_start::<Z, M>(ring);
+            self.starts.push(start);
+        }
+        self.rings.clear();
+        self.rings.extend(polygon.parts.clone());
+        let (rings, starts) = (polygon.rings, &self.starts);
+        if let Some(holes) = self.rings.get_mut(1..) {
+            self.runs
+                .sort::<Z, M, DESCENDING>(holes, polygon.coords, |ring, cursor| {
+                    ring_token(rings.range(ring), starts[ring - first], cursor, Token::End)
+                });
+        }
+        order.extend(self.rings.iter().map(|&ring| RingStart {
+            ring,
+            start: self.starts[ring - first],
+        }));
+    }
+
+    /// [push_polygon_order](Self::push_polygon_order), with the rings rotated as `ring_order` says.
+    /// `ring_order` is pushed by [push_rotated_hole_order](Self::push_rotated_hole_order).
+    pub fn push_rotated_polygon_order<const Z: bool, const M: bool, const DESCENDING: bool>(
+        &mut self,
+        multi: ScalarMultiPolygon,
+        ring_order: &[RingStart],
+        order: &mut Vec<usize>,
+    ) {
+        self.push_polygon_order_of::<Z, M, DESCENDING, RingStart>(multi, ring_order, order);
+    }
+
+    fn push_polygon_order_of<const Z: bool, const M: bool, const DESCENDING: bool, E: RingEntry>(
+        &mut self,
+        multi: ScalarMultiPolygon,
+        ring_order: &[E],
+        order: &mut Vec<usize>,
+    ) {
         let (polygons, rings) = (multi.polygons, multi.rings);
         let first_ring = polygons.span(multi.parts.clone()).start;
         let first = order.len();
         order.extend(multi.parts);
-        self.sort::<Z, M, DESCENDING>(&mut order[first..], multi.coords, |polygon, cursor| {
-            let polygon_rings = polygons.range(polygon);
-            if cursor.ring >= polygon_rings.len() {
-                return Token::End;
-            }
-            let ring = ring_order[polygon_rings.start + cursor.ring - first_ring];
-            let vertices = rings.range(ring);
-            if cursor.vertex < vertices.len() {
-                Token::Vertex(vertices.start + cursor.vertex)
-            } else {
-                Token::EndRing
-            }
-        });
+        self.runs
+            .sort::<Z, M, DESCENDING>(&mut order[first..], multi.coords, |polygon, cursor| {
+                let polygon_rings = polygons.range(polygon);
+                if cursor.ring >= polygon_rings.len() {
+                    return Token::End;
+                }
+                let entry = ring_order[polygon_rings.start + cursor.ring - first_ring];
+                ring_token(
+                    rings.range(entry.ring()),
+                    entry.start(),
+                    cursor,
+                    Token::EndRing,
+                )
+            });
     }
+}
+
+/// See `sort_parts` in Python.
+/// `rotate_rings` is ignored for points, and `ignore_per_row_errors` without `rotate_rings`.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SortOptions {
+    pub descending: bool,
+    pub rotate_rings: bool,
+    pub ignore_per_row_errors: bool,
 }
 
 /// The order map of every row, with `push_row` pushing that of a row that is there.
 /// A null row's parts keep their place.
-fn order_per_row(
+fn order_per_row<E: RingEntry>(
     rows: &List,
     parts: usize,
-    mut push_row: impl FnMut(usize, &mut Vec<usize>),
-) -> Vec<usize> {
+    mut push_row: impl FnMut(usize, &mut Vec<E>),
+) -> Vec<E> {
     // PERF: this could be a pre-sized array, with every row sorting its own slice of it in place.
     let mut order = Vec::with_capacity(parts);
     for i in 0..rows.len() {
         if rows.is_valid(i) {
             push_row(i, &mut order);
         } else {
-            order.extend(rows.range(i));
+            order.extend(rows.range(i).map(E::unrotated));
         }
     }
     order
 }
 
-fn is_identity(order: &[usize]) -> bool {
-    order.iter().enumerate().all(|(k, &j)| k == j)
+fn is_unchanged<E: RingEntry>(order: &[E]) -> bool {
+    order
+        .iter()
+        .enumerate()
+        .all(|(k, entry)| entry.ring() == k && entry.start() == 0)
 }
 
 /// `lists` with its lists in the order `order`, and the coordinates they hold moved with them.
-fn lists_in_order(
+fn lists_in_order<E: RingEntry>(
     lists: &ValidList,
     coords: &ValidCoords,
-    order: impl Iterator<Item = usize> + Clone,
+    order: impl Iterator<Item = E> + Clone,
 ) -> (ValidList, ValidCoords) {
     (
-        ValidList::from_offsets(offsets_of(order.clone().map(|j| lists.range(j).len()))),
-        coords.copy_ranges(order.map(|j| lists.range(j))),
+        ValidList::from_offsets(offsets_of(
+            order.clone().map(|entry| lists.range(entry.ring()).len()),
+        )),
+        coords.copy_ranges(order.flat_map(|entry| entry.pieces(lists))),
     )
+}
+
+/// `rows`, with a row null where one of its lines (from `lines_of`) is neither a ring nor empty.
+/// Unless `ignore_per_row_errors=true`, the first such line is returned as an error instead.
+fn rows_of_rings<const Z: bool, L: Iterator<Item = Range<usize>>>(
+    rows: &List,
+    coords: &ValidCoords,
+    lines_of: impl Fn(usize) -> L,
+    ignore_per_row_errors: bool,
+) -> GeoComputeResult<List> {
+    let mut failed = Vec::new();
+    for i in (0..rows.len()).filter(|&i| rows.is_valid(i)) {
+        let not_a_ring =
+            lines_of(i).find(|line| !line.is_empty() && !is_ring::<Z>(coords, line.clone()));
+        if let Some(line) = not_a_ring {
+            if !ignore_per_row_errors {
+                return Err(GeoComputeError::NotARing {
+                    vertices: line.len(),
+                });
+            }
+            failed.push(i);
+        }
+    }
+    if failed.is_empty() {
+        return Ok(rows.clone());
+    }
+    let mut passing = MutableBitmap::from_len_set(rows.len());
+    for i in failed {
+        passing.set(i, false);
+    }
+    let passing = Bitmap::from(passing);
+    let validity = combine_validities_and(rows.validity(), Some(&passing));
+    Ok(rows.clone().with_validity(validity))
 }
 
 fn multi_points_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool>(
@@ -306,7 +702,7 @@ fn multi_points_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool
     let order = order_per_row(&array.rows, array.coords.len(), |i, order| {
         sorter.push_point_order::<Z, M, DESCENDING>(array.get(i), order)
     });
-    let coords = if is_identity(&order) {
+    let coords = if is_unchanged(&order) {
         array.coords.clone()
     } else {
         array.coords.gathered(&order)
@@ -314,29 +710,85 @@ fn multi_points_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool
     MultiPointArray::from_parts(array.rows.clone(), coords)
 }
 
-fn multi_line_strings_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool>(
-    array: &MultiLineStringArray,
-) -> MultiLineStringArray {
+fn line_strings_with_rings_rotated_with<const Z: bool, const M: bool>(
+    array: &LineStringArray,
+    ignore_per_row_errors: bool,
+) -> GeoComputeResult<LineStringArray> {
+    let lines_of = |i| std::iter::once(array.rows.range(i));
+    let rows = rows_of_rings::<Z, _>(&array.rows, &array.coords, lines_of, ignore_per_row_errors)?;
     let mut sorter = PartSorter::default();
-    let order = order_per_row(&array.rows, array.lines.len(), |i, order| {
-        sorter.push_line_string_order::<Z, M, DESCENDING>(array.get(i), order)
-    });
-    let (lines, coords) = if is_identity(&order) {
-        (array.lines.clone(), array.coords.clone())
+    let order: Vec<RingStart> = (0..rows.len())
+        .map(|i| RingStart {
+            ring: i,
+            start: if rows.is_valid(i) {
+                sorter.ring_start::<Z, M>(array.get(i))
+            } else {
+                0
+            },
+        })
+        .collect();
+    let coords = if is_unchanged(&order) {
+        array.coords.clone()
     } else {
-        lists_in_order(&array.lines, &array.coords, order.iter().copied())
+        let lines = rows.ignoring_validity();
+        array
+            .coords
+            .copy_ranges(order.iter().flat_map(|entry| entry.pieces(lines)))
     };
-    MultiLineStringArray::from_parts(array.rows.clone(), lines, coords)
+    Ok(LineStringArray::from_parts(rows, coords))
 }
 
-fn polygons_with_holes_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool>(
+fn multi_line_strings_sorted_with<
+    const Z: bool,
+    const M: bool,
+    const DESCENDING: bool,
+    const ROTATE_RINGS: bool,
+>(
+    array: &MultiLineStringArray,
+    ignore_per_row_errors: bool,
+) -> GeoComputeResult<MultiLineStringArray>
+where
+    Rings<ROTATE_RINGS>: RingEntryOf,
+{
+    let lines = &array.lines;
+    let rows = if ROTATE_RINGS {
+        let lines_of = |i| array.rows.range(i).map(|j| lines.range(j));
+        rows_of_rings::<Z, _>(&array.rows, &array.coords, lines_of, ignore_per_row_errors)?
+    } else {
+        array.rows.clone()
+    };
+    let mut sorter = PartSorter::default();
+    let order = order_per_row(&rows, lines.len(), |i, order| {
+        <Entry<ROTATE_RINGS>>::push_line_string_order::<Z, M, DESCENDING>(
+            &mut sorter,
+            array.get(i),
+            order,
+        )
+    });
+    let (lines, coords) = if is_unchanged(&order) {
+        (lines.clone(), array.coords.clone())
+    } else {
+        lists_in_order(lines, &array.coords, order.iter().copied())
+    };
+    Ok(MultiLineStringArray::from_parts(rows, lines, coords))
+}
+
+fn polygons_with_holes_sorted_with<
+    const Z: bool,
+    const M: bool,
+    const DESCENDING: bool,
+    const ROTATE_RINGS: bool,
+>(
     array: &PolygonArray,
-) -> PolygonArray {
+) -> PolygonArray
+where
+    Rings<ROTATE_RINGS>: RingEntryOf,
+{
     let mut sorter = PartSorter::default();
     let order = order_per_row(&array.rows, array.rings.len(), |i, order| {
-        sorter.push_hole_order::<Z, M, DESCENDING>(array.get(i), order)
+        <Entry<ROTATE_RINGS>>::push_hole_order::<Z, M, DESCENDING>(&mut sorter, array.get(i), order)
     });
-    let (rings, coords) = if is_identity(&order) {
+    let (rings, coords) = if is_unchanged(&order) {
         (array.rings.clone(), array.coords.clone())
     } else {
         lists_in_order(&array.rings, &array.coords, order.iter().copied())
@@ -344,27 +796,44 @@ fn polygons_with_holes_sorted_with<const Z: bool, const M: bool, const DESCENDIN
     PolygonArray::from_parts(array.rows.clone(), rings, coords)
 }
 
-fn multi_polygons_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool>(
+fn multi_polygons_sorted_with<
+    const Z: bool,
+    const M: bool,
+    const DESCENDING: bool,
+    const ROTATE_RINGS: bool,
+>(
     array: &MultiPolygonArray,
-) -> MultiPolygonArray {
+) -> MultiPolygonArray
+where
+    Rings<ROTATE_RINGS>: RingEntryOf,
+{
     let (polygons, rings, coords) = (&array.polygons, &array.rings, &array.coords);
     let mut sorter = PartSorter::default();
     // The polygons of a null row are sorted too, which does no harm, as they are masked.
-    let mut ring_order = Vec::with_capacity(rings.len());
+    let mut ring_order: Vec<Entry<ROTATE_RINGS>> = Vec::with_capacity(rings.len());
     for polygon in polygons.ranges() {
         let polygon = ScalarPolygon {
             rings,
             coords,
             parts: polygon,
         };
-        sorter.push_hole_order::<Z, M, DESCENDING>(polygon, &mut ring_order);
+        <Entry<ROTATE_RINGS>>::push_hole_order::<Z, M, DESCENDING>(
+            &mut sorter,
+            polygon,
+            &mut ring_order,
+        );
     }
     let polygon_order = order_per_row(&array.rows, polygons.len(), |i, order| {
         let multi = array.get(i);
         let first_ring = polygons.span(multi.parts.clone()).start;
-        sorter.push_polygon_order::<Z, M, DESCENDING>(multi, &ring_order[first_ring..], order)
+        <Entry<ROTATE_RINGS>>::push_polygon_order::<Z, M, DESCENDING>(
+            &mut sorter,
+            multi,
+            &ring_order[first_ring..],
+            order,
+        )
     });
-    if is_identity(&polygon_order) && is_identity(&ring_order) {
+    if is_unchanged(&polygon_order) && is_unchanged(&ring_order) {
         return MultiPolygonArray::from_parts(
             array.rows.clone(),
             polygons.clone(),
@@ -386,40 +855,59 @@ fn multi_polygons_sorted_with<const Z: bool, const M: bool, const DESCENDING: bo
     )
 }
 
-pub fn multi_points_sorted(array: &MultiPointArray, descending: bool) -> MultiPointArray {
+/// `options.rotate_rings` and `options.ignore_per_row_errors` are ignored.
+pub fn multi_points_sorted(array: &MultiPointArray, options: SortOptions) -> MultiPointArray {
     let (z, m) = (array.coords.z().is_some(), array.coords.m().is_some());
     with_const_flags!(
-        Z = z, M = m, DESCENDING = descending;
+        Z = z, M = m, DESCENDING = options.descending;
         multi_points_sorted_with::<Z, M, DESCENDING>(array)
     )
 }
 
-pub fn multi_line_strings_sorted(
-    array: &MultiLineStringArray,
-    descending: bool,
-) -> MultiLineStringArray {
+/// Every linestring rotated as a ring, as `rotate_rings` does for the parts of [multi_line_strings_sorted].
+pub fn line_strings_with_rings_rotated(
+    array: &LineStringArray,
+    ignore_per_row_errors: bool,
+) -> GeoComputeResult<LineStringArray> {
     let (z, m) = (array.coords.z().is_some(), array.coords.m().is_some());
     with_const_flags!(
-        Z = z, M = m, DESCENDING = descending;
-        multi_line_strings_sorted_with::<Z, M, DESCENDING>(array)
+        Z = z, M = m;
+        line_strings_with_rings_rotated_with::<Z, M>(array, ignore_per_row_errors)
+    )
+}
+
+/// With `options.rotate_rings`, a row with a linestring that is neither a ring nor empty is an error,
+/// or null with `options.ignore_per_row_errors`.
+pub fn multi_line_strings_sorted(
+    array: &MultiLineStringArray,
+    options: SortOptions,
+) -> GeoComputeResult<MultiLineStringArray> {
+    let (z, m) = (array.coords.z().is_some(), array.coords.m().is_some());
+    with_const_flags!(
+        Z = z, M = m, DESCENDING = options.descending, ROTATE_RINGS = options.rotate_rings;
+        multi_line_strings_sorted_with::<Z, M, DESCENDING, ROTATE_RINGS>(
+            array,
+            options.ignore_per_row_errors,
+        )
     )
 }
 
 /// The exterior of every polygon stays first.
-pub fn polygons_with_holes_sorted(array: &PolygonArray, descending: bool) -> PolygonArray {
+/// With `options.rotate_rings`, the rings are assumed to be closed, so nothing fails.
+pub fn polygons_with_holes_sorted(array: &PolygonArray, options: SortOptions) -> PolygonArray {
     let (z, m) = (array.coords.z().is_some(), array.coords.m().is_some());
     with_const_flags!(
-        Z = z, M = m, DESCENDING = descending;
-        polygons_with_holes_sorted_with::<Z, M, DESCENDING>(array)
+        Z = z, M = m, DESCENDING = options.descending, ROTATE_RINGS = options.rotate_rings;
+        polygons_with_holes_sorted_with::<Z, M, DESCENDING, ROTATE_RINGS>(array)
     )
 }
 
 /// The holes of every polygon are sorted first, as in [polygons_with_holes_sorted].
 /// The polygons are then compared with their holes in that order.
-pub fn multi_polygons_sorted(array: &MultiPolygonArray, descending: bool) -> MultiPolygonArray {
+pub fn multi_polygons_sorted(array: &MultiPolygonArray, options: SortOptions) -> MultiPolygonArray {
     let (z, m) = (array.coords.z().is_some(), array.coords.m().is_some());
     with_const_flags!(
-        Z = z, M = m, DESCENDING = descending;
-        multi_polygons_sorted_with::<Z, M, DESCENDING>(array)
+        Z = z, M = m, DESCENDING = options.descending, ROTATE_RINGS = options.rotate_rings;
+        multi_polygons_sorted_with::<Z, M, DESCENDING, ROTATE_RINGS>(array)
     )
 }

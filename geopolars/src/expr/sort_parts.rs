@@ -2,11 +2,12 @@
 //! See `sort_parts` in Python for the rules.
 
 use geopolars_compute::native::{
-    multi_line_strings_sorted, multi_points_sorted, multi_polygons_sorted,
-    polygons_with_holes_sorted,
+    line_strings_with_rings_rotated, multi_line_strings_sorted, multi_points_sorted,
+    multi_polygons_sorted, polygons_with_holes_sorted, SortOptions,
 };
 use geopolars_core::{
-    downcast, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
+    downcast, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::Array;
@@ -14,13 +15,24 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
+use super::IntoPolarsResult;
 use crate::geoarrow::{describe, Kind};
+
+/// `rings` of `sort_parts`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum RingsKwarg {
+    Keep,
+    Rotate,
+}
 
 /// See python
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SortPartsKwargs {
     descending: bool,
+    rings: RingsKwarg,
+    ignore_per_row_errors: bool,
 }
 
 /// The kernel of `kind` on one chunk of the storage.
@@ -29,33 +41,46 @@ fn chunk_sorted(
     kind: Kind,
     kwargs: &SortPartsKwargs,
 ) -> PolarsResult<Box<dyn Array>> {
-    let descending = kwargs.descending;
+    let options = SortOptions {
+        descending: kwargs.descending,
+        rotate_rings: kwargs.rings == RingsKwarg::Rotate,
+        ignore_per_row_errors: kwargs.ignore_per_row_errors,
+    };
     Ok(match kind {
         // Python hands these back unchanged, without calling the kernel.
-        Kind::Point | Kind::LineString => {
-            polars_bail!(InvalidOperation: "sort_parts has no kernel for {kind:?}")
+        Kind::Point => polars_bail!(InvalidOperation: "sort_parts has no kernel for {kind:?}"),
+        Kind::LineString if !options.rotate_rings => {
+            polars_bail!(InvalidOperation: "sort_parts has no kernel for {kind:?} without rotating")
+        }
+        Kind::LineString => {
+            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
+            line_strings_with_rings_rotated(&array, options.ignore_per_row_errors)
+                .into_polars()?
+                .into_list_array()
+                .boxed()
         }
         Kind::MultiPoint => {
             let array = MultiPointArray::new(downcast(chunk, "a list of coordinates")?)?;
-            multi_points_sorted(&array, descending)
+            multi_points_sorted(&array, options)
                 .into_list_array()
                 .boxed()
         }
         Kind::Polygon => {
             let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
-            polygons_with_holes_sorted(&array, descending)
+            polygons_with_holes_sorted(&array, options)
                 .into_list_array()
                 .boxed()
         }
         Kind::MultiLineString => {
             let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            multi_line_strings_sorted(&array, descending)
+            multi_line_strings_sorted(&array, options)
+                .into_polars()?
                 .into_list_array()
                 .boxed()
         }
         Kind::MultiPolygon => {
             let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
-            multi_polygons_sorted(&array, descending)
+            multi_polygons_sorted(&array, options)
                 .into_list_array()
                 .boxed()
         }

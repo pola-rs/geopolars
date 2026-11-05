@@ -27,7 +27,7 @@ the comment says when one without a CRS takes a different tier.
 | `offset_curve` | - | | B | GEOS; z and m dropped [^1] | - | | - | | B | | - | |
 | `line_interpolate_point` | - | | B | GEOS; keeps z and m | - | | - | | B | parts walked in order | - | |
 | `reverse` | - | | A | | A | `reverse_holes` | A | ignores `nested` | A | `nested` | A | `nested`, `reverse_holes` |
-| `sort_parts` | C | RIG | C | RIG | A | holes; exterior first | A | | A | | A | holes, then polygons |
+| `sort_parts` | C | RIG | C/A | RIG, or rotated with `rings` | A | holes; exterior first; `rings` | A | | A | `rings` | A | holes, then polygons; `rings` |
 | `simplify` | C | RIG | B | GEOS; z kept, m dropped [^6] | B | split by `buffer(0)` is a per-row error | C | RIG | B | | B | |
 | `is_ring` | - | | A | ≥ 4 vertices, ends = x/y/z | - | | - | | A | parts chained into one ring | - | |
 | `is_simple` | A | always `True` | B | GEOS; x/y only | B | every ring as a line; GEOS | A | no two points equal in x/y | B | GEOS, as a whole | B | every ring as a line; GEOS |
