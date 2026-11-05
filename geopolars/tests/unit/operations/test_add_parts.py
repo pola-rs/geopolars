@@ -466,12 +466,23 @@ def test_parts_of_another_dimension_are_refused() -> None:
         lf.collect_schema()
 
 
-def test_parts_in_another_crs_are_refused() -> None:
-    lf = pl.LazyFrame(
-        [_points(_A[0], crs=RD), _points(_B[0], name="parts", crs="EPSG:4326")]
-    ).select(geo.add_parts("geometry", "parts"))
+@pytest.mark.parametrize(
+    ("geometry", "parts", "match"),
+    [
+        (_points(_A[0], crs=RD), _points(_B[0], crs="EPSG:4326"), "different CRSs"),
+        (_points(_A[0], crs=RD), _points(_B[0]), "only one"),
+        (_points(_A[0]), _points(_B[0], crs=RD), "only one"),
+        (_lines(_A), _listed_lines([_B], crs=RD), "only one"),
+    ],
+)
+def test_parts_in_another_crs_are_refused(
+    geometry: pl.Series, parts: pl.Series, match: str
+) -> None:
+    lf = pl.LazyFrame([geometry, parts.alias("parts")]).select(
+        geo.add_parts("geometry", "parts")
+    )
 
-    with pytest.raises(ComputeError, match="different CRSs"):
+    with pytest.raises(ComputeError, match=match):
         lf.collect_schema()
 
 

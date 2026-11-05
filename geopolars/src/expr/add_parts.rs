@@ -24,10 +24,9 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::construct::{
-    ensure_fits, fields_of, one_line_per_row, one_point_per_row, one_polygon_per_row, paired_rows,
-    storage_of,
+    fields_of, one_line_per_row, one_point_per_row, one_polygon_per_row, paired_rows, storage_of,
 };
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, ensure_same_crs, Geo, Kind};
 
 /// `null_behavior` of `add_parts`.
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -82,10 +81,11 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
             part.display(), multi.display(), parts
         );
     };
-    ensure_fits(
-        ("geometry", geo.dim, geo.metadata),
-        ("parts", found.dim, found.metadata),
-    )?;
+    polars_ensure!(
+        found.dim == geo.dim,
+        SchemaMismatch: "the geometry is {} but the parts are {}", geo.dim.tag(), found.dim.tag()
+    );
+    ensure_same_crs(&geo, &found)?;
     let listed = found.kind == multi || matches!(parts, DataType::List(_));
     Ok((Geo::new(multi, geo.dim, geo.metadata.clone()), listed))
 }

@@ -67,7 +67,8 @@ def add_parts(
     or one of them has a single row, which then goes with every row of the other.
 
     {keeps_dimension_and_crs}
-    Parts of another dimension, or parts that declare another CRS, are refused.
+    Parts of another dimension or another CRS are refused.
+    A CRS declared on only one of the two counts as another CRS.
 
     Nothing is checked: the parts are copied as they are.
 

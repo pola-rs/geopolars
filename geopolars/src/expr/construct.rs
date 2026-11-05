@@ -669,33 +669,19 @@ pub(super) fn listed_holes(
             _ => (false, ring_of(dtype).map_err(refused)?),
         },
     };
-    ensure_fits(
-        (subject, dim, metadata),
-        ("holes", hole_dim, &hole_metadata),
-    )?;
-    Ok(listed)
-}
-
-/// That `added` has the dimension of the `subject` it goes into,
-/// and does not declare another CRS than it does.
-/// Each is given by its name in the error messages, its dimension and its metadata.
-pub(super) fn ensure_fits(
-    (subject, dim, metadata): (&str, GeoDimension, &ExtensionMetadata),
-    (added, added_dim, added_metadata): (&str, GeoDimension, &ExtensionMetadata),
-) -> PolarsResult<()> {
     polars_ensure!(
-        added_dim == dim,
-        SchemaMismatch: "the {subject} is {} but the {added} are {}", dim.tag(), added_dim.tag()
+        hole_dim == dim,
+        SchemaMismatch: "the {subject} is {} but the holes are {}", dim.tag(), hole_dim.tag()
     );
-    if metadata.declares_crs() && added_metadata.declares_crs() {
-        let (crs, added_crs) = (metadata.crs()?, added_metadata.crs()?);
+    if metadata.declares_crs() && hole_metadata.declares_crs() {
+        let (crs, hole_crs) = (metadata.crs()?, hole_metadata.crs()?);
         polars_ensure!(
-            crs == added_crs,
-            SchemaMismatch: "the {subject} and the {added} declare different CRSs, {crs} and {added_crs}; \
+            crs == hole_crs,
+            SchemaMismatch: "the {subject} and the holes declare different CRSs, {crs} and {hole_crs}; \
             use `to_crs` to bring one onto the other first"
         );
     }
-    Ok(())
+    Ok(listed)
 }
 
 /// The polygons `polygon_rings_in_separate_columns` builds,
