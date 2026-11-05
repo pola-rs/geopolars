@@ -103,6 +103,30 @@ def _listed_polygons(*rows: list[Polygon | None] | None) -> pl.Series:
     return _listed("parts", list(rows), pl.List(pl.List(_XY)), PolygonXY())
 
 
+def _bare(rows: list[object], lists: int) -> pl.Series:
+    """`rows` as bare coordinates, nested `lists` lists deep."""
+    storage: pl.DataType = _XY
+    for _ in range(lists):
+        storage = pl.List(storage)
+    return pl.Series("parts", rows, dtype=storage)
+
+
+def _nested(
+    rows: list[object], storage: pl.DataType, dtype: pl.DataType, lists: int
+) -> pl.Series:
+    """`rows` as `dtype`s nested `lists` lists deep (at least one)."""
+    for _ in range(lists):
+        storage = pl.List(storage)
+    expr = pl.element().ext.to(dtype)
+    for _ in range(lists - 1):
+        expr = pl.element().list.eval(expr)
+    return pl.Series("parts", rows, dtype=storage).list.eval(expr)
+
+
+def _of_points(rows: list[object], lists: int, crs: str | None = None) -> pl.Series:
+    return _nested(rows, _XY, PointXY(crs=crs), lists)
+
+
 def _added(geometry: pl.Series, parts: pl.Series, **kwargs: object) -> pl.Series:
     df = pl.DataFrame([geometry, parts.alias("parts")])
     return df.select(geo.add_parts("geometry", "parts", **kwargs)).to_series()
@@ -185,6 +209,47 @@ def test_polygons(
 
     assert out.dtype == MultiPolygonXY()
     assert out.ext.storage().to_list() == expected
+
+
+@pytest.mark.parametrize(
+    ("geometry", "parts", "expected"),
+    [
+        (_points(_A[0]), _bare([_B[0]], 0), [[_A[0], _B[0]]]),
+        (_points(_A[0]), _bare([_B[:2]], 1), [[_A[0], *_B[:2]]]),
+        (_lines(_A), _of_points([_B], 1), [[_A, _B]]),
+        (_lines(_A), _of_points([[_B, _C]], 2), [[_A, _B, _C]]),
+        (_lines(_A), _bare([_B], 1), [[_A, _B]]),
+        (_lines(_A), _bare([[_B, _C]], 2), [[_A, _B, _C]]),
+        (_polygons(_P), _of_points([_Q], 2), [[_P, _Q]]),
+        (_polygons(_P), _of_points([[_Q, _P]], 3), [[_P, _Q, _P]]),
+        (_polygons(_P), _listed_lines(_Q), [[_P, _Q]]),
+        (_polygons(_P), _nested([[_Q]], pl.List(_XY), LineStringXY(), 2), [[_P, _Q]]),
+        (_polygons(_P), _bare([_Q], 2), [[_P, _Q]]),
+        (_polygons(_P), _bare([[_Q, _P]], 3), [[_P, _Q, _P]]),
+    ],
+)
+def test_parts_as_their_points_or_rings(
+    geometry: pl.Series, parts: pl.Series, expected: list[object]
+) -> None:
+    out = _added(geometry, parts)
+
+    assert out.ext.storage().to_list() == expected
+
+
+def test_bare_coordinates_take_the_crs_of_the_geometry() -> None:
+    out = _added(_lines(_A, crs=RD), _bare([_B], 1))
+
+    assert out.dtype == MultiLineStringXY(crs=RD)
+
+
+def test_a_null_point_in_a_part_of_points_is_ignored_or_propagates() -> None:
+    geometry, parts = _lines(_A, _A), _of_points([_B, [_B[0], None]], 1)
+
+    ignored = _added(geometry, parts)
+    propagated = _added(geometry, parts, null_behavior="propagate")
+
+    assert ignored.ext.storage().to_list() == [[_A, _B], [_A]]
+    assert propagated.ext.storage().to_list() == [[_A, _B], None]
 
 
 def test_parts_are_not_checked() -> None:
@@ -473,6 +538,7 @@ def test_parts_of_another_dimension_are_refused() -> None:
         (_points(_A[0], crs=RD), _points(_B[0]), "only one"),
         (_points(_A[0]), _points(_B[0], crs=RD), "only one"),
         (_lines(_A), _listed_lines([_B], crs=RD), "only one"),
+        (_lines(_A, crs=RD), _of_points([_B], 1, crs="EPSG:4326"), "different CRSs"),
     ],
 )
 def test_parts_in_another_crs_are_refused(
@@ -491,8 +557,14 @@ def test_parts_in_another_crs_are_refused(
     [
         (_lines(_A), _polygons(_P, name="parts")),
         (_points(_A[0]), _lines(_A, name="parts")),
-        (_polygons(_P), _listed_lines([_A])),
-        (_lines(_A), pl.Series("parts", [_A], dtype=pl.List(_XY))),
+        (_lines(_A), _multi_points(_A, name="parts")),
+        (_polygons(_P), _of_points([_A], 1)),
+        (_lines(_A), _of_points([[[_A]]], 3)),
+        (_lines(_A), _bare([[[_A]]], 3)),
+        (
+            _polygons(_P),
+            _nested([[[_P]]], pl.List(pl.List(pl.List(_XY))), MultiPolygonXY(), 1),
+        ),
     ],
 )
 def test_parts_of_another_kind_are_refused(

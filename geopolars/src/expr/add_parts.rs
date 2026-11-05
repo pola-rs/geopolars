@@ -26,7 +26,7 @@ use serde::Deserialize;
 use super::construct::{
     fields_of, one_line_per_row, one_point_per_row, one_polygon_per_row, paired_rows, storage_of,
 };
-use crate::geoarrow::{describe, ensure_same_crs, Geo, Kind};
+use crate::geoarrow::{coord, describe, ensure_same_crs, Geo, Kind};
 
 /// `null_behavior` of `add_parts`.
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -62,31 +62,55 @@ fn part_kinds(kind: Kind) -> (Kind, Kind) {
     }
 }
 
+/// The dtype below the outer list levels of `dtype`, and how many of those there are.
+fn under_lists(mut dtype: &DataType) -> (&DataType, u8) {
+    let mut lists = 0;
+    while let DataType::List(inner) = dtype {
+        dtype = inner;
+        lists += 1;
+    }
+    (dtype, lists)
+}
+
 /// The multi-geometries `add_parts` gives back,
-/// and whether the parts are a list of them per row (a list or a multi-geometry),
-/// rather than one part.
+/// and whether the parts are a list of them per row rather than one part.
 fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     let geo = describe(input_fields[0].dtype())?;
     let (part, multi) = part_kinds(geo.kind);
     let parts = input_fields[1].dtype();
-    let found = match parts {
-        DataType::List(inner) => describe(inner).ok().filter(|found| found.kind == part),
-        dtype => describe(dtype)
-            .ok()
-            .filter(|found| found.kind == part || found.kind == multi),
+    let refused = || {
+        polars_err!(
+            SchemaMismatch: "expected the parts as one `{}` per row, a list of them, or a `{}`; \
+            a part can also be the list of its points (or of their bare coordinates){}, got: {}",
+            part.display(), multi.display(),
+            if part == Kind::Polygon { ", or of its rings as linestrings" } else { "" },
+            parts
+        )
     };
-    let Some(found) = found else {
-        polars_bail!(
-            SchemaMismatch: "expected the parts as one `{}` per row, a list of them, or a `{}`, got: {}",
-            part.display(), multi.display(), parts
-        );
+    let (inner, lists) = under_lists(parts);
+    let (nesting, dim) = match inner {
+        DataType::Extension(..) => {
+            let found = describe(inner).map_err(|_| refused())?;
+            let is_ring = part == Kind::Polygon && found.kind == Kind::LineString;
+            let accepted = [part, multi, Kind::Point].contains(&found.kind) || is_ring;
+            if !accepted {
+                return Err(refused());
+            }
+            ensure_same_crs(&geo, &found)?;
+            (found.kind.nesting(), found.dim)
+        }
+        // Bare coordinates declare no CRS, and take the geometry's.
+        bare => (0, coord::dimension_of(bare).ok_or_else(refused)?),
+    };
+    let listed = match (lists + nesting).checked_sub(part.nesting()) {
+        Some(0) => false,
+        Some(1) => true,
+        _ => return Err(refused()),
     };
     polars_ensure!(
-        found.dim == geo.dim,
-        SchemaMismatch: "the geometry is {} but the parts are {}", geo.dim.tag(), found.dim.tag()
+        dim == geo.dim,
+        SchemaMismatch: "the geometry is {} but the parts are {}", geo.dim.tag(), dim.tag()
     );
-    ensure_same_crs(&geo, &found)?;
-    let listed = found.kind == multi || matches!(parts, DataType::List(_));
     Ok((Geo::new(multi, geo.dim, geo.metadata.clone()), listed))
 }
 

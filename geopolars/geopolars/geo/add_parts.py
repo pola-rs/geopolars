@@ -63,12 +63,19 @@ def add_parts(
     | `PolygonXY[ZM]`, `MultiPolygonXY[ZM]` | `PolygonXY[ZM]`, `list[PolygonXY[ZM]]`, `MultiPolygonXY[ZM]` | `MultiPolygonXY[ZM]` |
     | anything else | | refused |
 
+    A part can also be given as its vertices, as points nested in lists in its shape:
+    a linestring as `list[PointXY]`, a polygon as `list[list[PointXY]]`.
+    A polygon can also be given as its rings, as `list[LineStringXY]`.
+    Bare coordinates (the storage of points) work in place of the points.
+    A list of parts is then a list of those.
+
     `geometry` and `parts` have the same number of rows,
     or one of them has a single row, which then goes with every row of the other.
 
     {keeps_dimension_and_crs}
     Parts of another dimension or another CRS are refused.
     A CRS declared on only one of the two counts as another CRS.
+    Bare coordinates declare no CRS, and take that of `geometry`.
 
     Nothing is checked: the parts are copied as they are.
 
