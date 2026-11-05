@@ -58,6 +58,7 @@ geometry editing
 - [ ] drop_dims(z: bool, m: bool)
 - [x] to_linestring() takes list of points, multipoint, linestring: `line_string_from_vertices`
 - [x] split a multi-geometry into a list of its parts: `parts`
+- [x] sort the parts of a geometry: `sort_parts`
 - [ ] is_continuous (for multilinestring)
 
 repair:

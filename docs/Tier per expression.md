@@ -15,7 +15,7 @@ the comment says when one without a CRS takes a different tier.
 | `area_planar` | - | ANP | - | ANP | A | shoelace; CRS ignored | - | ANP | - | ANP | A | sum of parts |
 | `area_geodesic` | - | ANP | - | ANP | B | PROJ + GGL; needs a CRS | - | ANP | - | ANP | B | sum of parts |
 | `length` | - | ANL | A/B | Reuses bits of `distance` [^2] | - | ANL | - | ANL | A/B | sum of parts | - | ANL |
-| `centroid` | C | returns the point | A | length-weighted; keeps z/m | A | shoelace; z/m area-weighted | C | fwd `mean_coordinate` | A | length-weighted parts | A | area-weighted parts |
+| `centroid` | C | RIG | A | length-weighted; keeps z/m | A | shoelace; z/m area-weighted | C | fwd `mean_coordinate` | A | length-weighted parts | A | area-weighted parts |
 | `exterior` | - | | - | | A | ring 0 | - | | - | | A | LPP |
 | `interior` | - | | - | | A | rings after the first | - | | - | | A | LPP |
 | `add_holes` | - | | - | | A | holes: linestring(s) or multilinestring | - | | - | | - | |
@@ -27,7 +27,8 @@ the comment says when one without a CRS takes a different tier.
 | `offset_curve` | - | | B | GEOS; z and m dropped [^1] | - | | - | | B | | - | |
 | `line_interpolate_point` | - | | B | GEOS; keeps z and m | - | | - | | B | parts walked in order | - | |
 | `reverse` | - | | A | | A | `reverse_holes` | A | ignores `nested` | A | `nested` | A | `nested`, `reverse_holes` |
-| `simplify` | C | returns the point | B | GEOS; z kept, m dropped [^6] | B | split by `buffer(0)` is a per-row error | C | returns the multipoint | B | | B | |
+| `sort_parts` | C | RIG | C | RIG | A | holes; exterior first | A | | A | | A | holes, then polygons |
+| `simplify` | C | RIG | B | GEOS; z kept, m dropped [^6] | B | split by `buffer(0)` is a per-row error | C | RIG | B | | B | |
 | `is_ring` | - | | A | ≥ 4 vertices, ends = x/y/z | - | | - | | A | parts chained into one ring | - | |
 | `is_simple` | A | always `True` | B | GEOS; x/y only | B | every ring as a line; GEOS | A | no two points equal in x/y | B | GEOS, as a whole | B | every ring as a line; GEOS |
 | `rings_overlap` | - | | B | hacked as polygon; GEOS | - | | - | | - | | - | |
@@ -45,7 +46,7 @@ the comment says when one without a CRS takes a different tier.
 | `filter_coordinates` | A | | A | | A | | A | | A | | A | |
 | `fix_out_of_bounds` | A | bounds from PROJ (plan-time) | A | | A | | A | | A | | A | |
 | `distance` | A/B | [^2] | - | | - | | - | | - | | - | |
-| `mean_coordinate` | C | returns the point | C | | C | SCC | C | | C | | C | SCC |
+| `mean_coordinate` | C | RIG | C | | C | SCC | C | | C | | C | SCC |
 | `translate` | A | impl differs for const or col | A | | A | | A | | A | | A | |
 | `rotate` | A | | A | | A | | A | | A | | A | |
 | `rotate_about_centroid` | - | | C | CAA | C | | - | | - | | - | |
@@ -87,6 +88,7 @@ In this table:
 - LPP = returns a list, one result per part (computed as for the single variant)
 - CAA = composed of `centroid` + `affine_about`
 - SCC = skips the closing coordinate of each ring
+- RIG = short-circuits, and returns the input geometry directly
 
 [^1]: GEOS does not support m values (for this operation),
       so its value is dropped, and an m-less variant is returned.

@@ -40,6 +40,7 @@ pub mod rings;
 pub mod rings_overlap;
 pub mod simplify;
 pub mod snap_to_grid;
+pub mod sort_parts;
 pub mod to_ccw;
 pub mod wkb;
 pub mod wkt;
