@@ -61,13 +61,14 @@ fn chunk_sorted(
         }
         Kind::MultiPoint => {
             let array = MultiPointArray::new(downcast(chunk, "a list of coordinates")?)?;
-            multi_points_sorted(&array, options)
+            multi_points_sorted(&array, options.descending)
                 .into_list_array()
                 .boxed()
         }
         Kind::Polygon => {
             let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
             polygons_with_holes_sorted(&array, options)
+                .into_polars()?
                 .into_list_array()
                 .boxed()
         }
@@ -81,6 +82,7 @@ fn chunk_sorted(
         Kind::MultiPolygon => {
             let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
             multi_polygons_sorted(&array, options)
+                .into_polars()?
                 .into_list_array()
                 .boxed()
         }

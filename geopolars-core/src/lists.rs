@@ -4,6 +4,7 @@ use std::ops::Range;
 
 use polars_arrow::array::ListArray;
 use polars_arrow::bitmap::Bitmap;
+use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::OffsetsBuffer;
 
 /// Lists that are all assumed to be valid:
@@ -119,6 +120,13 @@ impl List {
 
     pub fn with_validity(self, validity: Option<Bitmap>) -> Self {
         Self { validity, ..self }
+    }
+
+    /// These lists, with the lists at `failed` null too.
+    pub fn with_null_at(self, failed: &[usize]) -> Self {
+        let succeeded = crate::output::succeeded(self.len(), failed);
+        let validity = combine_validities_and(self.validity(), succeeded.as_ref());
+        self.with_validity(validity)
     }
 
     /// The lists, for once it is known which are there.

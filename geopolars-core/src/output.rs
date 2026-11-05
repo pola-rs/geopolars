@@ -124,7 +124,7 @@ pub fn list_array(
 
 /// Every one of `len` rows but those in `failed`.
 /// `None` when nothing failed.
-fn succeeded(len: usize, failed: &[usize]) -> Option<Bitmap> {
+pub(crate) fn succeeded(len: usize, failed: &[usize]) -> Option<Bitmap> {
     (!failed.is_empty()).then(|| {
         let mut succeeded = MutableBitmap::from_len_set(len);
         for &i in failed {

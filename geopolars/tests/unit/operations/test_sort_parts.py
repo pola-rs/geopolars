@@ -14,17 +14,25 @@ from polars.testing import assert_frame_equal, assert_series_equal
 import geopolars as gpl
 from geopolars import geo
 from geopolars.datatypes import (
+    LineStringType,
     LineStringXY,
     LineStringXYM,
     LineStringXYZ,
+    LineStringXYZM,
+    MultiLineStringType,
     MultiLineStringXY,
     MultiLineStringXYZM,
     MultiPointXY,
     MultiPointXYM,
     MultiPointXYZ,
+    MultiPointXYZM,
+    MultiPolygonType,
     MultiPolygonXY,
+    MultiPolygonXYZM,
     PointXY,
+    PolygonType,
     PolygonXY,
+    PolygonXYZM,
 )
 
 if TYPE_CHECKING:
@@ -148,7 +156,8 @@ def test_multipolygons_with_the_same_exterior_are_ordered_by_their_holes(
     expected = [bare, [_OUTER, _HOLE_A, _HOLE_C], with_b]
     if descending:
         # The holes are sorted from greatest to smallest too,
-        # so `_HOLE_C` now comes before `_HOLE_B`.
+        # so `with_a_and_c` is compared on `_HOLE_C` rather than `_HOLE_A`,
+        # and now comes before `with_b`.
         expected = [[_OUTER, _HOLE_C, _HOLE_A], with_b, bare]
     assert _sorted(df, descending=descending) == [expected]
 
@@ -161,6 +170,42 @@ def test_equal_parts_keep_their_order() -> None:
         out = _sorted(df, descending=descending)[0]
         signs = [math.copysign(1, point["x"]) for point in out]
         assert signs == [1, -1, 1]
+
+
+def _signed(xs: list[float]) -> list[tuple[float, float]]:
+    return [(x, math.copysign(1, x)) for x in xs]
+
+
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize(
+    "dtype",
+    [MultiLineStringXY(), PolygonXY(), MultiPolygonXY()],
+    ids=["multilinestring", "polygon", "multipolygon"],
+)
+def test_equal_parts_compared_vertex_by_vertex_keep_their_order(
+    dtype: GeoArrowType, descending: bool
+) -> None:
+    """These go through another sort than the points of a multipoint.
+    Enough parts that the order of equal ones does not depend on luck."""
+    zeros = [0.0 if k % 3 else -0.0 for k in range(100)]
+    xs = [5.0 if k % 4 == 0 else x for k, x in enumerate(zeros)]
+    parts = [_vertices((x, 0)) for x in xs]
+    if isinstance(dtype, PolygonXY):
+        row: list[object] = [_OUTER, *parts]
+    elif isinstance(dtype, MultiPolygonXY):
+        row = [[part] for part in parts]
+    else:
+        row = list(parts)
+    df = _column(dtype, row)
+
+    out = _sorted(df, descending=descending)[0]
+    if isinstance(dtype, PolygonXY):
+        out = out[1:]
+    elif isinstance(dtype, MultiPolygonXY):
+        out = [polygon[0] for polygon in out]
+    # Python's sort keeps equal values in their order too, also with `reverse=True`.
+    expected = sorted(xs, reverse=descending)
+    assert _signed([part[0]["x"] for part in out]) == _signed(expected)
 
 
 def test_nan_is_the_greatest_value() -> None:
@@ -223,32 +268,62 @@ def _with_holes_sorted(rings: pl.Expr, *, descending: bool) -> pl.Expr:
 def _sorted_by_polars(dtype: GeoArrowType, *, descending: bool) -> pl.Expr:
     """The storage of the `geometry` column, with its parts sorted by Polars."""
     storage = pl.col("geometry").ext.storage()
-    if isinstance(dtype, LineStringXY):
+    if isinstance(dtype, LineStringType):
         return storage
-    if isinstance(dtype, PolygonXY):
+    if isinstance(dtype, PolygonType):
         return _with_holes_sorted(storage, descending=descending)
-    if isinstance(dtype, MultiPolygonXY):
+    if isinstance(dtype, MultiPolygonType):
         return storage.list.eval(
             _with_holes_sorted(pl.element(), descending=descending)
         ).list.sort(descending=descending)
     return storage.list.sort(descending=descending)
 
 
+_KINDS = ["linestring", "multipoint", "multilinestring", "polygon", "multipolygon"]
+_DTYPES: dict[tuple[str, str], GeoArrowType] = {
+    ("linestring", "xy"): LineStringXY(),
+    ("linestring", "xyzm"): LineStringXYZM(),
+    ("multipoint", "xy"): MultiPointXY(),
+    ("multipoint", "xyzm"): MultiPointXYZM(),
+    ("multilinestring", "xy"): MultiLineStringXY(),
+    ("multilinestring", "xyzm"): MultiLineStringXYZM(),
+    ("polygon", "xy"): PolygonXY(),
+    ("polygon", "xyzm"): PolygonXYZM(),
+    ("multipolygon", "xy"): MultiPolygonXY(),
+    ("multipolygon", "xyzm"): MultiPolygonXYZM(),
+}
+
+
+def _assert_ordered_as_polars(
+    dtype: GeoArrowType,
+    df: pl.DataFrame,
+    reference: pl.DataFrame,
+    *,
+    descending: bool,
+    **kwargs: object,
+) -> None:
+    """`sort_parts` of `df` against Polars sorting the parts of `reference`.
+    Also on a slice, whose chunk has offsets that do not start at 0."""
+    expected = reference.select(_sorted_by_polars(dtype, descending=descending))
+    for offset, length in [(0, None), (10, 150)]:
+        out = df.slice(offset, length).select(
+            geo.sort_parts("geometry", descending=descending, **kwargs).ext.storage()  # type: ignore[arg-type]
+        )
+        assert_series_equal(out.to_series(), expected.to_series().slice(offset, length))
+
+
 @pytest.mark.parametrize("descending", [False, True])
-@pytest.mark.parametrize(
-    "dtype",
-    [MultiPointXY(), MultiLineStringXY(), PolygonXY(), MultiPolygonXY()],
-    ids=["multipoint", "multilinestring", "polygon", "multipolygon"],
-)
+@pytest.mark.parametrize("axes", ["xy", "xyzm"])
+@pytest.mark.parametrize("kind", _KINDS[1:])
 def test_parts_are_ordered_as_polars_sorts_them(
-    dtype: GeoArrowType, descending: bool
+    kind: str, axes: str, descending: bool
 ) -> None:
     rng = random.Random(42)
     # Few distinct values, so many parts tie on their first vertices.
     values = [0.0, 1.0, NAN]
 
     def point() -> dict[str, float]:
-        return {"x": rng.choice(values), "y": rng.choice(values)}
+        return {axis: rng.choice(values) for axis in axes}
 
     def line() -> Vertices:
         return [point() for _ in range(rng.randint(0, 3))]
@@ -257,24 +332,28 @@ def test_parts_are_ordered_as_polars_sorts_them(
         return [line() for _ in range(rng.randint(0, 4))]
 
     part = {
-        MultiPointXY: point,
-        MultiLineStringXY: line,
-        PolygonXY: line,
-        MultiPolygonXY: polygon,
-    }[type(dtype)]
-    rows = _random_rows(rng, part)
-    df = _column(dtype, *rows)
+        "multipoint": point,
+        "multilinestring": line,
+        "polygon": line,
+        "multipolygon": polygon,
+    }[kind]
+    dtype = _DTYPES[kind, axes]
+    df = _column(dtype, *_random_rows(rng, part))
 
-    out = df.select(geo.sort_parts("geometry", descending=descending).ext.storage())
-    expected = df.select(_sorted_by_polars(dtype, descending=descending))
-    assert_series_equal(out.to_series(), expected.to_series())
+    _assert_ordered_as_polars(dtype, df, df, descending=descending)
 
 
 # Rotating rings, with `rings="rotate"`.
 
 
+def _vertex_key(vertex: dict[str, float]) -> tuple[tuple[bool, float], ...]:
+    """Orders vertices as `sort_parts` does: NaN is greater than any other value."""
+    return tuple((math.isnan(v), 0.0 if math.isnan(v) else v) for v in vertex.values())
+
+
 def _rotated(ring: Vertices) -> Vertices:
-    """`ring` begun at its smallest rotation, closed again by its new first vertex."""
+    """`ring` begun at its smallest rotation, closed again by its new first vertex.
+    A ring that already starts there is returned as it is."""
     distinct = ring[:-1]
     if len(distinct) < 2:
         return ring
@@ -282,7 +361,7 @@ def _rotated(ring: Vertices) -> Vertices:
     # `min` keeps the earliest of equal rotations.
     k = min(
         range(len(rotations)),
-        key=lambda k: [tuple(vertex.values()) for vertex in rotations[k]],
+        key=lambda k: [_vertex_key(vertex) for vertex in rotations[k]],
     )
     return ring if k == 0 else [*rotations[k], rotations[k][0]]
 
@@ -295,8 +374,13 @@ def _rotated_rows(dtype: GeoArrowType, rows: list[object]) -> list[object]:
             return _rotated(row)  # type: ignore[arg-type]
         return [rotated(part, depth - 1) for part in row]  # type: ignore[attr-defined]
 
-    depth = {LineStringXY: 0, MultiLineStringXY: 1, PolygonXY: 1, MultiPolygonXY: 2}
-    return [rotated(row, depth[type(dtype)]) for row in rows]
+    if isinstance(dtype, LineStringType):
+        depth = 0
+    elif isinstance(dtype, MultiPolygonType):
+        depth = 2
+    else:
+        depth = 1
+    return [rotated(row, depth) for row in rows]
 
 
 def _rotated_out(df: pl.DataFrame, **kwargs: object) -> list:
@@ -318,9 +402,13 @@ def test_a_ring_through_its_smallest_vertex_twice_is_decided_by_the_next() -> No
 
 
 def test_a_ring_with_equally_small_starts_keeps_the_earliest() -> None:
-    df = _column(LineStringXY(), _ring((1, 1), (0, 0), (1, 1), (0, 0)))
+    """`-0.0` and `0.0` are equal, so the sign of the zero shows which start was kept."""
+    df = _column(LineStringXY(), _ring((1, 1), (0.0, 0), (1, 1), (-0.0, 0)))
 
-    assert _rotated_out(df) == [_ring((0, 0), (1, 1), (0, 0), (1, 1))]
+    out = _rotated_out(df)[0]
+
+    assert out == _ring((0, 0), (1, 1), (0, 0), (1, 1))
+    assert [math.copysign(1, vertex["x"]) for vertex in out] == [1, 1, -1, 1, 1]
 
 
 def test_a_ring_keeps_its_direction() -> None:
@@ -372,30 +460,80 @@ def test_multipolygons_that_only_differ_in_their_starts_tie() -> None:
     assert _rotated_out(df) == [[[ring], [ring]]]
 
 
-@pytest.mark.parametrize(
-    "line",
-    [
-        _vertices((0, 0), (1, 0), (1, 1), (0, 1)),
-        _vertices((0, 0), (1, 0), (0, 0)),
-    ],
-    ids=["open", "too short"],
+_RING_DTYPES = pytest.mark.parametrize(
+    "dtype",
+    [LineStringXY(), MultiLineStringXY(), PolygonXY(), MultiPolygonXY()],
+    ids=["linestring", "multilinestring", "polygon", "multipolygon"],
 )
-def test_a_line_that_is_not_a_ring_raises(line: Vertices) -> None:
-    ring = _ring((1, 0), (1, 1), (0, 0))
-    lines = _column(LineStringXY(), ring, line)
-    multi = _column(MultiLineStringXY(), [ring], [ring, line])
-
-    for df in [lines, multi]:
-        with pytest.raises(pl.exceptions.ComputeError, match="expects rings"):
-            _rotated_out(df)
-        assert _rotated_out(df, ignore_per_row_errors=True)[1] is None
 
 
-def test_a_line_that_is_not_a_ring_only_nulls_its_own_row() -> None:
-    ring = _ring((1, 0), (1, 1), (0, 0))
-    df = _column(LineStringXY(), ring, _vertices((0, 0), (1, 0)), None)
+def _row_with(dtype: GeoArrowType, ring: Vertices) -> object:
+    """A row of `dtype` with `ring` in it, as a hole for a polygon."""
+    if isinstance(dtype, LineStringType):
+        return ring
+    if isinstance(dtype, MultiLineStringType):
+        return [ring]
+    if isinstance(dtype, PolygonType):
+        return [_OUTER, ring]
+    return [[_OUTER, ring]]
 
-    assert _rotated_out(df, ignore_per_row_errors=True) == [_rotated(ring), None, None]
+
+@_RING_DTYPES
+@pytest.mark.parametrize(
+    "ring",
+    [_ring((1, 0), (1, 1), (0, 0)), _ring((0, 0), (1, 0), (1, 1))],
+    ids=["rotated", "already at its start"],
+)
+def test_a_ring_that_is_not_closed_raises(dtype: GeoArrowType, ring: Vertices) -> None:
+    """With every other ring already at its start, nothing moves,
+    but the row that failed still has to become null."""
+    good = _row_with(dtype, ring)
+    bad = _row_with(dtype, _vertices((0, 0), (1, 0), (1, 1), (0, 1)))
+    df = _column(dtype, good, bad, good, None)
+
+    with pytest.raises(pl.exceptions.ComputeError, match="expects closed rings"):
+        _rotated_out(df)
+    rotated = _rotated_rows(dtype, [good])[0]
+    assert _rotated_out(df, ignore_per_row_errors=True) == [
+        rotated,
+        None,
+        rotated,
+        None,
+    ]
+
+
+@_RING_DTYPES
+@pytest.mark.parametrize(
+    ("ring", "expected"),
+    [
+        (_vertices((1, 1)), _vertices((1, 1))),
+        (_vertices((1, 1), (1, 1)), _vertices((1, 1), (1, 1))),
+        (_vertices((2, 1), (1, 1), (2, 1)), _vertices((1, 1), (2, 1), (1, 1))),
+    ],
+    ids=["one vertex", "two vertices", "three vertices"],
+)
+def test_a_short_closed_ring_is_rotated(
+    dtype: GeoArrowType, ring: Vertices, expected: Vertices
+) -> None:
+    """Unlike `is_ring`, rotating only asks a ring to be closed."""
+    df = _column(dtype, _row_with(dtype, ring))
+
+    assert _rotated_out(df) == [_row_with(dtype, expected)]
+
+
+def test_the_rings_under_a_null_multipolygon_are_not_checked() -> None:
+    storage = pl.Series(
+        "geometry",
+        [[[_vertices((1, 0), (0, 0))]], [[_OUTER]]],
+        dtype=MultiPolygonXY()._geo_storage,
+    )
+    # `when/then` keeps the ring that is not closed under the null row.
+    masked = pl.select(
+        pl.when(pl.int_range(2) == 0).then(None).otherwise(storage).alias("geometry")
+    ).to_series()
+    df = pl.DataFrame(masked.ext.to(MultiPolygonXY()))
+
+    assert _rotated_out(df) == [None, [[_OUTER]]]
 
 
 def test_empty_lines_are_kept_and_sort_first() -> None:
@@ -434,42 +572,46 @@ def test_the_namespace_passes_on_rotating_rings() -> None:
 
 
 @pytest.mark.parametrize("descending", [False, True])
-@pytest.mark.parametrize(
-    "dtype",
-    [LineStringXY(), MultiLineStringXY(), PolygonXY(), MultiPolygonXY()],
-    ids=["linestring", "multilinestring", "polygon", "multipolygon"],
-)
+@pytest.mark.parametrize("axes", ["xy", "xyzm"])
+@pytest.mark.parametrize("kind", [kind for kind in _KINDS if kind != "multipoint"])
 def test_rotated_parts_are_ordered_as_polars_sorts_them(
-    dtype: GeoArrowType, descending: bool
+    kind: str, axes: str, descending: bool
 ) -> None:
     rng = random.Random(7)
+    # Few distinct values, so many rings share vertices and tie on their starts.
+    values = [0.0, 1.0, NAN]
 
     def ring() -> Vertices:
         if rng.random() < 0.1:
             return []
-        # Few distinct values, so many rings share vertices and tie on their starts.
-        values = [0.0, 1.0]
-        vertices = [
-            {"x": rng.choice(values), "y": rng.choice(values)}
-            for _ in range(rng.randint(3, 6))
+        # NaN is not equal to itself, so a first vertex with one in x, y or z cannot close.
+        first = {
+            axis: rng.choice(values[:2] if axis != "m" else values) for axis in axes
+        }
+        # Down to one vertex, as a closed ring of fewer than four is rotated too.
+        rest = [
+            {axis: rng.choice(values) for axis in axes}
+            for _ in range(rng.randint(0, 5))
         ]
-        return [*vertices, vertices[0]]
+        # m is not compared to close a ring, so it may differ on the closing vertex.
+        closing = {**first, **({"m": rng.choice(values)} if "m" in axes else {})}
+        return [first, *rest, closing]
 
     def polygon() -> list[Vertices]:
         return [ring() for _ in range(rng.randint(0, 4))]
 
-    if isinstance(dtype, LineStringXY):
+    if kind == "linestring":
         rows: list[object] = [
             None if rng.random() < 0.1 else ring() for _ in range(200)
         ]
     else:
-        part = polygon if isinstance(dtype, MultiPolygonXY) else ring
-        rows = _random_rows(rng, part)
+        rows = _random_rows(rng, polygon if kind == "multipolygon" else ring)
 
-    out = _column(dtype, *rows).select(
-        geo.sort_parts("geometry", descending=descending, rings="rotate").ext.storage()
+    dtype = _DTYPES[kind, axes]
+    _assert_ordered_as_polars(
+        dtype,
+        _column(dtype, *rows),
+        _column(dtype, *_rotated_rows(dtype, rows)),
+        descending=descending,
+        rings="rotate",
     )
-    expected = _column(dtype, *_rotated_rows(dtype, rows)).select(
-        _sorted_by_polars(dtype, descending=descending)
-    )
-    assert_series_equal(out.to_series(), expected.to_series())

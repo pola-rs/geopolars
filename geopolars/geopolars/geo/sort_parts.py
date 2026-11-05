@@ -84,13 +84,15 @@ def sort_parts(
     that makes it smallest in the order above, keeping its direction.
     Of starts that make it equally small, the earliest is kept.
     The parts are then compared as they are once rotated.
-    A rotated ring is closed again by its new first vertex,
+    A ring that already starts there is left as it is.
+    Any other ring is closed again by its new first vertex,
     which replaces the old closing vertex (and so its m).
     The start does not depend on `descending`.
-    A linestring has to be a ring (see `is_ring`), or empty.
+
+    With `rings="rotate"`, every ring has to be closed (see `close_rings`), or empty.
     Otherwise this raises, or with `ignore_per_row_errors=True`,
     makes its row null.
-    The rings of a polygon are assumed to be closed already (see `close_rings`).
+    A ring of fewer than four vertices is fine, unlike for `is_ring`.
 
     A null geometry stays null, and an empty one stays empty.
 
