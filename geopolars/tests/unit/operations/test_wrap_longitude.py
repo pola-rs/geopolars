@@ -105,7 +105,7 @@ def test_every_ring_of_a_polygon_counts() -> None:
     ).select(
         geo.polygons_from_rings_in_separate_columns(
             geo.line_string_from_columns("exterior_x", "y", crs=WGS84),
-            geo.line_string_from_columns("hole_x", "y"),
+            geo.line_string_from_columns("hole_x", "y", crs=WGS84),
         ).alias("polygon")
     )
 

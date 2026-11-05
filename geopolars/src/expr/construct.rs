@@ -643,15 +643,64 @@ fn is_list_of_rings(dtype: &DataType) -> bool {
     }
 }
 
+/// The dtype below the outer list levels of `dtype`, and how many of those there are.
+pub(super) fn under_lists(mut dtype: &DataType) -> (&DataType, u8) {
+    let mut lists = 0;
+    while let DataType::List(inner) = dtype {
+        dtype = inner;
+        lists += 1;
+    }
+    (dtype, lists)
+}
+
+/// `metadata` of a column of `dtype`, or `None` when it holds bare coordinates.
+pub(super) fn declared_metadata<'a>(
+    dtype: &DataType,
+    metadata: &'a ExtensionMetadata,
+) -> Option<&'a ExtensionMetadata> {
+    let (inner, _) = under_lists(dtype);
+    matches!(inner, DataType::Extension(..)).then_some(metadata)
+}
+
+/// Errors unless `a` and `b` declare the same CRS, or neither declares one.
+/// `None` is bare coordinates, which declare no CRS and take that of the other.
+/// They are called `names` in the error message.
+pub(super) fn ensure_same_crs_unless_bare(
+    a: Option<&ExtensionMetadata>,
+    b: Option<&ExtensionMetadata>,
+    names: (&str, &str),
+) -> PolarsResult<()> {
+    let (Some(a), Some(b)) = (a, b) else {
+        return Ok(());
+    };
+    let (name_a, name_b) = names;
+    match (a.declares_crs(), b.declares_crs()) {
+        (false, false) => Ok(()),
+        (true, true) => {
+            let (crs_a, crs_b) = (a.crs()?, b.crs()?);
+            polars_ensure!(
+                crs_a == crs_b,
+                SchemaMismatch: "the {name_a} and the {name_b} declare different CRSs, {crs_a} and {crs_b}; \
+                use `to_crs` to bring one onto the other first"
+            );
+            Ok(())
+        }
+        (true, false) | (false, true) => polars_bail!(
+            SchemaMismatch: "only one of the {name_a} and the {name_b} declares a CRS; \
+            declare the same one on both"
+        ),
+    }
+}
+
 /// Whether `holes` holds a list of rings per row (a list or a multilinestring),
 /// rather than one ring.
 /// They have to have the dimension of the `subject` they go into,
-/// and not declare another CRS than its `metadata` does.
+/// and declare the CRS its `metadata` does (see [ensure_same_crs_unless_bare]).
 pub(super) fn listed_holes(
     holes: &Field,
     subject: &str,
     dim: GeoDimension,
-    metadata: &ExtensionMetadata,
+    metadata: Option<&ExtensionMetadata>,
 ) -> PolarsResult<bool> {
     let refused = |_| {
         polars_err!(
@@ -673,23 +722,21 @@ pub(super) fn listed_holes(
         hole_dim == dim,
         SchemaMismatch: "the {subject} is {} but the holes are {}", dim.tag(), hole_dim.tag()
     );
-    if metadata.declares_crs() && hole_metadata.declares_crs() {
-        let (crs, hole_crs) = (metadata.crs()?, hole_metadata.crs()?);
-        polars_ensure!(
-            crs == hole_crs,
-            SchemaMismatch: "the {subject} and the holes declare different CRSs, {crs} and {hole_crs}; \
-            use `to_crs` to bring one onto the other first"
-        );
-    }
+    let hole_metadata = declared_metadata(holes.dtype(), &hole_metadata);
+    ensure_same_crs_unless_bare(metadata, hole_metadata, (subject, "holes"))?;
     Ok(listed)
 }
 
 /// The polygons `polygon_rings_in_separate_columns` builds,
 /// and whether the holes (if passed) are a list of rings per row.
 fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResult<(Geo, bool)> {
-    let (dim, metadata) = ring_of(input_fields[0].dtype())?;
+    let exterior = input_fields[0].dtype();
+    let (dim, metadata) = ring_of(exterior)?;
     let listed = match input_fields.get(1) {
-        Some(holes) => listed_holes(holes, "exterior", dim, &metadata)?,
+        Some(holes) => {
+            let declared = declared_metadata(exterior, &metadata);
+            listed_holes(holes, "exterior", dim, declared)?
+        }
         None => false,
     };
     Ok((

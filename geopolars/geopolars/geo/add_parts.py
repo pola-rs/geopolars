@@ -45,7 +45,7 @@ def _ensure_one_of(name: str, value: str, options: object) -> None:
         raise ValueError(msg)
 
 
-@doc()
+@doc(parts="parts", geometry="geometry")
 def add_parts(
     geometry: IntoExprColumn,
     parts: IntoExprColumn,
@@ -73,9 +73,8 @@ def add_parts(
     or one of them has a single row, which then goes with every row of the other.
 
     {keeps_dimension_and_crs}
-    Parts of another dimension or another CRS are refused.
-    A CRS declared on only one of the two counts as another CRS.
-    Bare coordinates declare no CRS, and take that of `geometry`.
+    Parts of another dimension are refused.
+    {same_crs}
 
     Nothing is checked: the parts are copied as they are.
 

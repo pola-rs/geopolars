@@ -24,9 +24,10 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::construct::{
-    fields_of, one_line_per_row, one_point_per_row, one_polygon_per_row, paired_rows, storage_of,
+    ensure_same_crs_unless_bare, fields_of, one_line_per_row, one_point_per_row,
+    one_polygon_per_row, paired_rows, storage_of, under_lists,
 };
-use crate::geoarrow::{coord, describe, ensure_same_crs, Geo, Kind};
+use crate::geoarrow::{coord, describe, Geo, Kind};
 
 /// `null_parts` of `add_parts`.
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -62,16 +63,6 @@ fn part_kinds(kind: Kind) -> (Kind, Kind) {
     }
 }
 
-/// The dtype below the outer list levels of `dtype`, and how many of those there are.
-fn under_lists(mut dtype: &DataType) -> (&DataType, u8) {
-    let mut lists = 0;
-    while let DataType::List(inner) = dtype {
-        dtype = inner;
-        lists += 1;
-    }
-    (dtype, lists)
-}
-
 /// The multi-geometries `add_parts` gives back,
 /// and whether the parts are a list of them per row rather than one part.
 fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
@@ -88,7 +79,7 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
         )
     };
     let (inner, lists) = under_lists(parts);
-    let (nesting, dim) = match inner {
+    let (nesting, dim, metadata) = match inner {
         DataType::Extension(..) => {
             let found = describe(inner).map_err(|_| refused())?;
             let is_ring = part == Kind::Polygon && found.kind == Kind::LineString;
@@ -96,12 +87,11 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
             if !accepted {
                 return Err(refused());
             }
-            ensure_same_crs(&geo, &found)?;
-            (found.kind.nesting(), found.dim)
+            (found.kind.nesting(), found.dim, Some(&**found.metadata))
         }
-        // Bare coordinates declare no CRS, and take the geometry's.
-        bare => (0, coord::dimension_of(bare).ok_or_else(refused)?),
+        bare => (0, coord::dimension_of(bare).ok_or_else(refused)?, None),
     };
+    ensure_same_crs_unless_bare(Some(geo.metadata), metadata, ("geometry", "parts"))?;
     let listed = match (lists + nesting).checked_sub(part.nesting()) {
         Some(0) => false,
         Some(1) => true,

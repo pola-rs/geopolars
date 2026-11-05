@@ -92,6 +92,10 @@ An empty geometry gives an empty {output}, and a null one a null {output}.""",
 The type, dimension and CRS of the output geometry are kept from the input.""",
     "keeps_dimension_and_crs": """\
 The result keeps the input's dimension and CRS.""",
+    "same_crs": """\
+`{parts}` have to declare the CRS of `{geometry}`;
+a CRS declared on only one of the two is refused too.
+Bare coordinates declare no CRS, so they go with any.""",
     "ignores_empty_and_invalid": """\
 This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",

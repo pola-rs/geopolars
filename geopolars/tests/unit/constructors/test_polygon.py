@@ -525,6 +525,19 @@ def test_separate_columns_take_linestrings() -> None:
     assert single["polygon"].ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
 
 
+def test_a_bare_exterior_goes_with_holes_in_any_crs() -> None:
+    df = pl.DataFrame(
+        {"exterior": [_EXTERIOR], "hole": [_HOLE]},
+        schema={"exterior": _XY_VERTICES, "hole": _XY_VERTICES},
+    ).with_columns(geo.line_string("hole", crs="EPSG:4326"))
+
+    out = df.select(
+        geo.polygons_from_rings_in_separate_columns("exterior", "hole")
+    ).to_series()
+
+    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
 def test_separate_columns_without_holes_build_the_exterior_alone() -> None:
     out = _from_separate_rings([_EXTERIOR])
 

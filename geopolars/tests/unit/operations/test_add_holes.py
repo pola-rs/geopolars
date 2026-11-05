@@ -213,6 +213,24 @@ def test_holes_in_another_crs_are_refused() -> None:
         lf.collect_schema()
 
 
+def test_holes_without_a_crs_are_refused() -> None:
+    lf = pl.LazyFrame([_polygons([_EXTERIOR], crs=RD), _lines(_HOLE)]).select(
+        geo.add_holes("polygon", "holes")
+    )
+
+    with pytest.raises(ComputeError, match="only one"):
+        lf.collect_schema()
+
+
+def test_holes_as_bare_vertices_go_with_any_crs() -> None:
+    holes = pl.Series("holes", [_HOLE], dtype=_XY_VERTICES)
+
+    out = _added(_polygons([_EXTERIOR], crs=RD), holes)
+
+    assert out.dtype == PolygonXY(crs=RD)
+    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
 def test_holes_of_another_kind_are_refused() -> None:
     lf = pl.LazyFrame(
         [_polygons([_EXTERIOR]), _polygons([_HOLE]).alias("holes")]

@@ -41,7 +41,7 @@ def _add_holes(
     )
 
 
-@doc()
+@doc(parts="holes", geometry="polygon")
 def add_holes(
     polygon: IntoExprColumn,
     holes: IntoExprColumn,
@@ -67,7 +67,8 @@ def add_holes(
     each with the holes of that row.
 
     The result keeps the polygon's dimension and CRS.
-    Holes of another dimension, or holes that declare another CRS, are refused.
+    Holes of another dimension are refused.
+    {same_crs}
 
     A null polygon gives a null polygon.
     A null `holes` value, or an empty list adds no holes.

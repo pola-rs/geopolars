@@ -35,7 +35,7 @@ fn holes_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
         geo.kind == Kind::Polygon,
         SchemaMismatch: "add_holes expects a polygon column, got: {}", dtype
     );
-    let listed = listed_holes(&input_fields[1], "polygon", geo.dim, geo.metadata)?;
+    let listed = listed_holes(&input_fields[1], "polygon", geo.dim, Some(geo.metadata))?;
     Ok((
         Geo::new(Kind::Polygon, geo.dim, geo.metadata.clone()),
         listed,
