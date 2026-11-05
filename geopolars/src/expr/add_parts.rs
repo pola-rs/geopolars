@@ -6,7 +6,7 @@ use geopolars_compute::inner_nulls::{
     multi_polygons_with_null_parts_marked, propagate_inner_nulls_of_line_strings,
     propagate_inner_nulls_of_multi_line_strings, propagate_inner_nulls_of_multi_points,
     propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_points,
-    propagate_inner_nulls_of_polygons, NullPartsMarked,
+    propagate_inner_nulls_of_polygons, MaskedParts,
 };
 use geopolars_compute::native::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
@@ -25,7 +25,6 @@ use serde::Deserialize;
 
 use super::construct::{
     fields_of, one_line_per_row, one_point_per_row, one_polygon_per_row, paired_rows, storage_of,
-    under_lists,
 };
 use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, Kind};
 
@@ -99,7 +98,7 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
             parts
         )
     };
-    let (inner, lists) = under_lists(parts);
+    let (inner, lists) = coord::under_lists(parts);
     let (nesting, dim, metadata) = match inner {
         DataType::Extension(..) => {
             let found = describe(inner).map_err(|_| refused())?;
@@ -145,7 +144,7 @@ fn point_parts(
     chunk: &dyn Array,
     listed: bool,
     kwargs: AddPartsKwargs,
-) -> PolarsResult<NullPartsMarked<MultiPointArray>> {
+) -> PolarsResult<MaskedParts<MultiPointArray>> {
     let storage = UncheckedStorage::new(chunk)?;
     let parts = match (listed, kwargs.null_parts) {
         (false, _) => one_point_per_row(propagate_inner_nulls_of_points(storage)).into(),
@@ -163,7 +162,7 @@ fn line_parts(
     chunk: &dyn Array,
     listed: bool,
     kwargs: AddPartsKwargs,
-) -> PolarsResult<NullPartsMarked<MultiLineStringArray>> {
+) -> PolarsResult<MaskedParts<MultiLineStringArray>> {
     let storage = UncheckedStorage::new(chunk)?;
     let parts = match (listed, kwargs.null_parts) {
         (false, _) => one_line_per_row(propagate_inner_nulls_of_line_strings(storage)).into(),
@@ -181,7 +180,7 @@ fn polygon_parts(
     chunk: &dyn Array,
     listed: bool,
     kwargs: AddPartsKwargs,
-) -> PolarsResult<NullPartsMarked<MultiPolygonArray>> {
+) -> PolarsResult<MaskedParts<MultiPolygonArray>> {
     let storage = UncheckedStorage::new(chunk)?;
     let parts = match (listed, kwargs.null_parts) {
         (false, _) => one_polygon_per_row(propagate_inner_nulls_of_polygons(storage)).into(),

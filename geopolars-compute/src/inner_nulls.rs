@@ -3,7 +3,7 @@
 //! nulls only at the outermost level.
 //! Of a multi-geometry, the parts with a null value can be marked in a mask instead.
 //! They stay in the view with arbitrary values,
-//! which is wrapped in a [NullPartsMarked] so that only a kernel taking the mask reads it.
+//! which is wrapped in a [MaskedParts] so that only a kernel taking the mask reads it.
 //! This is a separate pass, before any kernel reads the views.
 
 use geopolars_core::{
@@ -110,10 +110,10 @@ pub fn propagate_inner_nulls_of_multi_polygons(storage: UncheckedStorage) -> Mul
 /// The other `*_with_null_parts_marked` functions do the same for their kind.
 pub fn multi_points_with_null_parts_marked(
     storage: UncheckedStorage,
-) -> NullPartsMarked<MultiPointArray> {
+) -> MaskedParts<MultiPointArray> {
     let keep = parts_passing(&storage);
     let ([rows], coords) = levels_of(storage);
-    NullPartsMarked {
+    MaskedParts {
         view: MultiPointArray::from_parts(rows, coords),
         keep,
     }
@@ -121,16 +121,16 @@ pub fn multi_points_with_null_parts_marked(
 
 pub fn multi_line_strings_with_null_parts_marked(
     storage: UncheckedStorage,
-) -> NullPartsMarked<MultiLineStringArray> {
+) -> MaskedParts<MultiLineStringArray> {
     let keep = parts_passing(&storage);
     let ([rows, lines], coords) = levels_of(storage);
     let view = MultiLineStringArray::from_parts(rows, lines.ignoring_validity().clone(), coords);
-    NullPartsMarked { view, keep }
+    MaskedParts { view, keep }
 }
 
 pub fn multi_polygons_with_null_parts_marked(
     storage: UncheckedStorage,
-) -> NullPartsMarked<MultiPolygonArray> {
+) -> MaskedParts<MultiPolygonArray> {
     let keep = parts_passing(&storage);
     let ([rows, polygons, rings], coords) = levels_of(storage);
     let view = MultiPolygonArray::from_parts(
@@ -139,25 +139,46 @@ pub fn multi_polygons_with_null_parts_marked(
         rings.ignoring_validity().clone(),
         coords,
     );
-    NullPartsMarked { view, keep }
+    MaskedParts { view, keep }
 }
 
 /// A view and a mask of the parts of it to read.
 /// The parts with a null value in the input are unset in it,
-/// and after [without_empty_parts](NullPartsMarked::without_empty_parts) the empty ones too.
+/// and after [without_empty_parts](MaskedParts::without_empty_parts) the empty ones too.
 /// The unset parts may hold arbitrary values,
 /// so the view is not handed out as a plain one.
 // Only the `native` kernels read it.
 #[cfg_attr(not(feature = "native"), allow(dead_code))]
-pub struct NullPartsMarked<T> {
+pub struct MaskedParts<T> {
     pub(crate) view: T,
     /// One bit per part. `None` when every part is set.
     pub(crate) keep: Option<Bitmap>,
 }
 
 /// A plain view has no null values below its rows, so every part is set.
-impl<T> From<T> for NullPartsMarked<T> {
+impl<T> From<T> for MaskedParts<T> {
     fn from(view: T) -> Self {
         Self { view, keep: None }
+    }
+}
+
+impl MaskedParts<MultiPointArray> {
+    #[inline(always)]
+    pub fn rows(&self) -> &List {
+        &self.view.rows
+    }
+}
+
+impl MaskedParts<MultiLineStringArray> {
+    #[inline(always)]
+    pub fn rows(&self) -> &List {
+        &self.view.rows
+    }
+}
+
+impl MaskedParts<MultiPolygonArray> {
+    #[inline(always)]
+    pub fn rows(&self) -> &List {
+        &self.view.rows
     }
 }

@@ -11,19 +11,14 @@ use polars_arrow::compute::utils::combine_validities_and;
 
 use super::concatenated::{concatenated, Built};
 use super::is_empty::{line_strings_are_empty, points_are_empty, polygons_are_empty};
-use crate::inner_nulls::NullPartsMarked;
+use crate::inner_nulls::MaskedParts;
 
 /// `keep`, with every part that `empty` holds as `true` unset as well.
 fn keep_without_empty(keep: Option<Bitmap>, empty: BooleanArray) -> Option<Bitmap> {
     combine_validities_and(keep.as_ref(), Some(&!empty.values()))
 }
 
-impl NullPartsMarked<MultiPointArray> {
-    #[inline(always)]
-    pub fn rows(&self) -> &List {
-        &self.view.rows
-    }
-
+impl MaskedParts<MultiPointArray> {
     /// Unsets the empty points (every axis NaN) in the mask too.
     pub fn without_empty_parts(self) -> Self {
         let points = PointArray::new(Coords::from_valid(self.view.coords.clone(), None));
@@ -32,12 +27,7 @@ impl NullPartsMarked<MultiPointArray> {
     }
 }
 
-impl NullPartsMarked<MultiLineStringArray> {
-    #[inline(always)]
-    pub fn rows(&self) -> &List {
-        &self.view.rows
-    }
-
+impl MaskedParts<MultiLineStringArray> {
     /// Unsets the linestrings without vertices in the mask too.
     pub fn without_empty_parts(self) -> Self {
         let lines = LineStringArray::from_parts(
@@ -50,12 +40,7 @@ impl NullPartsMarked<MultiLineStringArray> {
     }
 }
 
-impl NullPartsMarked<MultiPolygonArray> {
-    #[inline(always)]
-    pub fn rows(&self) -> &List {
-        &self.view.rows
-    }
-
+impl MaskedParts<MultiPolygonArray> {
     /// Unsets the polygons without vertices in the mask too.
     pub fn without_empty_parts(self) -> Self {
         let polygons = PolygonArray::from_parts(
@@ -73,7 +58,7 @@ impl NullPartsMarked<MultiPolygonArray> {
 /// See [multi_line_strings_with_added_parts].
 pub fn multi_points_with_added_parts(
     base: &MultiPointArray,
-    added: &NullPartsMarked<MultiPointArray>,
+    added: &MaskedParts<MultiPointArray>,
     validity: Option<Bitmap>,
 ) -> MultiPointArray {
     let keep = added.keep.as_ref();
@@ -91,7 +76,7 @@ pub fn multi_points_with_added_parts(
 /// `base` and `added` have to have the same length and dimension.
 pub fn multi_line_strings_with_added_parts(
     base: &MultiLineStringArray,
-    added: &NullPartsMarked<MultiLineStringArray>,
+    added: &MaskedParts<MultiLineStringArray>,
     validity: Option<Bitmap>,
 ) -> MultiLineStringArray {
     let keep = added.keep.as_ref();
@@ -107,7 +92,7 @@ pub fn multi_line_strings_with_added_parts(
 /// See [multi_line_strings_with_added_parts].
 pub fn multi_polygons_with_added_parts(
     base: &MultiPolygonArray,
-    added: &NullPartsMarked<MultiPolygonArray>,
+    added: &MaskedParts<MultiPolygonArray>,
     validity: Option<Bitmap>,
 ) -> MultiPolygonArray {
     let keep = added.keep.as_ref();

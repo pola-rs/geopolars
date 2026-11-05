@@ -643,22 +643,12 @@ fn is_list_of_rings(dtype: &DataType) -> bool {
     }
 }
 
-/// The dtype below the outer list levels of `dtype`, and how many of those there are.
-pub(super) fn under_lists(mut dtype: &DataType) -> (&DataType, u8) {
-    let mut lists = 0;
-    while let DataType::List(inner) = dtype {
-        dtype = inner;
-        lists += 1;
-    }
-    (dtype, lists)
-}
-
 /// `metadata` of a column of `dtype`, or `None` when it holds bare coordinates.
 fn declared_metadata(
     dtype: &DataType,
     metadata: Arc<ExtensionMetadata>,
 ) -> Option<Arc<ExtensionMetadata>> {
-    let (inner, _) = under_lists(dtype);
+    let (inner, _) = coord::under_lists(dtype);
     matches!(inner, DataType::Extension(..)).then_some(metadata)
 }
 

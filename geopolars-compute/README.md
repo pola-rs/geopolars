@@ -29,9 +29,9 @@ Only the outer level may have nulls.
 All other levels, including the coordinate values, contain none.
 There is therefore no need to branch on what to do with nulls below the rows.
 Making sure of this is up to whoever builds the views.
-The one exception is the view inside a `NullPartsMarked`:
+The one exception is the view inside a `MaskedParts`:
 the parts unset in its mask may hold arbitrary values where the input had a null.
-Only code that takes a `NullPartsMarked` reads that view.
+Only code that takes a `MaskedParts` reads that view.
 It skips those parts, or masks out what it computed for them.
 Every kernel in turn has to give valid output.
 
