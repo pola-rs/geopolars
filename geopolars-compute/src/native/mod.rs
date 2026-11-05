@@ -5,6 +5,7 @@ mod affine;
 mod area;
 mod bounds;
 mod centroid;
+mod concatenated;
 mod coordinate_selection;
 mod count_coordinates;
 pub mod distance;
@@ -28,7 +29,7 @@ mod too_short;
 
 pub use add_parts::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
-    multi_polygons_with_added_parts, NullPartsMarked,
+    multi_polygons_with_added_parts,
 };
 pub use affine::{
     affine_line_strings, affine_multi_line_strings, affine_multi_points, affine_multi_polygons,

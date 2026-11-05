@@ -6,11 +6,11 @@ use geopolars_compute::inner_nulls::{
     multi_polygons_with_null_parts_marked, propagate_inner_nulls_of_line_strings,
     propagate_inner_nulls_of_multi_line_strings, propagate_inner_nulls_of_multi_points,
     propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_points,
-    propagate_inner_nulls_of_polygons,
+    propagate_inner_nulls_of_polygons, NullPartsMarked,
 };
 use geopolars_compute::native::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
-    multi_polygons_with_added_parts, NullPartsMarked,
+    multi_polygons_with_added_parts,
 };
 use geopolars_core::{
     downcast, Coords, LineStringArray, List, MultiLineStringArray, MultiPointArray,

@@ -27,7 +27,7 @@ use polars_arrow::array::ListArray;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
-use super::add_parts::{concatenated, Built, Nested};
+use super::concatenated::{concatenated, Built, Nested};
 
 /// Which of a polygon's rings `rings` to keep.
 type Keep = fn(Range<usize>) -> Range<usize>;

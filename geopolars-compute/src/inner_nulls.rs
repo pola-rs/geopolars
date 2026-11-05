@@ -12,8 +12,6 @@ use geopolars_core::{
 };
 use polars_arrow::bitmap::Bitmap;
 
-#[cfg(feature = "native")]
-use crate::native::NullPartsMarked;
 use crate::passing::rows_passing;
 
 /// The validity of the rows of `storage`, with every null value below a row moved out to it:
@@ -54,7 +52,6 @@ fn levels_of<const N: usize>(storage: UncheckedStorage) -> ([List; N], ValidCoor
 
 /// Which parts of the rows of `storage` have no null value in or below them.
 /// `None` when every part does.
-#[cfg(feature = "native")]
 fn parts_passing(storage: &UncheckedStorage) -> Option<Bitmap> {
     let below_parts = &storage.lists[1..];
     let lists: Vec<&ValidList> = below_parts.iter().map(List::ignoring_validity).collect();
@@ -111,7 +108,6 @@ pub fn propagate_inner_nulls_of_multi_polygons(storage: UncheckedStorage) -> Mul
 /// The points without a null value are set in the mask (see [parts_passing]).
 /// The other points stay in the view, with arbitrary values.
 /// The other `*_with_null_parts_marked` functions do the same for their kind.
-#[cfg(feature = "native")]
 pub fn multi_points_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> NullPartsMarked<MultiPointArray> {
@@ -123,7 +119,6 @@ pub fn multi_points_with_null_parts_marked(
     }
 }
 
-#[cfg(feature = "native")]
 pub fn multi_line_strings_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> NullPartsMarked<MultiLineStringArray> {
@@ -133,7 +128,6 @@ pub fn multi_line_strings_with_null_parts_marked(
     NullPartsMarked { view, keep }
 }
 
-#[cfg(feature = "native")]
 pub fn multi_polygons_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> NullPartsMarked<MultiPolygonArray> {
@@ -146,4 +140,24 @@ pub fn multi_polygons_with_null_parts_marked(
         coords,
     );
     NullPartsMarked { view, keep }
+}
+
+/// A view and a mask of the parts of it to read.
+/// The parts with a null value in the input are unset in it,
+/// and after [without_empty_parts](NullPartsMarked::without_empty_parts) the empty ones too.
+/// The unset parts may hold arbitrary values,
+/// so the view is not handed out as a plain one.
+// Only the `native` kernels read it.
+#[cfg_attr(not(feature = "native"), allow(dead_code))]
+pub struct NullPartsMarked<T> {
+    pub(crate) view: T,
+    /// One bit per part. `None` when every part is set.
+    pub(crate) keep: Option<Bitmap>,
+}
+
+/// A plain view has no null values below its rows, so every part is set.
+impl<T> From<T> for NullPartsMarked<T> {
+    fn from(view: T) -> Self {
+        Self { view, keep: None }
+    }
 }
