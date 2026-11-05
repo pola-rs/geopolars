@@ -80,8 +80,8 @@ def sort_parts(
     With `descending=True`, the parts are sorted from greatest to smallest.
     Equal parts keep their order either way.
 
-    With `rings="rotate"`, every ring first starts at the vertex
-    from which its vertices are smallest in the order above, keeping its direction.
+    With `rings="rotate"`, every ring is first rotated to start where its vertices
+    are smallest in the order above, keeping its direction.
     The closing vertex is left out of this comparison.
     Of starts that make it equally small, the earliest is kept.
     The parts are then compared as they are once rotated.
@@ -92,8 +92,8 @@ def sort_parts(
 
     With `rings="rotate"`, every ring has to be closed (see `close_rings`), or empty.
     This includes the linestrings that the table says are rotated.
-    Otherwise this raises, or with `ignore_per_row_errors=True`,
-    makes its row null.
+    Otherwise this raises.
+    With `ignore_per_row_errors=True`, such a row gives a null geometry instead.
     A ring of fewer than four vertices is fine, unlike for `is_ring`.
     A ring whose first vertex has NaN in x, y, or z never counts as closed,
     as NaN does not equal itself.

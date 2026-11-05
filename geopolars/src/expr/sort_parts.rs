@@ -26,7 +26,7 @@ enum RingsKwarg {
     Rotate,
 }
 
-/// See python
+/// See `sort_parts`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SortPartsKwargs {
