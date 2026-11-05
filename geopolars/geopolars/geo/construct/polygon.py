@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_one_of
+from geopolars.geo.add_parts import NullParts
 from geopolars.geo.construct._common import (
     _from_columns,
     _gather,
@@ -66,23 +67,28 @@ def polygons_from_rings_in_single_column(
     return _gather("polygon", rings, _polygon_kwargs(crs, close))
 
 
+@doc(parts="holes", part="hole", geometry="exterior")
 def polygons_from_rings_in_separate_columns(
     exterior: IntoExprColumn,
     holes: IntoExprColumn | None = None,
     *,
     crs: str | None = None,
     close: CloseRings | None = None,
+    null_parts: NullParts = "null",
 ) -> pl.Expr:
     """Build a `geoarrow.polygon` column out of an exterior ring and its holes.
 
     `exterior` holds one ring per polygon,
-    as a `geoarrow.linestring` or as a bare vertex list.
-    `holes` holds one ring per polygon, a list of them, or a multilinestring.
+    as a `geoarrow.linestring`, a `geoarrow.multipoint`, or a list of its points.
+    `holes` holds one ring per polygon, a list of them, or a multilinestring,
+    each ring spelled like the exterior.
+    Bare coordinates (the storage of points) work in place of the points.
     Without `holes`, no polygon has holes.
 
+    {paired_rows}
+
     A null exterior gives a null polygon.
-    A null `holes` value means the polygon has no holes.
-    A null ring among the holes, or a null vertex, makes the polygon null.
+    {null_parts}
     The CRS is `crs`, or else the exterior's,
     or else that of the holes when the exterior is bare coordinates.
     `crs` also sets the CRS of holes that declare none.
@@ -108,17 +114,20 @@ def polygons_from_rings_in_separate_columns(
         .group_by("relation")
         .agg("inner")
     )
+    # A relation without inner ways gets null holes, which `"drop"` leaves out.
     outer.join(inner, on="relation", how="left").select(
-        geo.polygons_from_rings_in_separate_columns("outer", "inner")
+        geo.polygons_from_rings_in_separate_columns("outer", "inner", null_parts="drop")
     )
     ```
     """
+    validate_one_of("null_parts", null_parts, NullParts)
     return register_plugin_function(
         plugin_path=LIB,
         args=[exterior] if holes is None else [exterior, holes],
         function_name="polygon_rings_in_separate_columns",
         is_elementwise=True,
-        kwargs=_polygon_kwargs(crs, close),
+        # Mirrors `SeparateRingsKwargs` in `src/expr/construct.rs`.
+        kwargs={**_polygon_kwargs(crs, close), "null_parts": null_parts},
     )
 
 

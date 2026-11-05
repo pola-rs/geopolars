@@ -98,6 +98,16 @@ or one of them has a single row, which then goes with every row of the other."""
     "same_crs": """\
 `{parts}` have to declare the same CRS as `{geometry}`, or neither may declare one.
 Bare coordinates are the exception, and go with any CRS.""",
+    "null_parts": """\
+What a null {part} does is set by `null_parts`.
+A null {part} is a null row of `{parts}`, a null in a list of them,
+or one with a null anywhere inside it (such as a vertex, or one of its values).
+An untyped null (`pl.lit(None)`) as `{parts}` is a null row on every row.
+
+| `null_parts` | a null {part} |
+| - | - |
+| `"drop"` | is left out; the other {parts} of the row are still added |
+| `"null"` | makes the result null |""",
     "ignores_empty_and_invalid": """\
 This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",

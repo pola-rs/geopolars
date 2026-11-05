@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import PolygonType
 from geopolars.geo._dispatch import _to_expr, on_geometry
+from geopolars.geo.add_parts import NullParts
 
 if TYPE_CHECKING:
     import polars as pl
@@ -28,6 +29,7 @@ def _add_holes(
     geometry: GeoArrowType,
     holes: IntoExprColumn,
     close: CloseRings | None,
+    null_parts: NullParts,
 ) -> pl.Expr:
     if not isinstance(geometry, PolygonType):
         msg = f"add_holes expects a polygon column, got: {geometry!r}"
@@ -37,21 +39,24 @@ def _add_holes(
         args=[column, _to_expr(holes)],
         function_name="add_holes",
         is_elementwise=True,
-        kwargs={"close": None if close is None else asdict(close)},
+        kwargs={
+            "close": None if close is None else asdict(close),
+            "null_parts": null_parts,
+        },
     )
 
 
-@doc(parts="holes", geometry="polygon")
+@doc(parts="holes", part="hole", geometry="polygon")
 def add_holes(
     polygon: IntoExprColumn,
     holes: IntoExprColumn,
     *,
     close: CloseRings | None = None,
+    null_parts: NullParts = "null",
 ) -> pl.Expr:
     """Add the rings of `holes` to each polygon as extra holes,
     after the holes it already has.
-    `holes` holds one linestring per polygon (or its bare vertex list),
-    a list of them, or a multilinestring.
+    `holes` holds one linestring per polygon, a list of them, or a multilinestring.
 
     | polygon | holes | out |
     | - | - | - |
@@ -59,6 +64,10 @@ def add_holes(
     | `PolygonXY[ZM]` | `list[LineStringXY[ZM]]` | `PolygonXY[ZM]` |
     | `PolygonXY[ZM]` | `MultiLineStringXY[ZM]` | `PolygonXY[ZM]` |
     | anything else | | refused |
+
+    A linestring can also be given as its vertices, as `list[PointXY]` or `MultiPointXY`.
+    Bare coordinates (the storage of points) work in place of the points.
+    A list of linestrings is then a list of those.
 
 
     {paired_rows}
@@ -71,9 +80,11 @@ def add_holes(
     {same_crs}
 
     A null polygon gives a null polygon.
-    A null `holes` value, or an empty list adds no holes.
+    {null_parts}
+
+    An empty list adds no holes,
+    and neither do the holes `null_parts="drop"` leaves out.
     The polygon's own rings are still checked, as described below.
-    A null ring or a null vertex among the holes makes the polygon null.
     An empty polygon that gets holes with vertices is null,
     as it has no exterior to put them in.
     Empty holes can still be added to it, and it stays an empty polygon.
@@ -90,7 +101,8 @@ def add_holes(
     df.select(geo.add_holes("parcel", "ponds"))
     ```
     """
+    validate_one_of("null_parts", null_parts, NullParts)
     return on_geometry(
         polygon,
-        lambda column, geometry: _add_holes(column, geometry, holes, close),
+        lambda column, geometry: _add_holes(column, geometry, holes, close, null_parts),
     )

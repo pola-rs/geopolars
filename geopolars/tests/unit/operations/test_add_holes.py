@@ -12,6 +12,7 @@ from geopolars.datatypes import (
     LineStringXY,
     LineStringXYZ,
     MultiLineStringXY,
+    MultiPointXY,
     PolygonXY,
 )
 from tests.unit.conftest import Dimension
@@ -123,13 +124,49 @@ def test_adding_the_holes_back_rebuilds_the_polygons(
     assert_frame_equal(out, dimension.polygons(ring_coords))
 
 
-def test_nulls() -> None:
+@pytest.mark.parametrize(
+    ("null_parts", "expected"),
+    [
+        ("null", [None, None, [_EXTERIOR], None, None]),
+        ("drop", [None, [_EXTERIOR], [_EXTERIOR], [_EXTERIOR, _HOLE], [_EXTERIOR]]),
+    ],
+)
+def test_nulls(null_parts: str, expected: list[object]) -> None:
     out = _added(
-        _polygons(None, [_EXTERIOR], [_EXTERIOR], [_EXTERIOR]),
-        _listed_lines([_HOLE], None, [], [_HOLE, None]),
+        _polygons(None, [_EXTERIOR], [_EXTERIOR], [_EXTERIOR], [_EXTERIOR]),
+        _listed_lines([_HOLE], None, [], [_HOLE, None], [[*_HOLE[:3], None]]),
+        null_parts=null_parts,
     )
 
-    assert out.ext.storage().to_list() == [None, [_EXTERIOR], [_EXTERIOR], None]
+    assert out.ext.storage().to_list() == expected
+
+
+@pytest.mark.parametrize(
+    ("null_parts", "expected"), [("null", [None]), ("drop", [[_EXTERIOR]])]
+)
+def test_an_untyped_null_is_a_null_row_of_holes(
+    null_parts: str, expected: list[object]
+) -> None:
+    df = pl.DataFrame([_polygons([_EXTERIOR])])
+
+    out = df.select(
+        geo.add_holes("polygon", pl.lit(None), null_parts=null_parts)
+    ).to_series()
+
+    assert out.ext.storage().to_list() == expected
+
+
+def test_holes_dropped_before_a_slice_stay_dropped() -> None:
+    df = pl.DataFrame(
+        [
+            _polygons([_EXTERIOR], [_EXTERIOR]),
+            _listed_lines([None, _OTHER_HOLE], [None, _HOLE, None, _THIRD_HOLE]),
+        ]
+    ).slice(1, 1)
+
+    out = df.select(geo.add_holes("polygon", "holes", null_parts="drop")).to_series()
+
+    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE, _THIRD_HOLE]]
 
 
 def test_sliced_columns() -> None:
@@ -150,9 +187,17 @@ def test_sliced_columns() -> None:
 
 
 def test_an_empty_polygon_has_no_room_for_holes() -> None:
-    out = _added(_polygons([], [], []), _listed_lines([_HOLE], [], None))
+    out = _added(
+        _polygons([], [], []), _listed_lines([_HOLE], [], None), null_parts="drop"
+    )
 
     assert out.ext.storage().to_list() == [None, [], []]
+
+
+def test_a_dropped_hole_takes_no_room_in_an_empty_polygon() -> None:
+    out = _added(_polygons([]), _listed_lines([[*_HOLE[:3], None]]), null_parts="drop")
+
+    assert out.ext.storage().to_list() == [[]]
 
 
 def test_an_empty_hole_can_be_added_to_an_empty_polygon() -> None:
@@ -234,12 +279,23 @@ def test_holes_as_bare_vertices_go_with_any_crs() -> None:
     assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
 
 
+def test_holes_as_multipoints_are_accepted() -> None:
+    multi_points = pl.Series("holes", [_HOLE], dtype=_XY_VERTICES).ext.to(MultiPointXY())
+    listed = multi_points.implode()
+
+    single = _added(_polygons([_EXTERIOR]), multi_points)
+    several = _added(_polygons([_EXTERIOR]), listed)
+
+    assert single.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+    assert several.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
 def test_holes_of_another_kind_are_refused() -> None:
     lf = pl.LazyFrame(
         [_polygons([_EXTERIOR]), _polygons([_HOLE]).alias("holes")]
     ).select(geo.add_holes("polygon", "holes"))
 
-    with pytest.raises(ComputeError, match="expected the holes as one ring per row"):
+    with pytest.raises(ComputeError, match="expected the holes as one `linestring`"):
         lf.collect_schema()
 
 

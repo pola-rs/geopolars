@@ -234,6 +234,12 @@ def test_polygons(
         (_polygons(_P), _bare([_Q], 2), [[_P, _Q]]),
         (_polygons(_P), _bare([[_Q, _P]], 3), [[_P, _Q, _P]]),
         (_polygons(_P), _multi_lines(_Q, name="parts"), [[_P, _Q]]),
+        (_polygons(_P), _nested([_Q], pl.List(_XY), MultiPointXY(), 1), [[_P, _Q]]),
+        (
+            _polygons(_P),
+            _nested([[_Q, _P]], pl.List(_XY), MultiPointXY(), 2),
+            [[_P, _Q, _P]],
+        ),
         (
             _polygons(_P),
             _nested([[_Q, _P]], pl.List(pl.List(_XY)), MultiLineStringXY(), 1),

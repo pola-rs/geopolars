@@ -39,7 +39,7 @@ def _add_parts(
     )
 
 
-@doc(parts="parts", geometry="geometry")
+@doc(parts="parts", part="part", geometry="geometry")
 def add_parts(
     geometry: IntoExprColumn,
     parts: IntoExprColumn,
@@ -59,7 +59,8 @@ def add_parts(
 
     A part can also be given as its vertices, as points nested in lists in its shape:
     a linestring as `list[PointXY]` or `MultiPointXY`, a polygon as `list[list[PointXY]]`.
-    A polygon can also be given as its rings, as `list[LineStringXY]` or `MultiLineStringXY`.
+    A polygon can also be given as its rings,
+    as `list[LineStringXY]`, `list[MultiPointXY]` or `MultiLineStringXY`.
     Bare coordinates (the storage of points) work in place of the points.
     A list of parts is then a list of those.
 
@@ -72,15 +73,7 @@ def add_parts(
     The parts are not checked for validity: they are copied as they are.
 
     A null geometry gives a null result.
-    What a null among the parts does is set by `null_parts`.
-    A null part is a null row of `parts`, a null in a list of parts,
-    or a part with a null anywhere inside it (a ring, a vertex, or one of its values).
-    An untyped null (`pl.lit(None)`) as `parts` is a null row on every row.
-
-    | `null_parts` | a null part |
-    | - | - |
-    | `"drop"` | is left out; the other parts of the row are still added |
-    | `"null"` | makes the result null |
+    {null_parts}
 
     `"drop"` suits a list of parts aggregated from rows of which some are null.
 

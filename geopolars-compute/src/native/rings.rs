@@ -28,6 +28,7 @@ use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
 use super::concatenated::{concatenated, Built, Nested};
+use crate::inner_nulls::MaskedParts;
 
 /// Which of a polygon's rings `rings` to keep.
 type Keep = fn(Range<usize>) -> Range<usize>;
@@ -267,22 +268,46 @@ pub fn close_open_rings<const Z: bool>(
 }
 
 /// `polygons`, each followed by the linestrings on the same row of `holes` as extra holes.
-/// A null row of `holes` adds no holes.
+/// A null row of `holes` adds no holes,
+/// and only the linestrings set in its mask are added.
 /// Without `holes`, the polygons are copied as they are.
 /// The rows are null where `validity` says,
 /// which has to cover the null rows of `polygons`.
 ///
 /// `polygons` and `holes` have to have the same length and dimension.
-/// The vertices are copied into new buffers, as one slice per axis per row of each.
+/// The vertices are copied into new buffers, one slice per axis per run of copied rings.
 pub fn polygons_with_added_holes(
     polygons: &PolygonArray,
-    holes: Option<&MultiLineStringArray>,
+    holes: Option<&MaskedParts<MultiLineStringArray>>,
     validity: Option<Bitmap>,
 ) -> PolygonArray {
+    let keep = holes.and_then(|holes| holes.keep.as_ref());
+    let holes = holes.map(|holes| Nested::from(&holes.view));
     let Built {
         rows,
         levels: [rings],
         coords,
-    } = concatenated(polygons.into(), holes.map(Nested::from), None, validity);
+    } = concatenated(polygons.into(), holes, keep, validity);
     PolygonArray::from_parts(rows, rings, coords)
+}
+
+/// Where a polygon has room for its holes:
+/// everywhere but a polygon without rings that gets holes with vertices.
+/// Only the holes set in the mask count.
+/// Without this, its first hole would become its exterior, and pass validation.
+pub fn have_room_for_holes(
+    polygons: &PolygonArray,
+    holes: &MaskedParts<MultiLineStringArray>,
+) -> Bitmap {
+    let (rows, lines) = (&holes.view.rows, &holes.view.lines);
+    let is_kept = |line: usize| holes.keep.as_ref().is_none_or(|keep| keep.get_bit(line));
+    (0..polygons.rows.len())
+        .map(|i| {
+            !polygons.rows.range(i).is_empty()
+                || !rows.is_valid(i)
+                || rows
+                    .range(i)
+                    .all(|line| !is_kept(line) || lines.range(line).is_empty())
+        })
+        .collect()
 }
