@@ -40,7 +40,8 @@
 //!
 //! ## `ROTATE_RINGS`
 //!
-//! The kernels of every kind with rings are generic over `ROTATE_RINGS`.
+//! The multilinestring, polygon, and multipolygon kernels are generic over `ROTATE_RINGS`.
+//! Linestrings are only ever rotated, and multipoints never.
 //! If `ROTATE_RINGS=true`, every ring is rotated first, and the parts are compared as they are then.
 
 use std::cmp::Ordering;
@@ -475,8 +476,10 @@ impl PartSorter {
         self.push_polygon_order_of::<Z, M, DESCENDING, usize>(multi, ring_order, order);
     }
 
-    /// The offset of the vertex `ring` starts at once rotated to its smallest rotation,
-    /// as compared in [the module](self).
+    /// The vertex `ring` starts at once rotated to its smallest rotation,
+    /// counted from its first vertex (not an index into the coordinates).
+    /// Rotations are compared ascending, whatever `DESCENDING` is,
+    /// and without the closing vertex.
     /// Of rotations that are equal, the earliest is taken.
     /// `ring` has to be closed or empty (see [the module](self#rotated-rings-have-to-be-closed-or-empty)).
     pub fn ring_start<const Z: bool, const M: bool>(&mut self, ring: ScalarLineString) -> usize {
@@ -822,7 +825,8 @@ where
         array.rows.clone()
     };
     let mut sorter = PartSorter::default();
-    // The polygons of a null row are sorted (and their rings rotated) too, without being checked.
+    // `ring_order` is indexed by ring, so it needs the rings of every polygon, those of null rows too.
+    // Those are sorted (and rotated) without being checked.
     // That does no harm, as the row is masked.
     let mut ring_order: Vec<Entry<ROTATE_RINGS>> = Vec::with_capacity(rings.len());
     for polygon in polygons.ranges() {

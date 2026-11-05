@@ -46,7 +46,7 @@ def _sort_parts(
     )
 
 
-@doc()
+@doc(output="geometry")
 def sort_parts(
     geometry: IntoExprColumn,
     *,
@@ -81,7 +81,8 @@ def sort_parts(
     Equal parts keep their order either way.
 
     With `rings="rotate"`, every ring first starts at the vertex
-    that makes it smallest in the order above, keeping its direction.
+    from which its vertices are smallest in the order above, keeping its direction.
+    The closing vertex is left out of this comparison.
     Of starts that make it equally small, the earliest is kept.
     The parts are then compared as they are once rotated.
     A ring that already starts there is left as it is.
@@ -90,11 +91,14 @@ def sort_parts(
     The start does not depend on `descending`.
 
     With `rings="rotate"`, every ring has to be closed (see `close_rings`), or empty.
+    This includes the linestrings that the table says are rotated.
     Otherwise this raises, or with `ignore_per_row_errors=True`,
     makes its row null.
     A ring of fewer than four vertices is fine, unlike for `is_ring`.
+    A ring whose first vertex has NaN in x, y, or z never counts as closed,
+    as NaN does not equal itself.
 
-    A null geometry stays null, and an empty one stays empty.
+    {empty_and_null}
 
     ```python
     df.select(geo.sort_parts("islands", rings="rotate"))
