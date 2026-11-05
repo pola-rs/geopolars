@@ -19,6 +19,8 @@ pub enum GeoComputeError {
     },
     /// A linestring that has to be a ring, but is not one.
     NotARing { vertices: usize },
+    /// A ring that has to be closed or empty, but is neither.
+    NotClosed { vertices: usize },
     /// A coordinate with a NaN or infinite x or y, which GEOS cannot take.
     NotFinite { position: (f64, f64) },
     /// A NaN or infinite distance.
@@ -59,6 +61,11 @@ impl fmt::Display for GeoComputeError {
                 "expects rings (at least {MIN_RING_VERTICES} vertices, the last at the first), \
                 got a linestring of {vertices} vertices that is not one"
             ),
+            Self::NotClosed { vertices } => write!(
+                f,
+                "expects closed rings (the last vertex at the first) or empty ones, \
+                got a ring of {vertices} vertices that is not closed"
+            ),
             Self::NotFinite { position: (x, y) } => write!(
                 f,
                 "GEOS expects finite x and y, got ({x}, {y}). \
@@ -83,6 +90,7 @@ impl std::error::Error for GeoComputeError {
             Self::Reproject { source, .. } => Some(source),
             Self::Transformation { .. }
             | Self::NotARing { .. }
+            | Self::NotClosed { .. }
             | Self::NotFinite { .. }
             | Self::NotFiniteDistance { .. }
             | Self::NegativeOneSidedDistance { .. } => None,

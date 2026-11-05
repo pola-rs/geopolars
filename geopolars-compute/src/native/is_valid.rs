@@ -10,7 +10,6 @@
 //! The ring closure is generic over `Z`.
 //! If `Z=true`, a ring has to close in z as well.
 
-#[cfg(feature = "geos")]
 use std::ops::Range;
 
 use geopolars_core::{same_place, ValidCoords, ValidList};
@@ -18,15 +17,22 @@ use geopolars_core::{same_place, ValidCoords, ValidList};
 use geopolars_core::{ScalarPolygon, MIN_RING_VERTICES};
 use polars_arrow::bitmap::Bitmap;
 
+/// Whether `ring` is empty or closed, as GeoArrow asks.
+/// Unlike [is_ring](geopolars_core::is_ring), this asks for no minimum number of vertices.
+#[inline(always)]
+pub(crate) fn is_closed_or_empty<const Z: bool>(coords: &ValidCoords, ring: Range<usize>) -> bool {
+    ring.is_empty() || same_place::<Z>(coords, ring.start, ring.end - 1)
+}
+
 fn rings_are_closed_with<const Z: bool>(rings: &ValidList, coords: &ValidCoords) -> Bitmap {
     Bitmap::from_iter(
         rings
             .ranges()
-            .map(|ring| ring.is_empty() || same_place::<Z>(coords, ring.start, ring.end - 1)),
+            .map(|ring| is_closed_or_empty::<Z>(coords, ring)),
     )
 }
 
-/// Whether each of `rings` is empty or closed, as GeoArrow asks.
+/// Whether each of `rings` passes [is_closed_or_empty].
 pub(crate) fn rings_are_closed(rings: &ValidList, coords: &ValidCoords) -> Bitmap {
     let z = coords.dim().has_z();
     with_const_flags!(Z = z; rings_are_closed_with::<Z>(rings, coords))

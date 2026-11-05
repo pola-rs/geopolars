@@ -207,6 +207,17 @@ impl ValidCoords {
         Self::from_axes((x, y, Z.then_some(z), M.then_some(m)))
     }
 
+    /// The coordinates at `indices`, in order, copied into new buffers.
+    pub fn gathered(&self, indices: &[usize]) -> Self {
+        let gather = |axis: &[f64]| indices.iter().map(|&i| axis[i]).collect::<Vec<_>>();
+        Self::from_axes((
+            gather(&self.x),
+            gather(&self.y),
+            self.z.as_deref().map(gather),
+            self.m.as_deref().map(gather),
+        ))
+    }
+
     pub(crate) fn into_axes(self) -> BufferAxes {
         (self.x, self.y, self.z, self.m)
     }
