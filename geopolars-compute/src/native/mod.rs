@@ -1,5 +1,6 @@
 //! Kernels of our own, working straight off the GeoArrow buffers.
 
+mod add_parts;
 mod affine;
 mod area;
 mod bounds;
@@ -25,6 +26,11 @@ mod selected_coords;
 mod snap_to_grid;
 mod too_short;
 
+pub use add_parts::{
+    multi_line_strings_with_added_parts, multi_line_strings_with_kept_parts,
+    multi_points_with_added_parts, multi_points_with_kept_parts, multi_polygons_with_added_parts,
+    multi_polygons_with_kept_parts,
+};
 pub use affine::{
     affine_line_strings, affine_multi_line_strings, affine_multi_points, affine_multi_polygons,
     affine_points, affine_polygons, AffineMatrix, RowShift,

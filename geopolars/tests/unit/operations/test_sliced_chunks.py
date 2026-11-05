@@ -118,6 +118,11 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         lambda g: geo.join_line_strings(g, gaps="split", drop_repeated_joins=True),
         {LineStringXY, MultiPointXY, PolygonXY, MultiPolygonXY},
     ),
+    "add_parts": (lambda g: geo.add_parts(g, g), set()),
+    "add_parts propagate skip": (
+        lambda g: geo.add_parts(g, g, null_behavior="propagate", empty_behavior="skip"),
+        set(),
+    ),
 }
 
 

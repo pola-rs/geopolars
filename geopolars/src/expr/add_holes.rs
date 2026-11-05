@@ -12,7 +12,8 @@ use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use super::construct::{
-    assembled_validity, fields_of, holes_per_row, listed_holes, storage_of, validated_polygons,
+    assembled_validity, fields_of, holes_per_row, listed_holes, paired_rows, storage_of,
+    validated_polygons,
 };
 use crate::geoarrow::{describe, Geo, Kind};
 
@@ -83,12 +84,7 @@ fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> 
     let (geo, listed) = holes_added(&fields_of(inputs))?;
     let polygons = inputs[0].ext()?.storage();
     let holes = storage_of(&inputs[1])?;
-    let (polygons, holes) = match (polygons.len(), holes.len()) {
-        (n, m) if n == m => (polygons.rechunk(), holes.rechunk()),
-        (n, 1) => (polygons.rechunk(), holes.new_from_index(0, n).rechunk()),
-        (1, m) => (polygons.new_from_index(0, m).rechunk(), holes.rechunk()),
-        (n, m) => polars_bail!(ShapeMismatch: "the polygons have {n} rows but the holes have {m}"),
-    };
+    let (polygons, holes) = paired_rows(polygons, &holes, ("polygons", "holes"))?;
 
     let rows = polygons.list()?.downcast_as_array();
     let chunk = chunk_with_added_holes(rows, holes.chunks()[0].as_ref(), listed, kwargs.close)?;

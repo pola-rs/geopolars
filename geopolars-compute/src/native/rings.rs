@@ -27,6 +27,8 @@ use polars_arrow::array::ListArray;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
+use super::add_parts::{concatenated, Built, Nested};
+
 /// Which of a polygon's rings `rings` to keep.
 type Keep = fn(Range<usize>) -> Range<usize>;
 
@@ -264,30 +266,6 @@ pub fn close_open_rings<const Z: bool>(
     ))
 }
 
-/// The vertices one valid row of [polygons_with_added_holes] copies.
-struct CopiedVertices {
-    /// In the polygons' coordinates.
-    polygon: Range<usize>,
-    /// In the holes' coordinates.
-    holes: Range<usize>,
-}
-
-/// One axis of the polygons and of the holes,
-/// with every row's polygon followed by its holes, in `len` values.
-fn assembled_axis(
-    polygons: &[f64],
-    holes: &[f64],
-    copies: &[CopiedVertices],
-    len: usize,
-) -> Vec<f64> {
-    let mut assembled = Vec::with_capacity(len);
-    for copy in copies {
-        assembled.extend_from_slice(&polygons[copy.polygon.clone()]);
-        assembled.extend_from_slice(&holes[copy.holes.clone()]);
-    }
-    assembled
-}
-
 /// `polygons`, each followed by the linestrings on the same row of `holes` as extra holes.
 /// A null row of `holes` adds no holes.
 /// Without `holes`, the polygons are copied as they are.
@@ -301,71 +279,10 @@ pub fn polygons_with_added_holes(
     holes: Option<&MultiLineStringArray>,
     validity: Option<Bitmap>,
 ) -> PolygonArray {
-    let len = polygons.rows.len();
-    if let Some(holes) = holes {
-        assert_eq!(holes.rows.len(), len, "polygons and holes differ in length");
-        assert_eq!(
-            holes.coords.dim(),
-            polygons.coords.dim(),
-            "polygons and holes differ in dimension"
-        );
-    }
-    let is_valid = |i: usize| validity.as_ref().is_none_or(|validity| validity.get_bit(i));
-    const NO_OVERFLOW: &str = "no more items than the input";
-
-    // One pass builds the row and ring offsets, and the vertex ranges of each row
-    // The coordinates are copied per axis afterwards from those ranges
-    let hole_lines = holes.map_or(0, |holes| holes.lines.len());
-    let mut row_offsets = Offsets::<i64>::with_capacity(len);
-    let mut ring_offsets = Offsets::<i64>::with_capacity(polygons.rings.len() + hole_lines);
-    let mut copies = Vec::with_capacity(len);
-    let mut coords_len = 0;
-    for i in 0..len {
-        // A null row's offsets point anywhere, so it takes nothing.
-        if !is_valid(i) {
-            row_offsets.try_push(0).expect(NO_OVERFLOW);
-            continue;
-        }
-        let rings = polygons.rows.range(i);
-        let mut ring_count = rings.len();
-        // TODO: `try_extend_from_slice` (here and for the holes) is not inlined.
-        // With only a few rings per call, the call overhead is a large part of its cost.
-        // It took ~5.5 ns/row of ~52 in a release profile
-        // (1M polygons with 1 exterior + 2-3 holes of 5 vertices).
-        // An inlined loop of our own could win most of that back,
-        // or we can contribute upstream?
-        ring_offsets
-            .try_extend_from_slice(polygons.rings.offsets(), rings.start, rings.len())
-            .expect(NO_OVERFLOW);
-        let mut copy = CopiedVertices {
-            polygon: polygons.rings.span(rings),
-            holes: 0..0,
-        };
-        if let Some(holes) = holes.filter(|holes| holes.rows.is_valid(i)) {
-            let lines = holes.rows.range(i);
-            ring_count += lines.len();
-            ring_offsets
-                .try_extend_from_slice(holes.lines.offsets(), lines.start, lines.len())
-                .expect(NO_OVERFLOW);
-            copy.holes = holes.lines.span(lines);
-        }
-        row_offsets.try_push(ring_count).expect(NO_OVERFLOW);
-        coords_len += copy.polygon.len() + copy.holes.len();
-        copies.push(copy);
-    }
-
-    let (polygon, hole) = (&polygons.coords, holes.map(|holes| &holes.coords));
-    let axis = |polygons: &[f64], holes: Option<&[f64]>| {
-        assembled_axis(polygons, holes.unwrap_or_default(), &copies, coords_len)
-    };
-    PolygonArray::from_parts(
-        List::from_offsets(row_offsets.into(), validity),
-        ValidList::from_offsets(ring_offsets.into()),
-        ValidCoords::from_axes((
-            axis(polygon.x(), hole.map(ValidCoords::x)),
-            axis(polygon.y(), hole.map(ValidCoords::y)),
-            polygon.z().map(|z| axis(z, hole.and_then(ValidCoords::z))),
-            polygon.m().map(|m| axis(m, hole.and_then(ValidCoords::m))),
-        )),
-    )
+    let Built {
+        rows,
+        levels: [rings],
+        coords,
+    } = concatenated(polygons.into(), holes.map(Nested::from), validity);
+    PolygonArray::from_parts(rows, rings, coords)
 }

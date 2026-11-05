@@ -9,6 +9,7 @@
 //! matches on the [`Kind`](crate::geoarrow::Kind) exhaustively.
 
 pub mod add_holes;
+pub mod add_parts;
 pub mod affine;
 pub mod area;
 pub mod bounds;

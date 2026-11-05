@@ -68,8 +68,8 @@ repair:
 ## Two-column operations
 
 - [x] Adding additional holes to polygons from linestrings: `add_holes`
+- [x] Adding list[linestring] to multilinestring/list[polygon] to multipolygon etc.: `add_parts`
 - [ ] equality: (are two shapes the same?)
-- [ ] Adding list[linestring] to multilinestring/list[polygon] to multipolygon etc.
 
 Classic binary predicates:
 

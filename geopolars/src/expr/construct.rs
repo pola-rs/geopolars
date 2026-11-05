@@ -21,8 +21,8 @@ use geopolars_compute::native::{
 };
 use geopolars_compute::with_const_flags;
 use geopolars_core::{
-    LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PolygonArray, UncheckedStorage,
-    ValidCoords, ValidList,
+    LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
+    PolygonArray, UncheckedStorage, ValidCoords, ValidList,
 };
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;
@@ -669,19 +669,33 @@ pub(super) fn listed_holes(
             _ => (false, ring_of(dtype).map_err(refused)?),
         },
     };
+    ensure_fits(
+        (subject, dim, metadata),
+        ("holes", hole_dim, &hole_metadata),
+    )?;
+    Ok(listed)
+}
+
+/// That `added` has the dimension of the `subject` it goes into,
+/// and does not declare another CRS than it does.
+/// Each is given by its name in the error messages, its dimension and its metadata.
+pub(super) fn ensure_fits(
+    (subject, dim, metadata): (&str, GeoDimension, &ExtensionMetadata),
+    (added, added_dim, added_metadata): (&str, GeoDimension, &ExtensionMetadata),
+) -> PolarsResult<()> {
     polars_ensure!(
-        hole_dim == dim,
-        SchemaMismatch: "the {subject} is {} but the holes are {}", dim.tag(), hole_dim.tag()
+        added_dim == dim,
+        SchemaMismatch: "the {subject} is {} but the {added} are {}", dim.tag(), added_dim.tag()
     );
-    if metadata.declares_crs() && hole_metadata.declares_crs() {
-        let (crs, hole_crs) = (metadata.crs()?, hole_metadata.crs()?);
+    if metadata.declares_crs() && added_metadata.declares_crs() {
+        let (crs, added_crs) = (metadata.crs()?, added_metadata.crs()?);
         polars_ensure!(
-            crs == hole_crs,
-            SchemaMismatch: "the {subject} and the holes declare different CRSs, {crs} and {hole_crs}; \
+            crs == added_crs,
+            SchemaMismatch: "the {subject} and the {added} declare different CRSs, {crs} and {added_crs}; \
             use `to_crs` to bring one onto the other first"
         );
     }
-    Ok(listed)
+    Ok(())
 }
 
 /// The polygons `polygon_rings_in_separate_columns` builds,
@@ -706,6 +720,24 @@ fn kernel_output_type_polygon_rings_in_separate_columns(
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
+/// `a` and `b` as single chunks of the same length,
+/// where one of a single row goes with every row of the other.
+/// They are called `names` in the error message.
+pub(super) fn paired_rows(
+    a: &Series,
+    b: &Series,
+    names: (&str, &str),
+) -> PolarsResult<(Series, Series)> {
+    Ok(match (a.len(), b.len()) {
+        (n, m) if n == m => (a.rechunk(), b.rechunk()),
+        (n, 1) => (a.rechunk(), b.new_from_index(0, n).rechunk()),
+        (1, m) => (a.new_from_index(0, m).rechunk(), b.rechunk()),
+        (n, m) => {
+            polars_bail!(ShapeMismatch: "the {} have {n} rows but the {} have {m}", names.0, names.1)
+        }
+    })
+}
+
 pub(super) fn storage_of(series: &Series) -> PolarsResult<Series> {
     Ok(match series.dtype() {
         DataType::Extension(..) => series.ext()?.storage().clone(),
@@ -717,26 +749,42 @@ pub(super) fn storage_of(series: &Series) -> PolarsResult<Series> {
     })
 }
 
-/// A list of exactly one item per row, null where `rows` is.
-fn one_per_row(rows: &List) -> List {
-    let lengths = std::iter::repeat_n(1, rows.len());
+/// A list of exactly one item per row, for `len` rows that are null where `validity` says.
+fn one_per_row(len: usize, validity: Option<&Bitmap>) -> List {
+    let lengths = std::iter::repeat_n(1, len);
     let offsets = Offsets::try_from_lengths(lengths).expect("one per row");
-    List::from_offsets(offsets.into(), rows.validity().cloned())
+    List::from_offsets(offsets.into(), validity.cloned())
 }
 
 fn one_ring_per_row(exteriors: LineStringArray) -> PolygonArray {
     PolygonArray::from_parts(
-        one_per_row(&exteriors.rows),
+        one_per_row(exteriors.rows.len(), exteriors.rows.validity()),
         exteriors.rows.ignoring_validity().clone(),
         exteriors.coords,
     )
 }
 
-fn one_hole_per_row(holes: LineStringArray) -> MultiLineStringArray {
+pub(super) fn one_point_per_row(points: PointArray) -> MultiPointArray {
+    MultiPointArray::from_parts(
+        one_per_row(points.coords.len(), points.coords.validity()),
+        points.coords.ignoring_validity().clone(),
+    )
+}
+
+pub(super) fn one_line_per_row(lines: LineStringArray) -> MultiLineStringArray {
     MultiLineStringArray::from_parts(
-        one_per_row(&holes.rows),
-        holes.rows.ignoring_validity().clone(),
-        holes.coords,
+        one_per_row(lines.rows.len(), lines.rows.validity()),
+        lines.rows.ignoring_validity().clone(),
+        lines.coords,
+    )
+}
+
+pub(super) fn one_polygon_per_row(polygons: PolygonArray) -> MultiPolygonArray {
+    MultiPolygonArray::from_parts(
+        one_per_row(polygons.rows.len(), polygons.rows.validity()),
+        polygons.rows.ignoring_validity().clone(),
+        polygons.rings,
+        polygons.coords,
     )
 }
 
@@ -752,7 +800,7 @@ pub(super) fn holes_per_row(
     let holes = if listed {
         propagate_inner_nulls_of_multi_line_strings(storage)
     } else {
-        one_hole_per_row(propagate_inner_nulls_of_line_strings(storage))
+        one_line_per_row(propagate_inner_nulls_of_line_strings(storage))
     };
     Ok((holes, given))
 }

@@ -19,6 +19,7 @@ the comment says when one without a CRS takes a different tier.
 | `exterior` | - | | - | | A | ring 0 | - | | - | | A | LPP |
 | `interior` | - | | - | | A | rings after the first | - | | - | | A | LPP |
 | `add_holes` | - | | - | | A | holes: linestring(s) or multilinestring | - | | - | | - | |
+| `add_parts` | A | → multipoint; no checks | A | → multilinestring | A | → multipolygon | A | | A | | A | |
 | `boundary` | - | | C | | C | every ring | - | | C | LPP | C | LPP |
 | `parts` | - | | - | | - | | C | [^4] | C | [^4] | C | [^4] |
 | `join_line_strings` | - | | - | | - | | - | | A | [^5] | - | |

@@ -377,6 +377,22 @@ class ExprGeoNameSpace:
 
         return add_holes(self._expr, holes, close=close)
 
+    def add_parts(
+        self,
+        parts: IntoExprColumn,
+        *,
+        null_behavior: Literal["ignore", "propagate"] = "ignore",
+        empty_behavior: Literal["keep", "skip"] = "keep",
+    ) -> pl.Expr:
+        from geopolars.geo.add_parts import add_parts
+
+        return add_parts(
+            self._expr,
+            parts,
+            null_behavior=null_behavior,
+            empty_behavior=empty_behavior,
+        )
+
     def parts(self) -> pl.Expr:
         from geopolars.geo.parts import parts
 
