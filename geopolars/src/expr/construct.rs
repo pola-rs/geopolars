@@ -697,10 +697,14 @@ fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResu
     // A bare exterior takes the metadata of the holes.
     let declared = declared_metadata(exterior, metadata.clone()).or(holes_metadata.clone());
     let metadata = kwargs.apply(declared.unwrap_or(metadata))?;
+    // `crs` declares itself on holes without a CRS as much as on the exterior.
+    let holes_metadata = holes_metadata
+        .map(|holes| kwargs.apply(holes))
+        .transpose()?;
     ensure_same_crs_unless_bare(
         Some(&metadata),
         holes_metadata.as_deref(),
-        ("exterior", "holes"),
+        ("polygons", "holes"),
     )?;
     Ok((Geo::new(Kind::Polygon, dim, metadata), listed))
 }

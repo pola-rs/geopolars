@@ -66,7 +66,6 @@ def polygons_from_rings_in_single_column(
     return _gather("polygon", rings, _polygon_kwargs(crs, close))
 
 
-@doc(parts="holes", geometry="exterior")
 def polygons_from_rings_in_separate_columns(
     exterior: IntoExprColumn,
     holes: IntoExprColumn | None = None,
@@ -86,7 +85,9 @@ def polygons_from_rings_in_separate_columns(
     A null ring among the holes, or a null vertex, makes the polygon null.
     The CRS is `crs`, or else the exterior's,
     or else that of the holes when the exterior is bare coordinates.
-    {same_crs}
+    `crs` also sets the CRS of holes that declare none.
+    The holes then have to declare the polygon's CRS, or none when it has none.
+    Holes as bare coordinates go with any CRS.
     Rings are checked (and closed with `close`)
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
 

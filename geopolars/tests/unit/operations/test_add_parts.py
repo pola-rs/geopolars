@@ -724,6 +724,36 @@ def test_parts_of_another_kind_are_refused(
         lf.collect_schema()
 
 
+@pytest.mark.parametrize(
+    ("geometry", "parts", "spelling"),
+    [
+        (
+            _points(_A[0]),
+            _of_points([[_A]], 2),
+            "a point can also be its bare coordinates",
+        ),
+        (
+            _lines(_A),
+            pl.Series("parts", [1.0]),
+            "a linestring can also be a list of its points or a `multipoint`",
+        ),
+        (
+            _polygons(_P),
+            _of_points([_A], 1),
+            "a polygon can also be a list of its rings, each a list of its points",
+        ),
+    ],
+    ids=["point", "linestring", "polygon"],
+)
+def test_a_refusal_spells_out_the_parts_of_the_geometry(
+    geometry: pl.Series, parts: pl.Series, spelling: str
+) -> None:
+    lf = pl.LazyFrame([geometry, parts]).select(geo.add_parts("geometry", "parts"))
+
+    with pytest.raises(ComputeError, match=spelling):
+        lf.collect_schema()
+
+
 @pytest.mark.parametrize("kwargs", [{"null_parts": "skip"}, {"empty_parts": "null"}])
 def test_unknown_modes_are_refused(kwargs: dict[str, str]) -> None:
     with pytest.raises(ValueError, match="must be one of"):

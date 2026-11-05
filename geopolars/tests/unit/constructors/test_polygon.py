@@ -583,6 +583,26 @@ def test_holes_in_the_crs_passed_for_the_exterior_are_accepted() -> None:
     assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
 
 
+@pytest.mark.parametrize(
+    "exterior",
+    [
+        pl.col("exterior"),
+        geo.line_string("exterior"),
+        geo.line_string("exterior", crs="EPSG:4326"),
+    ],
+    ids=["bare", "linestring", "linestring in the crs"],
+)
+def test_the_crs_passed_is_set_on_holes_without_one(exterior: pl.Expr) -> None:
+    df = _bare_exterior_and_hole().with_columns(geo.line_string("hole"))
+
+    out = df.select(
+        geo.polygons_from_rings_in_separate_columns(exterior, "hole", crs="EPSG:4326")
+    ).to_series()
+
+    assert out.dtype == PolygonXY(crs="EPSG:4326")
+    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
 def test_holes_in_another_crs_than_the_one_passed_are_refused() -> None:
     lf = (
         _bare_exterior_and_hole()

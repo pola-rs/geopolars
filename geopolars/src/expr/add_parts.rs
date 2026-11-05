@@ -88,12 +88,15 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     let refused = || {
         polars_err!(
             SchemaMismatch: "expected the parts as one `{}` per row, a list of them, or a `{}`; \
-            a part can also be the list of its points (or of their bare coordinates){}, got: {}",
+            {}, got: {}",
             part.display(), multi.display(),
             match part {
-                Kind::LineString => ", or a `multipoint`",
-                Kind::Polygon => ", or of its rings as linestrings, or a `multilinestring`",
-                _ => "",
+                Kind::LineString => "a linestring can also be a list of its points or a `multipoint`, \
+                    and a point its bare coordinates",
+                Kind::Polygon => "a polygon can also be a list of its rings, \
+                    each a list of its points or a `linestring`, or a `multilinestring`, \
+                    and a point its bare coordinates",
+                _ => "a point can also be its bare coordinates",
             },
             parts
         )
