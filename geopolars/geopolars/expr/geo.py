@@ -390,7 +390,7 @@ class ExprGeoNameSpace:
         self,
         parts: IntoExprColumn,
         *,
-        null_parts: Literal["drop", "null"] = "drop",
+        null_parts: Literal["drop", "null"] = "null",
         empty_parts: Literal["keep", "drop"] = "keep",
     ) -> pl.Expr:
         from geopolars.geo.add_parts import add_parts

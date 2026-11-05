@@ -44,7 +44,7 @@ def add_parts(
     geometry: IntoExprColumn,
     parts: IntoExprColumn,
     *,
-    null_parts: NullParts = "drop",
+    null_parts: NullParts = "null",
     empty_parts: EmptyParts = "keep",
 ) -> pl.Expr:
     """Add the parts of `parts` to each geometry, after the parts it already has.
@@ -91,9 +91,11 @@ def add_parts(
     ```python
     df.select(geo.add_parts("roads", "new_roads"))
 
-    # Every road of a region added to that region's highway.
+    # Every road of a region added to that region's highway, leaving out the null ones.
     roads_per_region = roads.group_by("region").agg("road")
-    highways.join(roads_per_region, on="region").select(geo.add_parts("highway", "road"))
+    highways.join(roads_per_region, on="region").select(
+        geo.add_parts("highway", "road", null_parts="drop")
+    )
     ```
     """
     validate_one_of("null_parts", null_parts, NullParts)

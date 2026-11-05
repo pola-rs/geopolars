@@ -264,7 +264,7 @@ def test_bare_coordinates_take_the_crs_of_the_geometry() -> None:
 def test_a_null_point_in_a_part_of_points_is_dropped_or_nulls_the_result() -> None:
     geometry, parts = _lines(_A, _A), _of_points([_B, [_B[0], None]], 1)
 
-    dropped = _added(geometry, parts)
+    dropped = _added(geometry, parts, null_parts="drop")
     nulled = _added(geometry, parts, null_parts="null")
 
     assert dropped.ext.storage().to_list() == [[_A, _B], [_A]]
@@ -343,6 +343,7 @@ def test_null_parts_are_dropped() -> None:
     out = _added(
         _lines(None, _A, _A, _A, _A, _A),
         _listed_lines([_B], None, [], [_B, None, _C], [None], [_B, [None], _C]),  # type: ignore[list-item]
+        null_parts="drop",
     )
 
     assert out.ext.storage().to_list() == [
@@ -358,7 +359,7 @@ def test_null_parts_are_dropped() -> None:
 def test_a_null_single_part_is_dropped() -> None:
     parts = pl.Series("parts", [None, [_vertex(1, 1), None]], dtype=pl.List(_XY))
 
-    out = _added(_lines(_A, _A), parts.ext.to(LineStringXY()))
+    out = _added(_lines(_A, _A), parts.ext.to(LineStringXY()), null_parts="drop")
 
     assert out.ext.storage().to_list() == [[_A], [_A]]
 
@@ -376,7 +377,9 @@ def test_an_untyped_null_adds_nothing_or_nulls_the_result(
 ) -> None:
     df = pl.DataFrame([geometry])
 
-    dropped = df.select(geo.add_parts("geometry", pl.lit(None))).to_series()
+    dropped = df.select(
+        geo.add_parts("geometry", pl.lit(None), null_parts="drop")
+    ).to_series()
     nulled = df.select(
         geo.add_parts("geometry", pl.lit(None), null_parts="null")
     ).to_series()
@@ -386,11 +389,10 @@ def test_an_untyped_null_adds_nothing_or_nulls_the_result(
     assert nulled.ext.storage().to_list() == [None, None]
 
 
-def test_null_parts_null_the_result() -> None:
+def test_null_parts_null_the_result_by_default() -> None:
     out = _added(
         _lines(None, _A, _A, _A, _A),
         _listed_lines([_B], None, [], [_B, None], [_B, [None]]),  # type: ignore[list-item]
-        null_parts="null",
     )
 
     assert out.ext.storage().to_list() == [None, None, [_A], None, None]
@@ -406,8 +408,12 @@ def test_a_part_with_a_null_axis_is_dropped_or_nulls_the_result() -> None:
     lines = _listed_lines([[{"x": None, "y": 1.0}], _B])  # type: ignore[list-item]
     points = _listed_points([{"x": 1.0, "y": None}, _B[0]])  # type: ignore[list-item]
 
-    assert _added(_lines(_A), lines).ext.storage().to_list() == [[_A, _B]]
-    assert _added(_points(_A[0]), points).ext.storage().to_list() == [[_A[0], _B[0]]]
+    assert _added(_lines(_A), lines, null_parts="drop").ext.storage().to_list() == [
+        [_A, _B]
+    ]
+    assert _added(
+        _points(_A[0]), points, null_parts="drop"
+    ).ext.storage().to_list() == [[_A[0], _B[0]]]
     assert _added(_lines(_A), lines, null_parts="null").ext.storage().to_list() == [
         None
     ]
@@ -416,7 +422,7 @@ def test_a_part_with_a_null_axis_is_dropped_or_nulls_the_result() -> None:
 def test_null_points_are_dropped_or_null_the_result() -> None:
     geometry, parts = _points(_A[0], _A[0]), _listed_points([None, _B[0]], None)
 
-    dropped = _added(geometry, parts)
+    dropped = _added(geometry, parts, null_parts="drop")
     nulled = _added(geometry, parts, null_parts="null")
 
     assert dropped.ext.storage().to_list() == [[_A[0], _B[0]], [_A[0]]]
@@ -424,7 +430,9 @@ def test_null_points_are_dropped_or_null_the_result() -> None:
 
 
 def test_null_polygons_are_dropped() -> None:
-    out = _added(_multi_polygons([_P]), _listed_polygons([None, _Q, [[None]]]))  # type: ignore[list-item]
+    out = _added(
+        _multi_polygons([_P]), _listed_polygons([None, _Q, [[None]]]), null_parts="drop"
+    )  # type: ignore[list-item]
 
     assert out.ext.storage().to_list() == [[_P, _Q]]
 
@@ -433,7 +441,7 @@ def test_null_rings_are_dropped_or_null_the_result() -> None:
     geometry = _polygons(_P, _P)
     parts = _listed_polygons([[None], _Q], [_Q, [_P[0], None]])  # type: ignore[list-item]
 
-    dropped = _added(geometry, parts)
+    dropped = _added(geometry, parts, null_parts="drop")
     nulled = _added(geometry, parts, null_parts="null")
 
     assert dropped.ext.storage().to_list() == [[_P, _Q], [_P, _Q]]
@@ -450,7 +458,7 @@ def test_parts_aggregated_from_rows_with_nulls() -> None:
 
     out = highways.join(
         roads.group_by("region", maintain_order=True).agg("road"), on="region"
-    ).select(geo.add_parts("highway", "road"))
+    ).select(geo.add_parts("highway", "road", null_parts="drop"))
 
     assert out.to_series().ext.storage().to_list() == [[_A, _B], [_A, _C]]
 
@@ -542,7 +550,7 @@ def test_an_empty_point_without_parts_becomes_an_empty_multipoint() -> None:
 def test_the_parts_between_those_left_out_stay_in_order(
     geometry: pl.Series, parts: pl.Series, expected: list[object]
 ) -> None:
-    out = _added(geometry, parts, empty_parts="drop")
+    out = _added(geometry, parts, null_parts="drop", empty_parts="drop")
 
     assert out.ext.storage().to_list() == [expected]
 
@@ -571,7 +579,7 @@ def test_the_parts_left_out_keep_z_and_m_of_the_others_in_place() -> None:
         LineStringXYZM(),
     )
 
-    out = _added(geometry, parts, empty_parts="drop")
+    out = _added(geometry, parts, null_parts="drop", empty_parts="drop")
 
     assert out.ext.storage().to_list() == [
         [line(0, 1), line(2, 3), line(4, 5), line(6, 7)]
@@ -582,6 +590,7 @@ def test_null_and_empty_parts_are_both_left_out() -> None:
     out = _added(
         _lines(_A),
         _listed_lines([None, _B, [], _C, None]),
+        null_parts="drop",
         empty_parts="drop",
     )
 
@@ -608,7 +617,9 @@ def test_a_single_list_of_parts_with_nulls_and_empties_is_added_to_every_row() -
     df = pl.DataFrame([_lines(_A, _B)])
     parts = _listed_lines([None, _C, []])  # type: ignore[list-item]
 
-    out = df.select(geo.add_parts("geometry", parts, empty_parts="drop")).to_series()
+    out = df.select(
+        geo.add_parts("geometry", parts, null_parts="drop", empty_parts="drop")
+    ).to_series()
 
     assert out.ext.storage().to_list() == [[_A, _C], [_B, _C]]
 
@@ -628,7 +639,7 @@ def test_sliced_columns() -> None:
         ]
     ).slice(1, 3)
 
-    out = df.select(geo.add_parts("geometry", "parts")).to_series()
+    out = df.select(geo.add_parts("geometry", "parts", null_parts="drop")).to_series()
 
     assert out.ext.storage().to_list() == [[_A, _B, _C], None, [_B, _A]]
 
@@ -643,7 +654,7 @@ def test_sliced_points() -> None:
         ]
     ).slice(1, 3)
 
-    out = df.select(geo.add_parts("geometry", "parts")).to_series()
+    out = df.select(geo.add_parts("geometry", "parts", null_parts="drop")).to_series()
 
     assert out.ext.storage().to_list() == [[_A[0], _B[0]], None, [_B[0], _A[0]]]
 
@@ -656,7 +667,7 @@ def test_sliced_polygons() -> None:
         ]
     ).slice(1, 3)
 
-    out = df.select(geo.add_parts("geometry", "parts")).to_series()
+    out = df.select(geo.add_parts("geometry", "parts", null_parts="drop")).to_series()
 
     assert out.ext.storage().to_list() == [[_P, _Q], None, [_P, _Q]]
 
@@ -684,7 +695,11 @@ def test_every_chunk_gets_its_parts(engine: EngineType) -> None:
     )
     assert df.n_chunks() == 2
 
-    out = df.lazy().select(geo.add_parts("geometry", "parts")).collect(engine=engine)
+    out = (
+        df.lazy()
+        .select(geo.add_parts("geometry", "parts", null_parts="drop"))
+        .collect(engine=engine)
+    )
 
     assert out.to_series().ext.storage().to_list() == [[_A, _B], None, [_B, _C]]
 
