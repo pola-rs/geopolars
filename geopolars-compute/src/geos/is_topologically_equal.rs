@@ -1,5 +1,5 @@
 //! Whether two geometries are topologically equal, forwarded to GEOS.
-//! See `is_equal` in Python for the rules.
+//! See `is_topologically_equal` in Python for the rules.
 //!
 //! Both sides take any kind as a `&dyn ToGeosRows`,
 //! so one kernel serves every pair of kinds.

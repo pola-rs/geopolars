@@ -30,6 +30,7 @@ pub mod is_empty;
 pub mod is_equal;
 pub mod is_ring;
 pub mod is_simple;
+pub mod is_topologically_equal;
 pub mod is_valid;
 pub mod join_line_strings;
 pub mod length;

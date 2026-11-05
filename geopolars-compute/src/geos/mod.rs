@@ -36,8 +36,8 @@
 mod buffer;
 mod convex_hull;
 mod interpolate;
-mod is_equal;
 mod is_simple;
+mod is_topologically_equal;
 mod linestrings;
 mod offset_curve;
 mod points;
@@ -55,11 +55,11 @@ pub use convex_hull::{
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
 pub use interpolate::{interpolate_line_strings, interpolate_multi_line_strings, InterpolateMode};
-pub use is_equal::{topologically_equal_against_one, topologically_equal_pairwise};
 pub use is_simple::{
     line_strings_are_simple, multi_line_strings_are_simple, multi_polygons_are_simple,
     polygons_are_simple,
 };
+pub use is_topologically_equal::{topologically_equal_against_one, topologically_equal_pairwise};
 pub use offset_curve::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, OffsetCurveStyle,
 };

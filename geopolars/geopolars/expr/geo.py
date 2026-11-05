@@ -475,26 +475,36 @@ class ExprGeoNameSpace:
         self,
         other: IntoExprColumn,
         *,
-        mode: Literal["identical", "topological"] = "identical",
         abs_tol: float | None = None,
         rel_tol: float | None = None,
         nans_equal: bool = True,
         unique_z: bool = True,
         unique_m: bool = False,
-        ignore_per_row_errors: bool = False,
-        early_finite_check: bool = False,
     ) -> pl.Expr:
         from geopolars.geo.is_equal import is_equal
 
         return is_equal(
             self._expr,
             other,
-            mode=mode,
             abs_tol=abs_tol,
             rel_tol=rel_tol,
             nans_equal=nans_equal,
             unique_z=unique_z,
             unique_m=unique_m,
+        )
+
+    def is_topologically_equal(
+        self,
+        other: IntoExprColumn,
+        *,
+        ignore_per_row_errors: bool = False,
+        early_finite_check: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.is_topologically_equal import is_topologically_equal
+
+        return is_topologically_equal(
+            self._expr,
+            other,
             ignore_per_row_errors=ignore_per_row_errors,
             early_finite_check=early_finite_check,
         )

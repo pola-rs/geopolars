@@ -95,8 +95,8 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
     ),
     "is_ccw": (lambda g: geo.is_ccw(g), {MultiPointXY}),
     "is_equal": (lambda g: geo.is_equal(g, g), set()),
-    "is_equal topological": (
-        lambda g: geo.is_equal(g, g, mode="topological", ignore_per_row_errors=True),
+    "is_topologically_equal": (
+        lambda g: geo.is_topologically_equal(g, g, ignore_per_row_errors=True),
         set(),
     ),
     "exterior": (

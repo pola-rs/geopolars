@@ -37,8 +37,8 @@ the comment says when one without a CRS takes a different tier.
 | `to_ccw` | - | | A | | A | `holes_cw` | - | | A | every part | A | every part |
 | `to_cw` | - | | C | `to_ccw` + `reverse` | C | | - | | C | | C | |
 | `close_rings` | - | | A | repeats the first vertex, or `snap_z`/`snap_m` | A | every ring | - | | A | every part | A | every ring |
-| `is_equal` identical | A | pairwise or against one | A | same coordinates in order | A | same rings | A | | A | same parts | A | same polygons and rings |
-| `is_equal` topological | B | GEOS; x/y only; any two kinds; pairwise or against one | B | | B | | B | | B | | B | |
+| `is_equal` | A | pairwise or against one | A | same coordinates in order | A | same rings | A | | A | same parts | A | same polygons and rings |
+| `is_topologically_equal` | B | GEOS; x/y only; any two kinds; pairwise or against one | B | | B | | B | | B | | B | |
 | `is_valid_geoarrow` | A | bounds from PROJ (plan-time) | A | | A | | A | EP | A | EP | A | EP |
 | `null_out_invalid_geoarrow` | A | nulls what `is_valid_geoarrow` rejects | A | | A | | A | | A | | A | |
 | `is_valid_ogc` | A | bounds from PROJ (plan-time) | A | | A/B | topology through GEOS | A | EP | A | EP | A/B | EP and GEOS |

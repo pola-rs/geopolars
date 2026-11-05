@@ -1,5 +1,5 @@
 //! Whether two geometries are almost coincident/the same.
-//! See `is_equal` with `mode="identical"` in Python for the rules.
+//! See `is_equal` in Python for the rules.
 //!
 //! Every kernel takes `a`, and `b` of the same length (row by row) or of a single row (against every row of `a`).
 //! Every comparison stops at the first part length or value that does not match.
