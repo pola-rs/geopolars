@@ -14,6 +14,7 @@ from geopolars import geo
 from geopolars.datatypes import (
     LineStringXY,
     LineStringXYZ,
+    LineStringXYZM,
     MultiLineStringXY,
     MultiPointXY,
     MultiPolygonXY,
@@ -354,6 +355,23 @@ def test_null_parts_null_the_result() -> None:
     assert out.ext.storage().to_list() == [None, None, [_A], None, None]
 
 
+def test_a_null_point_gives_a_null_result() -> None:
+    out = _added(_points(None, _A[0]), _listed_points([_B[0]], [_B[0]]))
+
+    assert out.ext.storage().to_list() == [None, [_A[0], _B[0]]]
+
+
+def test_a_part_with_a_null_axis_is_dropped_or_nulls_the_result() -> None:
+    lines = _listed_lines([[{"x": None, "y": 1.0}], _B])  # type: ignore[list-item]
+    points = _listed_points([{"x": 1.0, "y": None}, _B[0]])  # type: ignore[list-item]
+
+    assert _added(_lines(_A), lines).ext.storage().to_list() == [[_A, _B]]
+    assert _added(_points(_A[0]), points).ext.storage().to_list() == [[_A[0], _B[0]]]
+    assert _added(_lines(_A), lines, null_parts="null").ext.storage().to_list() == [
+        None
+    ]
+
+
 def test_null_points_are_dropped_or_null_the_result() -> None:
     geometry, parts = _points(_A[0], _A[0]), _listed_points([None, _B[0]], None)
 
@@ -427,6 +445,37 @@ def test_empty_polygons_are_dropped() -> None:
     assert out.ext.storage().to_list() == [[_P, _Q]]
 
 
+def test_empty_parts_are_dropped_while_null_parts_null_the_result() -> None:
+    out = _added(
+        _lines(_A, _A),
+        _listed_lines([[], _B], [None, _B]),
+        null_parts="null",
+        empty_parts="drop",
+    )
+
+    assert out.ext.storage().to_list() == [[_A, _B], None]
+
+
+def test_the_parts_left_out_keep_z_and_m_of_the_others_in_place() -> None:
+    def line(*values: float) -> list[dict[str, float]]:
+        return [{"x": v, "y": v, "z": v * 10, "m": v * 100} for v in values]
+
+    xyzm = pl.Struct({axis: pl.Float64 for axis in "xyzm"})
+    geometry = _column("geometry", [line(0, 1)], pl.List(xyzm), LineStringXYZM())
+    parts = _listed(
+        "parts",
+        [[line(2, 3), None, [], line(4, 5), None, line(6, 7)]],
+        pl.List(xyzm),
+        LineStringXYZM(),
+    )
+
+    out = _added(geometry, parts, empty_parts="drop")
+
+    assert out.ext.storage().to_list() == [
+        [line(0, 1), line(2, 3), line(4, 5), line(6, 7)]
+    ]
+
+
 def test_null_and_empty_parts_are_both_left_out() -> None:
     out = _added(
         _lines(_A),
@@ -480,6 +529,34 @@ def test_sliced_columns() -> None:
     out = df.select(geo.add_parts("geometry", "parts")).to_series()
 
     assert out.ext.storage().to_list() == [[_A, _B, _C], None, [_B, _A]]
+
+
+def test_sliced_points() -> None:
+    df = pl.DataFrame(
+        [
+            _multi_points([_C[0]], [_A[0]], None, [_B[0]]),
+            _listed_points([_A[0]], [_B[0], None], [_A[0]], [None, _A[0]]).alias(
+                "parts"
+            ),
+        ]
+    ).slice(1, 3)
+
+    out = df.select(geo.add_parts("geometry", "parts")).to_series()
+
+    assert out.ext.storage().to_list() == [[_A[0], _B[0]], None, [_B[0], _A[0]]]
+
+
+def test_sliced_polygons() -> None:
+    df = pl.DataFrame(
+        [
+            _multi_polygons([_Q], [_P], None, [_P]),
+            _listed_polygons([_P], [_Q, None], [_P], [[[None]], _Q]).alias("parts"),  # type: ignore[list-item]
+        ]
+    ).slice(1, 3)
+
+    out = df.select(geo.add_parts("geometry", "parts")).to_series()
+
+    assert out.ext.storage().to_list() == [[_P, _Q], None, [_P, _Q]]
 
 
 def test_sliced_columns_with_empty_parts_dropped() -> None:

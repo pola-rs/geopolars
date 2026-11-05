@@ -119,6 +119,10 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         {LineStringXY, MultiPointXY, PolygonXY, MultiPolygonXY},
     ),
     "add_parts": (lambda g: geo.add_parts(g, g), set()),
+    "add_parts null drop": (
+        lambda g: geo.add_parts(g, g, null_parts="null", empty_parts="drop"),
+        set(),
+    ),
 }
 
 
