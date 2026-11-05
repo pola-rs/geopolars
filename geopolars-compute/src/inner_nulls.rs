@@ -1,9 +1,9 @@
 //! Moving every null value below a row out to the row,
 //! so that the views hold to GeoArrow's rule on null values:
 //! nulls only at the outermost level.
-//! Of a multi-geometry, the parts with a null value can be marked in a mask instead.
-//! They stay in the view with arbitrary values,
-//! which is wrapped in a [MaskedParts] so that only a kernel taking the mask reads it.
+//! Of a multi-geometry, the parts with a null value can instead be unset in a mask.
+//! They stay in the view, with arbitrary values.
+//! The view is then wrapped in a [MaskedParts], so that only a kernel that takes the mask reads it.
 //! This is a separate pass, before any kernel reads the views.
 
 use geopolars_core::{
@@ -148,11 +148,11 @@ pub fn multi_polygons_with_null_parts_marked(
 /// and after [without_empty_parts](crate::native::WithoutEmptyParts::without_empty_parts) the empty ones too.
 /// The unset parts may hold arbitrary values,
 /// so the view is not handed out as a plain one.
-// Only the `native` kernels read it.
-#[cfg_attr(not(feature = "native"), allow(dead_code))]
 pub struct MaskedParts<T> {
     pub(crate) view: T,
     /// One bit per part. `None` when every part is set.
+    // Without `native`, nothing reads the mask.
+    #[cfg_attr(not(feature = "native"), allow(dead_code))]
     pub(crate) keep: Option<Bitmap>,
 }
 

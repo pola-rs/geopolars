@@ -19,6 +19,8 @@ fn keep_without_empty(keep: Option<Bitmap>, empty: BooleanArray) -> Option<Bitma
 }
 
 /// Unsetting the empty parts in the mask of a [MaskedParts] too.
+/// The implementations hand the view, unset parts included, to kernels that give one value per part
+/// (see the README on `MaskedParts`).
 pub trait WithoutEmptyParts {
     fn without_empty_parts(self) -> Self;
 }

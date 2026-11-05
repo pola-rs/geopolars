@@ -102,7 +102,8 @@ pub fn ensure_same_crs(a: &GeoColumn, b: &GeoColumn) -> PolarsResult<()> {
 }
 
 /// Errors unless `a` and `b` declare the same CRS, or neither declares one.
-/// `None` is bare coordinates, which declare no CRS and so pass with any.
+/// `None` is a column without metadata (bare coordinates, or an untyped null),
+/// which declares no CRS and so passes with any.
 /// The caller decides the CRS of the result.
 /// They are called `names` in the error message.
 pub fn ensure_same_crs_unless_bare(

@@ -98,8 +98,9 @@ fn offsets_with_capacity<const N: usize>(capacity: impl Fn(usize) -> usize) -> [
 
 /// A slice of the base's vertices followed by a slice of the added parts' vertices,
 /// as [concatenated] copies them.
-/// A valid row takes one, and one more for each later run of kept items (see [kept_runs]).
-/// A later run of the base has an empty `added`, a later run of the added parts an empty `base`.
+/// A valid row takes one, and one more for each run of kept items after the first (see [kept_runs]).
+/// The last run of the base and the first run of the added parts share one.
+/// Every other run has one to itself, with the other range empty.
 #[derive(Default)]
 struct CopiedVertices {
     /// In the coordinates of the base.
@@ -130,7 +131,7 @@ fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: u
 /// Every null row of `base` has to be null in it too.
 ///
 /// `base` and `added` have to have the same length and dimension.
-/// The vertices are copied into new buffers, one slice per axis per [CopiedVertices].
+/// The vertices are copied into new buffers, two slices per axis per [CopiedVertices].
 pub(super) fn concatenated<const N: usize>(
     base: Nested<N>,
     base_keep: Option<&Bitmap>,
@@ -181,6 +182,10 @@ pub(super) fn concatenated<const N: usize>(
             }
             // As for the added items below, every run is a slice of its own.
             // The last run shares its `CopiedVertices` with the first run of the added items.
+            // Nothing reaches this yet, so it is untested:
+            // `add_parts` only masks a single base, of one item per row.
+            // It would be reached by dropping the empty parts of a multi base in `add_parts`,
+            // or by an expression that drops parts of one column, without `added`.
             Some(keep) => {
                 for run in kept_runs(keep, items) {
                     if item_count > 0 {

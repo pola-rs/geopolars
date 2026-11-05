@@ -669,14 +669,14 @@ pub(super) fn parts_layout(
     let (part, multi) = part_kinds(part);
     let refused = || {
         polars_err!(
-            SchemaMismatch: "expected the {name} as one `{}` per row, a list of them, or a `{}`; \
-            {}, got: {}",
+            SchemaMismatch: "expected the {name} as one `{}` per row, a list of them, or a `{}` \
+            ({}), got: {}",
             part.display(), multi.display(),
             match part {
                 Kind::LineString => "a linestring can also be a list of its points or a `multipoint`, \
                     and a point its bare coordinates",
-                Kind::Polygon => "a polygon can also be a list of its rings, \
-                    each a list of its points or a `linestring`, or a `multilinestring`, \
+                Kind::Polygon => "a polygon can also be a list of its rings or a `multilinestring`, \
+                    a ring a list of its points, a `linestring` or a `multipoint`, \
                     and a point its bare coordinates",
                 _ => "a point can also be its bare coordinates",
             },
@@ -908,8 +908,8 @@ pub(super) fn rows_validity(base: &List, parts: &List, null_parts: NullParts) ->
 
 /// One chunk of linestrings, holding one per row, or with `listed=true` a list of them,
 /// as a list of them per row.
-/// With [NullParts::Null], a row holding a null value is null.
-/// With [NullParts::Drop], a listed linestring holding one is unset in the mask instead.
+/// A row holding a null value is null.
+/// With `listed=true` and [NullParts::Drop], a linestring holding one is unset in the mask instead.
 pub(super) fn lines_per_row(
     chunk: &dyn Array,
     listed: bool,

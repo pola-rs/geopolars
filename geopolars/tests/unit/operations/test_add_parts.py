@@ -780,7 +780,7 @@ def test_parts_of_another_kind_are_refused(
         (
             _polygons(_P),
             _of_points([_A], 1),
-            "a polygon can also be a list of its rings, each a list of its points",
+            "a polygon can also be a list of its rings or a `multilinestring`",
         ),
     ],
     ids=["point", "linestring", "polygon"],
