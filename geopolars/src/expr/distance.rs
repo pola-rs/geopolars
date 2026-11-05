@@ -20,7 +20,7 @@ use proj::Proj;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Kind};
 use crate::proj::GeodeticCrs;
 
 /// How many CRSes to keep in cache.
@@ -106,21 +106,12 @@ fn shared_crs(fields: &[Field]) -> PolarsResult<Option<String>> {
         metadata.push(geo.metadata);
     }
 
-    match (metadata[0].declares_crs(), metadata[1].declares_crs()) {
-        (true, true) => {}
-        (true, false) | (false, true) => polars_bail!(
-            SchemaMismatch: "only one of the points declares a CRS, so they cannot be measured \
-            against each other; declare the same one on both"
-        ),
-        (false, false) => return Ok(None),
-    }
-    let (crs_a, crs_b) = (metadata[0].crs()?, metadata[1].crs()?);
-    polars_ensure!(
-        crs_a == crs_b,
-        SchemaMismatch: "the points declare different CRSs, {crs_a} and {crs_b}; \
-        use `to_crs` to bring one onto the other first"
-    );
-    Ok(Some(crs_a.to_owned()))
+    let [a, b] = [&metadata[0], &metadata[1]];
+    ensure_same_crs_unless_bare(Some(a), Some(b), ("first point", "second point"))?;
+    Ok(a.declares_crs()
+        .then(|| a.crs())
+        .transpose()?
+        .map(str::to_owned))
 }
 
 /// The CRS to measure along the ellipsoid of. Type operation only.
