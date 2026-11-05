@@ -1,6 +1,5 @@
-//! Adding the parts of one multi-geometry column to those of another,
-//! and keeping only some of the parts of a multi-geometry.
-//! Neither looks at the parts themselves: they are copied as they are.
+//! Adding the parts of one multi-geometry column to those of another.
+//! The parts are not looked at, only copied as they are.
 //!
 //! A polygon is a list of rings like a multilinestring is a list of linestrings,
 //! so `polygons_with_added_holes` shares this machinery.
@@ -81,7 +80,7 @@ fn copied_offsets<const N: usize>(
     offsets: &mut [Offsets<i64>; N],
 ) -> Range<usize> {
     for (level, offsets) in levels.iter().zip(offsets) {
-        // TODO: `try_extend_from_slice` is not inlined.
+        // PERF: `try_extend_from_slice` is not inlined.
         // With only a few items per call, the call overhead is a large part of its cost.
         // It took ~5.5 ns/row of ~52 in a release profile of `add_holes`
         // (1M polygons with 1 exterior + 2-3 holes of 5 vertices).
@@ -120,6 +119,7 @@ fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: u
 
 /// Every row of `base`, followed by the items on the same row of `added`.
 /// A null row of `added` adds nothing.
+/// With `keep`, only the items of `added` set in it are added (one bit per item).
 /// Without `added`, `base` is copied as it is.
 /// The rows are null where `validity` says,
 /// which has to cover the null rows of `base`.
@@ -129,8 +129,10 @@ fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: u
 pub(super) fn concatenated<const N: usize>(
     base: Nested<N>,
     added: Option<Nested<N>>,
+    keep: Option<&Bitmap>,
     validity: Option<Bitmap>,
 ) -> Built<N> {
+    let keep = keep.filter(|keep| keep.unset_bits() > 0);
     let len = base.rows.len();
     if let Some(added) = &added {
         assert_eq!(added.rows.len(), len, "the arrays differ in length");
@@ -161,14 +163,37 @@ pub(super) fn concatenated<const N: usize>(
             base: copied_offsets(&base.levels, items, &mut offsets),
             added: 0..0,
         };
-        if let Some(added) = added.as_ref().filter(|added| added.rows.is_valid(i)) {
+        let added = added.as_ref().filter(|added| added.rows.is_valid(i));
+        let Some(added) = added else {
+            row_offsets.try_push(item_count).expect(NO_OVERFLOW);
+            coords_len += copy.base.len();
+            copies.push(copy);
+            continue;
+        };
+        let Some(keep) = keep else {
             let items = added.rows.range(i);
             item_count += items.len();
             copy.added = copied_offsets(&added.levels, items, &mut offsets);
+            row_offsets.try_push(item_count).expect(NO_OVERFLOW);
+            coords_len += copy.base.len() + copy.added.len();
+            copies.push(copy);
+            continue;
+        };
+        // The first run goes with the base, every later run is a copy of its own.
+        let mut runs = kept_runs(keep, added.rows.range(i));
+        if let Some(run) = runs.next() {
+            item_count += run.len();
+            copy.added = copied_offsets(&added.levels, run, &mut offsets);
         }
-        row_offsets.try_push(item_count).expect(NO_OVERFLOW);
         coords_len += copy.base.len() + copy.added.len();
         copies.push(copy);
+        for run in runs {
+            item_count += run.len();
+            let added = copied_offsets(&added.levels, run, &mut offsets);
+            coords_len += added.len();
+            copies.push(CopiedVertices { base: 0..0, added });
+        }
+        row_offsets.try_push(item_count).expect(NO_OVERFLOW);
     }
 
     let (from, to) = (base.coords, added.as_ref().map(|added| added.coords));
@@ -199,50 +224,22 @@ fn kept_runs(keep: &Bitmap, items: Range<usize>) -> impl Iterator<Item = Range<u
     })
 }
 
-/// `array` with only the items set in `keep` (one bit per item),
-/// or `None` when that is all of them.
-/// The rows keep their validity.
-fn kept<const N: usize>(array: Nested<N>, keep: &Bitmap) -> Option<Built<N>> {
-    if keep.unset_bits() == 0 {
-        return None;
-    }
-    let len = array.rows.len();
-    let mut row_offsets = Offsets::<i64>::with_capacity(len);
-    let mut offsets = offsets_with_capacity(|level| array.levels[level].len());
-    let mut vertices = Vec::new();
-    for i in 0..len {
-        // A null row's offsets point anywhere, so it takes nothing.
-        if !array.rows.is_valid(i) {
-            row_offsets.try_push(0).expect(NO_OVERFLOW);
-            continue;
-        }
-        let mut item_count = 0;
-        for run in kept_runs(keep, array.rows.range(i)) {
-            item_count += run.len();
-            vertices.push(copied_offsets(&array.levels, run, &mut offsets));
-        }
-        row_offsets.try_push(item_count).expect(NO_OVERFLOW);
-    }
-    Some(Built {
-        rows: List::from_offsets(row_offsets.into(), array.rows.validity().cloned()),
-        levels: offsets.map(|offsets| ValidList::from_offsets(offsets.into())),
-        coords: array.coords.copy_ranges(vertices.into_iter()),
-    })
-}
-
 /// `base`, each followed by the points on the same row of `added`.
 /// See [multi_line_strings_with_added_parts].
 pub fn multi_points_with_added_parts(
     base: &MultiPointArray,
     added: &MultiPointArray,
+    keep: Option<&Bitmap>,
     validity: Option<Bitmap>,
 ) -> MultiPointArray {
-    let Built { rows, coords, .. } = concatenated(base.into(), Some(added.into()), validity);
+    let Built { rows, coords, .. } = concatenated(base.into(), Some(added.into()), keep, validity);
     MultiPointArray::from_parts(rows, coords)
 }
 
 /// `base`, each followed by the linestrings on the same row of `added`.
 /// A null row of `added` adds nothing.
+/// With `keep`, only the linestrings of `added` set in it are added (one bit per linestring).
+/// The ones not set are never read, so they may hold null values.
 /// The rows are null where `validity` says,
 /// which has to cover the null rows of `base`.
 ///
@@ -250,13 +247,14 @@ pub fn multi_points_with_added_parts(
 pub fn multi_line_strings_with_added_parts(
     base: &MultiLineStringArray,
     added: &MultiLineStringArray,
+    keep: Option<&Bitmap>,
     validity: Option<Bitmap>,
 ) -> MultiLineStringArray {
     let Built {
         rows,
         levels: [lines],
         coords,
-    } = concatenated(base.into(), Some(added.into()), validity);
+    } = concatenated(base.into(), Some(added.into()), keep, validity);
     MultiLineStringArray::from_parts(rows, lines, coords)
 }
 
@@ -265,53 +263,13 @@ pub fn multi_line_strings_with_added_parts(
 pub fn multi_polygons_with_added_parts(
     base: &MultiPolygonArray,
     added: &MultiPolygonArray,
+    keep: Option<&Bitmap>,
     validity: Option<Bitmap>,
 ) -> MultiPolygonArray {
     let Built {
         rows,
         levels: [polygons, rings],
         coords,
-    } = concatenated(base.into(), Some(added.into()), validity);
+    } = concatenated(base.into(), Some(added.into()), keep, validity);
     MultiPolygonArray::from_parts(rows, polygons, rings, coords)
-}
-
-/// `array` with only the points set in `keep`, one bit per point.
-/// Free when that is all of them.
-pub fn multi_points_with_kept_parts(array: MultiPointArray, keep: &Bitmap) -> MultiPointArray {
-    match kept((&array).into(), keep) {
-        Some(Built { rows, coords, .. }) => MultiPointArray::from_parts(rows, coords),
-        None => array,
-    }
-}
-
-/// `array` with only the linestrings set in `keep`, one bit per linestring.
-/// Free when that is all of them.
-pub fn multi_line_strings_with_kept_parts(
-    array: MultiLineStringArray,
-    keep: &Bitmap,
-) -> MultiLineStringArray {
-    match kept((&array).into(), keep) {
-        Some(Built {
-            rows,
-            levels: [lines],
-            coords,
-        }) => MultiLineStringArray::from_parts(rows, lines, coords),
-        None => array,
-    }
-}
-
-/// `array` with only the polygons set in `keep`, one bit per polygon.
-/// Free when that is all of them.
-pub fn multi_polygons_with_kept_parts(
-    array: MultiPolygonArray,
-    keep: &Bitmap,
-) -> MultiPolygonArray {
-    match kept((&array).into(), keep) {
-        Some(Built {
-            rows,
-            levels: [polygons, rings],
-            coords,
-        }) => MultiPolygonArray::from_parts(rows, polygons, rings, coords),
-        None => array,
-    }
 }

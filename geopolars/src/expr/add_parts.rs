@@ -2,17 +2,15 @@
 //! See `add_parts` in Python for the rules.
 
 use geopolars_compute::inner_nulls::{
-    drop_null_parts_of_multi_line_strings, drop_null_parts_of_multi_points,
-    drop_null_parts_of_multi_polygons, propagate_inner_nulls_of_line_strings,
+    multi_line_strings_with_null_parts_marked, multi_points_with_null_parts_marked,
+    multi_polygons_with_null_parts_marked, propagate_inner_nulls_of_line_strings,
     propagate_inner_nulls_of_multi_line_strings, propagate_inner_nulls_of_multi_points,
     propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_points,
     propagate_inner_nulls_of_polygons,
 };
 use geopolars_compute::native::{
-    line_strings_are_empty, multi_line_strings_with_added_parts,
-    multi_line_strings_with_kept_parts, multi_points_with_added_parts,
-    multi_points_with_kept_parts, multi_polygons_with_added_parts, multi_polygons_with_kept_parts,
-    points_are_empty, polygons_are_empty,
+    line_strings_are_empty, multi_line_strings_with_added_parts, multi_points_with_added_parts,
+    multi_polygons_with_added_parts, points_are_empty, polygons_are_empty,
 };
 use geopolars_core::{
     downcast, Coords, LineStringArray, List, MultiLineStringArray, MultiPointArray,
@@ -106,31 +104,45 @@ fn rows_validity(base: &List, parts: &List, null_behavior: NullBehavior) -> Opti
     }
 }
 
-fn not_empty(empty: BooleanArray) -> Bitmap {
-    !empty.values()
+/// The parts to keep: those that pass `passing`, and with [EmptyBehavior::Skip],
+/// those that `empty` (when called) does not mark.
+/// `None` when that is all of them.
+fn parts_to_keep(
+    passing: Option<Bitmap>,
+    empty_behavior: EmptyBehavior,
+    empty: impl FnOnce() -> BooleanArray,
+) -> Option<Bitmap> {
+    let not_empty = match empty_behavior {
+        EmptyBehavior::Keep => None,
+        EmptyBehavior::Skip => Some(!empty().values()),
+    };
+    combine_validities_and(passing.as_ref(), not_empty.as_ref())
 }
 
 /// One chunk of the parts to add to points,
 /// holding one point per row, or with `listed=true` a list of them.
+/// Also which points to add, one bit per point.
 fn point_parts(
     chunk: &dyn Array,
     listed: bool,
     kwargs: AddPartsKwargs,
-) -> PolarsResult<MultiPointArray> {
+) -> PolarsResult<(MultiPointArray, Option<Bitmap>)> {
     let storage = UncheckedStorage::new(chunk)?;
-    let parts = match (listed, kwargs.null_behavior) {
-        (false, _) => one_point_per_row(propagate_inner_nulls_of_points(storage)),
-        (true, NullBehavior::Ignore) => drop_null_parts_of_multi_points(storage),
-        (true, NullBehavior::Propagate) => propagate_inner_nulls_of_multi_points(storage),
+    let (parts, passing) = match (listed, kwargs.null_behavior) {
+        (false, _) => (
+            one_point_per_row(propagate_inner_nulls_of_points(storage)),
+            None,
+        ),
+        (true, NullBehavior::Ignore) => multi_points_with_null_parts_marked(storage),
+        (true, NullBehavior::Propagate) => (propagate_inner_nulls_of_multi_points(storage), None),
     };
-    Ok(match kwargs.empty_behavior {
-        EmptyBehavior::Keep => parts,
-        EmptyBehavior::Skip => {
-            let points = PointArray::new(Coords::from_valid(parts.coords.clone(), None));
-            let keep = not_empty(points_are_empty(&points));
-            multi_points_with_kept_parts(parts, &keep)
-        }
-    })
+    let keep = parts_to_keep(passing, kwargs.empty_behavior, || {
+        points_are_empty(&PointArray::new(Coords::from_valid(
+            parts.coords.clone(),
+            None,
+        )))
+    });
+    Ok((parts, keep))
 }
 
 /// [point_parts], for linestrings.
@@ -138,24 +150,26 @@ fn line_parts(
     chunk: &dyn Array,
     listed: bool,
     kwargs: AddPartsKwargs,
-) -> PolarsResult<MultiLineStringArray> {
+) -> PolarsResult<(MultiLineStringArray, Option<Bitmap>)> {
     let storage = UncheckedStorage::new(chunk)?;
-    let parts = match (listed, kwargs.null_behavior) {
-        (false, _) => one_line_per_row(propagate_inner_nulls_of_line_strings(storage)),
-        (true, NullBehavior::Ignore) => drop_null_parts_of_multi_line_strings(storage),
-        (true, NullBehavior::Propagate) => propagate_inner_nulls_of_multi_line_strings(storage),
-    };
-    Ok(match kwargs.empty_behavior {
-        EmptyBehavior::Keep => parts,
-        EmptyBehavior::Skip => {
-            let lines = LineStringArray::from_parts(
-                List::from_offsets(parts.lines.offsets().clone(), None),
-                parts.coords.clone(),
-            );
-            let keep = not_empty(line_strings_are_empty::<false>(&lines.into()));
-            multi_line_strings_with_kept_parts(parts, &keep)
+    let (parts, passing) = match (listed, kwargs.null_behavior) {
+        (false, _) => (
+            one_line_per_row(propagate_inner_nulls_of_line_strings(storage)),
+            None,
+        ),
+        (true, NullBehavior::Ignore) => multi_line_strings_with_null_parts_marked(storage),
+        (true, NullBehavior::Propagate) => {
+            (propagate_inner_nulls_of_multi_line_strings(storage), None)
         }
-    })
+    };
+    let keep = parts_to_keep(passing, kwargs.empty_behavior, || {
+        let lines = LineStringArray::from_parts(
+            List::from_offsets(parts.lines.offsets().clone(), None),
+            parts.coords.clone(),
+        );
+        line_strings_are_empty::<false>(&lines.into())
+    });
+    Ok((parts, keep))
 }
 
 /// [point_parts], for polygons.
@@ -163,25 +177,25 @@ fn polygon_parts(
     chunk: &dyn Array,
     listed: bool,
     kwargs: AddPartsKwargs,
-) -> PolarsResult<MultiPolygonArray> {
+) -> PolarsResult<(MultiPolygonArray, Option<Bitmap>)> {
     let storage = UncheckedStorage::new(chunk)?;
-    let parts = match (listed, kwargs.null_behavior) {
-        (false, _) => one_polygon_per_row(propagate_inner_nulls_of_polygons(storage)),
-        (true, NullBehavior::Ignore) => drop_null_parts_of_multi_polygons(storage),
-        (true, NullBehavior::Propagate) => propagate_inner_nulls_of_multi_polygons(storage),
+    let (parts, passing) = match (listed, kwargs.null_behavior) {
+        (false, _) => (
+            one_polygon_per_row(propagate_inner_nulls_of_polygons(storage)),
+            None,
+        ),
+        (true, NullBehavior::Ignore) => multi_polygons_with_null_parts_marked(storage),
+        (true, NullBehavior::Propagate) => (propagate_inner_nulls_of_multi_polygons(storage), None),
     };
-    Ok(match kwargs.empty_behavior {
-        EmptyBehavior::Keep => parts,
-        EmptyBehavior::Skip => {
-            let polygons = PolygonArray::from_parts(
-                List::from_offsets(parts.polygons.offsets().clone(), None),
-                parts.rings.clone(),
-                parts.coords.clone(),
-            );
-            let keep = not_empty(polygons_are_empty::<false>(&polygons.into()));
-            multi_polygons_with_kept_parts(parts, &keep)
-        }
-    })
+    let keep = parts_to_keep(passing, kwargs.empty_behavior, || {
+        let polygons = PolygonArray::from_parts(
+            List::from_offsets(parts.polygons.offsets().clone(), None),
+            parts.rings.clone(),
+            parts.coords.clone(),
+        );
+        polygons_are_empty::<false>(&polygons.into())
+    });
+    Ok((parts, keep))
 }
 
 /// One chunk of `base` (of `kind`) with one chunk of `parts` added.
@@ -200,9 +214,9 @@ fn chunk_with_added_parts(
                 Kind::Point => one_point_per_row(PointArray::new(Coords::new(base)?)),
                 _ => MultiPointArray::new(rows("a list of coordinates")?)?,
             };
-            let parts = point_parts(parts, listed, kwargs)?;
+            let (parts, keep) = point_parts(parts, listed, kwargs)?;
             let validity = rows_validity(&base.rows, &parts.rows, kwargs.null_behavior);
-            let added = multi_points_with_added_parts(&base, &parts, validity);
+            let added = multi_points_with_added_parts(&base, &parts, keep.as_ref(), validity);
             added.into_list_array().boxed()
         }
         Kind::LineString | Kind::MultiLineString => {
@@ -212,9 +226,9 @@ fn chunk_with_added_parts(
                 }
                 _ => MultiLineStringArray::new(rows("a list of linestrings")?)?,
             };
-            let parts = line_parts(parts, listed, kwargs)?;
+            let (parts, keep) = line_parts(parts, listed, kwargs)?;
             let validity = rows_validity(&base.rows, &parts.rows, kwargs.null_behavior);
-            let added = multi_line_strings_with_added_parts(&base, &parts, validity);
+            let added = multi_line_strings_with_added_parts(&base, &parts, keep.as_ref(), validity);
             added.into_list_array().boxed()
         }
         Kind::Polygon | Kind::MultiPolygon => {
@@ -222,9 +236,9 @@ fn chunk_with_added_parts(
                 Kind::Polygon => one_polygon_per_row(PolygonArray::new(rows("a list of rings")?)?),
                 _ => MultiPolygonArray::new(rows("a list of polygons")?)?,
             };
-            let parts = polygon_parts(parts, listed, kwargs)?;
+            let (parts, keep) = polygon_parts(parts, listed, kwargs)?;
             let validity = rows_validity(&base.rows, &parts.rows, kwargs.null_behavior);
-            let added = multi_polygons_with_added_parts(&base, &parts, validity);
+            let added = multi_polygons_with_added_parts(&base, &parts, keep.as_ref(), validity);
             added.into_list_array().boxed()
         }
     })

@@ -283,6 +283,6 @@ pub fn polygons_with_added_holes(
         rows,
         levels: [rings],
         coords,
-    } = concatenated(polygons.into(), holes.map(Nested::from), validity);
+    } = concatenated(polygons.into(), holes.map(Nested::from), None, validity);
     PolygonArray::from_parts(rows, rings, coords)
 }
