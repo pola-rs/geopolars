@@ -101,7 +101,7 @@ fn gathered(
     part: Kind,
 ) -> PolarsResult<Geo> {
     let (dim, metadata) = parts_of(dtype, part)?;
-    Ok(Geo::new(kind, dim, kwargs.apply(metadata)?))
+    Ok(Geo::new(kind, dim, kwargs.apply(metadata, "parts")?))
 }
 
 /// For gathering a list of `part`s into a `kind`.
@@ -121,7 +121,7 @@ fn line_string_of(dtype: &DataType, kwargs: &MetadataKwargs) -> PolarsResult<Geo
         Ok(geo) if geo.kind == Kind::MultiPoint => Ok(Geo::new(
             Kind::LineString,
             geo.dim,
-            kwargs.apply(geo.metadata.clone())?,
+            kwargs.apply(geo.metadata.clone(), "multipoint")?,
         )),
         _ => gathered(dtype, kwargs, Kind::LineString, Kind::Point),
     }
@@ -390,7 +390,11 @@ fn coordinates_of(input_fields: &[Field], kind: Kind, nesting: u8) -> PolarsResu
 /// Small helper
 fn zipped(input_fields: &[Field], kwargs: &MetadataKwargs, kind: Kind) -> PolarsResult<Geo> {
     let dim = coordinates_of(input_fields, kind, kind.nesting())?;
-    Ok(Geo::new(kind, dim, kwargs.apply(Default::default())?))
+    Ok(Geo::new(
+        kind,
+        dim,
+        kwargs.apply(Default::default(), "coordinates")?,
+    ))
 }
 
 /// The polygons or multipolygons `polygon_coords` and `multipolygon_coords` zip:
@@ -401,7 +405,11 @@ fn zipped_exteriors(
     kind: Kind,
 ) -> PolarsResult<Geo> {
     let dim = coordinates_of(input_fields, kind, kind.nesting() - 1)?;
-    Ok(Geo::new(kind, dim, kwargs.apply(Default::default())?))
+    Ok(Geo::new(
+        kind,
+        dim,
+        kwargs.apply(Default::default(), "coordinates")?,
+    ))
 }
 
 /// For zipping coordinate columns into a `kind`.
@@ -755,7 +763,8 @@ impl SeparateRingsKwargs {
 
 /// The polygons `polygon_rings_in_separate_columns` builds,
 /// and whether the holes (if passed) are a list of rings per row.
-/// The holes are checked against the CRS the polygons get.
+/// `crs` declares itself on the exterior and the holes where they declare none,
+/// and then they are checked against each other.
 fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResult<(Geo, bool)> {
     let exterior = input_fields[0].dtype();
     let layout = parts_layout(exterior, Kind::LineString, "exterior")
@@ -772,18 +781,22 @@ fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResu
         Some(holes) => listed_parts(holes, Kind::LineString, layout.dim, ("exterior", "holes"))?,
         None => (false, None),
     };
-    // A bare exterior takes the metadata of the holes.
-    let declared = layout.metadata.or(holes_metadata.clone());
-    let metadata = kwargs.apply(declared.unwrap_or_default())?;
-    // `crs` declares itself on holes without a CRS as much as on the exterior.
+    let exterior_metadata = (layout.metadata)
+        .map(|metadata| kwargs.apply(metadata, "exterior"))
+        .transpose()?;
     let holes_metadata = holes_metadata
-        .map(|holes| kwargs.apply(holes))
+        .map(|metadata| kwargs.apply(metadata, "holes"))
         .transpose()?;
     ensure_same_crs_unless_bare(
-        Some(&metadata),
+        exterior_metadata.as_deref(),
         holes_metadata.as_deref(),
-        ("polygons", "holes"),
+        ("exterior", "holes"),
     )?;
+    // A bare exterior takes the metadata of the holes.
+    let metadata = match exterior_metadata.or(holes_metadata) {
+        Some(metadata) => metadata,
+        None => kwargs.apply(Default::default(), "exterior")?,
+    };
     Ok((Geo::new(Kind::Polygon, layout.dim, metadata), listed))
 }
 

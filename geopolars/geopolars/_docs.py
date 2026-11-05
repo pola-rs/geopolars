@@ -97,7 +97,16 @@ The result keeps the input's dimension and CRS.""",
 or one of them has a single row, which then goes with every row of the other.""",
     "same_crs": """\
 `{parts}` have to declare the same CRS as `{geometry}`, or neither may declare one.
-Bare coordinates are the exception, and go with any CRS.""",
+Bare coordinates and an untyped null (`pl.lit(None)`) cannot declare a CRS,
+so they go with any.
+
+| `{geometry}` | `{parts}` | result |
+| - | - | - |
+| declares X | declares X | accepted |
+| declares none | declares none | accepted |
+| anything | bare coordinates, or `pl.lit(None)` | accepted |
+| declares X | declares none, or the other way round | refused |
+| declares X | declares Y | refused |""",
     "null_parts": """\
 What a null {part} does is set by `null_parts`.
 A null {part} is a null row of `{parts}`, a null in a list of them,

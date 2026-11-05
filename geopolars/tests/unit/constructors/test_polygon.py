@@ -620,7 +620,7 @@ def test_holes_in_another_crs_than_the_one_passed_are_refused() -> None:
         )
     )
 
-    with pytest.raises(ComputeError, match="already declare the CRS"):
+    with pytest.raises(ComputeError, match="the CRS of the holes is already"):
         lf.collect_schema()
 
 

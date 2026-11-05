@@ -92,6 +92,7 @@ def polygons_from_rings_in_separate_columns(
     The CRS is `crs`, or else the exterior's,
     or else that of the holes when the exterior is bare coordinates.
     `crs` also sets the CRS of holes that declare none.
+    An exterior or holes that already declare another CRS than `crs` are refused.
     The holes then have to declare the polygon's CRS, or none when it has none.
     Holes as bare coordinates go with any CRS.
     Rings are checked (and closed with `close`)

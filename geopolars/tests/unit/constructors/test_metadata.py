@@ -172,7 +172,7 @@ class TestGatheringParts:
         """Relabelling would silently move every coordinate somewhere else."""
         lf = parts(WGS84).lazy().select(constructor(pl.all(), crs="EPSG:28992"))
 
-        with pytest.raises(ComputeError, match="already declare the CRS"):
+        with pytest.raises(ComputeError, match="is already"):
             lf.collect_schema()
 
 
