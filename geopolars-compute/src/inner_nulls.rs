@@ -11,6 +11,7 @@ use geopolars_core::{
     PolygonArray, UncheckedStorage, ValidCoords, ValidList,
 };
 use polars_arrow::bitmap::Bitmap;
+use polars_arrow::compute::utils::combine_validities_and;
 
 use crate::passing::rows_passing;
 
@@ -144,7 +145,7 @@ pub fn multi_polygons_with_null_parts_marked(
 
 /// A view and a mask of the parts of it to read.
 /// The parts with a null value in the input are unset in it,
-/// and after [without_empty_parts](MaskedParts::without_empty_parts) the empty ones too.
+/// and after [without_empty_parts](crate::native::WithoutEmptyParts::without_empty_parts) the empty ones too.
 /// The unset parts may hold arbitrary values,
 /// so the view is not handed out as a plain one.
 // Only the `native` kernels read it.
@@ -173,6 +174,13 @@ impl MaskedParts<MultiLineStringArray> {
     #[inline(always)]
     pub fn rows(&self) -> &List {
         &self.view.rows
+    }
+
+    /// Makes the rows unset in `rows` null too.
+    pub fn only_on_rows(mut self, rows: &Bitmap) -> Self {
+        let validity = combine_validities_and(self.view.rows.validity(), Some(rows));
+        self.view.rows = self.view.rows.with_validity(validity);
+        self
     }
 }
 

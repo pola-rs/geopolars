@@ -690,7 +690,11 @@ pub(super) fn parts_layout(
             if !holds_parts(found.kind, part) {
                 return Err(refused());
             }
-            (found.kind.nesting(), found.dim, Some(found.metadata.clone()))
+            (
+                found.kind.nesting(),
+                found.dim,
+                Some(found.metadata.clone()),
+            )
         }
         bare => (0, coord::dimension_of(bare).ok_or_else(refused)?, None),
     };
@@ -754,7 +758,9 @@ impl SeparateRingsKwargs {
 /// The holes are checked against the CRS the polygons get.
 fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResult<(Geo, bool)> {
     let exterior = input_fields[0].dtype();
-    let layout = parts_layout(exterior, Kind::LineString, "exterior").ok().flatten();
+    let layout = parts_layout(exterior, Kind::LineString, "exterior")
+        .ok()
+        .flatten();
     let Some(layout) = layout.filter(|layout| !layout.listed) else {
         polars_bail!(
             SchemaMismatch: "expected the exterior as one ring per row: a `linestring`, \
@@ -828,7 +834,11 @@ pub(super) fn parts_storage(
     match parts.dtype() {
         DataType::Null => {
             let storage = dim.storage(multi.nesting());
-            Ok(Series::full_null(parts.name().clone(), parts.len(), &storage))
+            Ok(Series::full_null(
+                parts.name().clone(),
+                parts.len(),
+                &storage,
+            ))
         }
         _ => storage_of(parts),
     }

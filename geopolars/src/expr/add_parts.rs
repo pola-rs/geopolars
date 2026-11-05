@@ -8,7 +8,7 @@ use geopolars_compute::inner_nulls::{
 };
 use geopolars_compute::native::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
-    multi_polygons_with_added_parts,
+    multi_polygons_with_added_parts, WithoutEmptyParts,
 };
 use geopolars_core::{
     downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
@@ -26,7 +26,7 @@ use super::construct::{
 use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo, Kind};
 
 /// `empty_parts` of `add_parts`.
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum EmptyParts {
     Keep,
@@ -88,8 +88,18 @@ fn polygons_per_row(
     })
 }
 
+fn without_empty_parts_if<T: WithoutEmptyParts>(drop: bool, parts: T) -> T {
+    if drop {
+        parts.without_empty_parts()
+    } else {
+        parts
+    }
+}
+
 /// One chunk of `base` (of `kind`) with one chunk of `parts` added.
 /// `parts` holds one part per row, or with `listed=true` a list of them.
+/// With [EmptyParts::Drop], an empty single `base` is dropped like an empty part,
+/// as that is what it is once a multi-geometry.
 fn chunk_with_added_parts(
     kind: Kind,
     base: &dyn Array,
@@ -98,48 +108,47 @@ fn chunk_with_added_parts(
     kwargs: AddPartsKwargs,
 ) -> PolarsResult<Box<dyn Array>> {
     let rows = |what| downcast(base, what);
+    let drop = kwargs.empty_parts == EmptyParts::Drop;
     Ok(match kind {
         Kind::Point | Kind::MultiPoint => {
             let base = match kind {
-                Kind::Point => one_point_per_row(PointArray::new(Coords::new(base)?)),
-                _ => MultiPointArray::new(rows("a list of coordinates")?)?,
+                Kind::Point => without_empty_parts_if(
+                    drop,
+                    MaskedParts::from(one_point_per_row(PointArray::new(Coords::new(base)?))),
+                ),
+                _ => MultiPointArray::new(rows("a list of coordinates")?)?.into(),
             };
             let parts = points_per_row(parts, listed, kwargs.null_parts)?;
-            let parts = match kwargs.empty_parts {
-                EmptyParts::Keep => parts,
-                EmptyParts::Drop => parts.without_empty_parts(),
-            };
-            let validity = rows_validity(&base.rows, parts.rows(), kwargs.null_parts);
+            let parts = without_empty_parts_if(drop, parts);
+            let validity = rows_validity(base.rows(), parts.rows(), kwargs.null_parts);
             let added = multi_points_with_added_parts(&base, &parts, validity);
             added.into_list_array().boxed()
         }
         Kind::LineString | Kind::MultiLineString => {
             let base = match kind {
                 Kind::LineString => {
-                    one_line_per_row(LineStringArray::new(rows("a list of coordinates")?)?)
+                    let lines = LineStringArray::new(rows("a list of coordinates")?)?;
+                    without_empty_parts_if(drop, MaskedParts::from(one_line_per_row(lines)))
                 }
-                _ => MultiLineStringArray::new(rows("a list of linestrings")?)?,
+                _ => MultiLineStringArray::new(rows("a list of linestrings")?)?.into(),
             };
             let parts = lines_per_row(parts, listed, kwargs.null_parts)?;
-            let parts = match kwargs.empty_parts {
-                EmptyParts::Keep => parts,
-                EmptyParts::Drop => parts.without_empty_parts(),
-            };
-            let validity = rows_validity(&base.rows, parts.rows(), kwargs.null_parts);
+            let parts = without_empty_parts_if(drop, parts);
+            let validity = rows_validity(base.rows(), parts.rows(), kwargs.null_parts);
             let added = multi_line_strings_with_added_parts(&base, &parts, validity);
             added.into_list_array().boxed()
         }
         Kind::Polygon | Kind::MultiPolygon => {
             let base = match kind {
-                Kind::Polygon => one_polygon_per_row(PolygonArray::new(rows("a list of rings")?)?),
-                _ => MultiPolygonArray::new(rows("a list of polygons")?)?,
+                Kind::Polygon => {
+                    let polygons = PolygonArray::new(rows("a list of rings")?)?;
+                    without_empty_parts_if(drop, MaskedParts::from(one_polygon_per_row(polygons)))
+                }
+                _ => MultiPolygonArray::new(rows("a list of polygons")?)?.into(),
             };
             let parts = polygons_per_row(parts, listed, kwargs.null_parts)?;
-            let parts = match kwargs.empty_parts {
-                EmptyParts::Keep => parts,
-                EmptyParts::Drop => parts.without_empty_parts(),
-            };
-            let validity = rows_validity(&base.rows, parts.rows(), kwargs.null_parts);
+            let parts = without_empty_parts_if(drop, parts);
+            let validity = rows_validity(base.rows(), parts.rows(), kwargs.null_parts);
             let added = multi_polygons_with_added_parts(&base, &parts, validity);
             added.into_list_array().boxed()
         }

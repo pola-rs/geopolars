@@ -495,6 +495,40 @@ def test_a_point_with_only_some_axes_nan_is_not_empty() -> None:
 
 
 @pytest.mark.parametrize(
+    ("geometry", "parts", "part"),
+    [
+        (_points(_EMPTY_POINT), _listed_points([_B[0]]), _B[0]),
+        (_lines([]), _listed_lines([_B]), _B),
+        (_polygons([]), _listed_polygons([_Q]), _Q),
+        (_polygons([[]]), _listed_polygons([_Q]), _Q),
+    ],
+)
+def test_an_empty_single_geometry_is_dropped_too(
+    geometry: pl.Series, parts: pl.Series, part: object
+) -> None:
+    kept = _added(geometry, parts)
+    dropped = _added(geometry, parts, empty_parts="drop")
+
+    assert kept.ext.storage().list.len().to_list() == [2]
+    assert dropped.ext.storage().to_list() == [[part]]
+
+
+def test_an_empty_point_between_others_is_dropped() -> None:
+    geometry = _points(_A[0], _EMPTY_POINT, _C[0])
+    parts = _listed_points([_B[0]], [_B[1]], [_B[2]])
+
+    out = _added(geometry, parts, empty_parts="drop")
+
+    assert out.ext.storage().to_list() == [[_A[0], _B[0]], [_B[1]], [_C[0], _B[2]]]
+
+
+def test_an_empty_point_without_parts_becomes_an_empty_multipoint() -> None:
+    out = _added(_points(_EMPTY_POINT), _listed_points([]), empty_parts="drop")
+
+    assert out.ext.storage().to_list() == [[]]
+
+
+@pytest.mark.parametrize(
     ("geometry", "parts", "expected"),
     [
         (

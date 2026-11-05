@@ -29,7 +29,7 @@ mod too_short;
 
 pub use add_parts::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
-    multi_polygons_with_added_parts,
+    multi_polygons_with_added_parts, WithoutEmptyParts,
 };
 pub use affine::{
     affine_line_strings, affine_multi_line_strings, affine_multi_points, affine_multi_polygons,
@@ -98,8 +98,8 @@ pub use reverse::{
     reverse_polygons,
 };
 pub use rings::{
-    close_open_rings, multi_polygon_exteriors, multi_polygon_interiors, polygon_exteriors,
-    polygon_interiors, polygons_with_added_holes, have_room_for_holes,
+    close_open_rings, have_room_for_holes, multi_polygon_exteriors, multi_polygon_interiors,
+    polygon_exteriors, polygon_interiors, polygons_with_added_holes,
 };
 pub use selected_coords::{
     line_strings_with_selected, multi_line_strings_with_selected, multi_points_with_selected,

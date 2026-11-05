@@ -2,15 +2,15 @@
 //! The parts are copied as they are; only `without_empty_parts` looks at them, to find empty ones.
 
 use geopolars_core::{
-    Coords, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
+    LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
 };
 use polars_arrow::array::BooleanArray;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;
 
 use super::concatenated::{concatenated, Built};
-use super::is_empty::{line_strings_are_empty, points_are_empty, polygons_are_empty};
+use super::coordinate_selection::{which_are_not_selected, CoordinateSelection, NonFinite};
+use super::is_empty::{line_strings_are_empty, polygons_are_empty};
 use crate::inner_nulls::MaskedParts;
 
 /// `keep`, with every part that `empty` holds as `true` unset as well.
@@ -18,18 +18,33 @@ fn keep_without_empty(keep: Option<Bitmap>, empty: BooleanArray) -> Option<Bitma
     combine_validities_and(keep.as_ref(), Some(&!empty.values()))
 }
 
-impl MaskedParts<MultiPointArray> {
-    /// Unsets the empty points (every axis NaN) in the mask too.
-    pub fn without_empty_parts(self) -> Self {
-        let points = PointArray::new(Coords::from_valid(self.view.coords.clone(), None));
-        let keep = keep_without_empty(self.keep, points_are_empty(&points));
+/// Unsetting the empty parts in the mask of a [MaskedParts] too.
+pub trait WithoutEmptyParts {
+    fn without_empty_parts(self) -> Self;
+}
+
+const EMPTY_POINTS: CoordinateSelection = CoordinateSelection {
+    non_finite: Some(NonFinite {
+        select_non_finite: false,
+        select_empty: true,
+        ignore_z: false,
+        ignore_m: false,
+    }),
+    bounds: None,
+};
+
+/// The empty points have every axis NaN.
+impl WithoutEmptyParts for MaskedParts<MultiPointArray> {
+    fn without_empty_parts(self) -> Self {
+        let not_empty = which_are_not_selected(&self.view.coords, &EMPTY_POINTS);
+        let keep = combine_validities_and(self.keep.as_ref(), not_empty.as_ref());
         Self { keep, ..self }
     }
 }
 
-impl MaskedParts<MultiLineStringArray> {
-    /// Unsets the linestrings without vertices in the mask too.
-    pub fn without_empty_parts(self) -> Self {
+/// The empty linestrings have no vertices.
+impl WithoutEmptyParts for MaskedParts<MultiLineStringArray> {
+    fn without_empty_parts(self) -> Self {
         let lines = LineStringArray::from_parts(
             List::from_offsets(self.view.lines.offsets().clone(), None),
             self.view.coords.clone(),
@@ -40,9 +55,9 @@ impl MaskedParts<MultiLineStringArray> {
     }
 }
 
-impl MaskedParts<MultiPolygonArray> {
-    /// Unsets the polygons without vertices in the mask too.
-    pub fn without_empty_parts(self) -> Self {
+/// The empty polygons have no vertices.
+impl WithoutEmptyParts for MaskedParts<MultiPolygonArray> {
+    fn without_empty_parts(self) -> Self {
         let polygons = PolygonArray::from_parts(
             List::from_offsets(self.view.polygons.offsets().clone(), None),
             self.view.rings.clone(),
@@ -57,49 +72,63 @@ impl MaskedParts<MultiPolygonArray> {
 /// `base`, each followed by the points on the same row of `added`.
 /// See [multi_line_strings_with_added_parts].
 pub fn multi_points_with_added_parts(
-    base: &MultiPointArray,
+    base: &MaskedParts<MultiPointArray>,
     added: &MaskedParts<MultiPointArray>,
     validity: Option<Bitmap>,
 ) -> MultiPointArray {
-    let keep = added.keep.as_ref();
-    let Built { rows, coords, .. } =
-        concatenated(base.into(), Some((&added.view).into()), keep, validity);
+    let Built { rows, coords, .. } = concatenated(
+        (&base.view).into(),
+        base.keep.as_ref(),
+        Some((&added.view).into()),
+        added.keep.as_ref(),
+        validity,
+    );
     MultiPointArray::from_parts(rows, coords)
 }
 
 /// `base`, each followed by the linestrings on the same row of `added`.
 /// A null row of `added` adds nothing.
-/// Only the linestrings of `added` set in its mask are added.
+/// Only the linestrings of `base` and `added` set in their masks are taken.
 /// The rows are null where `validity` says.
 /// Every null row of `base` has to be null in it too.
 ///
 /// `base` and `added` have to have the same length and dimension.
 pub fn multi_line_strings_with_added_parts(
-    base: &MultiLineStringArray,
+    base: &MaskedParts<MultiLineStringArray>,
     added: &MaskedParts<MultiLineStringArray>,
     validity: Option<Bitmap>,
 ) -> MultiLineStringArray {
-    let keep = added.keep.as_ref();
     let Built {
         rows,
         levels: [lines],
         coords,
-    } = concatenated(base.into(), Some((&added.view).into()), keep, validity);
+    } = concatenated(
+        (&base.view).into(),
+        base.keep.as_ref(),
+        Some((&added.view).into()),
+        added.keep.as_ref(),
+        validity,
+    );
     MultiLineStringArray::from_parts(rows, lines, coords)
 }
 
 /// `base`, each followed by the polygons on the same row of `added`.
 /// See [multi_line_strings_with_added_parts].
 pub fn multi_polygons_with_added_parts(
-    base: &MultiPolygonArray,
+    base: &MaskedParts<MultiPolygonArray>,
     added: &MaskedParts<MultiPolygonArray>,
     validity: Option<Bitmap>,
 ) -> MultiPolygonArray {
-    let keep = added.keep.as_ref();
     let Built {
         rows,
         levels: [polygons, rings],
         coords,
-    } = concatenated(base.into(), Some((&added.view).into()), keep, validity);
+    } = concatenated(
+        (&base.view).into(),
+        base.keep.as_ref(),
+        Some((&added.view).into()),
+        added.keep.as_ref(),
+        validity,
+    );
     MultiPolygonArray::from_parts(rows, polygons, rings, coords)
 }

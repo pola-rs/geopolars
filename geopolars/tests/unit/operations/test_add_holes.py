@@ -206,6 +206,43 @@ def test_an_empty_hole_can_be_added_to_an_empty_polygon() -> None:
     assert out.ext.storage().to_list() == [[[]], [[], []]]
 
 
+def test_an_empty_exterior_has_no_room_for_holes() -> None:
+    out = _added(_polygons([[]]), _lines(_HOLE))
+
+    assert out.to_list() == [None]
+
+
+def test_a_polygon_with_an_empty_exterior_can_be_kept() -> None:
+    out = _added(
+        _polygons([], [[]], [_EXTERIOR]),
+        _lines(_HOLE, _HOLE, _HOLE),
+        empty_exterior="keep",
+    )
+
+    assert out.ext.storage().to_list() == [[], [[]], [_EXTERIOR, _HOLE]]
+
+
+def test_a_kept_polygon_takes_none_of_its_holes_unless_all_are_empty() -> None:
+    out = _added(
+        _polygons([[]], [[]]),
+        _listed_lines([[], _HOLE, []], [[], []]),
+        empty_exterior="keep",
+    )
+
+    assert out.ext.storage().to_list() == [[[]], [[], [], []]]
+
+
+def test_a_null_hole_still_nulls_a_kept_polygon() -> None:
+    out = _added(_polygons([]), _lines(None), empty_exterior="keep")
+
+    assert out.to_list() == [None]
+
+
+def test_an_unknown_empty_exterior_is_refused() -> None:
+    with pytest.raises(ValueError, match="must be one of"):
+        geo.add_holes("polygon", "holes", empty_exterior="drop")  # type: ignore[arg-type]
+
+
 def test_an_open_hole_nulls_the_polygon_unless_closed() -> None:
     polygons, holes = _polygons([_EXTERIOR]), _lines(_OPEN)
 
@@ -280,7 +317,9 @@ def test_holes_as_bare_vertices_go_with_any_crs() -> None:
 
 
 def test_holes_as_multipoints_are_accepted() -> None:
-    multi_points = pl.Series("holes", [_HOLE], dtype=_XY_VERTICES).ext.to(MultiPointXY())
+    multi_points = pl.Series("holes", [_HOLE], dtype=_XY_VERTICES).ext.to(
+        MultiPointXY()
+    )
     listed = multi_points.implode()
 
     single = _added(_polygons([_EXTERIOR]), multi_points)

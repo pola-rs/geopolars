@@ -374,10 +374,17 @@ class ExprGeoNameSpace:
         *,
         close: CloseRings | None = None,
         null_parts: Literal["drop", "null"] = "null",
+        empty_exterior: Literal["null", "keep"] = "null",
     ) -> pl.Expr:
         from geopolars.geo.add_holes import add_holes
 
-        return add_holes(self._expr, holes, close=close, null_parts=null_parts)
+        return add_holes(
+            self._expr,
+            holes,
+            close=close,
+            null_parts=null_parts,
+            empty_exterior=empty_exterior,
+        )
 
     def add_parts(
         self,

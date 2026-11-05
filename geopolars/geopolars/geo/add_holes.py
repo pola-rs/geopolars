@@ -6,7 +6,7 @@ A native kernel (A-tier) copies the polygons and their new holes into new buffer
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from polars.plugins import register_plugin_function
 
@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
     from geopolars.geo.close_rings import CloseRings
 
+EmptyExterior = Literal["null", "keep"]
+
 
 def _add_holes(
     column: pl.Expr,
@@ -30,6 +32,7 @@ def _add_holes(
     holes: IntoExprColumn,
     close: CloseRings | None,
     null_parts: NullParts,
+    empty_exterior: EmptyExterior,
 ) -> pl.Expr:
     if not isinstance(geometry, PolygonType):
         msg = f"add_holes expects a polygon column, got: {geometry!r}"
@@ -42,6 +45,7 @@ def _add_holes(
         kwargs={
             "close": None if close is None else asdict(close),
             "null_parts": null_parts,
+            "empty_exterior": empty_exterior,
         },
     )
 
@@ -53,6 +57,7 @@ def add_holes(
     *,
     close: CloseRings | None = None,
     null_parts: NullParts = "null",
+    empty_exterior: EmptyExterior = "null",
 ) -> pl.Expr:
     """Add the rings of `holes` to each polygon as extra holes,
     after the holes it already has.
@@ -85,8 +90,14 @@ def add_holes(
     An empty list adds no holes,
     and neither do the holes `null_parts="drop"` leaves out.
     The polygon's own rings are still checked, as described below.
-    An empty polygon that gets holes with vertices is null,
-    as it has no exterior to put them in.
+    A polygon with an empty exterior has nothing to put a hole with vertices in.
+    What it does when it gets one is set by `empty_exterior`.
+
+    | `empty_exterior` | a polygon with an empty exterior that gets a hole with vertices |
+    | - | - |
+    | `"null"` | is null |
+    | `"keep"` | stays as it is: none of the holes of its row are added |
+
     Empty holes can still be added to it, and it stays an empty polygon.
 
     Every ring of the result has to be a ring (see [`is_ring`][geopolars.geo.is_ring]),
@@ -102,7 +113,10 @@ def add_holes(
     ```
     """
     validate_one_of("null_parts", null_parts, NullParts)
+    validate_one_of("empty_exterior", empty_exterior, EmptyExterior)
     return on_geometry(
         polygon,
-        lambda column, geometry: _add_holes(column, geometry, holes, close, null_parts),
+        lambda column, geometry: _add_holes(
+            column, geometry, holes, close, null_parts, empty_exterior
+        ),
     )

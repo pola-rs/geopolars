@@ -24,6 +24,16 @@ pub struct AddHolesKwargs {
     /// How to close every open ring, as `close_rings` does. `None` closes nothing.
     pub close: Option<CloseRingsKwargs>,
     null_parts: NullParts,
+    empty_exterior: EmptyExterior,
+}
+
+/// `empty_exterior` of `add_holes`.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum EmptyExterior {
+    #[default]
+    Null,
+    Keep,
 }
 
 /// The polygons `add_holes` gives back,
@@ -63,7 +73,13 @@ fn chunk_with_added_holes(
     let holes = lines_per_row(holes, listed, kwargs.null_parts)?;
     let validity = rows_validity(&polygons.rows, holes.rows(), kwargs.null_parts);
     let room = have_room_for_holes(&polygons, &holes);
-    let validity = combine_validities_and(validity.as_ref(), Some(&room));
+    let (holes, validity) = match kwargs.empty_exterior {
+        EmptyExterior::Null => (
+            holes,
+            combine_validities_and(validity.as_ref(), Some(&room)),
+        ),
+        EmptyExterior::Keep => (holes.only_on_rows(&room), validity),
+    };
     let added = polygons_with_added_holes(&polygons, Some(&holes), validity);
     Ok(validated_polygons(added, kwargs.close))
 }

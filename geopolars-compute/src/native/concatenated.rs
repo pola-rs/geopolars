@@ -2,8 +2,8 @@
 //! `add_parts` builds on it, and so does `polygons_with_added_holes`,
 //! as a polygon's rings are its parts like a multilinestring's linestrings.
 
-use std::array;
 use std::ops::Range;
+use std::{array, mem};
 
 use geopolars_core::{
     List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray, ValidCoords,
@@ -98,8 +98,9 @@ fn offsets_with_capacity<const N: usize>(capacity: impl Fn(usize) -> usize) -> [
 
 /// A slice of the base's vertices followed by a slice of the added parts' vertices,
 /// as [concatenated] copies them.
-/// A valid row takes one, and one more for each later run of kept parts (see [kept_runs]).
-/// Those have an empty `base`.
+/// A valid row takes one, and one more for each later run of kept items (see [kept_runs]).
+/// A later run of the base has an empty `added`, a later run of the added parts an empty `base`.
+#[derive(Default)]
 struct CopiedVertices {
     /// In the coordinates of the base.
     base: Range<usize>,
@@ -122,8 +123,9 @@ fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: u
 /// The items are the entries of a row's list:
 /// the parts of a multi-geometry, or the rings of a polygon.
 /// A null row of `added` adds nothing.
-/// With `keep`, only the items of `added` set in it are added (one bit per item).
-/// Without `added`, `base` is copied as it is.
+/// With `base_keep` or `added_keep`, only the items of `base` or `added` set in it are taken
+/// (one bit per item).
+/// Without `added`, `base` is copied as it is (apart from what `base_keep` leaves out).
 /// The rows are null where `validity` says.
 /// Every null row of `base` has to be null in it too.
 ///
@@ -131,11 +133,13 @@ fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: u
 /// The vertices are copied into new buffers, one slice per axis per [CopiedVertices].
 pub(super) fn concatenated<const N: usize>(
     base: Nested<N>,
+    base_keep: Option<&Bitmap>,
     added: Option<Nested<N>>,
-    keep: Option<&Bitmap>,
+    added_keep: Option<&Bitmap>,
     validity: Option<Bitmap>,
 ) -> Built<N> {
-    let keep = keep.filter(|keep| keep.unset_bits() > 0);
+    let base_keep = base_keep.filter(|keep| keep.unset_bits() > 0);
+    let added_keep = added_keep.filter(|keep| keep.unset_bits() > 0);
     let len = base.rows.len();
     if let Some(added) = &added {
         assert_eq!(added.rows.len(), len, "the arrays differ in length");
@@ -161,11 +165,33 @@ pub(super) fn concatenated<const N: usize>(
             continue;
         }
         let items = base.rows.range(i);
-        let mut item_count = items.len();
-        let mut copy = CopiedVertices {
-            base: copied_offsets(&base.levels, items, &mut offsets),
-            added: 0..0,
-        };
+        let mut item_count = 0;
+        let mut copy = CopiedVertices::default();
+        match base_keep {
+            None => {
+                item_count = items.len();
+                copy.base = copied_offsets(&base.levels, items, &mut offsets);
+            }
+            // A single item, as every row of a single geometry has, needs no search for runs.
+            Some(keep) if items.len() == 1 => {
+                if keep.get_bit(items.start) {
+                    item_count = 1;
+                    copy.base = copied_offsets(&base.levels, items, &mut offsets);
+                }
+            }
+            // As for the added items below, every run is a slice of its own.
+            // The last run shares its `CopiedVertices` with the first run of the added items.
+            Some(keep) => {
+                for run in kept_runs(keep, items) {
+                    if item_count > 0 {
+                        coords_len += copy.base.len();
+                        copies.push(mem::take(&mut copy));
+                    }
+                    item_count += run.len();
+                    copy.base = copied_offsets(&base.levels, run, &mut offsets);
+                }
+            }
+        }
         let added = added.as_ref().filter(|added| added.rows.is_valid(i));
         let Some(added) = added else {
             row_offsets.try_push(item_count).expect(NO_OVERFLOW);
@@ -173,7 +199,7 @@ pub(super) fn concatenated<const N: usize>(
             copies.push(copy);
             continue;
         };
-        let Some(keep) = keep else {
+        let Some(keep) = added_keep else {
             let items = added.rows.range(i);
             item_count += items.len();
             copy.added = copied_offsets(&added.levels, items, &mut offsets);

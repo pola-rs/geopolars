@@ -287,23 +287,30 @@ pub fn polygons_with_added_holes(
         rows,
         levels: [rings],
         coords,
-    } = concatenated(polygons.into(), holes, keep, validity);
+    } = concatenated(polygons.into(), None, holes, keep, validity);
     PolygonArray::from_parts(rows, rings, coords)
 }
 
 /// Where a polygon has room for its holes:
-/// everywhere but a polygon without rings that gets holes with vertices.
+/// everywhere but a polygon with an empty exterior (or none) that gets holes with vertices.
 /// Only the holes set in the mask count.
-/// Without this, its first hole would become its exterior, and pass validation.
+/// Without this, the first hole of a polygon without rings would become its exterior,
+/// and pass validation.
 pub fn have_room_for_holes(
     polygons: &PolygonArray,
     holes: &MaskedParts<MultiLineStringArray>,
 ) -> Bitmap {
     let (rows, lines) = (&holes.view.rows, &holes.view.lines);
     let is_kept = |line: usize| holes.keep.as_ref().is_none_or(|keep| keep.get_bit(line));
+    let has_exterior = |i: usize| {
+        let mut rings = polygons.rows.range(i);
+        rings
+            .next()
+            .is_some_and(|exterior| !polygons.rings.range(exterior).is_empty())
+    };
     (0..polygons.rows.len())
         .map(|i| {
-            !polygons.rows.range(i).is_empty()
+            has_exterior(i)
                 || !rows.is_valid(i)
                 || rows
                     .range(i)
