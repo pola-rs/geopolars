@@ -5,7 +5,7 @@
 //! (see [`geopolars_compute::geos::topologically_equal_pairwise`]).
 
 use geopolars_compute::geos::{
-    topologically_equal_against_one, topologically_equal_pairwise, GeosGeometries, ToGeosRows,
+    topologically_equal_against_one, topologically_equal_pairwise, ToGeosRows,
 };
 use geopolars_compute::native::{
     line_strings_are_close, multi_line_strings_are_close, multi_points_are_close,
@@ -186,35 +186,24 @@ fn kernel_output_type_is_equal_topological(input_fields: &[Field]) -> PolarsResu
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-/// One chunk of the storage of a `kind`, converted for GEOS.
-fn chunk_to_geos_rows(
-    chunk: &dyn Array,
-    kind: Kind,
-    kwargs: &IsEqualTopologicalKwargs,
-) -> PolarsResult<GeosGeometries> {
-    let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
+/// One chunk of the storage of a `kind`, as the GEOS kernels take it.
+fn geos_view(chunk: &dyn Array, kind: Kind) -> PolarsResult<Box<dyn ToGeosRows>> {
     let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
-    match kind {
-        Kind::Point => PointArray::new(Coords::new(chunk)?).to_geos_rows(ignore, early),
-        Kind::MultiPoint => MultiPointArray::new(rows(chunk)?)?.to_geos_rows(ignore, early),
-        Kind::LineString => LineStringArray::new(rows(chunk)?)?.to_geos_rows(ignore, early),
-        Kind::MultiLineString => {
-            MultiLineStringArray::new(rows(chunk)?)?.to_geos_rows(ignore, early)
-        }
-        Kind::Polygon => PolygonArray::new(rows(chunk)?)?.to_geos_rows(ignore, early),
-        Kind::MultiPolygon => MultiPolygonArray::new(rows(chunk)?)?.to_geos_rows(ignore, early),
-    }
-    .into_polars()
+    Ok(match kind {
+        Kind::Point => Box::new(PointArray::new(Coords::new(chunk)?)),
+        Kind::MultiPoint => Box::new(MultiPointArray::new(rows(chunk)?)?),
+        Kind::LineString => Box::new(LineStringArray::new(rows(chunk)?)?),
+        Kind::MultiLineString => Box::new(MultiLineStringArray::new(rows(chunk)?)?),
+        Kind::Polygon => Box::new(PolygonArray::new(rows(chunk)?)?),
+        Kind::MultiPolygon => Box::new(MultiPolygonArray::new(rows(chunk)?)?),
+    })
 }
 
-/// `geometries` as a single chunk, converted for GEOS.
-fn series_to_geos_rows(
-    geometries: &Series,
-    kwargs: &IsEqualTopologicalKwargs,
-) -> PolarsResult<GeosGeometries> {
+/// [geos_view] of `geometries` as a single chunk.
+fn single_chunk_geos_view(geometries: &Series) -> PolarsResult<Box<dyn ToGeosRows>> {
     let kind = describe(geometries.dtype())?.kind;
     let storage = geometries.ext()?.storage().rechunk();
-    chunk_to_geos_rows(storage.chunks()[0].as_ref(), kind, kwargs)
+    geos_view(storage.chunks()[0].as_ref(), kind)
 }
 
 /// [topologically_equal_against_one] for every chunk of `many`, against the single row of `one`.
@@ -223,16 +212,16 @@ fn every_topologically_equal_to_one(
     many: &Series,
     kwargs: &IsEqualTopologicalKwargs,
 ) -> PolarsResult<Vec<BooleanArray>> {
-    let one = series_to_geos_rows(one, kwargs)?;
-    let one = &one.geometries[0];
+    let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
+    let one = single_chunk_geos_view(one)?;
     let kind = describe(many.dtype())?.kind;
     many.ext()?
         .storage()
         .chunks()
         .iter()
         .map(|many| {
-            let many = chunk_to_geos_rows(many.as_ref(), kind, kwargs)?;
-            topologically_equal_against_one(one, &many, kwargs.ignore_per_row_errors)
+            let many = geos_view(many.as_ref(), kind)?;
+            topologically_equal_against_one(one.as_ref(), many.as_ref(), ignore, early)
                 .into_polars()
         })
         .collect()
@@ -249,8 +238,12 @@ fn is_equal_topological(
         // `aligned_chunks` takes two storages of one physical type, and the kinds can differ,
         // so both sides are made a single chunk instead, as in `rings_overlap`.
         (n, m) if n == m => {
-            let (a, b) = (series_to_geos_rows(a, &kwargs)?, series_to_geos_rows(b, &kwargs)?);
-            vec![topologically_equal_pairwise(&a, &b, kwargs.ignore_per_row_errors).into_polars()?]
+            let (a, b) = (single_chunk_geos_view(a)?, single_chunk_geos_view(b)?);
+            let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
+            vec![
+                topologically_equal_pairwise(a.as_ref(), b.as_ref(), ignore, early)
+                    .into_polars()?,
+            ]
         }
         (1, _) => every_topologically_equal_to_one(a, b, &kwargs)?,
         (_, 1) => every_topologically_equal_to_one(b, a, &kwargs)?,
