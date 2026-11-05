@@ -62,7 +62,7 @@ impl<'a> From<&'a MultiPolygonArray> for Nested<'a, 2> {
     }
 }
 
-/// The parts of a [Nested] array, built up from copies of those of others.
+/// The rows, list levels, and coordinates [concatenated] builds.
 pub(super) struct Built<const N: usize> {
     pub(super) rows: List,
     pub(super) levels: [ValidList; N],
@@ -119,6 +119,8 @@ fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: u
 }
 
 /// Every row of `base`, followed by the items on the same row of `added`.
+/// The items are the entries of a row's list:
+/// the parts of a multi-geometry, or the rings of a polygon.
 /// A null row of `added` adds nothing.
 /// With `keep`, only the items of `added` set in it are added (one bit per item).
 /// Without `added`, `base` is copied as it is.
@@ -180,6 +182,8 @@ pub(super) fn concatenated<const N: usize>(
             copies.push(copy);
             continue;
         };
+        // The vertices of the items unset in `keep` lie between the runs, and must not be copied.
+        // So every run is a slice of its own.
         // The first run shares the base's `CopiedVertices`, every later run gets one of its own.
         let mut runs = kept_runs(keep, added.rows.range(i));
         if let Some(run) = runs.next() {
@@ -190,14 +194,17 @@ pub(super) fn concatenated<const N: usize>(
         copies.push(copy);
         for run in runs {
             item_count += run.len();
-            let added = copied_offsets(&added.levels, run, &mut offsets);
-            coords_len += added.len();
-            copies.push(CopiedVertices { base: 0..0, added });
+            let added_vertices = copied_offsets(&added.levels, run, &mut offsets);
+            coords_len += added_vertices.len();
+            copies.push(CopiedVertices {
+                base: 0..0,
+                added: added_vertices,
+            });
         }
         row_offsets.try_push(item_count).expect(NO_OVERFLOW);
     }
 
-    let (from, to) = (base.coords, added.as_ref().map(|added| added.coords));
+    let (base_coords, added_coords) = (base.coords, added.as_ref().map(|added| added.coords));
     let axis = |base: &[f64], added: Option<&[f64]>| {
         assembled_axis(base, added.unwrap_or_default(), &copies, coords_len)
     };
@@ -205,10 +212,10 @@ pub(super) fn concatenated<const N: usize>(
         rows: List::from_offsets(row_offsets.into(), validity),
         levels: offsets.map(|offsets| ValidList::from_offsets(offsets.into())),
         coords: ValidCoords::from_axes((
-            axis(from.x(), to.map(ValidCoords::x)),
-            axis(from.y(), to.map(ValidCoords::y)),
-            from.z().map(|z| axis(z, to.and_then(ValidCoords::z))),
-            from.m().map(|m| axis(m, to.and_then(ValidCoords::m))),
+            axis(base_coords.x(), added_coords.map(ValidCoords::x)),
+            axis(base_coords.y(), added_coords.map(ValidCoords::y)),
+            (base_coords.z()).map(|z| axis(z, added_coords.and_then(ValidCoords::z))),
+            (base_coords.m()).map(|m| axis(m, added_coords.and_then(ValidCoords::m))),
         )),
     }
 }

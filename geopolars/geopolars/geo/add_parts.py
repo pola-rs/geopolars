@@ -74,7 +74,7 @@ def add_parts(
     A null geometry gives a null result.
     What a null among the parts does is set by `null_parts`.
     A null part is a null row of `parts`, a null in a list of parts,
-    or a part with a null vertex in it.
+    or a part with a null anywhere inside it (a ring, a vertex, or one of its values).
     An untyped null (`pl.lit(None)`) as `parts` is a null row on every row.
 
     | `null_parts` | a null part |

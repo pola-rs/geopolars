@@ -545,6 +545,31 @@ def test_a_bare_exterior_takes_the_crs_of_the_holes() -> None:
     assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
 
 
+@pytest.mark.parametrize(
+    ("exterior_crs", "hole_crs", "match"),
+    [
+        ("EPSG:4326", "EPSG:28992", "different CRSs"),
+        ("EPSG:4326", None, "only one"),
+        (None, "EPSG:4326", "only one"),
+    ],
+)
+def test_separate_columns_refuse_holes_in_another_crs(
+    exterior_crs: str | None, hole_crs: str | None, match: str
+) -> None:
+    lf = (
+        _bare_exterior_and_hole()
+        .lazy()
+        .select(
+            geo.line_string("exterior", crs=exterior_crs),
+            geo.line_string("hole", crs=hole_crs),
+        )
+        .select(geo.polygons_from_rings_in_separate_columns("exterior", "hole"))
+    )
+
+    with pytest.raises(ComputeError, match=match):
+        lf.collect_schema()
+
+
 def test_holes_in_the_crs_passed_for_the_exterior_are_accepted() -> None:
     df = _bare_exterior_and_hole().select(
         geo.line_string("exterior"), geo.line_string("hole", crs="EPSG:4326")

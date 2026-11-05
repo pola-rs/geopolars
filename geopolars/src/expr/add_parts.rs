@@ -63,9 +63,11 @@ fn part_kinds(kind: Kind) -> (Kind, Kind) {
     }
 }
 
-/// The kinds that can also hold a single `part`, as the multi-geometry of its items:
-/// a linestring as a multipoint, a polygon as a linestring or multilinestring of its rings.
-fn items_of(part: Kind) -> &'static [Kind] {
+/// The kinds besides points that hold the items of a `part`.
+/// A multipoint holds the vertices of a linestring.
+/// A linestring holds one ring of a polygon, and a multilinestring all of its rings.
+/// The lists around them decide whether a row holds one part or a list of them.
+fn kinds_holding_items_of(part: Kind) -> &'static [Kind] {
     match part {
         Kind::LineString => &[Kind::MultiPoint],
         Kind::Polygon => &[Kind::LineString, Kind::MultiLineString],
@@ -102,7 +104,7 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
         DataType::Extension(..) => {
             let found = describe(inner).map_err(|_| refused())?;
             let accepted = [part, multi, Kind::Point].contains(&found.kind)
-                || items_of(part).contains(&found.kind);
+                || kinds_holding_items_of(part).contains(&found.kind);
             if !accepted {
                 return Err(refused());
             }

@@ -50,7 +50,8 @@ def add_holes(
 ) -> pl.Expr:
     """Add the rings of `holes` to each polygon as extra holes,
     after the holes it already has.
-    `holes` holds one linestring per polygon, a list of them, or a multilinestring.
+    `holes` holds one linestring per polygon (or its bare vertex list),
+    a list of them, or a multilinestring.
 
     | polygon | holes | out |
     | - | - | - |

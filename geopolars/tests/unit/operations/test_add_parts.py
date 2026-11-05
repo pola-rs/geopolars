@@ -357,16 +357,26 @@ def test_a_null_single_part_is_dropped() -> None:
     assert out.ext.storage().to_list() == [[_A], [_A]]
 
 
-def test_an_untyped_null_adds_nothing_or_nulls_the_result() -> None:
-    df = pl.DataFrame([_lines(_A, None)])
+@pytest.mark.parametrize(
+    ("geometry", "dtype", "part"),
+    [
+        (_points(_A[0], None), MultiPointXY(), _A[0]),
+        (_lines(_A, None), MultiLineStringXY(), _A),
+        (_polygons(_P, None), MultiPolygonXY(), _P),
+    ],
+)
+def test_an_untyped_null_adds_nothing_or_nulls_the_result(
+    geometry: pl.Series, dtype: pl.DataType, part: object
+) -> None:
+    df = pl.DataFrame([geometry])
 
     dropped = df.select(geo.add_parts("geometry", pl.lit(None))).to_series()
     nulled = df.select(
         geo.add_parts("geometry", pl.lit(None), null_parts="null")
     ).to_series()
 
-    assert dropped.dtype == MultiLineStringXY()
-    assert dropped.ext.storage().to_list() == [[_A], None]
+    assert dropped.dtype == dtype
+    assert dropped.ext.storage().to_list() == [[part], None]
     assert nulled.ext.storage().to_list() == [None, None]
 
 
@@ -468,6 +478,33 @@ def test_empty_polygons_are_dropped() -> None:
     out = _added(_polygons(_P), _listed_polygons([[], _Q, [[]]]), empty_parts="drop")
 
     assert out.ext.storage().to_list() == [[_P, _Q]]
+
+
+def test_a_point_with_only_some_axes_nan_is_not_empty() -> None:
+    parts = _listed_points([_vertex(math.nan, 1.0), _vertex(1.0, math.nan)])
+
+    out = _added(_points(_A[0]), parts, empty_parts="drop")
+
+    assert out.ext.storage().list.len().to_list() == [3]
+
+
+@pytest.mark.parametrize(
+    ("geometry", "parts", "expected"),
+    [
+        (
+            _points(_A[0]),
+            _listed_points([_B[0], None, _C[0], _EMPTY_POINT, _A[1]]),
+            [_A[0], _B[0], _C[0], _A[1]],
+        ),
+        (_polygons(_P), _listed_polygons([_Q, None, _P, [], _Q]), [_P, _Q, _P, _Q]),
+    ],
+)
+def test_the_parts_between_those_left_out_stay_in_order(
+    geometry: pl.Series, parts: pl.Series, expected: list[object]
+) -> None:
+    out = _added(geometry, parts, empty_parts="drop")
+
+    assert out.ext.storage().to_list() == [expected]
 
 
 def test_empty_parts_are_dropped_while_null_parts_null_the_result() -> None:
@@ -621,13 +658,20 @@ def test_the_namespace_forwards() -> None:
     )
 
 
-def test_parts_of_another_dimension_are_refused() -> None:
-    xyz = pl.Series(
-        "parts",
-        [[{"x": 1.0, "y": 1.0, "z": 0.0}]],
-        dtype=pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64, "z": pl.Float64})),
-    ).ext.to(LineStringXYZ())
-    lf = pl.LazyFrame([_lines(_A), xyz]).select(geo.add_parts("geometry", "parts"))
+_XYZ_VERTICES = pl.Series(
+    "parts",
+    [[{"x": 1.0, "y": 1.0, "z": 0.0}]],
+    dtype=pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64, "z": pl.Float64})),
+)
+
+
+@pytest.mark.parametrize(
+    "parts",
+    [_XYZ_VERTICES.ext.to(LineStringXYZ()), _XYZ_VERTICES],
+    ids=["linestring", "bare"],
+)
+def test_parts_of_another_dimension_are_refused(parts: pl.Series) -> None:
+    lf = pl.LazyFrame([_lines(_A), parts]).select(geo.add_parts("geometry", "parts"))
 
     with pytest.raises(ComputeError, match="the geometry is xy but the parts are xyz"):
         lf.collect_schema()
@@ -660,6 +704,8 @@ def test_parts_in_another_crs_are_refused(
         (_lines(_A), _polygons(_P, name="parts")),
         (_points(_A[0]), _lines(_A, name="parts")),
         (_polygons(_P), _multi_points(_A, name="parts")),
+        # A single linestring is one ring, not a polygon.
+        (_polygons(_P), _lines(_A, name="parts")),
         (_polygons(_P), _of_points([_A], 1)),
         (_lines(_A), _of_points([[[_A]]], 3)),
         (_lines(_A), _bare([[[_A]]], 3)),

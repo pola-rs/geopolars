@@ -204,21 +204,24 @@ def test_holes_of_another_dimension_are_refused() -> None:
         lf.collect_schema()
 
 
-def test_holes_in_another_crs_are_refused() -> None:
-    lf = pl.LazyFrame(
-        [_polygons([_EXTERIOR], crs=RD), _lines(_HOLE, crs="EPSG:4326")]
-    ).select(geo.add_holes("polygon", "holes"))
-
-    with pytest.raises(ComputeError, match="different CRSs"):
-        lf.collect_schema()
-
-
-def test_holes_without_a_crs_are_refused() -> None:
-    lf = pl.LazyFrame([_polygons([_EXTERIOR], crs=RD), _lines(_HOLE)]).select(
+@pytest.mark.parametrize(
+    ("polygon_crs", "holes", "match"),
+    [
+        (RD, _lines(_HOLE, crs="EPSG:4326"), "different CRSs"),
+        (RD, _lines(_HOLE), "only one"),
+        (None, _lines(_HOLE, crs=RD), "only one"),
+        (RD, _listed_lines([_HOLE]), "only one"),
+        (None, _listed_lines([_HOLE], crs=RD), "only one"),
+    ],
+)
+def test_holes_in_another_crs_are_refused(
+    polygon_crs: str | None, holes: pl.Series, match: str
+) -> None:
+    lf = pl.LazyFrame([_polygons([_EXTERIOR], crs=polygon_crs), holes]).select(
         geo.add_holes("polygon", "holes")
     )
 
-    with pytest.raises(ComputeError, match="only one"):
+    with pytest.raises(ComputeError, match=match):
         lf.collect_schema()
 
 
