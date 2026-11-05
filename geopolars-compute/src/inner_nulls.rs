@@ -1,8 +1,8 @@
 //! Moving every null value below a row out to the row,
 //! so that the views hold to GeoArrow's rule on null values:
 //! nulls only at the outermost level.
-//! Of a multi-geometry, the parts with a null value can be marked instead,
-//! for a kernel to leave out.
+//! Of a multi-geometry, the parts with a null value can be marked in a mask instead.
+//! They stay in the view, which is wrapped in a [NullPartsMarked] so that only a kernel taking the mask reads it.
 //! This is a separate pass, before any kernel reads the views.
 
 use geopolars_core::{
@@ -11,6 +11,8 @@ use geopolars_core::{
 };
 use polars_arrow::bitmap::Bitmap;
 
+#[cfg(feature = "native")]
+use crate::native::NullPartsMarked;
 use crate::passing::rows_passing;
 
 /// The validity of the rows of `storage`, with every null value below a row moved out to it:
@@ -104,40 +106,43 @@ pub fn propagate_inner_nulls_of_multi_polygons(storage: UncheckedStorage) -> Mul
     )
 }
 
-/// The multipoints of `storage` with only the null rows null,
-/// and which points have no null value (see [parts_passing]).
-/// The points that do are left in, so the view only holds where the mask is set.
+/// The multipoints of `storage`, with only the null rows null.
+/// The points without a null value are set in the mask (see [parts_passing]).
+/// The other points stay in the view, with arbitrary values.
 /// The other `*_with_null_parts_marked` functions do the same for their kind.
 #[cfg(feature = "native")]
 pub fn multi_points_with_null_parts_marked(
     storage: UncheckedStorage,
-) -> (MultiPointArray, Option<Bitmap>) {
+) -> NullPartsMarked<MultiPointArray> {
     let passing = parts_passing(&storage);
     let ([rows], coords) = levels_of(storage);
-    (MultiPointArray::from_parts(rows, coords), passing)
+    NullPartsMarked {
+        view: MultiPointArray::from_parts(rows, coords),
+        passing,
+    }
 }
 
 #[cfg(feature = "native")]
 pub fn multi_line_strings_with_null_parts_marked(
     storage: UncheckedStorage,
-) -> (MultiLineStringArray, Option<Bitmap>) {
+) -> NullPartsMarked<MultiLineStringArray> {
     let passing = parts_passing(&storage);
     let ([rows, lines], coords) = levels_of(storage);
-    let array = MultiLineStringArray::from_parts(rows, lines.ignoring_validity().clone(), coords);
-    (array, passing)
+    let view = MultiLineStringArray::from_parts(rows, lines.ignoring_validity().clone(), coords);
+    NullPartsMarked { view, passing }
 }
 
 #[cfg(feature = "native")]
 pub fn multi_polygons_with_null_parts_marked(
     storage: UncheckedStorage,
-) -> (MultiPolygonArray, Option<Bitmap>) {
+) -> NullPartsMarked<MultiPolygonArray> {
     let passing = parts_passing(&storage);
     let ([rows, polygons, rings], coords) = levels_of(storage);
-    let array = MultiPolygonArray::from_parts(
+    let view = MultiPolygonArray::from_parts(
         rows,
         polygons.ignoring_validity().clone(),
         rings.ignoring_validity().clone(),
         coords,
     );
-    (array, passing)
+    NullPartsMarked { view, passing }
 }

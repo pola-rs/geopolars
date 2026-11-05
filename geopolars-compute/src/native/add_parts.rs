@@ -8,11 +8,15 @@ use std::array;
 use std::ops::Range;
 
 use geopolars_core::{
-    List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray, ValidCoords,
-    ValidList,
+    Coords, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PointArray, PolygonArray, ValidCoords, ValidList,
 };
+use polars_arrow::array::BooleanArray;
 use polars_arrow::bitmap::Bitmap;
+use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::Offsets;
+
+use super::is_empty::{line_strings_are_empty, points_are_empty, polygons_are_empty};
 
 const NO_OVERFLOW: &str = "no more items than the input";
 
@@ -224,37 +228,112 @@ fn kept_runs(keep: &Bitmap, items: Range<usize>) -> impl Iterator<Item = Range<u
     })
 }
 
+/// A view whose parts may hold null values, and a mask of the parts that do not.
+/// A kernel taking it reads only the parts set in the mask,
+/// so the view is not handed out as a plain one.
+pub struct NullPartsMarked<T> {
+    pub(crate) view: T,
+    /// One bit per part. `None` when every part is set.
+    pub(crate) passing: Option<Bitmap>,
+}
+
+/// A plain view has no null values below its rows, so every part is set.
+impl<T> From<T> for NullPartsMarked<T> {
+    fn from(view: T) -> Self {
+        Self {
+            view,
+            passing: None,
+        }
+    }
+}
+
+/// `passing` with the parts `empty` holds as `true` unset too.
+fn passing_without_empty(passing: Option<Bitmap>, empty: BooleanArray) -> Option<Bitmap> {
+    combine_validities_and(passing.as_ref(), Some(&!empty.values()))
+}
+
+impl NullPartsMarked<MultiPointArray> {
+    #[inline(always)]
+    pub fn rows(&self) -> &List {
+        &self.view.rows
+    }
+
+    /// Unsets the empty points (every axis NaN) in the mask too.
+    pub fn without_empty_parts(self) -> Self {
+        let points = PointArray::new(Coords::from_valid(self.view.coords.clone(), None));
+        let passing = passing_without_empty(self.passing, points_are_empty(&points));
+        Self { passing, ..self }
+    }
+}
+
+impl NullPartsMarked<MultiLineStringArray> {
+    #[inline(always)]
+    pub fn rows(&self) -> &List {
+        &self.view.rows
+    }
+
+    /// Unsets the linestrings without vertices in the mask too.
+    pub fn without_empty_parts(self) -> Self {
+        let lines = LineStringArray::from_parts(
+            List::from_offsets(self.view.lines.offsets().clone(), None),
+            self.view.coords.clone(),
+        );
+        let empty = line_strings_are_empty::<false>(&lines.into());
+        let passing = passing_without_empty(self.passing, empty);
+        Self { passing, ..self }
+    }
+}
+
+impl NullPartsMarked<MultiPolygonArray> {
+    #[inline(always)]
+    pub fn rows(&self) -> &List {
+        &self.view.rows
+    }
+
+    /// Unsets the polygons without vertices in the mask too.
+    pub fn without_empty_parts(self) -> Self {
+        let polygons = PolygonArray::from_parts(
+            List::from_offsets(self.view.polygons.offsets().clone(), None),
+            self.view.rings.clone(),
+            self.view.coords.clone(),
+        );
+        let empty = polygons_are_empty::<false>(&polygons.into());
+        let passing = passing_without_empty(self.passing, empty);
+        Self { passing, ..self }
+    }
+}
+
 /// `base`, each followed by the points on the same row of `added`.
 /// See [multi_line_strings_with_added_parts].
 pub fn multi_points_with_added_parts(
     base: &MultiPointArray,
-    added: &MultiPointArray,
-    keep: Option<&Bitmap>,
+    added: &NullPartsMarked<MultiPointArray>,
     validity: Option<Bitmap>,
 ) -> MultiPointArray {
-    let Built { rows, coords, .. } = concatenated(base.into(), Some(added.into()), keep, validity);
+    let keep = added.passing.as_ref();
+    let Built { rows, coords, .. } =
+        concatenated(base.into(), Some((&added.view).into()), keep, validity);
     MultiPointArray::from_parts(rows, coords)
 }
 
 /// `base`, each followed by the linestrings on the same row of `added`.
 /// A null row of `added` adds nothing.
-/// With `keep`, only the linestrings of `added` set in it are added (one bit per linestring).
-/// The ones not set are never read, so they may hold null values.
+/// Only the linestrings of `added` set in its mask are added.
 /// The rows are null where `validity` says,
 /// which has to cover the null rows of `base`.
 ///
 /// `base` and `added` have to have the same length and dimension.
 pub fn multi_line_strings_with_added_parts(
     base: &MultiLineStringArray,
-    added: &MultiLineStringArray,
-    keep: Option<&Bitmap>,
+    added: &NullPartsMarked<MultiLineStringArray>,
     validity: Option<Bitmap>,
 ) -> MultiLineStringArray {
+    let keep = added.passing.as_ref();
     let Built {
         rows,
         levels: [lines],
         coords,
-    } = concatenated(base.into(), Some(added.into()), keep, validity);
+    } = concatenated(base.into(), Some((&added.view).into()), keep, validity);
     MultiLineStringArray::from_parts(rows, lines, coords)
 }
 
@@ -262,14 +341,14 @@ pub fn multi_line_strings_with_added_parts(
 /// See [multi_line_strings_with_added_parts].
 pub fn multi_polygons_with_added_parts(
     base: &MultiPolygonArray,
-    added: &MultiPolygonArray,
-    keep: Option<&Bitmap>,
+    added: &NullPartsMarked<MultiPolygonArray>,
     validity: Option<Bitmap>,
 ) -> MultiPolygonArray {
+    let keep = added.passing.as_ref();
     let Built {
         rows,
         levels: [polygons, rings],
         coords,
-    } = concatenated(base.into(), Some(added.into()), keep, validity);
+    } = concatenated(base.into(), Some((&added.view).into()), keep, validity);
     MultiPolygonArray::from_parts(rows, polygons, rings, coords)
 }
