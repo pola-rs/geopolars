@@ -270,7 +270,7 @@ def test_a_crs_on_only_one_point_is_refused_while_resolving_the_schema() -> None
         }
     ).select(geo.distance("a", "b"))
 
-    with pytest.raises(ComputeError, match="only one of the points"):
+    with pytest.raises(ComputeError, match="only one of the"):
         lf.collect_schema()
 
 

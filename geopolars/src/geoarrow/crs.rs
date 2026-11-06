@@ -248,9 +248,13 @@ impl MetadataKwargs {
     /// The metadata of a geometry built from parts carrying `metadata`.
     /// If empty, `metadata` comes back untouched.
     ///
-    /// This labels and never reprojects. Parts that already declare a different
-    /// CRS are an error rather than being relabelled into the wrong place.
-    pub fn apply(&self, metadata: Arc<ExtensionMetadata>) -> PolarsResult<Arc<ExtensionMetadata>> {
+    /// This labels and never reprojects. `metadata` that already declares a different
+    /// CRS is an error rather than being relabelled into the wrong place.
+    pub fn apply(
+        &self,
+        metadata: Arc<ExtensionMetadata>,
+        name_in_err_msg: &str,
+    ) -> PolarsResult<Arc<ExtensionMetadata>> {
         let Some(crs) = &self.crs else {
             return Ok(metadata);
         };
@@ -259,8 +263,8 @@ impl MetadataKwargs {
             None | Some(Value::Null) => Ok(Arc::new(Arc::unwrap_or_clone(metadata).with_crs(crs))),
             Some(declared) if *declared == crs_value(crs) => Ok(metadata),
             Some(declared) => polars_bail!(
-                SchemaMismatch: "the parts already declare the CRS {declared}, not {}; \
-                use `to_crs` to reproject them instead",
+                SchemaMismatch: "the CRS of the {name_in_err_msg} is already {declared}, not {}; \
+                use `to_crs` to reproject instead",
                 crs_value(crs)
             ),
         }
@@ -340,7 +344,7 @@ mod tests {
             crs: crs.map(str::to_owned),
         };
         let metadata = Arc::new(ExtensionMetadata::parse(metadata)?);
-        Ok(kwargs.apply(metadata)?.serialize())
+        Ok(kwargs.apply(metadata, "parts")?.serialize())
     }
 
     #[test]

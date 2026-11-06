@@ -12,6 +12,13 @@ use crate::{
 /// It reads the view part by part, so it cannot pass it on as a plain one.
 pub struct Untrimmed<T>(pub(crate) T);
 
+/// A trimmed view is an untrimmed one too.
+impl<T> From<T> for Untrimmed<T> {
+    fn from(view: T) -> Self {
+        Self(view)
+    }
+}
+
 impl Untrimmed<LineStringArray> {
     #[inline(always)]
     pub fn rows(&self) -> &List {

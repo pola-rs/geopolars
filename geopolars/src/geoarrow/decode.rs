@@ -40,7 +40,7 @@ pub fn target(metadata: Arc<ExtensionMetadata>, kwargs: &DecodeKwargs) -> Polars
     let metadata = MetadataKwargs {
         crs: kwargs.crs.clone(),
     }
-    .apply(metadata)?;
+    .apply(metadata, "geometries")?;
     Ok(Geo::new(kind, dim, metadata))
 }
 

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import on_geometry
 from geopolars.geo.remove_repeats_in_succession import TooShort
 
@@ -52,12 +52,7 @@ class OutOfBounds:
             ("action", OutOfBoundsAction),
             ("too_short", TooShort),
         ]:
-            value = getattr(self, name)
-            if value not in get_args(allowed):
-                msg = (
-                    f"`{name}` must be one of {list(get_args(allowed))}, got {value!r}"
-                )
-                raise ValueError(msg)
+            validate_one_of(name, getattr(self, name), allowed)
 
 
 def _bounds(

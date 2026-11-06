@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import on_geometry
 from geopolars.geo.affine import Origin, _origin
 
@@ -114,9 +114,7 @@ def snap_to_grid(
     df.select(geo.snap_to_grid("shape", (10.0, 10.0, 1.0), origin=(5.0, 5.0)))
     ```
     """
-    if mode not in get_args(RoundMode):
-        msg = f"`mode` must be one of {list(get_args(RoundMode))}, got {mode!r}"
-        raise ValueError(msg)
+    validate_one_of("mode", mode, RoundMode)
     return on_geometry(
         geometry, _snap_to_grid(_spacing(spacing), _origin(origin), mode)
     )

@@ -121,6 +121,13 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         lambda g: geo.join_line_strings(g, gaps="split", drop_repeated_joins=True),
         {LineStringXY, MultiPointXY, PolygonXY, MultiPolygonXY},
     ),
+    "add_parts": (lambda g: geo.add_parts(g, g), set()),
+    # The rows have no empty parts, so this only runs the emptiness checks on a sliced chunk.
+    # test_add_parts.py slices away parts that are left out.
+    "add_parts empty_parts=drop": (
+        lambda g: geo.add_parts(g, g, null_parts="null", empty_parts="drop"),
+        set(),
+    ),
 }
 
 

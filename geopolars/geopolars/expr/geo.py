@@ -57,9 +57,10 @@ class ExprGeoNameSpace:
         *,
         crs: str | None = None,
         close: CloseRings | None = None,
+        null_parts: Literal["drop", "null"] = "null",
     ) -> pl.Expr:
         return polygon.polygons_from_rings_in_separate_columns(
-            self._expr, holes, crs=crs, close=close
+            self._expr, holes, crs=crs, close=close, null_parts=null_parts
         )
 
     def polygons_from_coordinates(
@@ -372,10 +373,34 @@ class ExprGeoNameSpace:
         holes: IntoExprColumn,
         *,
         close: CloseRings | None = None,
+        null_parts: Literal["drop", "null"] = "null",
+        empty_exterior: Literal["null", "keep"] = "null",
     ) -> pl.Expr:
         from geopolars.geo.add_holes import add_holes
 
-        return add_holes(self._expr, holes, close=close)
+        return add_holes(
+            self._expr,
+            holes,
+            close=close,
+            null_parts=null_parts,
+            empty_exterior=empty_exterior,
+        )
+
+    def add_parts(
+        self,
+        parts: IntoExprColumn,
+        *,
+        null_parts: Literal["drop", "null"] = "null",
+        empty_parts: Literal["keep", "drop"] = "keep",
+    ) -> pl.Expr:
+        from geopolars.geo.add_parts import add_parts
+
+        return add_parts(
+            self._expr,
+            parts,
+            null_parts=null_parts,
+            empty_parts=empty_parts,
+        )
 
     def parts(self) -> pl.Expr:
         from geopolars.geo.parts import parts

@@ -3,6 +3,7 @@ Everything in the 'geo' namespace forwards to here.
 """
 
 from geopolars.geo.add_holes import add_holes
+from geopolars.geo.add_parts import add_parts
 from geopolars.geo.affine import (
     affine_transform,
     rotate,
@@ -88,6 +89,7 @@ __all__ = [
     "NonFinite",
     "OutOfBounds",
     "add_holes",
+    "add_parts",
     "affine_transform",
     "area",
     "area_geodesic",

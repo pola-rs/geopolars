@@ -18,7 +18,8 @@ the comment says when one without a CRS takes a different tier.
 | `centroid` | C | RIG | A | length-weighted; keeps z/m | A | shoelace; z/m area-weighted | C | fwd `mean_coordinate` | A | length-weighted parts | A | area-weighted parts |
 | `exterior` | - | | - | | A | ring 0 | - | | - | | A | LPP |
 | `interior` | - | | - | | A | rings after the first | - | | - | | A | LPP |
-| `add_holes` | - | | - | | A | holes: linestring(s) or multilinestring | - | | - | | - | |
+| `add_holes` | - | | - | | A | holes: linestring(s), multipoint(s) or multilinestring | - | | - | | - | |
+| `add_parts` | A | returns multipoint | A | returns multilinestring | A | returns multipolygon | A | | A | | A | |
 | `boundary` | - | | C | | C | every ring | - | | C | LPP | C | LPP |
 | `parts` | - | | - | | - | | C | [^4] | C | [^4] | C | [^4] |
 | `join_line_strings` | - | | - | | - | | - | | A | [^5] | - | |

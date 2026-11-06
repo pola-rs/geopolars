@@ -16,7 +16,8 @@ The crate holds:
 - `is_valid_ogc`'s kernels in `ogc_validity`, which run the checks of `native`.
   Then they run those of `geos`, on the rows that pass.
   These need both features.
-- the pass that moves every null value below a row out to the row in `inner_nulls`.
+- the pass that moves every null value below a row out to the row in `inner_nulls`,
+  or marks the parts holding one in a mask instead.
 - the fold of each level's mask up to the rows in `passing`.
   `inner_nulls` and the validity kernels use it.
 
@@ -29,6 +30,12 @@ Only the outer level may have nulls.
 All other levels, including the coordinate values, contain none.
 There is therefore no need to branch on what to do with nulls below the rows.
 Making sure of this is up to whoever builds the views.
+The one exception is the view inside a `MaskedParts`:
+the parts unset in its mask may hold arbitrary values where the input had a null.
+Only code that takes a `MaskedParts` reads that view.
+It skips those parts, or masks out what it computed for them.
+It may hand the view to a plain kernel only if that kernel gives one value per part,
+from that part alone, as the mask then drops the values of the unset parts.
 Every kernel in turn has to give valid output.
 
 This does **not** shield you from NaNs!
