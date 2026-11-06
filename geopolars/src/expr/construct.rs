@@ -11,9 +11,11 @@ use super::close_rings::CloseRingsKwargs;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
 use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, GeoDimension, Kind};
 use geopolars_compute::inner_nulls::{
-    multi_line_strings_with_null_parts_marked, propagate_inner_nulls_of_line_strings,
+    multi_line_strings_with_null_parts_marked, multi_points_with_null_parts_marked,
+    multi_polygons_with_null_parts_marked, propagate_inner_nulls_of_line_strings,
     propagate_inner_nulls_of_multi_line_strings, propagate_inner_nulls_of_multi_points,
-    propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_polygons, MaskedParts,
+    propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_points,
+    propagate_inner_nulls_of_polygons, MaskedParts,
 };
 use geopolars_compute::native::{
     close_open_rings, multi_polygons_have_only_rings, polygons_have_only_rings,
@@ -933,6 +935,34 @@ pub(super) fn lines_per_row(
         (false, _) => one_line_per_row(propagate_inner_nulls_of_line_strings(storage)).into(),
         (true, NullParts::Drop) => multi_line_strings_with_null_parts_marked(storage),
         (true, NullParts::Null) => propagate_inner_nulls_of_multi_line_strings(storage).into(),
+    })
+}
+
+/// [lines_per_row], for points.
+pub(super) fn points_per_row(
+    chunk: &dyn Array,
+    listed: bool,
+    null_parts: NullParts,
+) -> PolarsResult<MaskedParts<MultiPointArray>> {
+    let storage = UncheckedStorage::new(chunk)?;
+    Ok(match (listed, null_parts) {
+        (false, _) => one_point_per_row(propagate_inner_nulls_of_points(storage)).into(),
+        (true, NullParts::Drop) => multi_points_with_null_parts_marked(storage),
+        (true, NullParts::Null) => propagate_inner_nulls_of_multi_points(storage).into(),
+    })
+}
+
+/// [lines_per_row], for polygons.
+pub(super) fn polygons_per_row(
+    chunk: &dyn Array,
+    listed: bool,
+    null_parts: NullParts,
+) -> PolarsResult<MaskedParts<MultiPolygonArray>> {
+    let storage = UncheckedStorage::new(chunk)?;
+    Ok(match (listed, null_parts) {
+        (false, _) => one_polygon_per_row(propagate_inner_nulls_of_polygons(storage)).into(),
+        (true, NullParts::Drop) => multi_polygons_with_null_parts_marked(storage),
+        (true, NullParts::Null) => propagate_inner_nulls_of_multi_polygons(storage).into(),
     })
 }
 

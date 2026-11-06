@@ -624,6 +624,78 @@ def test_holes_in_another_crs_than_the_one_passed_are_refused() -> None:
         lf.collect_schema()
 
 
+def test_an_exterior_in_another_crs_than_the_one_passed_is_refused() -> None:
+    lf = (
+        _bare_exterior_and_hole()
+        .lazy()
+        .with_columns(geo.line_string("exterior", crs="EPSG:4326"))
+        .select(
+            geo.polygons_from_rings_in_separate_columns(
+                "exterior", "hole", crs="EPSG:28992"
+            )
+        )
+    )
+
+    with pytest.raises(ComputeError, match="the CRS of the exterior is already"):
+        lf.collect_schema()
+
+
+def test_bare_holes_go_with_the_crs_of_the_exterior() -> None:
+    df = _bare_exterior_and_hole().with_columns(
+        geo.line_string("exterior", crs="EPSG:4326")
+    )
+
+    out = df.select(
+        geo.polygons_from_rings_in_separate_columns("exterior", "hole")
+    ).to_series()
+
+    assert out.dtype == PolygonXY(crs="EPSG:4326")
+    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
+@pytest.mark.parametrize(
+    ("null_parts", "expected"), [("null", [None]), ("drop", [[_EXTERIOR]])]
+)
+def test_an_untyped_null_is_a_null_row_of_holes(
+    null_parts: str, expected: list[object]
+) -> None:
+    df = _bare_exterior_and_hole().select(geo.line_string("exterior", crs="EPSG:4326"))
+
+    out = df.select(
+        geo.polygons_from_rings_in_separate_columns(
+            "exterior", pl.lit(None), null_parts=null_parts
+        )
+    ).to_series()
+
+    assert out.dtype == PolygonXY(crs="EPSG:4326")
+    assert out.ext.storage().to_list() == expected
+
+
+def test_a_single_row_of_holes_goes_with_every_exterior() -> None:
+    df = pl.DataFrame(
+        {"exterior": [_EXTERIOR, _EXTERIOR]}, schema={"exterior": _XY_VERTICES}
+    )
+    hole = pl.Series("hole", [_HOLE], dtype=_XY_VERTICES)
+
+    out = df.select(
+        geo.polygons_from_rings_in_separate_columns("exterior", pl.lit(hole))
+    ).to_series()
+
+    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE], [_EXTERIOR, _HOLE]]
+
+
+def test_separate_columns_refuse_rows_of_different_lengths() -> None:
+    df = pl.DataFrame(
+        {"exterior": [_EXTERIOR, _EXTERIOR]}, schema={"exterior": _XY_VERTICES}
+    )
+    holes = pl.Series("hole", [_HOLE] * 3, dtype=_XY_VERTICES)
+
+    with pytest.raises(ComputeError, match="2 rows but the holes have 3"):
+        df.select(
+            geo.polygons_from_rings_in_separate_columns("exterior", pl.lit(holes))
+        )
+
+
 def test_separate_columns_without_holes_build_the_exterior_alone() -> None:
     out = _from_separate_rings([_EXTERIOR])
 

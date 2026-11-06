@@ -232,6 +232,18 @@ def test_a_kept_polygon_takes_none_of_its_holes_unless_all_are_empty() -> None:
     assert out.ext.storage().to_list() == [[[]], [[], [], []]]
 
 
+def test_a_kept_polygon_ignores_the_holes_that_are_dropped() -> None:
+    broken = [*_HOLE[:3], None]
+    out = _added(
+        _polygons([[]], [[]]),
+        _listed_lines([broken, []], [None, _HOLE]),  # type: ignore[list-item]
+        null_parts="drop",
+        empty_exterior="keep",
+    )
+
+    assert out.ext.storage().to_list() == [[[], []], [[]]]
+
+
 def test_a_null_hole_still_nulls_a_kept_polygon() -> None:
     out = _added(_polygons([]), _lines(None), empty_exterior="keep")
 

@@ -305,7 +305,8 @@ pub fn have_room_for_holes(
     let is_kept = |line: usize| holes.keep.as_ref().is_none_or(|keep| keep.get_bit(line));
     (0..polygons.rows.len())
         .map(|i| {
-            !polygons.get(i).has_empty_exterior()
+            !polygons.rows.is_valid(i)
+                || !polygons.get(i).has_empty_exterior()
                 || !rows.is_valid(i)
                 || rows
                     .range(i)

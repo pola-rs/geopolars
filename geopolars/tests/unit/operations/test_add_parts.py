@@ -684,6 +684,34 @@ def test_sliced_columns_with_empty_parts_dropped() -> None:
     assert out.to_series().ext.storage().to_list() == [[_A, _B, _C]]
 
 
+@pytest.mark.parametrize(
+    ("geometry", "parts", "expected"),
+    [
+        (
+            _points(_A[0], _A[0]),
+            _listed_points([None, _EMPTY_POINT], [_B[0], None, _EMPTY_POINT, _C[0]]),
+            [[_A[0], _B[0], _C[0]]],
+        ),
+        (
+            _polygons(_P, _P),
+            _listed_polygons([None, []], [_Q, [[None]], [[]], _P]),  # type: ignore[list-item]
+            [[_P, _Q, _P]],
+        ),
+    ],
+    ids=["points", "polygons"],
+)
+def test_parts_left_out_before_a_slice_stay_left_out(
+    geometry: pl.Series, parts: pl.Series, expected: list[object]
+) -> None:
+    df = pl.DataFrame([geometry, parts]).slice(1, 1)
+
+    out = df.select(
+        geo.add_parts("geometry", "parts", null_parts="drop", empty_parts="drop")
+    )
+
+    assert out.to_series().ext.storage().to_list() == expected
+
+
 @pytest.mark.parametrize("engine", ["in-memory", "streaming"])
 def test_every_chunk_gets_its_parts(engine: EngineType) -> None:
     df = pl.concat(

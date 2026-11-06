@@ -182,7 +182,8 @@ pub(super) fn concatenated<const N: usize>(
             }
             // As for the added items below, every run is a slice of its own.
             // The last run shares its `CopiedVertices` with the first run of the added items.
-            // Nothing reaches this yet, so it is untested:
+            // This is there so `concatenated` can serve as a general helper later.
+            // Nothing reaches it yet, so it is untested:
             // `add_parts` only masks a single base, of one item per row.
             // It would be reached by dropping the empty parts of a multi base in `add_parts`,
             // or by an expression that drops parts of one column, without `added`.

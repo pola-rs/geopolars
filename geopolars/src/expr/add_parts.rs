@@ -1,18 +1,14 @@
 //! Adding parts to geometries, from another column.
 //! See `add_parts` in Python for the rules.
 
-use geopolars_compute::inner_nulls::{
-    multi_points_with_null_parts_marked, multi_polygons_with_null_parts_marked,
-    propagate_inner_nulls_of_multi_points, propagate_inner_nulls_of_multi_polygons,
-    propagate_inner_nulls_of_points, propagate_inner_nulls_of_polygons, MaskedParts,
-};
+use geopolars_compute::inner_nulls::MaskedParts;
 use geopolars_compute::native::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
     multi_polygons_with_added_parts, WithoutEmptyParts,
 };
 use geopolars_core::{
     downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray, UncheckedStorage,
+    PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::Array;
@@ -21,7 +17,8 @@ use serde::Deserialize;
 
 use super::construct::{
     fields_of, lines_per_row, listed_parts, one_line_per_row, one_point_per_row,
-    one_polygon_per_row, paired_rows, part_kinds, parts_storage, rows_validity, NullParts,
+    one_polygon_per_row, paired_rows, part_kinds, parts_storage, points_per_row, polygons_per_row,
+    rows_validity, NullParts,
 };
 use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo, Kind};
 
@@ -56,36 +53,6 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
 fn kernel_output_type_add_parts(input_fields: &[Field]) -> PolarsResult<Field> {
     let (geo, _) = parts_added(input_fields)?;
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
-}
-
-/// One chunk of points, holding one per row, or with `listed=true` a list of them,
-/// as a list of them per row.
-/// See [lines_per_row] for `null_parts`.
-fn points_per_row(
-    chunk: &dyn Array,
-    listed: bool,
-    null_parts: NullParts,
-) -> PolarsResult<MaskedParts<MultiPointArray>> {
-    let storage = UncheckedStorage::new(chunk)?;
-    Ok(match (listed, null_parts) {
-        (false, _) => one_point_per_row(propagate_inner_nulls_of_points(storage)).into(),
-        (true, NullParts::Drop) => multi_points_with_null_parts_marked(storage),
-        (true, NullParts::Null) => propagate_inner_nulls_of_multi_points(storage).into(),
-    })
-}
-
-/// [points_per_row], for polygons.
-fn polygons_per_row(
-    chunk: &dyn Array,
-    listed: bool,
-    null_parts: NullParts,
-) -> PolarsResult<MaskedParts<MultiPolygonArray>> {
-    let storage = UncheckedStorage::new(chunk)?;
-    Ok(match (listed, null_parts) {
-        (false, _) => one_polygon_per_row(propagate_inner_nulls_of_polygons(storage)).into(),
-        (true, NullParts::Drop) => multi_polygons_with_null_parts_marked(storage),
-        (true, NullParts::Null) => propagate_inner_nulls_of_multi_polygons(storage).into(),
-    })
 }
 
 fn without_empty_parts_if<T: WithoutEmptyParts>(drop: bool, parts: T) -> T {
