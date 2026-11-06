@@ -202,6 +202,20 @@ def test_empty_points_are_only_equal_with_nans_equal() -> None:
     assert _is_equal(PointXY(), [empty], [empty], nans_equal=True) == [True]
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        MultiPointXY(),
+        LineStringXY(),
+        MultiLineStringXY(),
+        PolygonXY(),
+        MultiPolygonXY(),
+    ],
+)
+def test_empty_geometries_of_other_kinds_are_equal(dtype: GeoArrowType) -> None:
+    assert _is_equal(dtype, [[]], [[]]) == [True]
+
+
 def test_m_is_only_compared_when_unique() -> None:
     a = {"x": 1.0, "y": 2.0, "m": 0.0}
     b = a | {"m": 5.0}

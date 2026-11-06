@@ -45,7 +45,8 @@ def is_equal(
     {tolerance_range}
 
     A NaN is equal to nothing, as in `pl.Expr.is_close`.
-    So the empty point (NaN in x and y) is not equal to another one.
+    So the empty point (NaN in x and y) is not even equal to itself,
+    while two empty geometries of any other kind are equal.
     `nans_equal=True` makes a NaN equal to a NaN, as in `==` in Polars.
 
     `a` and `b` have to be the same kind and dimension.

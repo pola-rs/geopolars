@@ -27,6 +27,7 @@ fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Op
 /// Whether two arrays of geometries are topologically equal, row by row.
 /// A row that GEOS fails to convert or compare makes this return its error.
 /// That row is null instead if `ignore_per_row_errors=true`.
+/// Each side is converted in full, so a row null on only one side can still fail.
 ///
 /// `a` and `b` must have the same length.
 pub fn topologically_equal_pairwise(

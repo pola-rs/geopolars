@@ -185,6 +185,42 @@ def test_against_a_single_null_geometry_everything_is_null() -> None:
     assert out["many"].to_list() == [None, None]
 
 
+# GEOS fails to build a linestring of a single vertex.
+_ONE_VERTEX_LINE = _xy((0, 0))
+
+
+@pytest.mark.parametrize("early_finite_check", [False, True])
+def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -> None:
+    failing = [_ONE_VERTEX_LINE, _NOT_FINITE_LINE]
+    df = pl.DataFrame(
+        [
+            _series("a", LineStringXY(), [None, None, _FINITE_LINE]),
+            _series("b", LineStringXY(), [*failing, _FINITE_LINE[::-1]]),
+        ]
+    )
+
+    out = df.select(
+        geo.is_topologically_equal("a", "b", early_finite_check=early_finite_check)
+    )
+
+    assert out["a"].to_list() == [None, None, True]
+
+
+@pytest.mark.parametrize("early_finite_check", [False, True])
+def test_against_a_single_null_geometry_no_row_reaches_geos(
+    early_finite_check: bool,
+) -> None:
+    many = _series("many", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE])
+    one = _wkt("one", PointXY(), [None])
+    df = pl.DataFrame(many)
+    kwargs = {"early_finite_check": early_finite_check}
+
+    out = df.select(geo.is_topologically_equal("many", one, **kwargs))
+    assert out["many"].to_list() == [None, None]
+    out = df.select(geo.is_topologically_equal(one, "many", **kwargs))
+    assert out.to_series().to_list() == [None, None]
+
+
 def test_columns_chunked_differently_are_compared_row_by_row() -> None:
     a = _chunked([_wkt("a", PolygonXY(), [_SQUARE]), _wkt("a", PolygonXY(), [None])])
     b = _wkt("b", MultiPolygonXY(), [f"MULTIPOLYGON ({_SQUARE[7:]})", None])

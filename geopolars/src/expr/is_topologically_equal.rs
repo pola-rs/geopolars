@@ -10,6 +10,8 @@ use geopolars_core::{
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, BooleanArray, ListArray};
+use polars_arrow::compute::utils::combine_validities_and;
+use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -48,10 +50,12 @@ fn geos_view(chunk: &dyn Array, kind: Kind) -> PolarsResult<Box<dyn ToGeosRows>>
     })
 }
 
-fn single_chunk_geos_view(geometries: &Series) -> PolarsResult<Box<dyn ToGeosRows>> {
-    let kind = describe(geometries.dtype())?.kind;
-    let storage = geometries.ext()?.storage().rechunk();
-    geos_view(storage.chunks()[0].as_ref(), kind)
+fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
+    Ok(describe(geometries.dtype())?.kind)
+}
+
+fn storage_as_single_chunk(geometries: &Series) -> PolarsResult<ArrayRef> {
+    Ok(geometries.ext()?.storage().rechunk().chunks()[0].clone())
 }
 
 /// Runs [topologically_equal_against_one] on every chunk of `many`, against the single row of `one`.
@@ -61,11 +65,18 @@ fn every_topologically_equal_to_one(
     kwargs: &IsTopologicallyEqualKwargs,
 ) -> PolarsResult<Vec<BooleanArray>> {
     let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
-    let one = single_chunk_geos_view(one)?;
-    let kind = describe(many.dtype())?.kind;
-    many.ext()?
-        .storage()
-        .chunks()
+    let one_chunk = storage_as_single_chunk(one)?;
+    let many_chunks = many.ext()?.storage().chunks();
+    // Every result is null, so `many` is not sent to GEOS, where a row could fail.
+    if one_chunk.is_null(0) {
+        return Ok(many_chunks
+            .iter()
+            .map(|many| BooleanArray::new_null(ArrowDataType::Boolean, many.len()))
+            .collect());
+    }
+    let one = geos_view(one_chunk.as_ref(), kind_of(one)?)?;
+    let kind = kind_of(many)?;
+    many_chunks
         .iter()
         .map(|many| {
             let many = geos_view(many.as_ref(), kind)?;
@@ -86,7 +97,17 @@ fn is_topologically_equal(
         // The kinds can differ, but `aligned_chunks` needs two storages of one physical type.
         // So both sides are made a single chunk instead.
         (n, m) if n == m => {
-            let (a, b) = (single_chunk_geos_view(a)?, single_chunk_geos_view(b)?);
+            let (a_chunk, b_chunk) = (storage_as_single_chunk(a)?, storage_as_single_chunk(b)?);
+            // A row null on one side is made null on the other too,
+            // so that it is not sent to GEOS, where it could fail.
+            let validity = combine_validities_and(a_chunk.validity(), b_chunk.validity());
+            let (a, b) = (
+                geos_view(
+                    a_chunk.with_validity(validity.clone()).as_ref(),
+                    kind_of(a)?,
+                )?,
+                geos_view(b_chunk.with_validity(validity).as_ref(), kind_of(b)?)?,
+            );
             let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
             vec![
                 topologically_equal_pairwise(a.as_ref(), b.as_ref(), ignore, early)
