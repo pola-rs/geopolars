@@ -71,11 +71,8 @@ fn output_kind(parts: IntersectionParts, multi: bool) -> Kind {
     }
 }
 
-/// The type of the intersection of `a` and `b`, and what the kernel has to give for it.
-/// It keeps `keep`, or by default the dimension of the lower-dimensional input.
-/// It is the single kind if a lower-dimensional input is a single kind, without `allow_splitting`,
-/// and always for a point.
-/// It is XYZ if either input has z, otherwise XY, with the metadata of `a`.
+/// Works out the output type of the Python `intersection`,
+/// and the [`IntersectionOutput`] the kernel has to give for it.
 fn intersection_type(
     a: &DataType,
     b: &DataType,
@@ -96,6 +93,8 @@ fn intersection_type(
             keep
         }
     };
+    // A single lowest-dimensional input stays single, unless splitting is allowed.
+    // A point cannot split, so it stays single regardless.
     let has_point = a.kind == Kind::Point || b.kind == Kind::Point;
     let single_lowest = [a.kind, b.kind]
         .into_iter()

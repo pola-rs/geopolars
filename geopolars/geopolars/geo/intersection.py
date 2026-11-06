@@ -1,3 +1,5 @@
+"""The intersection of two geometries, forwarded to GEOS (B-tier)."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
@@ -43,26 +45,26 @@ def intersection(
     ignore_per_row_errors: bool = False,
     early_finite_check: bool = False,
 ) -> pl.Expr:
-    """The (boolean) intersection of `a` and `b`.
+    """The part two geometries have in common, row by row.
     A single geometry on either side is intersected with every row of the other.
 
     The result has one kind for the whole column,
-    but GEOS can give parts of several dimensions for one row.
+    but the intersection of one row can have parts of several dimensions.
     Two polygons can overlap in an area, but also touch along an edge or at a point,
     and two lines can overlap along a stretch, but also cross at a point.
     So only the parts of one dimension are kept, and the others are dropped.
     By default, that is the dimension of the lower-dimensional input.
     Set `keep` to `"points"`, `"lines"` or `"polygons"` to keep another,
     such as `keep="points"` for where two lines cross.
-    It cannot be higher than the default: two lines never intersect in a polygon.
+    It cannot be higher than the default, as two lines never intersect in a polygon.
 
-    Without `allow_splitting`, a single kind stays single.
-    The result is then a single kind if the lower-dimensional input is one (either, if they share a dimension),
-    and a result in several parts raises.
-    With `allow_splitting=True`, it is the multi kind instead, which holds every part.
-    A point cannot split, so it always gives a point.
-    The kinds of the output, as "without `allow_splitting` / with it" where the two differ
-    (the table is symmetric, so only the upper half is filled):
+    The result is a single kind if the lower-dimensional input is one
+    (or if either input is one, when they share a dimension).
+    A row whose result has several parts then raises.
+    With `allow_splitting=True`, the result is the multi kind instead, which holds every part.
+    A point cannot split, so a point input always gives a point.
+    The table below gives the output kind as "without `allow_splitting` / with it" where the two differ.
+    It is symmetric, so only its upper half is filled.
 
     | a \\ b | Point | MultiPoint | LineString | MultiLineString | Polygon | MultiPolygon |
     | - | - | - | - | - | - | - |
@@ -83,13 +85,13 @@ def intersection(
     | `"polygons"` | both are polygons or multipolygons | Polygon / MultiPolygon | every point and line part |
 
     Points here are parts of the result, not vertices of its lines or polygons.
-    A dropped part does not count as a split:
-    two polygons that overlap in one area and touch at a point give one polygon.
+    A dropped part does not count towards a split,
+    so two polygons that overlap in one area and touch at a point give one polygon.
     A line that crosses itself is cut where it does,
     so it splits even if it lies entirely inside a polygon.
 
     {computed_by_geos_keeping_z}
-    The output has z if either input has, otherwise it is XY.
+    The output has z as soon as either input has it.
     Where only one input has z, GEOS fills it in from that one.
     {empty_and_null}
     Two geometries that do not meet give an empty {output} too.

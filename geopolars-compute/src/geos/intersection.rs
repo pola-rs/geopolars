@@ -23,8 +23,7 @@ pub enum IntersectionParts {
 }
 
 impl IntersectionParts {
-    /// The GEOS types of a single part, and of several.
-    fn geometry_types(self) -> (GeometryTypes, GeometryTypes) {
+    fn single_and_multi_types(self) -> (GeometryTypes, GeometryTypes) {
         match self {
             Self::Points => (GeometryTypes::Point, GeometryTypes::MultiPoint),
             Self::Lines => (GeometryTypes::LineString, GeometryTypes::MultiLineString),
@@ -41,27 +40,21 @@ impl IntersectionParts {
     }
 }
 
-/// What an intersection gives: which parts, in which kind.
+/// Which parts an intersection gives, and in which kind.
 #[derive(Debug, Clone, Copy)]
 pub struct IntersectionOutput {
     pub parts: IntersectionParts,
-    /// The multi kind of `parts`.
-    /// Otherwise the single kind, and a result in several parts is an error.
+    /// A row that splits into several parts fails with [`GeoComputeError::Split`] if `multi=false`.
     pub multi: bool,
-    /// Keeps z; m is always dropped.
+    /// The output never has m, even if `z=true`.
     pub z: bool,
-    /// Reverses every ring of a polygon, so its exterior runs counter-clockwise.
-    /// Otherwise it runs clockwise, as GEOS gives it.
+    /// GEOS gives a clockwise exterior, so `ccw_outer=true` reverses every ring of a polygon.
     pub ccw_outer: bool,
 }
 
-/// The intersection of every row of `a` with the same row of `b`, forwarded to GEOS,
-/// as the array `output` says (a point array, or a list array for any other kind).
-/// A null row on either side gives a null row, and an empty one an empty row.
-/// If `ignore_per_row_errors=true`, a row that fails is null;
-/// otherwise its error is returned.
-/// A row fails when GEOS fails on it,
-/// or when it splits into several parts for a single kind ([`GeoComputeError::Split`]).
+/// Intersects two arrays of geometries row by row through GEOS,
+/// into the storage of the kind `output` describes.
+/// Implements the Python `intersection`, which documents its behaviour.
 /// Each side is converted to GEOS in full, so a row that is null on only one side can still fail.
 ///
 /// `a` and `b` must have the same length.
@@ -85,17 +78,16 @@ pub fn intersection_pairwise(
         .zip(&b.geometries)
         .map(|(a, b)| intersect_rows(a, b, output, ignore_per_row_errors))
         .collect::<GeoComputeResult<Vec<_>>>()?;
-    into_array(
+    intersections_into_array(
         intersections,
-        sum(a.size_hint, b.size_hint),
+        summed_size_hint(a.size_hint, b.size_hint),
         output,
         ignore_per_row_errors,
     )
 }
 
 /// Like [intersection_pairwise], with a single geometry against every row of `many`.
-/// If `one_is_a=true`, `one` is the first geometry of each intersection, otherwise the second.
-/// As in [intersection_pairwise], `many` is converted to GEOS in full, even if `one` is null.
+/// As there, `many` is converted to GEOS in full, even if `one` is null.
 ///
 /// `one` must hold a single row.
 pub fn intersection_against_one(
@@ -123,17 +115,17 @@ pub fn intersection_against_one(
             intersect_rows(a, b, output, ignore_per_row_errors)
         })
         .collect::<GeoComputeResult<Vec<_>>>()?;
-    into_array(
+    intersections_into_array(
         intersections,
-        sum(one.size_hint, many.size_hint),
+        summed_size_hint(one.size_hint, many.size_hint),
         output,
         ignore_per_row_errors,
     )
 }
 
-/// Overlay can add vertices where the two cross,
-/// so this is only a starting capacity, not an upper bound.
-fn sum(a: SizeHint<2>, b: SizeHint<2>) -> SizeHint<2> {
+fn summed_size_hint(a: SizeHint<2>, b: SizeHint<2>) -> SizeHint<2> {
+    // The intersection lies within both, but overlay can add vertices where the two cross.
+    // So the sum is not an upper bound.
     SizeHint {
         coords: a.coords + b.coords,
         parts: [a.parts[0] + b.parts[0], a.parts[1] + b.parts[1]],
@@ -154,20 +146,21 @@ fn intersect_rows(
         (GeosRow::Geometry(a), GeosRow::Geometry(b)) => a
             .intersection(b)
             .map_err(GeoComputeError::from)
-            .and_then(|intersection| kept_parts(intersection, output)),
+            .and_then(|intersection| intersect_rows_kept_parts(intersection, output)),
     };
     Ok(row_or_null(intersection.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
 
-/// The parts of `intersection` of the dimension `output` keeps, as one geometry of that kind.
-/// For the single kind, a single part is passed on as is,
-/// and several parts are a [`GeoComputeError::Split`].
-/// Parts of another dimension are dropped.
-fn kept_parts(intersection: Geometry, output: IntersectionOutput) -> GeoComputeResult<GeosRow> {
+/// Narrows an intersection down to the parts of the dimension `output` keeps,
+/// as one geometry of the kind `output` describes.
+fn intersect_rows_kept_parts(
+    intersection: Geometry,
+    output: IntersectionOutput,
+) -> GeoComputeResult<GeosRow> {
     if intersection.is_empty()? {
         return Ok(GeosRow::Empty);
     }
-    let (single, multi) = output.parts.geometry_types();
+    let (single, multi) = output.parts.single_and_multi_types();
     let found = intersection.geometry_type()?;
     // The common cases: GEOS gave the kept dimension only, so nothing is copied.
     if found == single || (found == multi && output.multi) {
@@ -176,7 +169,7 @@ fn kept_parts(intersection: Geometry, output: IntersectionOutput) -> GeoComputeR
     if found != multi && found != GeometryTypes::GeometryCollection {
         return Ok(GeosRow::Empty);
     }
-    // A collection mixes dimensions, and a multi kind can have a single part to take out.
+    // A collection can mix dimensions, and a multi kind can hold a single part to take out.
     // Only these copy their kept parts.
     let mut parts = Vec::new();
     for n in 0..intersection.get_num_geometries()? {
@@ -193,7 +186,7 @@ fn kept_parts(intersection: Geometry, output: IntersectionOutput) -> GeoComputeR
     }
 }
 
-fn into_array(
+fn intersections_into_array(
     geometries: Vec<GeosRow>,
     size_hint: SizeHint<2>,
     output: IntersectionOutput,
@@ -210,7 +203,8 @@ fn into_array(
         ccw_outer,
     } = output;
     let ignore = ignore_per_row_errors;
-    // `kept_parts` only lets through what these take, so none of them meets a wrong kind.
+    // `intersect_rows_kept_parts` only lets through what these take,
+    // so none of them meets a wrong kind.
     Ok(match (parts, multi) {
         (IntersectionParts::Points, false) => {
             let dim = if z {
