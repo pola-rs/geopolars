@@ -149,7 +149,8 @@ def test_columns_chunked_differently_are_paired_row_by_row() -> None:
     assert _as_wkt(out["a"]) == ["LINESTRING(3 0,1 0)", None]
 
 
-# GEOS fails on a vertex with just one NaN axis, at least when it is the closest one.
+# Only x is NaN, as NaN in both x and y is an empty point.
+# Every distance to it is NaN, so GEOS finds no nearest points and fails.
 _NOT_FINITE_POINT = pl.Series("a", [{"x": math.nan, "y": 1.0}]).ext.to(PointXY())
 
 

@@ -46,6 +46,7 @@ def shortest_line_between(
     {early_finite_check}
 
     `a` and `b` have to declare the same CRS, or neither one.
+    If they are not the same (or only one has a CRS, and the other does not), an error is raised at plan time.
 
     ```python
     df.with_columns(geo.shortest_line_between("house", "road").alias("driveway"))

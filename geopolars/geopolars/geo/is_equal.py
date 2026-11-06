@@ -51,7 +51,7 @@ def is_equal(
 
     `a` and `b` have to be the same kind and dimension.
     Both have to declare the same CRS, or neither one.
-    Anything else raises at plan time.
+    If they are not the same (or only one has a CRS, and the other does not), an error is raised at plan time.
 
     ```python
     df.filter(geo.is_equal("parcel", "surveyed", abs_tol=0.01))

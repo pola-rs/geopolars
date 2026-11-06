@@ -47,6 +47,7 @@ def rings_overlap(
 
     {projected_plane_xy}
     Both have to declare the same CRS, or neither one.
+    If they are not the same (or only one has a CRS, and the other does not), an error is raised at plan time.
     A side of a single ring is compared against every ring of the other.
 
     Every linestring has to be a ring:
