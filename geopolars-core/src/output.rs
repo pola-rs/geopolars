@@ -18,6 +18,7 @@ use crate::GeoDimension;
 /// Then only the first ones are used.
 /// The rows are not counted, the caller knows how many there are.
 /// Being off costs reallocations or unused memory, never correctness.
+#[derive(Debug, Clone, Copy)]
 pub struct SizeHint<const N: usize> {
     pub coords: usize,
     pub parts: [usize; N],

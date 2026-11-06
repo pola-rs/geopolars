@@ -2,21 +2,23 @@
 //! See `intersection` in Python for the rules.
 //!
 //! GEOS gives a result of any kind per row, mixed ones as a `GeometryCollection`.
-//! Each result is narrowed down to the parts of one dimension ([`IntersectionParts`]),
-//! so that every row fits the one output kind.
+//! The caller picks the output kind, through one of the `into_*` methods of [`IntersectionPairs`].
+//! Each of those narrows every result down to the parts of its dimension,
+//! so that every row fits that kind.
 
 use geopolars_core::output::SizeHint;
-use geopolars_core::{GeoDimension, GeometryArray};
+use geopolars_core::{
+    GeoDimension, GeometryArray, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
+};
 use geos::{Geom, Geometry, GeometryTypes};
-use polars_arrow::array::Array;
 
 use super::{GeosGeometries, GeosRow, ToGeosRows};
 use crate::{row_or_null, GeoComputeError, GeoComputeResult};
 
 /// The dimension of the parts an intersection keeps.
-/// Ordered by dimension, from points up to polygons.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum IntersectionParts {
+#[derive(Debug, Clone, Copy)]
+enum IntersectionParts {
     Points,
     Lines,
     Polygons,
@@ -40,92 +42,120 @@ impl IntersectionParts {
     }
 }
 
-/// Which parts an intersection gives, and in which kind.
-#[derive(Debug, Clone, Copy)]
-pub struct IntersectionOutput {
-    pub parts: IntersectionParts,
-    /// A row that splits into several parts fails with [`GeoComputeError::Split`] if `multi=false`.
-    pub multi: bool,
-    /// m is always dropped, whatever the inputs have.
-    pub z: bool,
-    /// GEOS gives a clockwise exterior, so `ccw_outer=true` reverses every ring of a polygon.
-    pub ccw_outer: bool,
+/// Two arrays of geometries converted to GEOS, with their rows paired up to intersect.
+/// A single row on either side is paired with every row of the other.
+/// Each `into_*` method intersects them, narrows every intersection down to its own kind,
+/// and copies them into our array of it.
+/// m is always dropped, whatever the inputs have.
+pub struct IntersectionPairs {
+    a: Vec<GeosRow>,
+    b: Vec<GeosRow>,
+    rows: usize,
+    size_hint: SizeHint<2>,
+    ignore_per_row_errors: bool,
 }
 
-// TODO: `intersection_pairwise` and `intersection_against_one` pair their GEOS rows
+// TODO: `IntersectionPairs` pairs its GEOS rows
 // the same way as `topologically_equal_pairwise` and `topologically_equal_against_one`.
 // Turn that into a shared helper once a third GEOS operation on two geometries
 // (such as `union` or `difference`) needs it.
 
-/// Intersects two arrays of geometries row by row through GEOS,
-/// into the storage of the kind `output` describes.
-/// Implements the Python `intersection`, which documents its behaviour.
-/// Each side is converted to GEOS in full, so a row that is null on only one side can still fail.
-///
-/// `a` and `b` must have the same length.
-pub fn intersection_pairwise(
-    a: &GeometryArray,
-    b: &GeometryArray,
-    output: IntersectionOutput,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
-) -> GeoComputeResult<Box<dyn Array>> {
-    let a = a.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    let b = b.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    debug_assert_eq!(
-        a.geometries.len(),
-        b.geometries.len(),
-        "`a` and `b` must have the same length"
-    );
-    let intersections = a
-        .geometries
-        .iter()
-        .zip(&b.geometries)
-        .map(|(a, b)| intersect_rows(a, b, output, ignore_per_row_errors))
-        .collect::<GeoComputeResult<Vec<_>>>()?;
-    intersections_into_array(
-        intersections,
-        summed_size_hint(a.size_hint, b.size_hint),
-        output,
-        ignore_per_row_errors,
-    )
+impl IntersectionPairs {
+    /// Implements the Python `intersection`, which documents its behaviour.
+    /// Each side is converted to GEOS in full, so a row paired with a null can still fail.
+    /// If `ignore_per_row_errors=true`, a row that fails here or in the `into_*` method is null.
+    ///
+    /// `a` and `b` must have the same length, or one of them a single row.
+    pub fn new(
+        a: &GeometryArray,
+        b: &GeometryArray,
+        ignore_per_row_errors: bool,
+        early_finite_check: bool,
+    ) -> GeoComputeResult<Self> {
+        let a = a.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
+        let b = b.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
+        let (a_rows, b_rows) = (a.geometries.len(), b.geometries.len());
+        let rows = if a_rows == 1 { b_rows } else { a_rows };
+        assert!(
+            b_rows == rows || b_rows == 1,
+            "cannot pair {a_rows} geometries with {b_rows}"
+        );
+        Ok(Self {
+            a: a.geometries,
+            b: b.geometries,
+            rows,
+            size_hint: summed_size_hint(a.size_hint, b.size_hint),
+            ignore_per_row_errors,
+        })
+    }
+    /// As points, the empty point where there are none.
+    /// Several points fail with [`GeoComputeError::Split`].
+    pub fn into_points(self, z: bool) -> GeoComputeResult<PointArray> {
+        let dim = if z {
+            GeoDimension::XYZ
+        } else {
+            GeoDimension::XY
+        };
+        self.intersected(IntersectionParts::Points, false)?
+            .into_point_array(dim)
+    }
+
+    pub fn into_multi_points(self, z: bool) -> GeoComputeResult<MultiPointArray> {
+        let intersections = self.intersected(IntersectionParts::Points, true)?;
+        with_const_flags!(Z = z; intersections.into_multi_point_array::<Z>(self.ignore_per_row_errors))
+    }
+
+    /// Several linestrings fail with [`GeoComputeError::Split`].
+    pub fn into_line_strings(self, z: bool) -> GeoComputeResult<LineStringArray> {
+        let intersections = self.intersected(IntersectionParts::Lines, false)?;
+        with_const_flags!(Z = z; intersections.into_line_string_array::<Z>(self.ignore_per_row_errors))
+    }
+
+    pub fn into_multi_line_strings(self, z: bool) -> GeoComputeResult<MultiLineStringArray> {
+        let intersections = self.intersected(IntersectionParts::Lines, true)?;
+        with_const_flags!(Z = z; intersections.into_multi_line_string_array::<Z>(self.ignore_per_row_errors))
+    }
+
+    /// Several polygons fail with [`GeoComputeError::Split`].
+    /// GEOS gives a clockwise exterior, so `ccw_outer=true` reverses every ring.
+    pub fn into_polygons(self, z: bool, ccw_outer: bool) -> GeoComputeResult<PolygonArray> {
+        self.intersected(IntersectionParts::Polygons, false)?
+            .into_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
+    }
+
+    /// See [`IntersectionPairs::into_polygons`] for `ccw_outer`.
+    pub fn into_multi_polygons(
+        self,
+        z: bool,
+        ccw_outer: bool,
+    ) -> GeoComputeResult<MultiPolygonArray> {
+        self.intersected(IntersectionParts::Polygons, true)?
+            .into_multi_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
+    }
+
+    /// Every pair intersected, and narrowed down to its `parts`,
+    /// which the `into_*_array` of that kind takes:
+    /// a single geometry, or with `multi=true` a single or a multi one.
+    fn intersected(
+        &self,
+        parts: IntersectionParts,
+        multi: bool,
+    ) -> GeoComputeResult<GeosGeometries> {
+        let ignore = self.ignore_per_row_errors;
+        let geometries = broadcast(&self.a, self.rows)
+            .zip(broadcast(&self.b, self.rows))
+            .map(|(a, b)| intersect_rows(a, b, parts, multi, ignore))
+            .collect::<GeoComputeResult<Vec<_>>>()?;
+        Ok(GeosGeometries {
+            geometries,
+            size_hint: self.size_hint,
+        })
+    }
 }
 
-/// Like [intersection_pairwise], with a single geometry against every row of `many`.
-/// As there, `many` is converted to GEOS in full, even if `one` is null.
-///
-/// `one` must hold a single row.
-pub fn intersection_against_one(
-    one: &GeometryArray,
-    many: &GeometryArray,
-    one_is_a: bool,
-    output: IntersectionOutput,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
-) -> GeoComputeResult<Box<dyn Array>> {
-    let one = one.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    let [one_row] = one.geometries.as_slice() else {
-        panic!("`one` must be a single row, got {}", one.geometries.len());
-    };
-    let many = many.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    let intersections = many
-        .geometries
-        .iter()
-        .map(|row| {
-            let (a, b) = if one_is_a {
-                (one_row, row)
-            } else {
-                (row, one_row)
-            };
-            intersect_rows(a, b, output, ignore_per_row_errors)
-        })
-        .collect::<GeoComputeResult<Vec<_>>>()?;
-    intersections_into_array(
-        intersections,
-        summed_size_hint(one.size_hint, many.size_hint),
-        output,
-        ignore_per_row_errors,
-    )
+/// `len` rows out of `rows`, which holds that many or a single one to repeat.
+fn broadcast(rows: &[GeosRow], len: usize) -> impl Iterator<Item = &GeosRow> {
+    rows.iter().cycle().take(len)
 }
 
 fn summed_size_hint(a: SizeHint<2>, b: SizeHint<2>) -> SizeHint<2> {
@@ -141,7 +171,8 @@ fn summed_size_hint(a: SizeHint<2>, b: SizeHint<2>) -> SizeHint<2> {
 fn intersect_rows(
     a: &GeosRow,
     b: &GeosRow,
-    output: IntersectionOutput,
+    parts: IntersectionParts,
+    multi: bool,
     ignore_per_row_errors: bool,
 ) -> GeoComputeResult<GeosRow> {
     let intersection = match (a, b) {
@@ -151,95 +182,44 @@ fn intersect_rows(
         (GeosRow::Geometry(a), GeosRow::Geometry(b)) => a
             .intersection(b)
             .map_err(GeoComputeError::from)
-            .and_then(|intersection| intersect_rows_kept_parts(intersection, output)),
+            .and_then(|intersection| kept_parts(intersection, parts, multi)),
     };
     Ok(row_or_null(intersection.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
 
-/// Narrows an intersection down to the parts of the dimension `output` keeps,
-/// as one geometry of the kind `output` describes.
-fn intersect_rows_kept_parts(
+/// Narrows an intersection down to its `parts`,
+/// as one geometry if `multi=false` (or [`GeoComputeError::Split`] if it has several).
+/// With `multi=true`, a single part can stay a single geometry.
+fn kept_parts(
     intersection: Geometry,
-    output: IntersectionOutput,
+    parts: IntersectionParts,
+    multi: bool,
 ) -> GeoComputeResult<GeosRow> {
     if intersection.is_empty()? {
         return Ok(GeosRow::Empty);
     }
-    let (single, multi) = output.parts.single_and_multi_types();
+    let (single_type, multi_type) = parts.single_and_multi_types();
     let found = intersection.geometry_type()?;
     // The common cases: GEOS gave the kept dimension only, so nothing is copied.
-    if found == single || (found == multi && output.multi) {
+    if found == single_type || (found == multi_type && multi) {
         return Ok(GeosRow::Geometry(intersection));
     }
-    if found != multi && found != GeometryTypes::GeometryCollection {
+    if found != multi_type && found != GeometryTypes::GeometryCollection {
         return Ok(GeosRow::Empty);
     }
-    // A collection can mix dimensions, and a multi kind can hold a single part to take out.
+    // A collection can mix dimensions, and a multi geometry of a single part has to be unpacked.
     // Only these copy their kept parts.
-    let mut parts = Vec::new();
+    let mut kept = Vec::new();
     for n in 0..intersection.get_num_geometries()? {
         let part = intersection.get_geometry_n(n)?;
-        if part.geometry_type()? == single && !part.is_empty()? {
-            parts.push(Geom::clone(&part)?);
+        if part.geometry_type()? == single_type && !part.is_empty()? {
+            kept.push(Geom::clone(&part)?);
         }
     }
-    match parts.len() {
+    match kept.len() {
         0 => Ok(GeosRow::Empty),
-        _ if output.multi => Ok(GeosRow::Geometry(output.parts.create_multi(parts)?)),
-        1 => Ok(GeosRow::Geometry(parts.pop().expect("one part"))),
+        _ if multi => Ok(GeosRow::Geometry(parts.create_multi(kept)?)),
+        1 => Ok(GeosRow::Geometry(kept.pop().expect("one part"))),
         parts => Err(GeoComputeError::Split { parts }),
     }
-}
-
-fn intersections_into_array(
-    geometries: Vec<GeosRow>,
-    size_hint: SizeHint<2>,
-    output: IntersectionOutput,
-    ignore_per_row_errors: bool,
-) -> GeoComputeResult<Box<dyn Array>> {
-    let geometries = GeosGeometries {
-        geometries,
-        size_hint,
-    };
-    let IntersectionOutput {
-        parts,
-        multi,
-        z,
-        ccw_outer,
-    } = output;
-    let ignore = ignore_per_row_errors;
-    // `intersect_rows_kept_parts` only lets through what these take,
-    // so none of them meets a wrong kind.
-    Ok(match (parts, multi) {
-        (IntersectionParts::Points, false) => {
-            let dim = if z {
-                GeoDimension::XYZ
-            } else {
-                GeoDimension::XY
-            };
-            Box::new(geometries.into_point_array(dim)?.into_struct_array())
-        }
-        (IntersectionParts::Points, true) => with_const_flags!(
-            Z = z;
-            Box::new(geometries.into_multi_point_array::<Z>(ignore)?.into_list_array())
-        ),
-        (IntersectionParts::Lines, false) => with_const_flags!(
-            Z = z;
-            Box::new(geometries.into_line_string_array::<Z>(ignore)?.into_list_array())
-        ),
-        (IntersectionParts::Lines, true) => with_const_flags!(
-            Z = z;
-            Box::new(geometries.into_multi_line_string_array::<Z>(ignore)?.into_list_array())
-        ),
-        (IntersectionParts::Polygons, false) => Box::new(
-            geometries
-                .into_polygon_array(z, ignore, ccw_outer)?
-                .into_list_array(),
-        ),
-        (IntersectionParts::Polygons, true) => Box::new(
-            geometries
-                .into_multi_polygon_array(z, ignore, ccw_outer)?
-                .into_list_array(),
-        ),
-    })
 }
