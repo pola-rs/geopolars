@@ -21,8 +21,6 @@ pub struct ShortestLineBetweenKwargs {
     early_finite_check: bool,
 }
 
-/// An XY linestring with the metadata of the first geometry.
-/// Both can be of any kind and dimension, in the same CRS (or neither declaring one).
 fn shortest_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<DataType> {
     let (a, b) = (describe(a)?, describe(b)?);
     ensure_same_crs(&a, &b)?;
@@ -40,15 +38,15 @@ fn kernel_output_type_shortest_line_between(input_fields: &[Field]) -> PolarsRes
     ))
 }
 
-/// Runs [shortest_lines_against_one] on every chunk of `many`, against the single row of `one`.
+/// Runs [shortest_lines_against_one] on every chunk of `many`, or gives `None` if `one` is null.
 fn every_shortest_line_to_one(
     one: &Series,
     many: &Series,
-    one_is_a: bool,
+    lines_start_on_one: bool,
     kwargs: &ShortestLineBetweenKwargs,
 ) -> PolarsResult<Option<Vec<ArrayRef>>> {
     let one_chunk = storage_as_single_chunk(one)?;
-    // A null `one` makes every result null, so `many` is not sent to GEOS, where a row could fail.
+    // Every line would be null, so `many` is not sent to GEOS, where a row could fail.
     if one_chunk.is_null(0) {
         return Ok(None);
     }
@@ -62,8 +60,8 @@ fn every_shortest_line_to_one(
         .iter()
         .map(|many| {
             let many = geometry_array(many.as_ref(), kind)?;
-            let lines =
-                shortest_lines_against_one(&one, &many, one_is_a, ignore, early).into_polars()?;
+            let lines = shortest_lines_against_one(&one, &many, lines_start_on_one, ignore, early)
+                .into_polars()?;
             Ok(lines.into_list_array().boxed())
         })
         .collect::<PolarsResult<_>>()?;

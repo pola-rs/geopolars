@@ -80,14 +80,13 @@ pub fn shortest_lines_pairwise(
 }
 
 /// Gets the shortest line between a single geometry and every row of `many`.
-/// The lines start on `one` if `one_is_a=true`, and end on it if `one_is_a=false`.
 /// As in [shortest_lines_pairwise], `many` is converted to GEOS in full, even if `one` is null.
 ///
 /// `one` must hold a single row.
 pub fn shortest_lines_against_one(
     one: &GeometryArray,
     many: &GeometryArray,
-    one_is_a: bool,
+    lines_start_on_one: bool,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 ) -> GeoComputeResult<LineStringArray> {
@@ -100,7 +99,7 @@ pub fn shortest_lines_against_one(
         .geometries
         .iter()
         .map(|row| {
-            let (a, b) = if one_is_a { (one, row) } else { (row, one) };
+            let (a, b) = if lines_start_on_one { (one, row) } else { (row, one) };
             shortest_line_between_rows(a, b, ignore_per_row_errors)
         })
         .collect::<GeoComputeResult<Vec<_>>>()?;
