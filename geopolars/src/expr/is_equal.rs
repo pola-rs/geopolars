@@ -45,8 +45,9 @@ fn kernel_output_type_is_equal(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-/// The kernel of `kind` on one chunk of `a`'s storage and one of `b`'s.
-/// `b` is as long as `a`, or a single row.
+/// Runs the kernel of `kind` on a storage chunk of `a` and one of `b`.
+///
+/// `b` must be as long as `a`, or a single row.
 fn chunk_is_equal(
     a: &dyn Array,
     b: &dyn Array,
@@ -125,7 +126,7 @@ fn aligned_chunks(a: &Series, b: &Series) -> PolarsResult<Vec<(ArrayRef, ArrayRe
     })
 }
 
-/// [chunk_is_equal] for every chunk of `many`, against the single row of `one`.
+/// Runs [chunk_is_equal] on every chunk of `many`, against the single row of `one`.
 /// Equality goes both ways, so this serves a single geometry on either side.
 fn every_against_one(
     one: &Series,

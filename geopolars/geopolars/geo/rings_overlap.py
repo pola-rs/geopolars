@@ -72,7 +72,7 @@ def rings_overlap(
                 f" got: {a_dtype!r} and {b_dtype!r}"
             )
             raise TypeError(msg)
-        ensure_same_crs(a_dtype, b_dtype, of="rings")
+        ensure_same_crs(a_dtype, b_dtype, described_as="rings")
         return register_plugin_function(
             plugin_path=LIB,
             args=[a, b],

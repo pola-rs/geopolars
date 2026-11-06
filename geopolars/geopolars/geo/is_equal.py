@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 
-@doc(output="result")
+@doc()
 def is_equal(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -32,18 +32,10 @@ def is_equal(
     unique_z: bool = True,
     unique_m: bool = False,
 ) -> pl.Expr:
-    """Whether two geometries are equal, row by row, as a `bool`:
-    whether every coordinate is equal (or close) to the one at the same position in the other.
-
-    `a` and `b` have to be the same kind and dimension.
-    Both have to declare the same CRS, or neither one.
-    Anything else raises at plan time.
-
-    Equal lengths are compared row by row.
+    """Whether two geometries are equal, row by row, as a `bool`.
     A single geometry on either side is compared against every row of the other.
-    A null geometry on either side gives a null result.
 
-    The coordinates are compared in the order they are stored,
+    Every coordinate has to equal the one at the same position in the other,
     so a ring that starts at another vertex, or runs the other way, is not equal.
     The same goes for the parts of a multi-geometry, even though they have no order of their own.
     See `is_topologically_equal` to compare geometries however they are stored.
@@ -51,9 +43,14 @@ def is_equal(
     {coincidence_axes}
     {coincidence_tolerance}
     {tolerance_range}
-    With `nans_equal=False`, the default, a NaN is equal to nothing, as in `pl.Expr.is_close`.
+
+    A NaN is equal to nothing, as in `pl.Expr.is_close`.
     So the empty point (NaN in x and y) is not equal to another one.
-    With `nans_equal=True`, a NaN is equal to a NaN, as in `==` in Polars.
+    `nans_equal=True` makes a NaN equal to a NaN, as in `==` in Polars.
+
+    `a` and `b` have to be the same kind and dimension.
+    Both have to declare the same CRS, or neither one.
+    Anything else raises at plan time.
 
     ```python
     df.filter(geo.is_equal("parcel", "surveyed", abs_tol=0.01))

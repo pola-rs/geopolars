@@ -112,18 +112,16 @@ def on_geometry_pair(
 
 
 def ensure_same_crs(
-    a_dtype: GeoArrowType, b_dtype: GeoArrowType, *, of: str = "geometries"
+    a_dtype: GeoArrowType, b_dtype: GeoArrowType, *, described_as: str = "geometries"
 ) -> None:
-    """Raises unless `a_dtype` and `b_dtype` declare the same CRS, or neither declares one.
-    `of` names the two in the message, such as `"rings"`.
-    """
+    """Raises unless `a_dtype` and `b_dtype` declare the same CRS, or neither declares one."""
     a_crs, b_crs = a_dtype._crs(), b_dtype._crs()
     if (a_crs is None) != (b_crs is None):
-        msg = f"only one of the {of} declares a CRS; declare the same one on both"
+        msg = f"only one of the {described_as} declares a CRS; declare the same one on both"
         raise ValueError(msg)
     if a_crs != b_crs:
         msg = (
-            f"the {of} declare different CRSs, {a_crs} and {b_crs}; "
+            f"the {described_as} declare different CRSs, {a_crs} and {b_crs}; "
             "use `to_crs` to bring one onto the other first"
         )
         raise ValueError(msg)

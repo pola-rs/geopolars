@@ -35,7 +35,7 @@ fn kernel_output_type_is_topologically_equal(input_fields: &[Field]) -> PolarsRe
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-/// One chunk of the storage of a `kind`, as the GEOS kernels take it.
+/// Wraps a storage chunk of `kind` for the GEOS kernels.
 fn geos_view(chunk: &dyn Array, kind: Kind) -> PolarsResult<Box<dyn ToGeosRows>> {
     let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
     Ok(match kind {
@@ -48,14 +48,13 @@ fn geos_view(chunk: &dyn Array, kind: Kind) -> PolarsResult<Box<dyn ToGeosRows>>
     })
 }
 
-/// [geos_view] of `geometries` as a single chunk.
 fn single_chunk_geos_view(geometries: &Series) -> PolarsResult<Box<dyn ToGeosRows>> {
     let kind = describe(geometries.dtype())?.kind;
     let storage = geometries.ext()?.storage().rechunk();
     geos_view(storage.chunks()[0].as_ref(), kind)
 }
 
-/// [topologically_equal_against_one] for every chunk of `many`, against the single row of `one`.
+/// Runs [topologically_equal_against_one] on every chunk of `many`, against the single row of `one`.
 fn every_topologically_equal_to_one(
     one: &Series,
     many: &Series,
@@ -84,8 +83,8 @@ fn is_topologically_equal(
 ) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let chunks = match (a.len(), b.len()) {
-        // `aligned_chunks` takes two storages of one physical type, and the kinds can differ,
-        // so both sides are made a single chunk instead, as in `rings_overlap`.
+        // The kinds can differ, but `aligned_chunks` needs two storages of one physical type.
+        // So both sides are made a single chunk instead.
         (n, m) if n == m => {
             let (a, b) = (single_chunk_geos_view(a)?, single_chunk_geos_view(b)?);
             let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);

@@ -11,7 +11,6 @@ use super::{GeosRow, ToGeosRows};
 use crate::per_row::optional_bool_array;
 use crate::{row_or_null, GeoComputeResult};
 
-/// `None` if either is null.
 #[inline(always)]
 fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Option<bool>> {
     Ok(Some(match (a, b) {
@@ -25,11 +24,11 @@ fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Op
     }))
 }
 
-/// Whether the rows of `a` and `b`, which have the same length, are topologically equal row by row.
-/// A row is null where either geometry is.
-/// If `ignore_per_row_errors=true`, a row GEOS fails on, to convert or to compare, is null too;
-/// otherwise its error is returned.
-/// `early_finite_check` is as [`ToGeosRows`] takes it.
+/// Whether two arrays of geometries are topologically equal, row by row.
+/// A row that GEOS fails to convert or compare makes this return its error.
+/// That row is null instead if `ignore_per_row_errors=true`.
+///
+/// `a` and `b` must have the same length.
 pub fn topologically_equal_pairwise(
     a: &dyn ToGeosRows,
     b: &dyn ToGeosRows,
@@ -41,7 +40,7 @@ pub fn topologically_equal_pairwise(
     debug_assert_eq!(
         a.geometries.len(),
         b.geometries.len(),
-        "Chunks must be the same size"
+        "`a` and `b` must have the same length"
     );
     let tested = a
         .geometries
@@ -53,8 +52,8 @@ pub fn topologically_equal_pairwise(
 }
 
 /// Whether the single geometry `one` is topologically equal to each row of `many`.
-/// Complementary to [topologically_equal_pairwise]. See it for the other options.
 /// Equality goes both ways, so this serves a single geometry on either side.
+/// See [topologically_equal_pairwise] for the other arguments.
 pub fn topologically_equal_against_one(
     one: &dyn ToGeosRows,
     many: &dyn ToGeosRows,

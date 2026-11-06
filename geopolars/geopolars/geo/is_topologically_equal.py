@@ -26,31 +26,28 @@ def is_topologically_equal(
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """Whether two geometries cover the same points in x and y, row by row, as a `bool`.
-
-    `a` and `b` can be any two kinds and dimensions.
-    Both have to declare the same CRS, or neither one.
-    Anything else raises at plan time.
-
-    Equal lengths are compared row by row.
     A single geometry on either side is compared against every row of the other.
-    A null geometry on either side gives a null result.
 
     Unlike `is_equal`, it does not matter how the coordinates are stored.
-    A ring that starts at another vertex or runs the other way is equal,
-    as is a line with an extra vertex along one of its segments,
-    or a multi-geometry with its parts in another order.
-    A polygon is equal to a multipolygon with only that polygon as a part.
-    Any two empty geometries are equal, whatever their kinds.
+    A ring that starts at another vertex or runs the other way is equal.
+    So is a line with an extra vertex along one of its segments,
+    and a multi-geometry with its parts in another order.
+    The kinds and dimensions do not have to match either.
+    A polygon is equal to a multipolygon with only that polygon as a part,
+    and any two empty geometries are equal.
 
-    Computed by GEOS, in x and y only.
-    It takes no tolerance.
+    Computed by GEOS, without a tolerance.
 
     {geos_errors}
 
     {geos_non_finite}
-    GEOS then gives no meaningful answer: depending on where the vertex is, it raises,
-    or gives `True` or `False`, even for two of the same geometry.
+    GEOS then gives no meaningful answer.
+    Depending on where the vertex is, it raises or gives `True` or `False`,
+    even for two of the same geometry.
     {early_finite_check}
+
+    `a` and `b` have to declare the same CRS, or neither one.
+    Anything else raises at plan time.
 
     ```python
     df.filter(geo.is_topologically_equal("parcel", "surveyed"))
