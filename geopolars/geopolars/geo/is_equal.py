@@ -28,7 +28,7 @@ def is_equal(
     *,
     abs_tol: float | None = None,
     rel_tol: float | None = None,
-    nans_equal: bool = True,
+    nans_equal: bool = False,
     unique_z: bool = True,
     unique_m: bool = False,
 ) -> pl.Expr:
@@ -51,9 +51,9 @@ def is_equal(
     {coincidence_axes}
     {coincidence_tolerance}
     {tolerance_range}
-    With `nans_equal=True`, the default, a NaN is equal to a NaN, as in `==` in Polars.
-    So the empty point (NaN in x and y) is equal to another one.
-    With `nans_equal=False`, a NaN is equal to nothing, as in `pl.Expr.is_close` by default.
+    With `nans_equal=False`, the default, a NaN is equal to nothing, as in `pl.Expr.is_close`.
+    So the empty point (NaN in x and y) is not equal to another one.
+    With `nans_equal=True`, a NaN is equal to a NaN, as in `==` in Polars.
 
     ```python
     df.filter(geo.is_equal("parcel", "surveyed", abs_tol=0.01))

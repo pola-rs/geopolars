@@ -195,11 +195,11 @@ def test_the_same_rings_in_other_polygons_are_not_close() -> None:
     assert _is_close(MultiPolygonXY(), [a], [b]) == [False]
 
 
-def test_empty_points_are_equal_unless_nans_equal_is_false() -> None:
+def test_empty_points_are_only_equal_with_nans_equal() -> None:
     empty = {"x": math.nan, "y": math.nan}
 
-    assert _is_equal(PointXY(), [empty], [empty]) == [True]
-    assert _is_equal(PointXY(), [empty], [empty], nans_equal=False) == [False]
+    assert _is_equal(PointXY(), [empty], [empty]) == [False]
+    assert _is_equal(PointXY(), [empty], [empty], nans_equal=True) == [True]
 
 
 def test_m_is_only_compared_when_unique() -> None:
@@ -304,13 +304,13 @@ def test_an_infinity_is_only_equal_to_itself_and_nan_to_nothing_without_nans_equ
     [{}, {"abs_tol": 1e-9}, {"rel_tol": 1e-9}],
     ids=["exact", "abs_tol", "rel_tol"],
 )
-def test_a_nan_is_equal_to_a_nan_by_default_whatever_the_tolerance(
+def test_a_nan_is_equal_to_a_nan_with_nans_equal_whatever_the_tolerance(
     tolerance: dict[str, float],
 ) -> None:
     a = [_point(math.nan, 0), _point(math.nan, 0)]
     b = [_point(math.nan, 0), _point(0, 0)]
 
-    assert _is_equal(PointXY(), a, b, **tolerance) == [True, False]
+    assert _is_equal(PointXY(), a, b, nans_equal=True, **tolerance) == [True, False]
 
 
 @pytest.mark.parametrize(

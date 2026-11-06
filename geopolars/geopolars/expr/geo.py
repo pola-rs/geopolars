@@ -477,7 +477,7 @@ class ExprGeoNameSpace:
         *,
         abs_tol: float | None = None,
         rel_tol: float | None = None,
-        nans_equal: bool = True,
+        nans_equal: bool = False,
         unique_z: bool = True,
         unique_m: bool = False,
     ) -> pl.Expr:
