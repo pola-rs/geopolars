@@ -9,7 +9,7 @@
 //! The public functions take `early_finite_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
-use geopolars_core::{MultiPolygonArray, PolygonArray};
+use geopolars_core::{GeometryArray, MultiPolygonArray, PolygonArray};
 use geos::{BufferParams, Geom, Geometry};
 pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
@@ -63,7 +63,7 @@ pub struct BufferStyle {
 /// If `ccw_outer=true`, every ring is reversed, so the exterior runs counter-clockwise.
 /// Otherwise it runs clockwise, as GEOS gives it.
 pub fn buffer_into_polygons(
-    array: &impl ToGeosRows,
+    array: &GeometryArray,
     distance: BufferDistance,
     style: &BufferStyle,
     ccw_outer: bool,
@@ -83,7 +83,7 @@ pub fn buffer_into_polygons(
 /// Parts whose buffers overlap are merged into one.
 /// A row that GEOS buffers into several polygons gets them all as parts.
 pub fn buffer_into_multi_polygons(
-    array: &impl ToGeosRows,
+    array: &GeometryArray,
     distance: BufferDistance,
     style: &BufferStyle,
     ccw_outer: bool,

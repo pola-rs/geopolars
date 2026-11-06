@@ -5,6 +5,7 @@
 
 mod coords;
 mod dimension;
+mod geometry_array;
 mod geotraits;
 mod linestrings;
 mod lists;
@@ -22,6 +23,7 @@ pub use coords::{
     same_position, AxisArrays, Coords, Tolerance, ValidCoords, MIN_RING_VERTICES,
 };
 pub use dimension::GeoDimension;
+pub use geometry_array::GeometryArray;
 pub use geotraits::{Coord, Geometry};
 pub use linestrings::{
     LineStringArray, MultiLineStringArray, ScalarLineString, ScalarMultiLineString,

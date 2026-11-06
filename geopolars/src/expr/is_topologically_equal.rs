@@ -1,22 +1,18 @@
 //! Whether two geometries are topologically equal
 //! (see [`geopolars_compute::geos::topologically_equal_pairwise`]).
 
-use geopolars_compute::geos::{
-    topologically_equal_against_one, topologically_equal_pairwise, ToGeosRows,
-};
-use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
-};
+use geopolars_compute::geos::{topologically_equal_against_one, topologically_equal_pairwise};
 use polars::prelude::*;
-use polars_arrow::array::{Array, BooleanArray, ListArray};
+use polars_arrow::array::BooleanArray;
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, ensure_same_crs, Kind};
+use crate::geoarrow::{
+    describe, ensure_same_crs, geometry_array, kind_of, storage_as_single_chunk,
+};
 
 /// See python
 #[derive(Debug, Default, Deserialize)]
@@ -37,27 +33,6 @@ fn kernel_output_type_is_topologically_equal(input_fields: &[Field]) -> PolarsRe
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-/// Wraps a storage chunk of `kind` for the GEOS kernels.
-fn geos_view(chunk: &dyn Array, kind: Kind) -> PolarsResult<Box<dyn ToGeosRows>> {
-    let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
-    Ok(match kind {
-        Kind::Point => Box::new(PointArray::new(Coords::new(chunk)?)),
-        Kind::MultiPoint => Box::new(MultiPointArray::new(rows(chunk)?)?),
-        Kind::LineString => Box::new(LineStringArray::new(rows(chunk)?)?),
-        Kind::MultiLineString => Box::new(MultiLineStringArray::new(rows(chunk)?)?),
-        Kind::Polygon => Box::new(PolygonArray::new(rows(chunk)?)?),
-        Kind::MultiPolygon => Box::new(MultiPolygonArray::new(rows(chunk)?)?),
-    })
-}
-
-fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
-    Ok(describe(geometries.dtype())?.kind)
-}
-
-fn storage_as_single_chunk(geometries: &Series) -> PolarsResult<ArrayRef> {
-    Ok(geometries.ext()?.storage().rechunk().chunks()[0].clone())
-}
-
 /// Runs [topologically_equal_against_one] on every chunk of `many`, against the single row of `one`.
 fn every_topologically_equal_to_one(
     one: &Series,
@@ -74,14 +49,13 @@ fn every_topologically_equal_to_one(
             .map(|many| BooleanArray::new_null(ArrowDataType::Boolean, many.len()))
             .collect());
     }
-    let one = geos_view(one_chunk.as_ref(), kind_of(one)?)?;
+    let one = geometry_array(one_chunk.as_ref(), kind_of(one)?)?;
     let kind = kind_of(many)?;
     many_chunks
         .iter()
         .map(|many| {
-            let many = geos_view(many.as_ref(), kind)?;
-            topologically_equal_against_one(one.as_ref(), many.as_ref(), ignore, early)
-                .into_polars()
+            let many = geometry_array(many.as_ref(), kind)?;
+            topologically_equal_against_one(&one, &many, ignore, early).into_polars()
         })
         .collect()
 }
@@ -102,17 +76,14 @@ fn is_topologically_equal(
             // so that it is not sent to GEOS, where it could fail.
             let validity = combine_validities_and(a_chunk.validity(), b_chunk.validity());
             let (a, b) = (
-                geos_view(
+                geometry_array(
                     a_chunk.with_validity(validity.clone()).as_ref(),
                     kind_of(a)?,
                 )?,
-                geos_view(b_chunk.with_validity(validity).as_ref(), kind_of(b)?)?,
+                geometry_array(b_chunk.with_validity(validity).as_ref(), kind_of(b)?)?,
             );
             let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
-            vec![
-                topologically_equal_pairwise(a.as_ref(), b.as_ref(), ignore, early)
-                    .into_polars()?,
-            ]
+            vec![topologically_equal_pairwise(&a, &b, ignore, early).into_polars()?]
         }
         (1, _) => every_topologically_equal_to_one(a, b, &kwargs)?,
         (_, 1) => every_topologically_equal_to_one(b, a, &kwargs)?,

@@ -73,7 +73,8 @@ use std::ops::Range;
 
 use geopolars_core::output::SizeHint;
 use geopolars_core::{
-    Coords, GeoDimension, List, MultiPointArray, PointArray, ScalarPoint, ValidCoords,
+    Coords, GeoDimension, GeometryArray, List, MultiPointArray, PointArray, ScalarPoint,
+    ValidCoords,
 };
 use geos::{CoordSeq, CoordType, Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
@@ -101,6 +102,24 @@ pub trait ToGeosRows {
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries>;
+}
+
+impl ToGeosRows for GeometryArray {
+    fn to_geos_rows(
+        &self,
+        ignore_per_row_errors: bool,
+        early_finite_check: bool,
+    ) -> GeoComputeResult<GeosGeometries> {
+        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+        match self {
+            GeometryArray::Point(array) => array.to_geos_rows(ignore, early),
+            GeometryArray::LineString(array) => array.to_geos_rows(ignore, early),
+            GeometryArray::Polygon(array) => array.to_geos_rows(ignore, early),
+            GeometryArray::MultiPoint(array) => array.to_geos_rows(ignore, early),
+            GeometryArray::MultiLineString(array) => array.to_geos_rows(ignore, early),
+            GeometryArray::MultiPolygon(array) => array.to_geos_rows(ignore, early),
+        }
+    }
 }
 
 fn coord_type(dim: GeoDimension) -> CoordType {
