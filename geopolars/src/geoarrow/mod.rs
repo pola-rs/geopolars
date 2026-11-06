@@ -105,12 +105,12 @@ pub fn ensure_same_crs(a: &GeoColumn, b: &GeoColumn) -> PolarsResult<()> {
 pub fn ensure_same_crs_unless_bare(
     a: Option<&ExtensionMetadata>,
     b: Option<&ExtensionMetadata>,
-    names: (&str, &str),
+    names_in_err_msg: (&str, &str),
 ) -> PolarsResult<()> {
     let (Some(a), Some(b)) = (a, b) else {
         return Ok(());
     };
-    let (name_a, name_b) = names;
+    let (name_a, name_b) = names_in_err_msg;
     match (a.declares_crs(), b.declares_crs()) {
         (false, false) => Ok(()),
         (true, true) => {

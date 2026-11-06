@@ -667,7 +667,7 @@ pub(super) struct PartsLayout {
 pub(super) fn parts_layout(
     dtype: &DataType,
     part: Kind,
-    name: &str,
+    name_in_err_msg: &str,
 ) -> PolarsResult<Option<PartsLayout>> {
     if matches!(dtype, DataType::Null) {
         return Ok(None);
@@ -675,7 +675,7 @@ pub(super) fn parts_layout(
     let (part, multi) = part_kinds(part);
     let refused = || {
         polars_err!(
-            SchemaMismatch: "expected the {name} as one `{}` per row, a list of them, or a `{}` \
+            SchemaMismatch: "expected the {name_in_err_msg} as one `{}` per row, a list of them, or a `{}` \
             ({}), got: {}",
             part.display(), multi.display(),
             match part {
@@ -718,15 +718,14 @@ pub(super) fn parts_layout(
 
 /// Whether the column `parts` holds a list of parts of the kind `part` per row (see [parts_layout]),
 /// and its metadata (`None` for bare coordinates, or an untyped null).
-/// `names` are for error message 'what they go into', 'the parts'
 /// CRS is left for the caller to check.
 pub(super) fn listed_parts(
     parts: &Field,
     part: Kind,
     dim: GeoDimension,
-    names: (&str, &str),
+    names_in_err_msg: (&str, &str),
 ) -> PolarsResult<(bool, Option<Arc<ExtensionMetadata>>)> {
-    let (subject, name) = names;
+    let (subject, name) = names_in_err_msg;
     let Some(layout) = parts_layout(parts.dtype(), part, name)? else {
         return Ok((true, None));
     };
@@ -806,14 +805,14 @@ fn kernel_output_type_polygon_rings_in_separate_columns(
 pub(super) fn paired_rows(
     a: &Series,
     b: &Series,
-    names: (&str, &str),
+    names_in_err_msg: (&str, &str),
 ) -> PolarsResult<(Series, Series)> {
     Ok(match (a.len(), b.len()) {
         (n, m) if n == m => (a.rechunk(), b.rechunk()),
         (n, 1) => (a.rechunk(), b.new_from_index(0, n).rechunk()),
         (1, m) => (a.new_from_index(0, m).rechunk(), b.rechunk()),
         (n, m) => {
-            polars_bail!(ShapeMismatch: "the {} have {n} rows but the {} have {m}", names.0, names.1)
+            polars_bail!(ShapeMismatch: "the {} have {n} rows but the {} have {m}", names_in_err_msg.0, names_in_err_msg.1)
         }
     })
 }

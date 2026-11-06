@@ -253,7 +253,7 @@ impl MetadataKwargs {
     pub fn apply(
         &self,
         metadata: Arc<ExtensionMetadata>,
-        name: &str,
+        name_in_err_msg: &str,
     ) -> PolarsResult<Arc<ExtensionMetadata>> {
         let Some(crs) = &self.crs else {
             return Ok(metadata);
@@ -263,7 +263,7 @@ impl MetadataKwargs {
             None | Some(Value::Null) => Ok(Arc::new(Arc::unwrap_or_clone(metadata).with_crs(crs))),
             Some(declared) if *declared == crs_value(crs) => Ok(metadata),
             Some(declared) => polars_bail!(
-                SchemaMismatch: "the CRS of the {name} is already {declared}, not {}; \
+                SchemaMismatch: "the CRS of the {name_in_err_msg} is already {declared}, not {}; \
                 use `to_crs` to reproject instead",
                 crs_value(crs)
             ),
