@@ -128,18 +128,30 @@ def test_a_single_geometry_is_measured_against_every_row() -> None:
 _NOT_FINITE_POINT = pl.Series("a", [{"x": math.nan, "y": 1.0}]).ext.to(PointXY())
 
 
+def _line_strings(name: str, rows: list[list[tuple[float, float]]]) -> pl.Series:
+    storage = pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))
+    coords = [[{"x": x, "y": y} for x, y in row] for row in rows]
+    return pl.Series(name, coords, dtype=storage).ext.to(LineStringXY())
+
+
+# GEOS fails to build a linestring of a single vertex,
+# and the early finite check fails on the NaN vertex of the other.
+_FAILING_LINES = [[(0, 0)], [(0, 0), (math.nan, 1), (2, 2)]]
+
+
 @pytest.mark.parametrize("early_finite_check", [False, True])
 def test_against_a_single_null_geometry_no_row_reaches_geos(
     early_finite_check: bool,
 ) -> None:
     one = _wkt("one", PolygonXY(), [None])
+    df = pl.DataFrame(_line_strings("many", _FAILING_LINES))
     kwargs = {"early_finite_check": early_finite_check}
 
-    out = pl.select(geo.shortest_line_between(_NOT_FINITE_POINT, one, **kwargs))
-    assert out.to_series().to_list() == [None]
-    assert out.schema["a"] == LineStringXY()
-    out = pl.select(geo.shortest_line_between(one, _NOT_FINITE_POINT, **kwargs))
-    assert out.to_series().to_list() == [None]
+    out = df.select(geo.shortest_line_between("many", one, **kwargs))
+    assert out["many"].to_list() == [None, None]
+    assert out.schema["many"] == LineStringXY()
+    out = df.select(geo.shortest_line_between(one, "many", **kwargs))
+    assert out.to_series().to_list() == [None, None]
 
 
 def test_a_single_null_geometry_against_no_rows_gives_no_lines() -> None:
@@ -164,15 +176,18 @@ def test_against_the_first_of_no_rows_gives_no_lines() -> None:
 
 @pytest.mark.parametrize("early_finite_check", [False, True])
 def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -> None:
-    b = _wkt("b", PolygonXY(), [None])
-
-    out = pl.select(
-        geo.shortest_line_between(
-            _NOT_FINITE_POINT, b, early_finite_check=early_finite_check
-        )
+    df = pl.DataFrame(
+        [
+            _wkt("a", PointXY(), [None, None, "POINT (3 0)"]),
+            _line_strings("b", [*_FAILING_LINES, [(0, 0), (1, 0), (1, 1)]]),
+        ]
     )
 
-    assert out.to_series().to_list() == [None]
+    out = df.select(
+        geo.shortest_line_between("a", "b", early_finite_check=early_finite_check)
+    )
+
+    assert _as_wkt(out["a"]) == [None, None, "LINESTRING(3 0,1 0)"]
 
 
 def test_geos_raises_on_a_geometry_that_is_not_finite() -> None:
