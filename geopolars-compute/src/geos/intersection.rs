@@ -52,6 +52,11 @@ pub struct IntersectionOutput {
     pub ccw_outer: bool,
 }
 
+// TODO: `intersection_pairwise` and `intersection_against_one` pair their GEOS rows
+// the same way as `topologically_equal_pairwise` and `topologically_equal_against_one`.
+// Turn that into a shared helper once a third GEOS operation on two geometries
+// (such as `union` or `difference`) needs it.
+
 /// Intersects two arrays of geometries row by row through GEOS,
 /// into the storage of the kind `output` describes.
 /// Implements the Python `intersection`, which documents its behaviour.

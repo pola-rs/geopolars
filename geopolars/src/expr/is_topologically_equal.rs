@@ -9,7 +9,9 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, ensure_same_crs, map_geometry_pairs};
+use crate::geoarrow::{
+    describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, GeometryPairs,
+};
 
 /// See python
 #[derive(Debug, Default, Deserialize)]
@@ -38,12 +40,40 @@ fn is_topologically_equal(
 ) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
-    let chunks = map_geometry_pairs(
-        a,
-        b,
-        |a, b| topologically_equal_pairwise(a, b, ignore, early).into_polars(),
-        |one, many, _| topologically_equal_against_one(one, many, ignore, early).into_polars(),
-        |rows| Ok(BooleanArray::new_null(ArrowDataType::Boolean, rows)),
-    )?;
+    let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
+    let chunks = match single_chunk_masked_pairs(a, b)? {
+        GeometryPairs::Pairwise(pairs) => pairs
+            .iter()
+            .map(|(a, b)| {
+                let (a, b) = (
+                    geometry_array(a.as_ref(), a_kind)?,
+                    geometry_array(b.as_ref(), b_kind)?,
+                );
+                topologically_equal_pairwise(&a, &b, ignore, early).into_polars()
+            })
+            .collect::<PolarsResult<Vec<_>>>()?,
+        GeometryPairs::AgainstOne {
+            one,
+            many,
+            one_is_a,
+        } => {
+            let (one_kind, many_kind) = if one_is_a {
+                (a_kind, b_kind)
+            } else {
+                (b_kind, a_kind)
+            };
+            let one = geometry_array(one.as_ref(), one_kind)?;
+            many.iter()
+                .map(|many| {
+                    let many = geometry_array(many.as_ref(), many_kind)?;
+                    topologically_equal_against_one(&one, &many, ignore, early).into_polars()
+                })
+                .collect::<PolarsResult<Vec<_>>>()?
+        }
+        GeometryPairs::AllNull(lengths) => lengths
+            .iter()
+            .map(|&rows| BooleanArray::new_null(ArrowDataType::Boolean, rows))
+            .collect(),
+    };
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
 }

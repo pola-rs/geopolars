@@ -3,14 +3,14 @@
 
 use geopolars_compute::geos::{rings_overlap_against_one, rings_overlap_pairwise};
 use geopolars_compute::with_const_flags;
-use geopolars_core::LineStringArray;
+use geopolars_core::{downcast, LineStringArray};
 use polars::prelude::*;
 use polars_arrow::array::BooleanArray;
 use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, ensure_same_crs, Kind};
+use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs, Kind};
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -43,71 +43,50 @@ fn compute_err(e: impl std::fmt::Display) -> PolarsError {
     polars_err!(ComputeError: "rings_overlap {e}")
 }
 
-/// The rings of `rings`, as a single chunk.
-fn single_chunk(rings: &Series) -> PolarsResult<ListChunked> {
-    Ok(rings.ext()?.storage().list()?.rechunk().into_owned())
+fn rings(chunk: &ArrayRef) -> PolarsResult<LineStringArray> {
+    LineStringArray::new(downcast(chunk.as_ref(), "a list of vertices")?)
 }
 
-/// [rings_overlap_pairwise], into a polars error.
-fn pairwise<const TOUCHING: bool>(
-    a: &LineStringArray,
-    b: &LineStringArray,
-    ignore_per_row_errors: bool,
-) -> PolarsResult<BooleanArray> {
-    rings_overlap_pairwise::<TOUCHING>(a, b, ignore_per_row_errors).map_err(compute_err)
-}
-
-/// [rings_overlap_against_one] for every chunk of `many`.
-fn every_against_one<const TOUCHING: bool>(
-    one: &Series,
-    many: &Series,
+fn rings_overlap_chunks<const TOUCHING: bool>(
+    a: &Series,
+    b: &Series,
     ignore_per_row_errors: bool,
 ) -> PolarsResult<Vec<BooleanArray>> {
-    let one = single_chunk(one)?;
-    let one = LineStringArray::new(one.downcast_as_array())?;
-    let many = many.ext()?.storage().list()?;
-    if !one.rows.is_valid(0) {
-        return Ok(many
-            .downcast_iter()
-            .map(|many| BooleanArray::new_null(ArrowDataType::Boolean, many.len()))
-            .collect());
-    }
-    let one = one.get(0);
-    many.downcast_iter()
-        .map(|many| {
-            let many = LineStringArray::new(many)?;
-            rings_overlap_against_one::<TOUCHING>(&one, &many, ignore_per_row_errors)
-                .map_err(compute_err)
-        })
-        .collect()
+    Ok(match aligned_pairs(a, b)? {
+        GeometryPairs::Pairwise(pairs) => pairs
+            .iter()
+            .map(|(a, b)| {
+                rings_overlap_pairwise::<TOUCHING>(&rings(a)?, &rings(b)?, ignore_per_row_errors)
+                    .map_err(compute_err)
+            })
+            .collect::<PolarsResult<Vec<_>>>()?,
+        GeometryPairs::AgainstOne { one, many, .. } => {
+            let one = rings(&one)?;
+            many.iter()
+                .map(|many| {
+                    rings_overlap_against_one::<TOUCHING>(
+                        &one.get(0),
+                        &rings(many)?,
+                        ignore_per_row_errors,
+                    )
+                    .map_err(compute_err)
+                })
+                .collect::<PolarsResult<Vec<_>>>()?
+        }
+        GeometryPairs::AllNull(lengths) => lengths
+            .iter()
+            .map(|&rows| BooleanArray::new_null(ArrowDataType::Boolean, rows))
+            .collect(),
+    })
 }
 
 /// See `rings_overlap`.
 #[polars_expr(output_type_func=kernel_output_type_rings_overlap)]
 fn rings_overlap(inputs: &[Series], kwargs: RingsOverlapKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let (touching, ignore_errors) = (kwargs.include_touching, kwargs.ignore_per_row_errors);
-    let chunks = match (a.len(), b.len()) {
-        (n, m) if n == m => {
-            let (a, b) = (single_chunk(a)?, single_chunk(b)?);
-            let (a, b) = (
-                LineStringArray::new(a.downcast_as_array())?,
-                LineStringArray::new(b.downcast_as_array())?,
-            );
-            vec![with_const_flags!(
-                TOUCHING = touching;
-                pairwise::<TOUCHING>(&a, &b, ignore_errors)
-            )?]
-        }
-        (1, _) => with_const_flags!(
-            TOUCHING = touching;
-            every_against_one::<TOUCHING>(a, b, ignore_errors)
-        )?,
-        (_, 1) => with_const_flags!(
-            TOUCHING = touching;
-            every_against_one::<TOUCHING>(b, a, ignore_errors)
-        )?,
-        (n, m) => polars_bail!(ShapeMismatch: "cannot compare {n} rings against {m}"),
-    };
+    let chunks = with_const_flags!(
+        TOUCHING = kwargs.include_touching;
+        rings_overlap_chunks::<TOUCHING>(a, b, kwargs.ignore_per_row_errors)
+    )?;
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
 }
