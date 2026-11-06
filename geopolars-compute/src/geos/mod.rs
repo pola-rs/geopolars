@@ -43,6 +43,7 @@ mod offset_curve;
 mod points;
 mod polygons;
 mod rings_overlap;
+mod shortest_line;
 mod simplify;
 mod topology;
 
@@ -64,6 +65,7 @@ pub use offset_curve::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, OffsetCurveStyle,
 };
 pub use rings_overlap::{rings_overlap_against_one, rings_overlap_pairwise};
+pub use shortest_line::{shortest_lines_against_one, shortest_lines_pairwise};
 pub use simplify::{
     simplify_line_strings, simplify_multi_line_strings, simplify_multi_polygons, simplify_polygons,
 };
