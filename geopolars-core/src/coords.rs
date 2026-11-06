@@ -363,6 +363,10 @@ impl Coords {
         (self.axes.into_axes(), self.validity)
     }
 
+    pub fn with_validity(self, validity: Option<Bitmap>) -> Self {
+        Self { validity, ..self }
+    }
+
     #[inline(always)]
     pub fn is_valid(&self, i: usize) -> bool {
         self.validity

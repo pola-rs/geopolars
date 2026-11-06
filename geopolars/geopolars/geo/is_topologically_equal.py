@@ -46,8 +46,7 @@ def is_topologically_equal(
     even for two of the same geometry.
     {early_finite_check}
 
-    `a` and `b` have to declare the same CRS, or neither one.
-    Anything else raises at plan time.
+    {same_crs_pair}
 
     ```python
     df.filter(geo.is_topologically_equal("parcel", "surveyed"))

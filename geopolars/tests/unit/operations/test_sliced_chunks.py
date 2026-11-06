@@ -99,6 +99,10 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         lambda g: geo.is_topologically_equal(g, g, ignore_per_row_errors=True),
         set(),
     ),
+    "shortest_line_between": (
+        lambda g: geo.shortest_line_between(g, g, ignore_per_row_errors=True),
+        set(),
+    ),
     "exterior": (
         lambda g: geo.exterior(g),
         {LineStringXY, MultiPointXY, MultiLineStringXY},

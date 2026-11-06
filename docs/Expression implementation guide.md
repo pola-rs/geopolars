@@ -61,6 +61,7 @@ This functionality has a dedicated Rust kernel in `geopolars-compute`'s `native`
 working directly on our storage.
 This makes them very fast, but they cannot be subdivided at plan-time.
 These are ideally element-wise if possible.
+Before implementing one, read the [geopolars-compute README](../geopolars-compute/README.md#writing-kernels) first.
 
 ### B. Forward to external
 
@@ -70,6 +71,7 @@ This usually means at least one allocation and copy pass
 for every item processed this way, so prefer A-tier where it is feasible.
 In return we don't have to re-implement (and maintain) well-tested algorithms.
 Kernels forwarding to GEOS live in `geopolars-compute`'s `geos` module.
+Before implementing one, read the [geopolars-compute README](../geopolars-compute/README.md#writing-kernels) first.
 
 Examples are:
 

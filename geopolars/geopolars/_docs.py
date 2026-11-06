@@ -108,6 +108,9 @@ so they go with any.
 | anything | bare coordinates, or `pl.lit(None)` | accepted |
 | declares X | declares none, or the other way round | refused |
 | declares X | declares Y | refused |""",
+    "same_crs_pair": """\
+`a` and `b` have to declare the same CRS, or neither one.
+If the CRSs differ (or only one has a CRS, and the other does not), an error is raised at plan time.""",
     "null_parts": """\
 What a null {part} does is set by `null_parts`.
 A null {part} is a null row of `{parts}`, a null in a list of them,

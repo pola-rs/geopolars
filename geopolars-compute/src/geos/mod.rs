@@ -43,6 +43,7 @@ mod offset_curve;
 mod points;
 mod polygons;
 mod rings_overlap;
+mod shortest_line;
 mod simplify;
 mod topology;
 
@@ -64,6 +65,7 @@ pub use offset_curve::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, OffsetCurveStyle,
 };
 pub use rings_overlap::{rings_overlap_against_one, rings_overlap_pairwise};
+pub use shortest_line::{shortest_lines_against_one, shortest_lines_pairwise};
 pub use simplify::{
     simplify_line_strings, simplify_multi_line_strings, simplify_multi_polygons, simplify_polygons,
 };
@@ -216,6 +218,35 @@ fn multi_point_to_geos(axes: &Axes, vertices: Range<usize>) -> GeoComputeResult<
     Ok(Geometry::create_multipoint(points)?)
 }
 
+#[inline(always)]
+fn is_geoarrow_empty_point(x: f64, y: f64) -> bool {
+    x.is_nan() && y.is_nan()
+}
+
+/// Marks every [empty point](is_empty_point) and every row without parts in `array`.
+/// A row whose parts are all empty, such as a polygon whose only ring has no vertices, is not marked.
+/// The bit of a null row is arbitrary.
+fn empty_rows(array: &GeometryArray) -> Bitmap {
+    let without_parts =
+        |rows: &List| Bitmap::from_iter((0..rows.len()).map(|i| rows.range(i).is_empty()));
+    match array {
+        GeometryArray::Point(array) => {
+            let coords = array.coords.ignoring_validity();
+            let (x, y) = (coords.x(), coords.y());
+            Bitmap::from_iter(
+                x.iter()
+                    .zip(y)
+                    .map(|(&x, &y)| is_geoarrow_empty_point(x, y)),
+            )
+        }
+        GeometryArray::LineString(array) => without_parts(&array.rows),
+        GeometryArray::Polygon(array) => without_parts(&array.rows),
+        GeometryArray::MultiPoint(array) => without_parts(&array.rows),
+        GeometryArray::MultiLineString(array) => without_parts(&array.rows),
+        GeometryArray::MultiPolygon(array) => without_parts(&array.rows),
+    }
+}
+
 /// Point `i` of `coords`, which carry `len` axes of `coord_type`.
 /// `None` if it is null.
 #[inline(always)]
@@ -228,8 +259,7 @@ fn point_to_geos<const EARLY_FINITE_CHECK: bool>(
     let Some((x, y)) = coords.xy(i) else {
         return Ok(None);
     };
-    // GeoArrow's empty point. GEOS only counts a point without coordinates as empty.
-    if x.is_nan() && y.is_nan() {
+    if is_geoarrow_empty_point(x, y) {
         return Ok(Some(Geometry::create_empty_point()?));
     }
     if EARLY_FINITE_CHECK {
