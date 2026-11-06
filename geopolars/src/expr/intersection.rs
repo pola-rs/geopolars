@@ -9,7 +9,9 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, ensure_same_crs, map_geometry_pairs, Geo, GeoDimension, Kind};
+use crate::geoarrow::{
+    describe, ensure_same_crs, map_geometry_pairs, storage_as_single_chunk, Geo, GeoDimension, Kind,
+};
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -140,6 +142,7 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
         |one, many, one_is_a| {
             intersection_against_one(one, many, one_is_a, output, ignore, early).into_polars()
         },
+        |rows| storage_as_single_chunk(&Series::full_null(PlSmallStr::EMPTY, rows, &dtype)),
     )?;
     // SAFETY: the kernel gives the storage of the kind and dimension `dtype` says.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(a.name().clone(), chunks, &dtype) })

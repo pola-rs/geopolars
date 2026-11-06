@@ -3,6 +3,8 @@
 
 use geopolars_compute::geos::{topologically_equal_against_one, topologically_equal_pairwise};
 use polars::prelude::*;
+use polars_arrow::array::BooleanArray;
+use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -41,6 +43,7 @@ fn is_topologically_equal(
         b,
         |a, b| topologically_equal_pairwise(a, b, ignore, early).into_polars(),
         |one, many, _| topologically_equal_against_one(one, many, ignore, early).into_polars(),
+        |rows| Ok(BooleanArray::new_null(ArrowDataType::Boolean, rows)),
     )?;
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
 }
