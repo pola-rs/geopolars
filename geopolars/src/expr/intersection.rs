@@ -174,6 +174,17 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
             })
             .collect::<PolarsResult<Vec<_>>>()?,
     };
+    // `intersection_type` and `intersections_into_array` pick the kind separately.
+    #[cfg(debug_assertions)]
+    {
+        let DataType::Extension(_, storage) = &dtype else {
+            unreachable!("`intersection_type` gives a geometry dtype");
+        };
+        let storage = storage.to_arrow(CompatLevel::newest());
+        for chunk in &chunks {
+            debug_assert_eq!(chunk.dtype(), &storage, "the kernel gave another storage");
+        }
+    }
     // SAFETY: the kernel gives the storage of the kind and dimension `dtype` says.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(a.name().clone(), chunks, &dtype) })
 }
