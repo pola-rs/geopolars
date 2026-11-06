@@ -269,26 +269,21 @@ def test_the_namespace_method_passes_its_options_on() -> None:
     assert out["a"].to_list() == [None, True]
 
 
-def test_a_point_that_is_not_finite_is_compared_as_it_is() -> None:
-    a = [
-        {"x": math.nan, "y": 1.0},
-        {"x": math.inf, "y": 1.0},
-        {"x": math.nan, "y": 1.0},
-    ]
-    b = [{"x": math.nan, "y": 1.0}, {"x": math.inf, "y": 1.0}, {"x": 0.0, "y": 1.0}]
-    df = pl.DataFrame([_series("a", PointXY(), a), _series("b", PointXY(), b)])
-
-    out = df.select(geo.is_topologically_equal("a", "b"))
-
-    assert out["a"].to_list() == [True, True, False]
-
-
 def test_different_crss_are_refused() -> None:
     df = pl.DataFrame(
         [_wkt("a", PolygonXY(), [_SQUARE]), _wkt("b", PointXY(), ["POINT (0 0)"])]
     ).with_columns(geo.set_crs("a", "EPSG:4326"), geo.set_crs("b", "EPSG:3857"))
 
     with pytest.raises(ValueError, match="different CRSs"):
+        df.select(geo.is_topologically_equal("a", "b"))
+
+
+def test_a_crs_on_only_one_side_is_refused() -> None:
+    df = pl.DataFrame(
+        [_wkt("a", PolygonXY(), [_SQUARE]), _wkt("b", PointXY(), ["POINT (0 0)"])]
+    ).with_columns(geo.set_crs("a", "EPSG:4326"))
+
+    with pytest.raises(ValueError, match="only one of the geometries"):
         df.select(geo.is_topologically_equal("a", "b"))
 
 

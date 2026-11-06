@@ -8,7 +8,7 @@ from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
 from geopolars._utils import LIB
-from geopolars.geo._dispatch import on_geometry_pair
+from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
 if TYPE_CHECKING:
     import polars as pl
@@ -50,8 +50,6 @@ def is_topologically_equal(
     {geos_non_finite}
     GEOS then gives no meaningful answer: depending on where the vertex is, it raises,
     or gives `True` or `False`, even for two of the same geometry.
-    A point (not a multipoint) is the exception.
-    GEOS compares its coordinates as they are, with NaN equal to NaN and an infinity equal to itself.
     {early_finite_check}
 
     ```python
@@ -66,13 +64,7 @@ def is_topologically_equal(
     def build(
         a: pl.Expr, a_dtype: GeoArrowType, b: pl.Expr, b_dtype: GeoArrowType
     ) -> pl.Expr:
-        a_crs, b_crs = a_dtype._crs(), b_dtype._crs()
-        if a_crs != b_crs:
-            msg = (
-                f"the geometries declare different CRSs, {a_crs} and {b_crs}; "
-                "use `to_crs` to bring one onto the other first"
-            )
-            raise ValueError(msg)
+        ensure_same_crs(a_dtype, b_dtype)
         return register_plugin_function(
             plugin_path=LIB,
             args=[a, b],

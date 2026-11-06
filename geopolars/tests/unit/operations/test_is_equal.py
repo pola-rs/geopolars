@@ -414,6 +414,15 @@ def test_different_crss_are_refused() -> None:
         df.select(geo.is_equal("a", "b"))
 
 
+def test_a_crs_on_only_one_side_is_refused() -> None:
+    df = pl.DataFrame(
+        [_series("a", PointXY(), [_LINE[0]]), _series("b", PointXY(), [_LINE[0]])]
+    ).with_columns(geo.set_crs("a", "EPSG:4326"))
+
+    with pytest.raises(ValueError, match="only one of the geometries"):
+        df.select(geo.is_equal("a", "b"))
+
+
 def test_unequal_lengths_are_refused() -> None:
     a = _series("a", PointXY(), [_LINE[0], _LINE[1]])
     b = _series("b", PointXY(), [_LINE[0], _LINE[1], _LINE[2]])

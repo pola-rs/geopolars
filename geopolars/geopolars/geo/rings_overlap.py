@@ -12,7 +12,7 @@ from polars.plugins import register_plugin_function
 from geopolars._docs import doc
 from geopolars._utils import LIB
 from geopolars.datatypes import LineStringType
-from geopolars.geo._dispatch import on_geometry_pair
+from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
 if TYPE_CHECKING:
     import polars as pl
@@ -72,16 +72,7 @@ def rings_overlap(
                 f" got: {a_dtype!r} and {b_dtype!r}"
             )
             raise TypeError(msg)
-        a_crs, b_crs = a_dtype._crs(), b_dtype._crs()
-        if (a_crs is None) != (b_crs is None):
-            msg = "only one of the rings declares a CRS; declare the same one on both"
-            raise ValueError(msg)
-        if a_crs != b_crs:
-            msg = (
-                f"the rings declare different CRSs, {a_crs} and {b_crs}; "
-                "use `to_crs` to bring one onto the other first"
-            )
-            raise ValueError(msg)
+        ensure_same_crs(a_dtype, b_dtype, of="rings")
         return register_plugin_function(
             plugin_path=LIB,
             args=[a, b],

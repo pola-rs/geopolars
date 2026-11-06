@@ -1,9 +1,9 @@
 //! Whether two geometries are equal, coordinate by coordinate
-//! (see [`geopolars_compute::native::points_are_close`] and the kernels of the other kinds).
+//! (see [`geopolars_compute::native::points_are_equal`] and the kernels of the other kinds).
 
 use geopolars_compute::native::{
-    line_strings_are_close, multi_line_strings_are_close, multi_points_are_close,
-    multi_polygons_are_close, points_are_close, polygons_are_close, Coincidence,
+    line_strings_are_equal, multi_line_strings_are_equal, multi_points_are_equal,
+    multi_polygons_are_equal, points_are_equal, polygons_are_equal, Coincidence,
 };
 use geopolars_core::{
     downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
@@ -47,7 +47,7 @@ fn kernel_output_type_is_equal(input_fields: &[Field]) -> PolarsResult<Field> {
 
 /// The kernel of `kind` on one chunk of `a`'s storage and one of `b`'s.
 /// `b` is as long as `a`, or a single row.
-fn chunk_is_close(
+fn chunk_is_equal(
     a: &dyn Array,
     b: &dyn Array,
     kind: Kind,
@@ -57,7 +57,7 @@ fn chunk_is_close(
     let (unique_z, unique_m, nans_equal) = (kwargs.unique_z, kwargs.unique_m, kwargs.nans_equal);
     let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
     Ok(match kind {
-        Kind::Point => points_are_close(
+        Kind::Point => points_are_equal(
             &PointArray::new(Coords::new(a)?),
             &PointArray::new(Coords::new(b)?),
             coincidence,
@@ -65,7 +65,7 @@ fn chunk_is_close(
             unique_m,
             nans_equal,
         ),
-        Kind::MultiPoint => multi_points_are_close(
+        Kind::MultiPoint => multi_points_are_equal(
             &MultiPointArray::new_untrimmed(rows(a)?)?,
             &MultiPointArray::new_untrimmed(rows(b)?)?,
             coincidence,
@@ -73,7 +73,7 @@ fn chunk_is_close(
             unique_m,
             nans_equal,
         ),
-        Kind::LineString => line_strings_are_close(
+        Kind::LineString => line_strings_are_equal(
             &LineStringArray::new_untrimmed(rows(a)?)?,
             &LineStringArray::new_untrimmed(rows(b)?)?,
             coincidence,
@@ -81,7 +81,7 @@ fn chunk_is_close(
             unique_m,
             nans_equal,
         ),
-        Kind::MultiLineString => multi_line_strings_are_close(
+        Kind::MultiLineString => multi_line_strings_are_equal(
             &MultiLineStringArray::new_untrimmed(rows(a)?)?,
             &MultiLineStringArray::new_untrimmed(rows(b)?)?,
             coincidence,
@@ -89,7 +89,7 @@ fn chunk_is_close(
             unique_m,
             nans_equal,
         ),
-        Kind::Polygon => polygons_are_close(
+        Kind::Polygon => polygons_are_equal(
             &PolygonArray::new_untrimmed(rows(a)?)?,
             &PolygonArray::new_untrimmed(rows(b)?)?,
             coincidence,
@@ -97,7 +97,7 @@ fn chunk_is_close(
             unique_m,
             nans_equal,
         ),
-        Kind::MultiPolygon => multi_polygons_are_close(
+        Kind::MultiPolygon => multi_polygons_are_equal(
             &MultiPolygonArray::new_untrimmed(rows(a)?)?,
             &MultiPolygonArray::new_untrimmed(rows(b)?)?,
             coincidence,
@@ -125,9 +125,9 @@ fn aligned_chunks(a: &Series, b: &Series) -> PolarsResult<Vec<(ArrayRef, ArrayRe
     })
 }
 
-/// [chunk_is_close] for every chunk of `many`, against the single row of `one`.
-/// Closeness goes both ways, so this serves a single geometry on either side.
-fn every_is_close_to_one(
+/// [chunk_is_equal] for every chunk of `many`, against the single row of `one`.
+/// Equality goes both ways, so this serves a single geometry on either side.
+fn every_against_one(
     one: &Series,
     many: &Series,
     kind: Kind,
@@ -139,7 +139,7 @@ fn every_is_close_to_one(
         .storage()
         .chunks()
         .iter()
-        .map(|many| chunk_is_close(many.as_ref(), one, kind, kwargs))
+        .map(|many| chunk_is_equal(many.as_ref(), one, kind, kwargs))
         .collect()
 }
 
@@ -151,10 +151,10 @@ fn is_equal(inputs: &[Series], kwargs: IsEqualKwargs) -> PolarsResult<Series> {
     let chunks = match (a.len(), b.len()) {
         (n, m) if n == m => aligned_chunks(a, b)?
             .iter()
-            .map(|(a, b)| chunk_is_close(a.as_ref(), b.as_ref(), kind, &kwargs))
+            .map(|(a, b)| chunk_is_equal(a.as_ref(), b.as_ref(), kind, &kwargs))
             .collect::<PolarsResult<Vec<_>>>()?,
-        (1, _) => every_is_close_to_one(a, b, kind, &kwargs)?,
-        (_, 1) => every_is_close_to_one(b, a, kind, &kwargs)?,
+        (1, _) => every_against_one(a, b, kind, &kwargs)?,
+        (_, 1) => every_against_one(b, a, kind, &kwargs)?,
         (n, m) => polars_bail!(ShapeMismatch: "cannot compare {n} geometries against {m}"),
     };
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())

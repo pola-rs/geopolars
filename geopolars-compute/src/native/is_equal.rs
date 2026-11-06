@@ -1,11 +1,11 @@
-//! Whether two geometries are almost coincident/the same.
+//! Whether two geometries are equal coordinate by coordinate, exactly or within a tolerance.
 //! See `is_equal` in Python for the rules.
 //!
 //! Every kernel takes `a`, and `b` of the same length (row by row) or of a single row (against every row of `a`).
 //! Every comparison stops at the first part length or value that does not match.
 //!
-//! Every kernel takes a [Coincidence], matched once in `are_close!`.
-//! The `*_are_close_with` kernels are then generic over the closure `close`,
+//! Every kernel takes a [Coincidence], matched once in `are_equal!`.
+//! The `*_are_equal_with` kernels are then generic over the closure `close`,
 //! which says whether two values coincide by that variant.
 //! So a kernel has no per-value match on the variant.
 //!
@@ -26,7 +26,7 @@
 //! ## `NANS_EQUAL`
 //!
 //! Every kernel is generic over `NANS_EQUAL`, or takes it as `nans_equal`.
-//! If `NANS_EQUAL=true`, two NaNs are close.
+//! If `NANS_EQUAL=true`, two NaNs are equal.
 
 // TODO: With current implementation, the order matters for MultiPoints, Multi*, and Linestring rings.
 // Maybe we should allow giving a bool to first sort?
@@ -122,7 +122,7 @@ fn per_compared_row(a: &List, b: &List, test: impl Fn(usize, usize) -> bool) -> 
     }
 }
 
-fn points_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_EQUAL: bool>(
+fn points_are_equal_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_EQUAL: bool>(
     a: &PointArray,
     b: &PointArray,
     close: impl Fn(f64, f64) -> bool + Copy,
@@ -134,7 +134,7 @@ fn points_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_
         "`b` has to be as long as `a`, or a single row"
     );
     let (a_coords, b_coords) = (a.ignoring_validity(), b.ignoring_validity());
-    let rows_are_close = |i: usize, j: usize| {
+    let rows_are_equal = |i: usize, j: usize| {
         coordinates_are_close::<UNIQUE_Z, UNIQUE_M, NANS_EQUAL>(
             a_coords,
             i..i + 1,
@@ -145,15 +145,15 @@ fn points_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_
     };
     // A null point is compared too, but its result is masked by the validity.
     let values = if b.len() == len {
-        Bitmap::from_iter((0..len).map(|i| rows_are_close(i, i)))
+        Bitmap::from_iter((0..len).map(|i| rows_are_equal(i, i)))
     } else {
-        Bitmap::from_iter((0..len).map(|i| rows_are_close(i, 0)))
+        Bitmap::from_iter((0..len).map(|i| rows_are_equal(i, 0)))
     };
     let validity = compared_validity(a.validity(), b.validity(), len);
     BooleanArray::new(ArrowDataType::Boolean, values, validity)
 }
 
-fn line_strings_are_close_with<
+fn line_strings_are_equal_with<
     const UNIQUE_Z: bool,
     const UNIQUE_M: bool,
     const NANS_EQUAL: bool,
@@ -173,7 +173,7 @@ fn line_strings_are_close_with<
     })
 }
 
-fn multi_points_are_close_with<
+fn multi_points_are_equal_with<
     const UNIQUE_Z: bool,
     const UNIQUE_M: bool,
     const NANS_EQUAL: bool,
@@ -193,7 +193,7 @@ fn multi_points_are_close_with<
     })
 }
 
-fn multi_line_strings_are_close_with<
+fn multi_line_strings_are_equal_with<
     const UNIQUE_Z: bool,
     const UNIQUE_M: bool,
     const NANS_EQUAL: bool,
@@ -215,7 +215,7 @@ fn multi_line_strings_are_close_with<
     })
 }
 
-fn polygons_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_EQUAL: bool>(
+fn polygons_are_equal_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_EQUAL: bool>(
     a: &Untrimmed<PolygonArray>,
     b: &Untrimmed<PolygonArray>,
     close: impl Fn(f64, f64) -> bool + Copy,
@@ -233,7 +233,7 @@ fn polygons_are_close_with<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NAN
     })
 }
 
-fn multi_polygons_are_close_with<
+fn multi_polygons_are_equal_with<
     const UNIQUE_Z: bool,
     const UNIQUE_M: bool,
     const NANS_EQUAL: bool,
@@ -264,9 +264,9 @@ fn multi_polygons_are_close_with<
     })
 }
 
-/// Dispatches a `*_are_close_with` kernel on `unique_z` and `unique_m`
+/// Dispatches a `*_are_equal_with` kernel on `unique_z` and `unique_m`
 /// (each only for an axis in `$dim`), `nans_equal`, and the variant of `$coincidence`.
-macro_rules! are_close {
+macro_rules! are_equal {
     ($kernel:ident, $dim:expr, $a:expr, $b:expr, $coincidence:expr, $unique_z:expr, $unique_m:expr, $nans_equal:expr) => {{
         let dim = $dim;
         with_const_flags!(
@@ -292,7 +292,7 @@ macro_rules! are_close {
     }};
 }
 
-pub fn points_are_close(
+pub fn points_are_equal(
     a: &PointArray,
     b: &PointArray,
     coincidence: Coincidence,
@@ -300,8 +300,8 @@ pub fn points_are_close(
     unique_m: bool,
     nans_equal: bool,
 ) -> BooleanArray {
-    are_close!(
-        points_are_close_with,
+    are_equal!(
+        points_are_equal_with,
         a.coords.dim(),
         a,
         b,
@@ -312,7 +312,7 @@ pub fn points_are_close(
     )
 }
 
-pub fn multi_points_are_close(
+pub fn multi_points_are_equal(
     a: &Untrimmed<MultiPointArray>,
     b: &Untrimmed<MultiPointArray>,
     coincidence: Coincidence,
@@ -320,8 +320,8 @@ pub fn multi_points_are_close(
     unique_m: bool,
     nans_equal: bool,
 ) -> BooleanArray {
-    are_close!(
-        multi_points_are_close_with,
+    are_equal!(
+        multi_points_are_equal_with,
         a.coords().dim(),
         a,
         b,
@@ -332,7 +332,7 @@ pub fn multi_points_are_close(
     )
 }
 
-pub fn line_strings_are_close(
+pub fn line_strings_are_equal(
     a: &Untrimmed<LineStringArray>,
     b: &Untrimmed<LineStringArray>,
     coincidence: Coincidence,
@@ -340,8 +340,8 @@ pub fn line_strings_are_close(
     unique_m: bool,
     nans_equal: bool,
 ) -> BooleanArray {
-    are_close!(
-        line_strings_are_close_with,
+    are_equal!(
+        line_strings_are_equal_with,
         a.coords().dim(),
         a,
         b,
@@ -353,7 +353,7 @@ pub fn line_strings_are_close(
 }
 
 /// The parts also have to be as many, and as long.
-pub fn multi_line_strings_are_close(
+pub fn multi_line_strings_are_equal(
     a: &Untrimmed<MultiLineStringArray>,
     b: &Untrimmed<MultiLineStringArray>,
     coincidence: Coincidence,
@@ -361,8 +361,8 @@ pub fn multi_line_strings_are_close(
     unique_m: bool,
     nans_equal: bool,
 ) -> BooleanArray {
-    are_close!(
-        multi_line_strings_are_close_with,
+    are_equal!(
+        multi_line_strings_are_equal_with,
         a.coords().dim(),
         a,
         b,
@@ -374,7 +374,7 @@ pub fn multi_line_strings_are_close(
 }
 
 /// The rings also have to be as many, and as long.
-pub fn polygons_are_close(
+pub fn polygons_are_equal(
     a: &Untrimmed<PolygonArray>,
     b: &Untrimmed<PolygonArray>,
     coincidence: Coincidence,
@@ -382,8 +382,8 @@ pub fn polygons_are_close(
     unique_m: bool,
     nans_equal: bool,
 ) -> BooleanArray {
-    are_close!(
-        polygons_are_close_with,
+    are_equal!(
+        polygons_are_equal_with,
         a.coords().dim(),
         a,
         b,
@@ -395,7 +395,7 @@ pub fn polygons_are_close(
 }
 
 /// The polygons, and their rings, also have to be as many, and as long.
-pub fn multi_polygons_are_close(
+pub fn multi_polygons_are_equal(
     a: &Untrimmed<MultiPolygonArray>,
     b: &Untrimmed<MultiPolygonArray>,
     coincidence: Coincidence,
@@ -403,8 +403,8 @@ pub fn multi_polygons_are_close(
     unique_m: bool,
     nans_equal: bool,
 ) -> BooleanArray {
-    are_close!(
-        multi_polygons_are_close_with,
+    are_equal!(
+        multi_polygons_are_equal_with,
         a.coords().dim(),
         a,
         b,
