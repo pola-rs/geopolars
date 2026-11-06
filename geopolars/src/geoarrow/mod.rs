@@ -20,12 +20,12 @@ use std::any::Any;
 use std::sync::Arc;
 
 use polars::prelude::*;
-use polars_arrow::array::Array;
+use polars_arrow::array::{Array, ListArray};
 use polars_core::datatypes::extension::{register_extension_type, ExtensionTypeInstance};
 
 use geopolars_core::{
-    downcast, Coords, Geometry, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PointArray, PolygonArray,
+    downcast, Coords, Geometry, GeometryArray, LineStringArray, MultiLineStringArray,
+    MultiPointArray, MultiPolygonArray, PointArray, PolygonArray,
 };
 
 use bbox::BoxFactory;
@@ -89,6 +89,31 @@ pub fn describe(dtype: &DataType) -> PolarsResult<GeoColumn<'_>> {
     polars_bail!(
         SchemaMismatch: "`{}` is not registered with this library, got: {}", kind.name(), dtype
     )
+}
+
+/// The [Kind] of a geometry column, see [describe].
+pub fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
+    Ok(describe(geometries.dtype())?.kind)
+}
+
+/// The storage of a geometry column, rechunked into a single chunk.
+pub fn storage_as_single_chunk(geometries: &Series) -> PolarsResult<ArrayRef> {
+    Ok(geometries.ext()?.storage().rechunk().chunks()[0].clone())
+}
+
+/// Wraps a chunk of a `kind` column's storage, for kernels that take any kind of geometry.
+pub fn geometry_array(chunk: &dyn Array, kind: Kind) -> PolarsResult<GeometryArray> {
+    let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
+    Ok(match kind {
+        Kind::Point => GeometryArray::Point(PointArray::new(Coords::new(chunk)?)),
+        Kind::MultiPoint => GeometryArray::MultiPoint(MultiPointArray::new(rows(chunk)?)?),
+        Kind::LineString => GeometryArray::LineString(LineStringArray::new(rows(chunk)?)?),
+        Kind::MultiLineString => {
+            GeometryArray::MultiLineString(MultiLineStringArray::new(rows(chunk)?)?)
+        }
+        Kind::Polygon => GeometryArray::Polygon(PolygonArray::new(rows(chunk)?)?),
+        Kind::MultiPolygon => GeometryArray::MultiPolygon(MultiPolygonArray::new(rows(chunk)?)?),
+    })
 }
 
 /// Errors unless `a` and `b` declare the same CRS, or neither declares one.

@@ -1,6 +1,7 @@
 //! Whether two geometries are topologically equal, forwarded to GEOS.
 //! See `is_topologically_equal` in Python for the rules.
 
+use geopolars_core::GeometryArray;
 use geos::Geom;
 use polars_arrow::array::BooleanArray;
 
@@ -27,8 +28,8 @@ fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Op
 ///
 /// `a` and `b` must have the same length.
 pub fn topologically_equal_pairwise(
-    a: &dyn ToGeosRows,
-    b: &dyn ToGeosRows,
+    a: &GeometryArray,
+    b: &GeometryArray,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 ) -> GeoComputeResult<BooleanArray> {
@@ -54,8 +55,8 @@ pub fn topologically_equal_pairwise(
 ///
 /// `one` must hold a single row.
 pub fn topologically_equal_against_one(
-    one: &dyn ToGeosRows,
-    many: &dyn ToGeosRows,
+    one: &GeometryArray,
+    many: &GeometryArray,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 ) -> GeoComputeResult<BooleanArray> {
