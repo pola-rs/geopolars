@@ -79,9 +79,9 @@ def add_parts(
 
     What an empty part (a point with every axis NaN, or a part without vertices)
     does is set by `empty_parts`.
-    It applies to the parts that are added.
-    With `"drop"`, an empty geometry that is not a multi-geometry adds no part of its own either.
-    The parts a multi-geometry already has are kept.
+    It applies to the parts that are added,
+    and to a `geometry` that is not a multi-geometry, as that becomes the first part of the result.
+    A multi-geometry keeps every part it already has, empty ones included.
 
     | `empty_parts` | an empty part |
     | - | - |

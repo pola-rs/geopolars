@@ -111,7 +111,7 @@ so they go with any.
 What a null {part} does is set by `null_parts`.
 A null {part} is a null row of `{parts}`, a null in a list of them,
 or one with a null anywhere inside it (such as a vertex, or one of its values).
-An untyped null (`pl.lit(None)`) as `{parts}` is a null row on every row.
+An untyped null (`pl.lit(None)`) as `{parts}` is null on every row.
 
 | `null_parts` | a null {part} |
 | - | - |

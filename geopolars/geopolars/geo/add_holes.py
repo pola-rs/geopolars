@@ -98,7 +98,7 @@ def add_holes(
     | `"null"` | is null |
     | `"keep"` | stays as it is: none of the holes of its row are added |
 
-    Empty holes can still be added to it, and it stays an empty polygon.
+    If it only gets empty holes, it takes them, and stays an empty polygon.
 
     Every ring of the result has to be a ring (see [`is_ring`][geopolars.geo.is_ring]),
     the polygon's own existing rings included,

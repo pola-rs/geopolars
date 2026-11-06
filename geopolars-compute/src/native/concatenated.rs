@@ -98,8 +98,9 @@ fn offsets_with_capacity<const N: usize>(capacity: impl Fn(usize) -> usize) -> [
 
 /// A slice of the base's vertices followed by a slice of the added parts' vertices,
 /// as [concatenated] copies them.
-/// A valid row takes one, and one more for each run of kept items after the first (see [kept_runs]).
-/// The last run of the base and the first run of the added parts share one.
+/// A valid row takes one per run of kept items (see [kept_runs]),
+/// an unmasked base or added list counting as one run,
+/// but the last run of the base and the first run of the added parts share one.
 /// Every other run has one to itself, with the other range empty.
 #[derive(Default)]
 struct CopiedVertices {

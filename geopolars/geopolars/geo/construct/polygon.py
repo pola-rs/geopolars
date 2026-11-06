@@ -89,6 +89,7 @@ def polygons_from_rings_in_separate_columns(
 
     A null exterior gives a null polygon.
     {null_parts}
+
     The CRS is `crs`, or else the exterior's,
     or else that of the holes when the exterior is bare coordinates.
     `crs` also sets the CRS of holes that declare none.
