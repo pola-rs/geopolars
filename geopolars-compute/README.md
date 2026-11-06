@@ -84,3 +84,10 @@ How to handle errors depends on where they are raised.
 - An accumulator-like function combines many rows into far fewer results.
   Ask the caller how to handle errors here, with an `IGNORE_ERRORS` const `bool`.
   The default should be to return the error.
+
+### Exiting early before GEOS
+
+Converting a geometry to GEOS and calling GEOS on it is expensive.
+So a GEOS kernel that can tell the result of a row without GEOS gives it before converting,
+such as a null or empty geometry on either side of a binary operation.
+That row then reaches GEOS on neither side, where it could also fail (see `geos/shortest_line.rs`).
