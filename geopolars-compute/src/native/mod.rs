@@ -12,8 +12,8 @@ pub mod distance;
 mod fix_out_of_bounds;
 mod has_repeats_in_succession;
 mod is_ccw;
-mod is_close;
 mod is_empty;
+mod is_equal;
 mod is_ring;
 mod is_simple;
 // For `geoarrow_validity` and `ogc_validity`.
@@ -70,13 +70,13 @@ pub use is_ccw::{
     multi_line_strings_to_ccw, multi_polygons_are_ccw, multi_polygons_to_ccw, polygons_are_ccw,
     polygons_to_ccw,
 };
-pub use is_close::{
-    line_strings_are_close, multi_line_strings_are_close, multi_points_are_close,
-    multi_polygons_are_close, points_are_close, polygons_are_close,
-};
 pub use is_empty::{
     line_strings_are_empty, multi_line_strings_are_empty, multi_points_are_empty,
     multi_polygons_are_empty, points_are_empty, polygons_are_empty,
+};
+pub use is_equal::{
+    line_strings_are_equal, multi_line_strings_are_equal, multi_points_are_equal,
+    multi_polygons_are_equal, points_are_equal, polygons_are_equal,
 };
 pub use is_ring::{
     line_strings_are_rings, multi_line_strings_are_rings, multi_polygons_have_only_rings,

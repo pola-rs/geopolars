@@ -56,10 +56,11 @@ from geopolars.geo.force_dimension import force_2d, force_3d, force_m, without_m
 from geopolars.geo.has_repeats_in_succession import has_repeats_in_succession
 from geopolars.geo.interior import interior
 from geopolars.geo.is_ccw import is_ccw
-from geopolars.geo.is_close import is_close
 from geopolars.geo.is_empty import is_empty
+from geopolars.geo.is_equal import is_equal
 from geopolars.geo.is_ring import is_ring
 from geopolars.geo.is_simple import is_simple
+from geopolars.geo.is_topologically_equal import is_topologically_equal
 from geopolars.geo.is_valid import (
     is_valid_geoarrow,
     is_valid_ogc,
@@ -114,11 +115,12 @@ __all__ = [
     "has_repeats_in_succession",
     "interior",
     "is_ccw",
-    "is_close",
     "is_empty",
+    "is_equal",
     "is_geographic",
     "is_ring",
     "is_simple",
+    "is_topologically_equal",
     "is_valid_geoarrow",
     "is_valid_ogc",
     "join_line_strings",
