@@ -27,6 +27,8 @@ pub enum GeoComputeError {
     NotFiniteDistance { distance: f64 },
     /// A negative distance for a buffer of one side, whose side is not given by the sign.
     NegativeOneSidedDistance { distance: f64 },
+    /// A result in several parts, where only one fits.
+    Split { parts: usize },
     #[cfg(feature = "geos")]
     Geos(geos::Error),
 }
@@ -78,6 +80,11 @@ impl fmt::Display for GeoComputeError {
                 f,
                 "a buffer of one side expects a distance of at least 0, got: {distance}"
             ),
+            Self::Split { parts } => write!(
+                f,
+                "the result split into {parts} parts, which a single geometry cannot hold; \
+                set `allow_splitting=True` to get a multi kind"
+            ),
             #[cfg(feature = "geos")]
             Self::Geos(source) => write!(f, "{source}"),
         }
@@ -93,7 +100,8 @@ impl std::error::Error for GeoComputeError {
             | Self::NotClosed { .. }
             | Self::NotFinite { .. }
             | Self::NotFiniteDistance { .. }
-            | Self::NegativeOneSidedDistance { .. } => None,
+            | Self::NegativeOneSidedDistance { .. }
+            | Self::Split { .. } => None,
             #[cfg(feature = "geos")]
             Self::Geos(source) => Some(source),
         }

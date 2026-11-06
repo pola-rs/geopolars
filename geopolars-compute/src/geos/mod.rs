@@ -36,6 +36,7 @@
 mod buffer;
 mod convex_hull;
 mod interpolate;
+mod intersection;
 mod is_simple;
 mod is_topologically_equal;
 mod linestrings;
@@ -56,6 +57,9 @@ pub use convex_hull::{
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
 pub use interpolate::{interpolate_line_strings, interpolate_multi_line_strings, InterpolateMode};
+pub use intersection::{
+    intersection_against_one, intersection_pairwise, IntersectionOutput, IntersectionParts,
+};
 pub use is_simple::{
     line_strings_are_simple, multi_line_strings_are_simple, multi_polygons_are_simple,
     polygons_are_simple,

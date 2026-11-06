@@ -1,7 +1,9 @@
-use geopolars_core::{Coords, GeoDimension, PointArray, ValidCoords};
+use geopolars_core::{Coords, GeoDimension, List, MultiPointArray, PointArray, ValidCoords};
 use geos::{Geom, GeometryTypes};
 
-use super::{coord_type, GeosGeometries, GeosRow, ValidityBuilder};
+use super::{
+    coord_type, wrong_kind, CoordsBuilder, GeosGeometries, GeosRow, OffsetsBuilder, ValidityBuilder,
+};
 use crate::GeoComputeResult;
 
 impl GeosGeometries {
@@ -63,5 +65,46 @@ impl GeosGeometries {
             ValidCoords::from_axes(axes),
             validity.finish(),
         )))
+    }
+
+    /// Our multipoint array of the geometries, one row each.
+    /// Every GEOS geometry is freed once it is copied.
+    /// GEOS gives a multipoint of one part as a plain point.
+    /// So a point is read as a single part, or as none if it is empty.
+    /// A geometry that is not a point or multipoint is an error.
+    /// If `ignore_per_row_errors=true`, its row is null instead.
+    pub fn into_multi_point_array<const Z: bool>(
+        self,
+        ignore_per_row_errors: bool,
+    ) -> GeoComputeResult<MultiPointArray> {
+        let mut validity = ValidityBuilder::with_capacity(self.geometries.len());
+        let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
+        let mut rows = OffsetsBuilder::with_capacity(self.geometries.len());
+        for geometry in self.geometries {
+            let is_valid = match geometry {
+                GeosRow::Null => false,
+                GeosRow::Empty => true,
+                GeosRow::Geometry(geometry) => match geometry.geometry_type()? {
+                    // An empty point has no coordinates, so it adds no part.
+                    GeometryTypes::Point => {
+                        coords.push::<Z, false>(&geometry)?;
+                        true
+                    }
+                    GeometryTypes::MultiPoint => {
+                        for n in 0..geometry.get_num_geometries()? {
+                            coords.push::<Z, false>(&geometry.get_geometry_n(n)?)?;
+                        }
+                        true
+                    }
+                    other => wrong_kind("multipoint", other, ignore_per_row_errors)?,
+                },
+            };
+            validity.push(is_valid);
+            rows.push(coords.len());
+        }
+        Ok(MultiPointArray::from_parts(
+            List::from_offsets(rows.finish(), validity.finish()),
+            coords.finish(),
+        ))
     }
 }

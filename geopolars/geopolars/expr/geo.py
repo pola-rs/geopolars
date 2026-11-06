@@ -525,6 +525,28 @@ class ExprGeoNameSpace:
             early_finite_check=early_finite_check,
         )
 
+    def intersection(
+        self,
+        other: IntoExprColumn,
+        *,
+        keep: Literal["points", "lines", "polygons"] | None = None,
+        allow_splitting: bool = False,
+        ccw_outer: bool = False,
+        ignore_per_row_errors: bool = False,
+        early_finite_check: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.intersection import intersection
+
+        return intersection(
+            self._expr,
+            other,
+            keep=keep,
+            allow_splitting=allow_splitting,
+            ccw_outer=ccw_outer,
+            ignore_per_row_errors=ignore_per_row_errors,
+            early_finite_check=early_finite_check,
+        )
+
     def is_ccw(self, *, holes_cw: bool = True) -> pl.Expr:
         from geopolars.geo.is_ccw import is_ccw
 
