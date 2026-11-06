@@ -60,8 +60,8 @@ fn is_valid(validity: Option<&Bitmap>, i: usize) -> bool {
 }
 
 /// Gets the shortest line from `a` to `b`, row by row.
-/// Implements the Python `shortest_line_between`, which documents its behaviour.
-/// A row null or empty on either side gives a null or empty line without going to GEOS,
+/// See Python `shortest_line_between`
+/// A row that is null or empty on either side does not go to GEOS,
 /// so the other side cannot fail there.
 ///
 /// `a` and `b` must have the same length.
@@ -74,17 +74,20 @@ pub fn shortest_lines_pairwise(
     debug_assert_eq!(a.len(), b.len(), "`a` and `b` must have the same length");
     let valid = combine_validities_and(a.validity(), b.validity());
     let empty = &empty_rows(&a) | &empty_rows(&b);
-    let sent = combine_validities_and_not(valid.as_ref(), Some(&empty));
+    let sent_to_geos = combine_validities_and_not(valid.as_ref(), Some(&empty));
     let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-    let a = a.with_validity(sent.clone()).to_geos_rows(ignore, early)?;
-    let b = b.with_validity(sent).to_geos_rows(ignore, early)?;
+    let a = a
+        .with_validity(sent_to_geos.clone())
+        .to_geos_rows(ignore, early)?;
+    let b = b.with_validity(sent_to_geos).to_geos_rows(ignore, early)?;
     let lines = a
         .geometries
         .iter()
         .zip(&b.geometries)
         .enumerate()
         .map(|(i, (a, b))| {
-            // A row that was not sent is null on both sides.
+            // Every row that was not sent to GEOS is null on both sides,
+            // so an empty one gets its line here.
             if empty.get_bit(i) && is_valid(valid.as_ref(), i) {
                 return Ok(GeosRow::Empty);
             }
@@ -94,8 +97,9 @@ pub fn shortest_lines_pairwise(
     shortest_lines_into_array(lines, ignore_per_row_errors)
 }
 
-/// Gets the shortest line between a single geometry and every row of `many`.
-/// If `one` is null or empty, so is every line, and `many` does not go to GEOS.
+/// Gets the shortest line between a single geometry and every row of `many`,
+/// as [shortest_lines_pairwise] does for a `one` repeated on every row.
+/// If `one` is null or empty, `many` does not go to GEOS at all.
 ///
 /// `one` must hold a single row.
 pub fn shortest_lines_against_one(

@@ -88,6 +88,6 @@ How to handle errors depends on where they are raised.
 ### Exiting early before GEOS
 
 Converting a geometry to GEOS and calling GEOS on it is expensive.
-So a GEOS kernel that can tell the result of a row without GEOS gives it before converting,
+A GEOS kernel that can tell the result of a row without GEOS therefore gives it before converting,
 such as a null or empty geometry on either side of a binary operation.
 That row then reaches GEOS on neither side, where it could also fail (see `geos/shortest_line.rs`).

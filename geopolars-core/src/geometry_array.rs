@@ -28,7 +28,6 @@ impl GeometryArray {
         }
     }
 
-    /// `None` when every geometry is there.
     pub fn validity(&self) -> Option<&Bitmap> {
         match self {
             GeometryArray::Point(array) => array.coords.validity(),

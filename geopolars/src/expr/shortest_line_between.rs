@@ -70,8 +70,8 @@ fn shortest_line_between(
     let dtype = shortest_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let chunks = match (a.len(), b.len()) {
-        // The kinds can differ, but `aligned_chunks` needs two storages of one physical type.
-        // So both sides are made a single chunk instead.
+        // The kinds can differ, but `aligned_chunks` needs two storages of one physical type,
+        // so both sides are made a single chunk instead.
         (n, m) if n == m => {
             let a = geometry_array(storage_as_single_chunk(a)?.as_ref(), kind_of(a)?)?;
             let b = geometry_array(storage_as_single_chunk(b)?.as_ref(), kind_of(b)?)?;

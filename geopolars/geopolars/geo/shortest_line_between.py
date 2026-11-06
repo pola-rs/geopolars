@@ -27,8 +27,8 @@ def shortest_line_between(
 ) -> pl.Expr:
     """The shortest line between two geometries, row by row, as a `LineStringXY`.
     It runs from the point on `a` closest to `b`, to the point on `b` closest to `a`.
-    If the geometries touch or overlap, both vertices are the same point.
-    The length of the line is the distance between the two geometries.
+    If the geometries intersect, both vertices are the same point.
+    The length of the line is the planar distance between the two geometries, in x and y.
     A single geometry on either side is measured against every row of the other.
 
     Any kind and dimension can be on either side.
@@ -45,8 +45,7 @@ def shortest_line_between(
     Depending on where the vertex is, it raises or might give a line that is not the shortest.
     {early_finite_check}
 
-    `a` and `b` have to declare the same CRS, or neither one.
-    If they are not the same (or only one has a CRS, and the other does not), an error is raised at plan time.
+    {same_crs_pair}
 
     ```python
     df.with_columns(geo.shortest_line_between("house", "road").alias("driveway"))

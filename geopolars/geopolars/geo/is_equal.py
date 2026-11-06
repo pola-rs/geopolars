@@ -49,9 +49,8 @@ def is_equal(
     while two empty geometries of any other kind are equal.
     `nans_equal=True` makes a NaN equal to a NaN, as in `==` in Polars.
 
-    `a` and `b` have to be the same kind and dimension.
-    Both have to declare the same CRS, or neither one.
-    If they are not the same (or only one has a CRS, and the other does not), an error is raised at plan time.
+    `a` and `b` have to be the same kind and dimension, or an error is raised at plan time.
+    {same_crs_pair}
 
     ```python
     df.filter(geo.is_equal("parcel", "surveyed", abs_tol=0.01))
