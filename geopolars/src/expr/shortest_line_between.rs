@@ -4,7 +4,6 @@
 use geopolars_compute::geos::{shortest_lines_against_one, shortest_lines_pairwise};
 use geopolars_core::GeoDimension;
 use polars::prelude::*;
-use polars_arrow::compute::utils::combine_validities_and;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -38,23 +37,17 @@ fn kernel_output_type_shortest_line_between(input_fields: &[Field]) -> PolarsRes
     ))
 }
 
-/// Runs [shortest_lines_against_one] on every chunk of `many`, or gives `None` if `one` is null.
+/// Runs [shortest_lines_against_one] on every chunk of `many`.
 fn every_shortest_line_against_one(
     one: &Series,
     many: &Series,
     lines_start_on_one: bool,
     kwargs: &ShortestLineBetweenKwargs,
-) -> PolarsResult<Option<Vec<ArrayRef>>> {
-    let one_chunk = storage_as_single_chunk(one)?;
-    // Every line would be null, so `many` is not sent to GEOS, where a row could fail.
-    if one_chunk.is_null(0) {
-        return Ok(None);
-    }
+) -> PolarsResult<Vec<ArrayRef>> {
     let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
-    let one = geometry_array(one_chunk.as_ref(), kind_of(one)?)?;
+    let one = geometry_array(storage_as_single_chunk(one)?.as_ref(), kind_of(one)?)?;
     let kind = kind_of(many)?;
-    let chunks = many
-        .ext()?
+    many.ext()?
         .storage()
         .chunks()
         .iter()
@@ -64,8 +57,7 @@ fn every_shortest_line_against_one(
                 .into_polars()?;
             Ok(lines.into_list_array().boxed())
         })
-        .collect::<PolarsResult<_>>()?;
-    Ok(Some(chunks))
+        .collect()
 }
 
 /// See `shortest_line_between`.
@@ -81,29 +73,15 @@ fn shortest_line_between(
         // The kinds can differ, but `aligned_chunks` needs two storages of one physical type.
         // So both sides are made a single chunk instead.
         (n, m) if n == m => {
-            let (a_chunk, b_chunk) = (storage_as_single_chunk(a)?, storage_as_single_chunk(b)?);
-            // A row null on one side is made null on the other too,
-            // so that it is not sent to GEOS, where it could fail.
-            let validity = combine_validities_and(a_chunk.validity(), b_chunk.validity());
-            let (a, b) = (
-                geometry_array(
-                    a_chunk.with_validity(validity.clone()).as_ref(),
-                    kind_of(a)?,
-                )?,
-                geometry_array(b_chunk.with_validity(validity).as_ref(), kind_of(b)?)?,
-            );
+            let a = geometry_array(storage_as_single_chunk(a)?.as_ref(), kind_of(a)?)?;
+            let b = geometry_array(storage_as_single_chunk(b)?.as_ref(), kind_of(b)?)?;
             let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
-            let lines = shortest_lines_pairwise(&a, &b, ignore, early).into_polars()?;
-            Some(vec![lines.into_list_array().boxed()])
+            let lines = shortest_lines_pairwise(a, b, ignore, early).into_polars()?;
+            vec![lines.into_list_array().boxed()]
         }
         (1, _) => every_shortest_line_against_one(a, b, true, &kwargs)?,
         (_, 1) => every_shortest_line_against_one(b, a, false, &kwargs)?,
         (n, m) => polars_bail!(ShapeMismatch: "cannot pair {n} geometries with {m}"),
-    };
-    let Some(chunks) = chunks else {
-        // A single null geometry: one null line per row of the other side, which can have none.
-        let len = if a.len() == 1 { b.len() } else { a.len() };
-        return Ok(Series::full_null(name, len, &dtype));
     };
     // SAFETY: the shortest lines are XY linestrings, as `dtype` says.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &dtype) })

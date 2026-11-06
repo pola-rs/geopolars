@@ -216,6 +216,63 @@ def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -
     assert _as_wkt(out["a"]) == [None, None, "LINESTRING(3 0,1 0)"]
 
 
+@pytest.mark.parametrize(
+    "one",
+    [
+        _wkt("one", PolygonXY(), ["POLYGON EMPTY"]),
+        _wkt("one", PointXY(), ["POINT EMPTY"]),
+    ],
+)
+@pytest.mark.parametrize("early_finite_check", [False, True])
+def test_against_a_single_empty_geometry_no_row_reaches_geos(
+    one: pl.Series, early_finite_check: bool
+) -> None:
+    df = pl.DataFrame(_line_strings("many", _FAILING_LINES))
+    kwargs = {"early_finite_check": early_finite_check}
+
+    out = df.select(geo.shortest_line_between("many", one, **kwargs))
+    assert _as_wkt(out["many"]) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
+    out = df.select(geo.shortest_line_between(one, "many", **kwargs))
+    assert _as_wkt(out.to_series()) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
+
+
+@pytest.mark.parametrize("early_finite_check", [False, True])
+def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
+    early_finite_check: bool,
+) -> None:
+    df = pl.DataFrame(
+        [
+            _wkt("a", PointXY(), ["POINT EMPTY", "POINT EMPTY", "POINT (3 0)"]),
+            _line_strings("b", [*_FAILING_LINES, [(0, 0), (1, 0), (1, 1)]]),
+        ]
+    )
+
+    out = df.select(
+        geo.shortest_line_between("a", "b", early_finite_check=early_finite_check)
+    )
+
+    assert _as_wkt(out["a"]) == [
+        "LINESTRING EMPTY",
+        "LINESTRING EMPTY",
+        "LINESTRING(3 0,1 0)",
+    ]
+
+
+def test_an_empty_geometry_against_a_failing_one_is_empty_with_ignore_per_row_errors() -> (
+    None
+):
+    df = pl.DataFrame(
+        [
+            _wkt("a", PolygonXY(), ["POLYGON EMPTY"]),
+            _line_strings("b", _FAILING_LINES[:1]),
+        ]
+    )
+
+    out = df.select(geo.shortest_line_between("a", "b", ignore_per_row_errors=True))
+
+    assert _as_wkt(out["a"]) == ["LINESTRING EMPTY"]
+
+
 def test_geos_raises_on_a_geometry_that_is_not_finite() -> None:
     b = _wkt("b", PolygonXY(), [_SQUARE])
 

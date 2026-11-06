@@ -218,6 +218,33 @@ fn multi_point_to_geos(axes: &Axes, vertices: Range<usize>) -> GeoComputeResult<
     Ok(Geometry::create_multipoint(points)?)
 }
 
+/// GeoArrow's empty point. GEOS only counts a point without coordinates as empty.
+#[inline(always)]
+fn is_empty_point(x: f64, y: f64) -> bool {
+    x.is_nan() && y.is_nan()
+}
+
+/// Which rows of `array` are empty by the checks of the conversion to GEOS:
+/// an [empty point](is_empty_point), or a row without parts.
+/// Rows that GEOS itself finds empty, such as a polygon whose only ring has no vertices, are not included.
+/// The value of a null row is arbitrary.
+fn empty_rows(array: &GeometryArray) -> Bitmap {
+    let without_parts =
+        |rows: &List| Bitmap::from_iter((0..rows.len()).map(|i| rows.range(i).is_empty()));
+    match array {
+        GeometryArray::Point(array) => {
+            let coords = array.coords.ignoring_validity();
+            let (x, y) = (coords.x(), coords.y());
+            Bitmap::from_iter(x.iter().zip(y).map(|(&x, &y)| is_empty_point(x, y)))
+        }
+        GeometryArray::LineString(array) => without_parts(&array.rows),
+        GeometryArray::Polygon(array) => without_parts(&array.rows),
+        GeometryArray::MultiPoint(array) => without_parts(&array.rows),
+        GeometryArray::MultiLineString(array) => without_parts(&array.rows),
+        GeometryArray::MultiPolygon(array) => without_parts(&array.rows),
+    }
+}
+
 /// Point `i` of `coords`, which carry `len` axes of `coord_type`.
 /// `None` if it is null.
 #[inline(always)]
@@ -230,8 +257,7 @@ fn point_to_geos<const EARLY_FINITE_CHECK: bool>(
     let Some((x, y)) = coords.xy(i) else {
         return Ok(None);
     };
-    // GeoArrow's empty point. GEOS only counts a point without coordinates as empty.
-    if x.is_nan() && y.is_nan() {
+    if is_empty_point(x, y) {
         return Ok(Some(Geometry::create_empty_point()?));
     }
     if EARLY_FINITE_CHECK {
