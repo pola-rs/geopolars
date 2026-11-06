@@ -21,6 +21,8 @@ use std::sync::Arc;
 
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
+use polars_arrow::bitmap::Bitmap;
+use polars_arrow::compute::utils::combine_validities_and;
 use polars_core::datatypes::extension::{register_extension_type, ExtensionTypeInstance};
 
 use geopolars_core::{
@@ -114,6 +116,64 @@ pub fn geometry_array(chunk: &dyn Array, kind: Kind) -> PolarsResult<GeometryArr
         Kind::Polygon => GeometryArray::Polygon(PolygonArray::new(rows(chunk)?)?),
         Kind::MultiPolygon => GeometryArray::MultiPolygon(MultiPolygonArray::new(rows(chunk)?)?),
     })
+}
+
+/// Runs a kernel on two geometry columns of any kinds, row by row,
+/// or with a single geometry on either side against every row of the other.
+/// `against_one` gets that single geometry first, with `one_is_a=true` if it came from `a`.
+/// A row that is null on one side is made null on the other too,
+/// so that the kernel never sends it to GEOS, where it could fail.
+pub fn map_geometry_pairs<T>(
+    a: &Series,
+    b: &Series,
+    pairwise: impl Fn(&GeometryArray, &GeometryArray) -> PolarsResult<T>,
+    against_one: impl Fn(&GeometryArray, &GeometryArray, bool) -> PolarsResult<T>,
+) -> PolarsResult<Vec<T>> {
+    match (a.len(), b.len()) {
+        // The kinds can differ, but `aligned_chunks` needs two storages of one physical type.
+        // So both sides are made a single chunk instead.
+        (n, m) if n == m => {
+            let (a_chunk, b_chunk) = (storage_as_single_chunk(a)?, storage_as_single_chunk(b)?);
+            let validity = combine_validities_and(a_chunk.validity(), b_chunk.validity());
+            let (a_rows, b_rows) = (
+                geometry_array(
+                    a_chunk.with_validity(validity.clone()).as_ref(),
+                    kind_of(a)?,
+                )?,
+                geometry_array(b_chunk.with_validity(validity).as_ref(), kind_of(b)?)?,
+            );
+            Ok(vec![pairwise(&a_rows, &b_rows)?])
+        }
+        (1, _) => map_geometry_pairs_against_one(a, b, true, against_one),
+        (_, 1) => map_geometry_pairs_against_one(b, a, false, against_one),
+        (n, m) => polars_bail!(ShapeMismatch: "cannot pair {n} geometries with {m}"),
+    }
+}
+
+fn map_geometry_pairs_against_one<T>(
+    one: &Series,
+    many: &Series,
+    one_is_a: bool,
+    against_one: impl Fn(&GeometryArray, &GeometryArray, bool) -> PolarsResult<T>,
+) -> PolarsResult<Vec<T>> {
+    let one_chunk = storage_as_single_chunk(one)?;
+    let one_is_null = one_chunk.is_null(0);
+    let one = geometry_array(one_chunk.as_ref(), kind_of(one)?)?;
+    let kind = kind_of(many)?;
+    many.ext()?
+        .storage()
+        .chunks()
+        .iter()
+        .map(|many| {
+            // A null `one` makes every row null.
+            let many = if one_is_null {
+                many.with_validity(Some(Bitmap::new_zeroed(many.len())))
+            } else {
+                many.clone()
+            };
+            against_one(&one, &geometry_array(many.as_ref(), kind)?, one_is_a)
+        })
+        .collect()
 }
 
 /// Errors unless `a` and `b` declare the same CRS, or neither declares one.
