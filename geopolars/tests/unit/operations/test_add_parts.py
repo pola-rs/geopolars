@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 from polars.exceptions import ComputeError
-from polars.testing import assert_frame_equal
+from polars.testing import assert_frame_equal, assert_series_equal
 
 from geopolars import geo
 from geopolars.datatypes import (
@@ -133,83 +133,153 @@ def _added(geometry: pl.Series, parts: pl.Series, **kwargs: object) -> pl.Series
     return df.select(geo.add_parts("geometry", "parts", **kwargs)).to_series()
 
 
-def test_a_linestring_and_its_parts_become_a_multilinestring() -> None:
-    out = _added(_lines(_A, crs=RD), _listed_lines([_B, _C], crs=RD))
-
-    assert out.dtype == MultiLineStringXY(crs=RD)
-    assert out.ext.storage().to_list() == [[_A, _B, _C]]
+def _assert_storage_equal_with_nan(out: pl.Series, expected: list[object]) -> None:
+    storage = out.ext.storage()
+    assert_series_equal(storage, pl.Series(storage.name, expected, storage.dtype))
 
 
 @pytest.mark.parametrize(
-    ("geometry", "parts", "expected"),
+    ("geometry", "parts", "dtype", "expected"),
     [
-        (_lines(_A, _B), _lines(_C, _A, name="parts"), [[_A, _C], [_B, _A]]),
-        (_lines(_A, _B), _listed_lines([_B, _C], []), [[_A, _B, _C], [_B]]),
+        (
+            _lines(_A, _B),
+            _lines(_C, _A, name="parts"),
+            MultiLineStringXY(),
+            [[_A, _C], [_B, _A]],
+        ),
+        (
+            _lines(_A, _B),
+            _listed_lines([_B, _C], []),
+            MultiLineStringXY(),
+            [[_A, _B, _C], [_B]],
+        ),
         (
             _lines(_A, _B),
             _multi_lines([_B, _C], [], name="parts"),
+            MultiLineStringXY(),
             [[_A, _B, _C], [_B]],
         ),
         (
             _multi_lines([_A, _B], []),
             _lines(_C, _A, name="parts"),
+            MultiLineStringXY(),
             [[_A, _B, _C], [_A]],
         ),
         (
             _multi_lines([_A, _B], []),
             _listed_lines([_C], [_A, _B]),
+            MultiLineStringXY(),
             [[_A, _B, _C], [_A, _B]],
         ),
         (
             _multi_lines([_A, _B], [_C]),
             _multi_lines([_C], [_A], name="parts"),
+            MultiLineStringXY(),
             [[_A, _B, _C], [_C, _A]],
         ),
+        (_points(_A[0]), _points(_A[1], name="parts"), MultiPointXY(), [_A]),
+        (
+            _points(_A[0]),
+            _listed_points([_B[0], _B[1]]),
+            MultiPointXY(),
+            [[_A[0], *_B[:2]]],
+        ),
+        (
+            _points(_A[0]),
+            _multi_points(_B, name="parts"),
+            MultiPointXY(),
+            [[_A[0], *_B]],
+        ),
+        (
+            _multi_points(_A),
+            _points(_C[0], name="parts"),
+            MultiPointXY(),
+            [[*_A, _C[0]]],
+        ),
+        (_multi_points(_A), _listed_points([_C[1]]), MultiPointXY(), [[*_A, _C[1]]]),
+        (
+            _multi_points(_A),
+            _multi_points(_B, name="parts"),
+            MultiPointXY(),
+            [_A + _B],
+        ),
+        (
+            _polygons(_P),
+            _polygons(_Q, name="parts"),
+            MultiPolygonXY(),
+            [[_P, _Q]],
+        ),
+        (
+            _polygons(_P),
+            _listed_polygons([_Q, _P]),
+            MultiPolygonXY(),
+            [[_P, _Q, _P]],
+        ),
+        (
+            _polygons(_P),
+            _multi_polygons([_Q], name="parts"),
+            MultiPolygonXY(),
+            [[_P, _Q]],
+        ),
+        (
+            _multi_polygons([_P, _Q]),
+            _polygons(_P, name="parts"),
+            MultiPolygonXY(),
+            [[_P, _Q, _P]],
+        ),
+        (
+            _multi_polygons([_Q]),
+            _listed_polygons([_P, _Q]),
+            MultiPolygonXY(),
+            [[_Q, _P, _Q]],
+        ),
+        (
+            _multi_polygons([_Q]),
+            _multi_polygons([_P], name="parts"),
+            MultiPolygonXY(),
+            [[_Q, _P]],
+        ),
+    ],
+    ids=[
+        "linestring: a linestring",
+        "linestring: linestrings in a list",
+        "linestring: a multilinestring",
+        "multilinestring: a linestring",
+        "multilinestring: linestrings in a list",
+        "multilinestring: a multilinestring",
+        "point: a point",
+        "point: points in a list",
+        "point: a multipoint",
+        "multipoint: a point",
+        "multipoint: points in a list",
+        "multipoint: a multipoint",
+        "polygon: a polygon",
+        "polygon: polygons in a list",
+        "polygon: a multipolygon",
+        "multipolygon: a polygon",
+        "multipolygon: polygons in a list",
+        "multipolygon: a multipolygon",
     ],
 )
-def test_lines(geometry: pl.Series, parts: pl.Series, expected: list[object]) -> None:
-    out = _added(geometry, parts)
-
-    assert out.dtype == MultiLineStringXY()
-    assert out.ext.storage().to_list() == expected
-
-
-@pytest.mark.parametrize(
-    ("geometry", "parts", "expected"),
-    [
-        (_points(_A[0]), _points(_A[1], name="parts"), [_A]),
-        (_points(_A[0]), _listed_points([_B[0], _B[1]]), [[_A[0], *_B[:2]]]),
-        (_points(_A[0]), _multi_points(_B, name="parts"), [[_A[0], *_B]]),
-        (_multi_points(_A), _points(_C[0], name="parts"), [[*_A, _C[0]]]),
-        (_multi_points(_A), _listed_points([_C[1]]), [[*_A, _C[1]]]),
-        (_multi_points(_A), _multi_points(_B, name="parts"), [_A + _B]),
-    ],
-)
-def test_points(geometry: pl.Series, parts: pl.Series, expected: list[object]) -> None:
-    out = _added(geometry, parts)
-
-    assert out.dtype == MultiPointXY()
-    assert out.ext.storage().to_list() == expected
-
-
-@pytest.mark.parametrize(
-    ("geometry", "parts", "expected"),
-    [
-        (_polygons(_P), _polygons(_Q, name="parts"), [[_P, _Q]]),
-        (_polygons(_P), _listed_polygons([_Q, _P]), [[_P, _Q, _P]]),
-        (_polygons(_P), _multi_polygons([_Q], name="parts"), [[_P, _Q]]),
-        (_multi_polygons([_P, _Q]), _polygons(_P, name="parts"), [[_P, _Q, _P]]),
-        (_multi_polygons([_Q]), _listed_polygons([_P, _Q]), [[_Q, _P, _Q]]),
-        (_multi_polygons([_Q]), _multi_polygons([_P], name="parts"), [[_Q, _P]]),
-    ],
-)
-def test_polygons(
-    geometry: pl.Series, parts: pl.Series, expected: list[object]
+def test_parts_are_added_after_those_the_geometry_has(
+    geometry: pl.Series, parts: pl.Series, dtype: pl.DataType, expected: list[object]
 ) -> None:
     out = _added(geometry, parts)
 
-    assert out.dtype == MultiPolygonXY()
+    assert out.dtype == dtype
     assert out.ext.storage().to_list() == expected
+
+
+@pytest.mark.parametrize(
+    "parts",
+    [_listed_lines([_B], crs=RD), _bare([_B], 1)],
+    ids=["parts in the same crs", "parts as bare coordinates"],
+)
+def test_the_crs_of_the_geometry_is_kept(parts: pl.Series) -> None:
+    out = _added(_lines(_A, crs=RD), parts)
+
+    assert out.dtype == MultiLineStringXY(crs=RD)
+    assert out.ext.storage().to_list() == [[_A, _B]]
 
 
 @pytest.mark.parametrize(
@@ -246,8 +316,28 @@ def test_polygons(
             [[_P, _Q, _P]],
         ),
     ],
+    ids=[
+        "point: bare coordinates",
+        "point: bare coordinates in a list",
+        "linestring: points in a list",
+        "linestring: points in 2 lists",
+        "linestring: bare coordinates in a list",
+        "linestring: bare coordinates in 2 lists",
+        "linestring: a multipoint",
+        "linestring: multipoints in a list",
+        "polygon: points in 2 lists",
+        "polygon: points in 3 lists",
+        "polygon: linestrings in a list",
+        "polygon: linestrings in 2 lists",
+        "polygon: bare coordinates in 2 lists",
+        "polygon: bare coordinates in 3 lists",
+        "polygon: a multilinestring",
+        "polygon: multipoints in a list",
+        "polygon: multipoints in 2 lists",
+        "polygon: multilinestrings in a list",
+    ],
 )
-def test_parts_as_their_points_or_rings(
+def test_a_part_can_be_given_as_its_points_or_rings(
     geometry: pl.Series, parts: pl.Series, expected: list[object]
 ) -> None:
     out = _added(geometry, parts)
@@ -255,20 +345,11 @@ def test_parts_as_their_points_or_rings(
     assert out.ext.storage().to_list() == expected
 
 
-def test_bare_coordinates_take_the_crs_of_the_geometry() -> None:
-    out = _added(_lines(_A, crs=RD), _bare([_B], 1))
+def test_no_rows() -> None:
+    out = _added(_lines(), _listed_lines())
 
-    assert out.dtype == MultiLineStringXY(crs=RD)
-
-
-def test_a_null_point_in_a_part_of_points_is_dropped_or_nulls_the_result() -> None:
-    geometry, parts = _lines(_A, _A), _of_points([_B, [_B[0], None]], 1)
-
-    dropped = _added(geometry, parts, null_parts="drop")
-    nulled = _added(geometry, parts, null_parts="null")
-
-    assert dropped.ext.storage().to_list() == [[_A, _B], [_A]]
-    assert nulled.ext.storage().to_list() == [[_A, _B], None]
+    assert out.dtype == MultiLineStringXY()
+    assert out.to_list() == []
 
 
 def test_parts_are_not_checked() -> None:
@@ -339,29 +420,72 @@ def test_adding_the_parts_back_rebuilds_the_multipolygons(
     assert_frame_equal(out, dimension.multipolygons(multipolygon_coords))
 
 
-def test_null_parts_are_dropped() -> None:
-    out = _added(
-        _lines(None, _A, _A, _A, _A, _A),
-        _listed_lines([_B], None, [], [_B, None, _C], [None], [_B, [None], _C]),  # type: ignore[list-item]
-        null_parts="drop",
-    )
+@pytest.mark.parametrize(
+    ("geometry", "parts", "dropped", "nulled"),
+    [
+        (_lines(_A), _listed_lines(None), [[_A]], [None]),
+        (_lines(_A), _listed_lines([_B, None, _C]), [[_A, _B, _C]], [None]),  # type: ignore[list-item]
+        (_lines(_A), _listed_lines([None]), [[_A]], [None]),  # type: ignore[list-item]
+        (_lines(_A), _listed_lines([_B, [None], _C]), [[_A, _B, _C]], [None]),  # type: ignore[list-item]
+        (
+            _lines(_A),
+            _listed_lines([[{"x": None, "y": 1.0}], _B]),  # type: ignore[list-item]
+            [[_A, _B]],
+            [None],
+        ),
+        (_lines(_A), _lines(None, name="parts"), [[_A]], [None]),
+        (_lines(_A), _lines([_B[0], None], name="parts"), [[_A]], [None]),  # type: ignore[list-item]
+        (_lines(_A), _listed_lines([]), [[_A]], [[_A]]),
+        (_points(_A[0]), _listed_points(None), [[_A[0]]], [None]),
+        (_points(_A[0]), _listed_points([None, _B[0]]), [[_A[0], _B[0]]], [None]),
+        (
+            _points(_A[0]),
+            _listed_points([{"x": 1.0, "y": None}, _B[0]]),  # type: ignore[list-item]
+            [[_A[0], _B[0]]],
+            [None],
+        ),
+        (_polygons(_P), _listed_polygons([None, _Q]), [[_P, _Q]], [None]),
+        (_polygons(_P), _listed_polygons([_Q, [_P[0], None]]), [[_P, _Q]], [None]),  # type: ignore[list-item]
+        (_polygons(_P), _listed_polygons([[[None]], _Q]), [[_P, _Q]], [None]),  # type: ignore[list-item]
+        (_lines(None), _listed_lines([_B]), [None], [None]),
+        (_points(None), _listed_points([_B[0]]), [None], [None]),
+    ],
+    ids=[
+        "a null row of linestrings",
+        "a null linestring",
+        "only a null linestring",
+        "a linestring with a null vertex",
+        "a linestring with a null axis",
+        "a single null linestring",
+        "a single linestring with a null vertex",
+        "an empty list is no null",
+        "a null row of points",
+        "a null point",
+        "a point with a null axis",
+        "a null polygon",
+        "a polygon with a null ring",
+        "a polygon with a null vertex",
+        "a null linestring geometry",
+        "a null point geometry",
+    ],
+)
+def test_a_null_part_is_dropped_or_nulls_the_result(
+    geometry: pl.Series,
+    parts: pl.Series,
+    dropped: list[object],
+    nulled: list[object],
+) -> None:
+    out_dropped = _added(geometry, parts, null_parts="drop")
+    out_nulled = _added(geometry, parts, null_parts="null")
 
-    assert out.ext.storage().to_list() == [
-        None,
-        [_A],
-        [_A],
-        [_A, _B, _C],
-        [_A],
-        [_A, _B, _C],
-    ]
+    assert out_dropped.ext.storage().to_list() == dropped
+    assert out_nulled.ext.storage().to_list() == nulled
 
 
-def test_a_null_single_part_is_dropped() -> None:
-    parts = pl.Series("parts", [None, [_vertex(1, 1), None]], dtype=pl.List(_XY))
+def test_null_parts_null_the_result_by_default() -> None:
+    out = _added(_lines(_A, _A), _listed_lines([_B, None], [_B]))  # type: ignore[list-item]
 
-    out = _added(_lines(_A, _A), parts.ext.to(LineStringXY()), null_parts="drop")
-
-    assert out.ext.storage().to_list() == [[_A], [_A]]
+    assert out.ext.storage().to_list() == [None, [_A, _B]]
 
 
 @pytest.mark.parametrize(
@@ -371,6 +495,7 @@ def test_a_null_single_part_is_dropped() -> None:
         (_lines(_A, None), MultiLineStringXY(), _A),
         (_polygons(_P, None), MultiPolygonXY(), _P),
     ],
+    ids=["point", "linestring", "polygon"],
 )
 def test_an_untyped_null_adds_nothing_or_nulls_the_result(
     geometry: pl.Series, dtype: pl.DataType, part: object
@@ -389,151 +514,79 @@ def test_an_untyped_null_adds_nothing_or_nulls_the_result(
     assert nulled.ext.storage().to_list() == [None, None]
 
 
-def test_null_parts_null_the_result_by_default() -> None:
-    out = _added(
-        _lines(None, _A, _A, _A, _A),
-        _listed_lines([_B], None, [], [_B, None], [_B, [None]]),  # type: ignore[list-item]
-    )
-
-    assert out.ext.storage().to_list() == [None, None, [_A], None, None]
-
-
-def test_a_null_point_gives_a_null_result() -> None:
-    out = _added(_points(None, _A[0]), _listed_points([_B[0]], [_B[0]]))
-
-    assert out.ext.storage().to_list() == [None, [_A[0], _B[0]]]
-
-
-def test_a_part_with_a_null_axis_is_dropped_or_nulls_the_result() -> None:
-    lines = _listed_lines([[{"x": None, "y": 1.0}], _B])  # type: ignore[list-item]
-    points = _listed_points([{"x": 1.0, "y": None}, _B[0]])  # type: ignore[list-item]
-
-    assert _added(_lines(_A), lines, null_parts="drop").ext.storage().to_list() == [
-        [_A, _B]
-    ]
-    assert _added(
-        _points(_A[0]), points, null_parts="drop"
-    ).ext.storage().to_list() == [[_A[0], _B[0]]]
-    assert _added(_lines(_A), lines, null_parts="null").ext.storage().to_list() == [
-        None
-    ]
-
-
-def test_null_points_are_dropped_or_null_the_result() -> None:
-    geometry, parts = _points(_A[0], _A[0]), _listed_points([None, _B[0]], None)
-
-    dropped = _added(geometry, parts, null_parts="drop")
-    nulled = _added(geometry, parts, null_parts="null")
-
-    assert dropped.ext.storage().to_list() == [[_A[0], _B[0]], [_A[0]]]
-    assert nulled.ext.storage().to_list() == [None, None]
-
-
-def test_null_polygons_are_dropped() -> None:
-    out = _added(
-        _multi_polygons([_P]), _listed_polygons([None, _Q, [[None]]]), null_parts="drop"
-    )  # type: ignore[list-item]
-
-    assert out.ext.storage().to_list() == [[_P, _Q]]
-
-
-def test_null_rings_are_dropped_or_null_the_result() -> None:
-    geometry = _polygons(_P, _P)
-    parts = _listed_polygons([[None], _Q], [_Q, [_P[0], None]])  # type: ignore[list-item]
-
-    dropped = _added(geometry, parts, null_parts="drop")
-    nulled = _added(geometry, parts, null_parts="null")
-
-    assert dropped.ext.storage().to_list() == [[_P, _Q], [_P, _Q]]
-    assert nulled.ext.storage().to_list() == [None, None]
-
-
-def test_parts_aggregated_from_rows_with_nulls() -> None:
-    roads = pl.DataFrame({"region": ["n", "n", "s", "s"]}).with_columns(
-        _lines(_B, None, None, _C, name="road")
-    )
-    highways = pl.DataFrame({"region": ["n", "s"]}).with_columns(
-        _lines(_A, _A, name="highway")
-    )
-
-    out = highways.join(
-        roads.group_by("region", maintain_order=True).agg("road"), on="region"
-    ).select(geo.add_parts("highway", "road", null_parts="drop"))
-
-    assert out.to_series().ext.storage().to_list() == [[_A, _B], [_A, _C]]
-
-
-def test_empty_parts_are_kept_or_dropped() -> None:
-    geometry, parts = _multi_lines([[]]), _listed_lines([[], _B, []])
-
-    kept = _added(geometry, parts)
-    dropped = _added(geometry, parts, empty_parts="drop")
-
-    assert kept.ext.storage().to_list() == [[[], [], _B, []]]
-    # The geometry's own empty part stays.
-    assert dropped.ext.storage().to_list() == [[[], _B]]
-
-
-def test_an_empty_single_part_is_dropped() -> None:
-    out = _added(_lines(_A, _A), _lines([], _B, name="parts"), empty_parts="drop")
-
-    assert out.ext.storage().to_list() == [[_A], [_A, _B]]
-
-
-def test_empty_points_are_dropped() -> None:
-    out = _added(
-        _points(_A[0]), _listed_points([_EMPTY_POINT, _B[0]]), empty_parts="drop"
-    )
-
-    assert out.ext.storage().to_list() == [[_A[0], _B[0]]]
-
-
-def test_empty_polygons_are_dropped() -> None:
-    out = _added(_polygons(_P), _listed_polygons([[], _Q, [[]]]), empty_parts="drop")
-
-    assert out.ext.storage().to_list() == [[_P, _Q]]
-
-
-def test_a_point_with_only_some_axes_nan_is_not_empty() -> None:
-    parts = _listed_points([_vertex(math.nan, 1.0), _vertex(1.0, math.nan)])
-
-    out = _added(_points(_A[0]), parts, empty_parts="drop")
-
-    assert out.ext.storage().list.len().to_list() == [3]
-
-
 @pytest.mark.parametrize(
-    ("geometry", "parts", "part"),
+    ("geometry", "parts", "kept", "dropped"),
     [
-        (_points(_EMPTY_POINT), _listed_points([_B[0]]), _B[0]),
-        (_lines([]), _listed_lines([_B]), _B),
-        (_polygons([]), _listed_polygons([_Q]), _Q),
-        (_polygons([[]]), _listed_polygons([_Q]), _Q),
+        (
+            _multi_lines([[]]),
+            _listed_lines([[], _B, []]),
+            [[[], [], _B, []]],
+            # The geometry's own empty part stays.
+            [[[], _B]],
+        ),
+        (
+            _lines(_A, _A),
+            _lines([], _B, name="parts"),
+            [[_A, []], [_A, _B]],
+            [[_A], [_A, _B]],
+        ),
+        (
+            _points(_A[0]),
+            _listed_points([_EMPTY_POINT, _B[0]]),
+            [[_A[0], _EMPTY_POINT, _B[0]]],
+            [[_A[0], _B[0]]],
+        ),
+        (
+            _points(_A[0]),
+            _listed_points([_vertex(math.nan, 1.0), _vertex(1.0, math.nan)]),
+            [[_A[0], _vertex(math.nan, 1.0), _vertex(1.0, math.nan)]],
+            [[_A[0], _vertex(math.nan, 1.0), _vertex(1.0, math.nan)]],
+        ),
+        (
+            _polygons(_P),
+            _listed_polygons([[], _Q, [[]]]),
+            [[_P, [], _Q, [[]]]],
+            [[_P, _Q]],
+        ),
+        (
+            _points(_EMPTY_POINT),
+            _listed_points([_B[0]]),
+            [[_EMPTY_POINT, _B[0]]],
+            [[_B[0]]],
+        ),
+        (
+            _points(_A[0], _EMPTY_POINT, _C[0]),
+            _listed_points([_B[0]], [_B[1]], [_B[2]]),
+            [[_A[0], _B[0]], [_EMPTY_POINT, _B[1]], [_C[0], _B[2]]],
+            [[_A[0], _B[0]], [_B[1]], [_C[0], _B[2]]],
+        ),
+        (_points(_EMPTY_POINT), _listed_points([]), [[_EMPTY_POINT]], [[]]),
+        (_lines([]), _listed_lines([_B]), [[[], _B]], [[_B]]),
+        (_polygons([]), _listed_polygons([_Q]), [[[], _Q]], [[_Q]]),
+        (_polygons([[]]), _listed_polygons([_Q]), [[[[]], _Q]], [[_Q]]),
+    ],
+    ids=[
+        "linestrings in a list",
+        "a single linestring",
+        "points in a list",
+        "a point with only some axes nan is not empty",
+        "polygons in a list",
+        "an empty point geometry",
+        "an empty point geometry between others",
+        "an empty point geometry without parts",
+        "an empty linestring geometry",
+        "an empty polygon geometry",
+        "a polygon geometry with an empty ring",
     ],
 )
-def test_an_empty_single_geometry_is_dropped_too(
-    geometry: pl.Series, parts: pl.Series, part: object
+def test_empty_parts_are_kept_or_dropped(
+    geometry: pl.Series,
+    parts: pl.Series,
+    kept: list[object],
+    dropped: list[object],
 ) -> None:
-    kept = _added(geometry, parts)
-    dropped = _added(geometry, parts, empty_parts="drop")
-
-    assert kept.ext.storage().list.len().to_list() == [2]
-    assert dropped.ext.storage().to_list() == [[part]]
-
-
-def test_an_empty_point_between_others_is_dropped() -> None:
-    geometry = _points(_A[0], _EMPTY_POINT, _C[0])
-    parts = _listed_points([_B[0]], [_B[1]], [_B[2]])
-
-    out = _added(geometry, parts, empty_parts="drop")
-
-    assert out.ext.storage().to_list() == [[_A[0], _B[0]], [_B[1]], [_C[0], _B[2]]]
-
-
-def test_an_empty_point_without_parts_becomes_an_empty_multipoint() -> None:
-    out = _added(_points(_EMPTY_POINT), _listed_points([]), empty_parts="drop")
-
-    assert out.ext.storage().to_list() == [[]]
+    _assert_storage_equal_with_nan(_added(geometry, parts), kept)
+    _assert_storage_equal_with_nan(_added(geometry, parts, empty_parts="drop"), dropped)
 
 
 @pytest.mark.parametrize(
@@ -544,10 +597,16 @@ def test_an_empty_point_without_parts_becomes_an_empty_multipoint() -> None:
             _listed_points([_B[0], None, _C[0], _EMPTY_POINT, _A[1]]),
             [_A[0], _B[0], _C[0], _A[1]],
         ),
+        (
+            _lines(_A),
+            _listed_lines([None, _B, [], _C, None]),  # type: ignore[list-item]
+            [_A, _B, _C],
+        ),
         (_polygons(_P), _listed_polygons([_Q, None, _P, [], _Q]), [_P, _Q, _P, _Q]),
     ],
+    ids=["points", "linestrings", "polygons"],
 )
-def test_the_parts_between_those_left_out_stay_in_order(
+def test_null_and_empty_parts_are_left_out_and_the_rest_stays_in_order(
     geometry: pl.Series, parts: pl.Series, expected: list[object]
 ) -> None:
     out = _added(geometry, parts, null_parts="drop", empty_parts="drop")
@@ -586,21 +645,23 @@ def test_the_parts_left_out_keep_z_and_m_of_the_others_in_place() -> None:
     ]
 
 
-def test_null_and_empty_parts_are_both_left_out() -> None:
-    out = _added(
-        _lines(_A),
-        _listed_lines([None, _B, [], _C, None]),
-        null_parts="drop",
-        empty_parts="drop",
-    )
-
-    assert out.ext.storage().to_list() == [[_A, _B, _C]]
-
-
-def test_a_single_part_is_added_to_every_row() -> None:
+@pytest.mark.parametrize(
+    ("parts", "kwargs"),
+    [
+        (_lines(_C), {}),
+        (
+            _listed_lines([None, _C, []]),  # type: ignore[list-item]
+            {"null_parts": "drop", "empty_parts": "drop"},
+        ),
+    ],
+    ids=["a part", "a list with null and empty parts"],
+)
+def test_a_single_row_of_parts_is_added_to_every_row(
+    parts: pl.Series, kwargs: dict[str, str]
+) -> None:
     df = pl.DataFrame([_lines(_A, _B)])
 
-    out = df.select(geo.add_parts("geometry", _lines(_C))).to_series()
+    out = df.select(geo.add_parts("geometry", parts, **kwargs)).to_series()  # type: ignore[arg-type]
 
     assert out.ext.storage().to_list() == [[_A, _C], [_B, _C]]
 
@@ -613,17 +674,6 @@ def test_a_single_geometry_gets_every_row_of_parts() -> None:
     assert out.ext.storage().to_list() == [[_A, _B], [_A, _C]]
 
 
-def test_a_single_list_of_parts_with_nulls_and_empties_is_added_to_every_row() -> None:
-    df = pl.DataFrame([_lines(_A, _B)])
-    parts = _listed_lines([None, _C, []])  # type: ignore[list-item]
-
-    out = df.select(
-        geo.add_parts("geometry", parts, null_parts="drop", empty_parts="drop")
-    ).to_series()
-
-    assert out.ext.storage().to_list() == [[_A, _C], [_B, _C]]
-
-
 def test_rows_of_different_lengths_are_refused() -> None:
     df = pl.DataFrame([_lines(_A, _B)])
 
@@ -631,83 +681,72 @@ def test_rows_of_different_lengths_are_refused() -> None:
         df.select(geo.add_parts("geometry", _lines(_A, _B, _C, name="parts")))
 
 
-def test_sliced_columns() -> None:
-    df = pl.DataFrame(
-        [
-            _multi_lines([_C], [_A], None, [_B]),
-            _listed_lines([_A], [_B, _C], [_A], [None, _A]).alias("parts"),
-        ]
-    ).slice(1, 3)
-
-    out = df.select(geo.add_parts("geometry", "parts", null_parts="drop")).to_series()
-
-    assert out.ext.storage().to_list() == [[_A, _B, _C], None, [_B, _A]]
-
-
-def test_sliced_points() -> None:
-    df = pl.DataFrame(
-        [
-            _multi_points([_C[0]], [_A[0]], None, [_B[0]]),
-            _listed_points([_A[0]], [_B[0], None], [_A[0]], [None, _A[0]]).alias(
-                "parts"
-            ),
-        ]
-    ).slice(1, 3)
-
-    out = df.select(geo.add_parts("geometry", "parts", null_parts="drop")).to_series()
-
-    assert out.ext.storage().to_list() == [[_A[0], _B[0]], None, [_B[0], _A[0]]]
-
-
-def test_sliced_polygons() -> None:
-    df = pl.DataFrame(
-        [
-            _multi_polygons([_Q], [_P], None, [_P]),
-            _listed_polygons([_P], [_Q, None], [_P], [[[None]], _Q]).alias("parts"),  # type: ignore[list-item]
-        ]
-    ).slice(1, 3)
-
-    out = df.select(geo.add_parts("geometry", "parts", null_parts="drop")).to_series()
-
-    assert out.ext.storage().to_list() == [[_P, _Q], None, [_P, _Q]]
-
-
-def test_sliced_columns_with_empty_parts_dropped() -> None:
-    # The empty part before the slice shifts every part after it by one,
-    # until the parts are trimmed to the slice.
-    df = pl.DataFrame(
-        [_lines(_A, _A), _listed_lines([[]], [_B, [], _C]).alias("parts")]
-    ).slice(1, 1)
-
-    out = df.select(geo.add_parts("geometry", "parts", empty_parts="drop"))
-
-    assert out.to_series().ext.storage().to_list() == [[_A, _B, _C]]
-
-
 @pytest.mark.parametrize(
     ("geometry", "parts", "expected"),
     [
         (
+            _multi_lines([_C], [_A], None, [_B]),
+            _listed_lines([_A], [_B, _C], [_A], [None, _A]),  # type: ignore[list-item]
+            [[_A, _B, _C], None, [_B, _A]],
+        ),
+        (
+            _multi_points([_C[0]], [_A[0]], None, [_B[0]]),
+            _listed_points([_A[0]], [_B[0], None], [_A[0]], [None, _A[0]]),
+            [[_A[0], _B[0]], None, [_B[0], _A[0]]],
+        ),
+        (
+            _multi_polygons([_Q], [_P], None, [_P]),
+            _listed_polygons([_P], [_Q, None], [_P], [[[None]], _Q]),  # type: ignore[list-item]
+            [[_P, _Q], None, [_P, _Q]],
+        ),
+    ],
+    ids=["linestrings", "points", "polygons"],
+)
+def test_sliced_columns(
+    geometry: pl.Series, parts: pl.Series, expected: list[object]
+) -> None:
+    df = pl.DataFrame([geometry, parts]).slice(1, 3)
+
+    out = df.select(geo.add_parts("geometry", "parts", null_parts="drop"))
+
+    assert out.to_series().ext.storage().to_list() == expected
+
+
+@pytest.mark.parametrize(
+    ("geometry", "parts", "kwargs", "expected"),
+    [
+        # The empty part before the slice shifts every part after it by one,
+        # until the parts are trimmed to the slice.
+        (
+            _lines(_A, _A),
+            _listed_lines([[]], [_B, [], _C]),
+            {"empty_parts": "drop"},
+            [[_A, _B, _C]],
+        ),
+        (
             _points(_A[0], _A[0]),
             _listed_points([None, _EMPTY_POINT], [_B[0], None, _EMPTY_POINT, _C[0]]),
+            {"null_parts": "drop", "empty_parts": "drop"},
             [[_A[0], _B[0], _C[0]]],
         ),
         (
             _polygons(_P, _P),
             _listed_polygons([None, []], [_Q, [[None]], [[]], _P]),  # type: ignore[list-item]
+            {"null_parts": "drop", "empty_parts": "drop"},
             [[_P, _Q, _P]],
         ),
     ],
-    ids=["points", "polygons"],
+    ids=["empty linestrings", "null and empty points", "null and empty polygons"],
 )
 def test_parts_left_out_before_a_slice_stay_left_out(
-    geometry: pl.Series, parts: pl.Series, expected: list[object]
+    geometry: pl.Series,
+    parts: pl.Series,
+    kwargs: dict[str, str],
+    expected: list[object],
 ) -> None:
     df = pl.DataFrame([geometry, parts]).slice(1, 1)
 
-    out = df.select(
-        geo.add_parts("geometry", "parts", null_parts="drop", empty_parts="drop")
-    )
+    out = df.select(geo.add_parts("geometry", "parts", **kwargs))  # type: ignore[arg-type]
 
     assert out.to_series().ext.storage().to_list() == expected
 
@@ -741,6 +780,11 @@ def test_the_namespace_forwards() -> None:
     )
 
 
+def test_a_geometry_column_without_a_geometry_is_refused() -> None:
+    with pytest.raises(TypeError, match="expected a `geoarrow.point`"):
+        _added(_points(_A[0]).ext.storage(), _points(_B[0], name="parts"))
+
+
 _XYZ_VERTICES = pl.Series(
     "parts",
     [[{"x": 1.0, "y": 1.0, "z": 0.0}]],
@@ -769,6 +813,13 @@ def test_parts_of_another_dimension_are_refused(parts: pl.Series) -> None:
         (_lines(_A), _listed_lines([_B], crs=RD), "only one"),
         (_lines(_A, crs=RD), _of_points([_B], 1, crs="EPSG:4326"), "different CRSs"),
     ],
+    ids=[
+        "different crs",
+        "a crs on the geometry only",
+        "a crs on the parts only",
+        "a crs on the listed parts only",
+        "a different crs on the points of the parts",
+    ],
 )
 def test_parts_in_another_crs_are_refused(
     geometry: pl.Series, parts: pl.Series, match: str
@@ -786,16 +837,22 @@ def test_parts_in_another_crs_are_refused(
     [
         (_lines(_A), _polygons(_P, name="parts")),
         (_points(_A[0]), _lines(_A, name="parts")),
-        (_polygons(_P), _multi_points(_A, name="parts")),
         # A single linestring is one ring, not a polygon.
         (_polygons(_P), _lines(_A, name="parts")),
-        (_polygons(_P), _of_points([_A], 1)),
         (_lines(_A), _of_points([[[_A]]], 3)),
         (_lines(_A), _bare([[[_A]]], 3)),
         (
             _polygons(_P),
             _nested([[[_P]]], pl.List(pl.List(pl.List(_XY))), MultiPolygonXY(), 1),
         ),
+    ],
+    ids=[
+        "linestring: a polygon",
+        "point: a linestring",
+        "polygon: a linestring",
+        "linestring: points in 3 lists",
+        "linestring: bare coordinates in 3 lists",
+        "polygon: multipolygons in a list",
     ],
 )
 def test_parts_of_another_kind_are_refused(

@@ -250,9 +250,10 @@ def test_a_null_hole_still_nulls_a_kept_polygon() -> None:
     assert out.to_list() == [None]
 
 
-def test_an_unknown_empty_exterior_is_refused() -> None:
+@pytest.mark.parametrize("kwargs", [{"null_parts": "skip"}, {"empty_exterior": "drop"}])
+def test_unknown_modes_are_refused(kwargs: dict[str, str]) -> None:
     with pytest.raises(ValueError, match="must be one of"):
-        geo.add_holes("polygon", "holes", empty_exterior="drop")  # type: ignore[arg-type]
+        geo.add_holes("polygon", "holes", **kwargs)  # type: ignore[arg-type]
 
 
 def test_an_open_hole_nulls_the_polygon_unless_closed() -> None:
@@ -306,6 +307,13 @@ def test_holes_of_another_dimension_are_refused() -> None:
         (None, _lines(_HOLE, crs=RD), "only one"),
         (RD, _listed_lines([_HOLE]), "only one"),
         (None, _listed_lines([_HOLE], crs=RD), "only one"),
+    ],
+    ids=[
+        "different crs",
+        "a crs on the polygon only",
+        "a crs on the holes only",
+        "a crs on the polygon only, listed holes",
+        "a crs on the listed holes only",
     ],
 )
 def test_holes_in_another_crs_are_refused(

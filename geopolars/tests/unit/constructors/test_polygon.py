@@ -537,10 +537,11 @@ def _bare_exterior_and_hole() -> pl.DataFrame:
     )
 
 
-def test_a_bare_exterior_takes_the_crs_of_the_holes() -> None:
-    df = _bare_exterior_and_hole().with_columns(
-        geo.line_string("hole", crs="EPSG:4326")
-    )
+@pytest.mark.parametrize(
+    "typed", ["hole", "exterior"], ids=["bare exterior", "bare holes"]
+)
+def test_a_bare_ring_takes_the_crs_of_the_other(typed: str) -> None:
+    df = _bare_exterior_and_hole().with_columns(geo.line_string(typed, crs="EPSG:4326"))
 
     out = df.select(
         geo.polygons_from_rings_in_separate_columns("exterior", "hole")
@@ -575,10 +576,25 @@ def test_separate_columns_refuse_holes_in_another_crs(
         lf.collect_schema()
 
 
-def test_holes_in_the_crs_passed_for_the_exterior_are_accepted() -> None:
-    df = _bare_exterior_and_hole().select(
-        geo.line_string("exterior"), geo.line_string("hole", crs="EPSG:4326")
-    )
+@pytest.mark.parametrize(
+    ("exterior", "hole"),
+    [
+        (pl.col("exterior"), geo.line_string("hole")),
+        (geo.line_string("exterior"), geo.line_string("hole")),
+        (geo.line_string("exterior", crs="EPSG:4326"), geo.line_string("hole")),
+        (geo.line_string("exterior"), geo.line_string("hole", crs="EPSG:4326")),
+    ],
+    ids=[
+        "bare exterior",
+        "linestring exterior",
+        "linestring exterior in the crs",
+        "holes in the crs",
+    ],
+)
+def test_the_crs_passed_is_set_on_rings_without_one(
+    exterior: pl.Expr, hole: pl.Expr
+) -> None:
+    df = _bare_exterior_and_hole().select(exterior, hole)
 
     out = df.select(
         geo.polygons_from_rings_in_separate_columns("exterior", "hole", crs="EPSG:4326")
@@ -589,30 +605,20 @@ def test_holes_in_the_crs_passed_for_the_exterior_are_accepted() -> None:
 
 
 @pytest.mark.parametrize(
-    "exterior",
+    ("column", "match"),
     [
-        pl.col("exterior"),
-        geo.line_string("exterior"),
-        geo.line_string("exterior", crs="EPSG:4326"),
+        ("hole", "the CRS of the holes is already"),
+        ("exterior", "the CRS of the exterior is already"),
     ],
-    ids=["bare", "linestring", "linestring in the crs"],
+    ids=["holes", "exterior"],
 )
-def test_the_crs_passed_is_set_on_holes_without_one(exterior: pl.Expr) -> None:
-    df = _bare_exterior_and_hole().with_columns(geo.line_string("hole"))
-
-    out = df.select(
-        geo.polygons_from_rings_in_separate_columns(exterior, "hole", crs="EPSG:4326")
-    ).to_series()
-
-    assert out.dtype == PolygonXY(crs="EPSG:4326")
-    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
-
-
-def test_holes_in_another_crs_than_the_one_passed_are_refused() -> None:
+def test_rings_in_another_crs_than_the_one_passed_are_refused(
+    column: str, match: str
+) -> None:
     lf = (
         _bare_exterior_and_hole()
         .lazy()
-        .with_columns(geo.line_string("hole", crs="EPSG:4326"))
+        .with_columns(geo.line_string(column, crs="EPSG:4326"))
         .select(
             geo.polygons_from_rings_in_separate_columns(
                 "exterior", "hole", crs="EPSG:28992"
@@ -620,37 +626,8 @@ def test_holes_in_another_crs_than_the_one_passed_are_refused() -> None:
         )
     )
 
-    with pytest.raises(ComputeError, match="the CRS of the holes is already"):
+    with pytest.raises(ComputeError, match=match):
         lf.collect_schema()
-
-
-def test_an_exterior_in_another_crs_than_the_one_passed_is_refused() -> None:
-    lf = (
-        _bare_exterior_and_hole()
-        .lazy()
-        .with_columns(geo.line_string("exterior", crs="EPSG:4326"))
-        .select(
-            geo.polygons_from_rings_in_separate_columns(
-                "exterior", "hole", crs="EPSG:28992"
-            )
-        )
-    )
-
-    with pytest.raises(ComputeError, match="the CRS of the exterior is already"):
-        lf.collect_schema()
-
-
-def test_bare_holes_go_with_the_crs_of_the_exterior() -> None:
-    df = _bare_exterior_and_hole().with_columns(
-        geo.line_string("exterior", crs="EPSG:4326")
-    )
-
-    out = df.select(
-        geo.polygons_from_rings_in_separate_columns("exterior", "hole")
-    ).to_series()
-
-    assert out.dtype == PolygonXY(crs="EPSG:4326")
-    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
 
 
 @pytest.mark.parametrize(
@@ -721,36 +698,41 @@ def test_a_null_exterior_is_a_null_polygon() -> None:
     assert out.is_null().to_list() == [True, False]
 
 
-def test_a_null_ring_among_the_holes_nulls_the_polygon() -> None:
-    out = _from_separate_rings([_EXTERIOR, _EXTERIOR], [[_HOLE, None], [_HOLE]])
-
-    assert out.is_null().to_list() == [True, False]
-
-
-def test_a_null_ring_among_the_holes_can_be_dropped() -> None:
-    out = _from_separate_rings([_EXTERIOR], [[None, _HOLE]], null_parts="drop")
-
-    assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
-
-
-def test_a_null_vertex_in_a_hole_nulls_the_polygon() -> None:
-    broken = [*_HOLE[:3], None]
-    listed = _from_separate_rings([_EXTERIOR], [[broken]])
-    single = _from_separate_rings([_EXTERIOR], [broken], holes_dtype=_XY_VERTICES)
-
-    assert listed.is_null().to_list() == [True]
-    assert single.is_null().to_list() == [True]
-
-
-def test_a_hole_with_a_null_vertex_can_be_dropped() -> None:
-    broken = [*_HOLE[:3], None]
-    listed = _from_separate_rings([_EXTERIOR], [[broken, _HOLE]], null_parts="drop")
-    single = _from_separate_rings(
-        [_EXTERIOR], [broken], holes_dtype=_XY_VERTICES, null_parts="drop"
+@pytest.mark.parametrize(
+    ("null_parts", "expected"),
+    [
+        ("null", [None, [_EXTERIOR, _HOLE]]),
+        ("drop", [[_EXTERIOR, _HOLE], [_EXTERIOR, _HOLE]]),
+    ],
+    ids=["null", "drop"],
+)
+def test_a_null_ring_among_the_holes(null_parts: str, expected: list[object]) -> None:
+    out = _from_separate_rings(
+        [_EXTERIOR, _EXTERIOR], [[None, _HOLE], [_HOLE]], null_parts=null_parts
     )
 
-    assert listed.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
-    assert single.ext.storage().to_list() == [[_EXTERIOR]]
+    assert out.ext.storage().to_list() == expected
+
+
+@pytest.mark.parametrize(
+    ("null_parts", "listed_expected", "single_expected"),
+    [
+        ("null", [None], [None]),
+        ("drop", [[_EXTERIOR, _HOLE]], [[_EXTERIOR]]),
+    ],
+    ids=["null", "drop"],
+)
+def test_a_null_vertex_in_a_hole(
+    null_parts: str, listed_expected: list[object], single_expected: list[object]
+) -> None:
+    broken = [*_HOLE[:3], None]
+    listed = _from_separate_rings([_EXTERIOR], [[broken, _HOLE]], null_parts=null_parts)
+    single = _from_separate_rings(
+        [_EXTERIOR], [broken], holes_dtype=_XY_VERTICES, null_parts=null_parts
+    )
+
+    assert listed.ext.storage().to_list() == listed_expected
+    assert single.ext.storage().to_list() == single_expected
 
 
 def test_an_exterior_can_be_a_multipoint() -> None:
@@ -764,6 +746,15 @@ def test_an_exterior_can_be_a_multipoint() -> None:
     ).to_series()
 
     assert out.ext.storage().to_list() == [[_EXTERIOR, _HOLE]]
+
+
+def test_separate_columns_refuse_an_unknown_null_parts() -> None:
+    with pytest.raises(ValueError, match="must be one of"):
+        geo.polygons_from_rings_in_separate_columns(
+            "exterior",
+            "holes",
+            null_parts="skip",  # type: ignore[arg-type]
+        )
 
 
 def test_separate_columns_reject_holes_of_another_dimension() -> None:
