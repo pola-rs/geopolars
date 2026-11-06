@@ -71,7 +71,7 @@ repair:
 - [x] Adding additional holes to polygons from linestrings: `add_holes`
 - [x] Adding list[linestring] to multilinestring/list[polygon] to multipolygon etc.: `add_parts`
 - [x] equality: (are two shapes the same?): `is_equal`, `is_topologically_equal`
-- [x] shortest line between two geometries: `shortest_line`
+- [x] shortest line between two geometries: `shortest_line_between`
 - [ ] Adding list[linestring] to multilinestring/list[polygon] to multipolygon etc.
 
 Classic binary predicates:

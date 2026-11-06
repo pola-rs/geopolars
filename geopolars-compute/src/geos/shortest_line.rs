@@ -53,7 +53,7 @@ fn shortest_lines_into_array(
 }
 
 /// Gets the shortest line from `a` to `b`, row by row.
-/// Implements the Python `shortest_line`, which documents its behaviour.
+/// Implements the Python `shortest_line_between`, which documents its behaviour.
 /// Each side is converted to GEOS in full, so a row that is null on only one side can still fail.
 ///
 /// `a` and `b` must have the same length.

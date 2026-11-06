@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 @doc(output="line")
-def shortest_line(
+def shortest_line_between(
     a: IntoExprColumn,
     b: IntoExprColumn,
     *,
@@ -48,7 +48,7 @@ def shortest_line(
     `a` and `b` have to declare the same CRS (or neither should have a CRS).
 
     ```python
-    df.with_columns(geo.shortest_line("house", "road").alias("driveway"))
+    df.with_columns(geo.shortest_line_between("house", "road").alias("driveway"))
     ```
     """
     kwargs = {
@@ -63,7 +63,7 @@ def shortest_line(
         return register_plugin_function(
             plugin_path=LIB,
             args=[a, b],
-            function_name="shortest_line",
+            function_name="shortest_line_between",
             kwargs=kwargs,
             is_elementwise=True,
         )

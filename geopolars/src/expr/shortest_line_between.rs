@@ -16,27 +16,27 @@ use crate::geoarrow::{
 /// See python
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct ShortestLineKwargs {
+pub struct ShortestLineBetweenKwargs {
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 }
 
 /// An XY linestring with the metadata of the first geometry.
 /// Both can be of any kind and dimension, in the same CRS (or neither declaring one).
-fn shortest_line_type(a: &DataType, b: &DataType) -> PolarsResult<DataType> {
+fn shortest_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<DataType> {
     let (a, b) = (describe(a)?, describe(b)?);
     ensure_same_crs(&a, &b)?;
     Ok(Geo::new(Kind::LineString, GeoDimension::XY, a.metadata.clone()).dtype())
 }
 
-/// For [`shortest_line`], named after the first geometry.
-fn kernel_output_type_shortest_line(input_fields: &[Field]) -> PolarsResult<Field> {
+/// For [`shortest_line_between`], named after the first geometry.
+fn kernel_output_type_shortest_line_between(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
-        polars_bail!(ComputeError: "shortest_line takes two geometries, got {} inputs", input_fields.len());
+        polars_bail!(ComputeError: "shortest_line_between takes two geometries, got {} inputs", input_fields.len());
     };
     Ok(Field::new(
         a.name().clone(),
-        shortest_line_type(a.dtype(), b.dtype())?,
+        shortest_line_between_type(a.dtype(), b.dtype())?,
     ))
 }
 
@@ -45,7 +45,7 @@ fn every_shortest_line_to_one(
     one: &Series,
     many: &Series,
     one_is_a: bool,
-    kwargs: &ShortestLineKwargs,
+    kwargs: &ShortestLineBetweenKwargs,
 ) -> PolarsResult<Option<Vec<ArrayRef>>> {
     let one_chunk = storage_as_single_chunk(one)?;
     // A null `one` makes every result null, so `many` is not sent to GEOS, where a row could fail.
@@ -70,11 +70,14 @@ fn every_shortest_line_to_one(
     Ok(Some(chunks))
 }
 
-/// See `shortest_line`.
-#[polars_expr(output_type_func=kernel_output_type_shortest_line)]
-fn shortest_line(inputs: &[Series], kwargs: ShortestLineKwargs) -> PolarsResult<Series> {
+/// See `shortest_line_between`.
+#[polars_expr(output_type_func=kernel_output_type_shortest_line_between)]
+fn shortest_line_between(
+    inputs: &[Series],
+    kwargs: ShortestLineBetweenKwargs,
+) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let dtype = shortest_line_type(a.dtype(), b.dtype())?;
+    let dtype = shortest_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let chunks = match (a.len(), b.len()) {
         // The kinds can differ, but `aligned_chunks` needs two storages of one physical type.

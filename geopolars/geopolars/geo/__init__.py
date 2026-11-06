@@ -76,7 +76,7 @@ from geopolars.geo.parts import parts
 from geopolars.geo.remove_repeats_in_succession import remove_repeats_in_succession
 from geopolars.geo.reverse import reverse
 from geopolars.geo.rings_overlap import rings_overlap
-from geopolars.geo.shortest_line import shortest_line
+from geopolars.geo.shortest_line_between import shortest_line_between
 from geopolars.geo.simplify import simplify
 from geopolars.geo.snap_to_grid import snap_to_grid
 from geopolars.geo.sort_parts import sort_parts
@@ -158,7 +158,7 @@ __all__ = [
     "scale",
     "scale_about_centroid",
     "set_crs",
-    "shortest_line",
+    "shortest_line_between",
     "simplify",
     "skew",
     "skew_about_centroid",
