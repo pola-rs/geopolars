@@ -81,14 +81,14 @@ fn interpolate_via_geos(
             distance,
             ignore_per_row_errors,
             finite_distance,
-            |input, distance| input.interpolate(distance),
+            |input, distance| Ok(input.interpolate(distance)?),
         ),
         InterpolateMode::Normalized => by_distance_via_geos(
             geometries,
             distance,
             ignore_per_row_errors,
             finite_distance,
-            |input, fraction| input.interpolate_normalized(fraction),
+            |input, fraction| Ok(input.interpolate_normalized(fraction)?),
         ),
     }
 }

@@ -419,6 +419,17 @@ fn wrong_kind(
     Err(geos::Error::ConversionError(format!("expected a {expected}, got a {found:?}")).into())
 }
 
+/// `geometry`, unless it is a `multi` of several parts, which the single kind cannot hold.
+fn unless_split(geometry: Geometry, multi: GeometryTypes) -> GeoComputeResult<Geometry> {
+    if geometry.geometry_type()? == multi {
+        let parts = geometry.get_num_geometries()?;
+        if parts > 1 {
+            return Err(GeoComputeError::Split { parts });
+        }
+    }
+    Ok(geometry)
+}
+
 /// Which rows are there, pushed one after the other.
 /// A bitmap is only built once a row is null.
 struct ValidityBuilder {

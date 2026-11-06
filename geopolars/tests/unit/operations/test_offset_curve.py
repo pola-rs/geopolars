@@ -113,7 +113,7 @@ def test_the_inside_of_a_corner_is_cut_short() -> None:
 
 
 def test_a_split_line_raises() -> None:
-    with pytest.raises(ComputeError, match="MultiLineString"):
+    with pytest.raises(ComputeError, match="split into 2 parts"):
         _offset(_column(LineStringXY, _CROSSING), -1.0)
 
 
