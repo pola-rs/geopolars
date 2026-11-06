@@ -186,7 +186,7 @@ def test_keeping_a_higher_dimension_than_the_inputs_is_refused(
 
 
 def test_an_unknown_keep_is_refused() -> None:
-    with pytest.raises(ValueError, match="`keep` to be one of"):
+    with pytest.raises(ValueError, match="`keep` must be one of"):
         geo.intersection("a", "b", keep="areas")  # type: ignore[arg-type]
 
 

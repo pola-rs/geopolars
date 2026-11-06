@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, get_args
 
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import (
     LineStringType,
     MultiLineStringType,
@@ -23,10 +23,11 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 # Ordered by dimension, from points up to polygons.
-_KEEP = ("points", "lines", "polygons")
+Keep = Literal["points", "lines", "polygons"]
+_KEEP: tuple[Keep, ...] = get_args(Keep)
 
 
-def _dimension(dtype: GeoArrowType) -> int:
+def _topological_dimension(dtype: GeoArrowType) -> int:
     if isinstance(dtype, PolygonType | MultiPolygonType):
         return 2
     if isinstance(dtype, LineStringType | MultiLineStringType):
@@ -39,7 +40,7 @@ def intersection(
     a: IntoExprColumn,
     b: IntoExprColumn,
     *,
-    keep: Literal["points", "lines", "polygons"] | None = None,
+    keep: Keep | None = None,
     allow_splitting: bool = False,
     ccw_outer: bool = False,
     ignore_per_row_errors: bool = False,
@@ -75,7 +76,10 @@ def intersection(
     | Polygon | | | | | Polygon / MultiPolygon | Polygon / MultiPolygon |
     | MultiPolygon | | | | | | MultiPolygon |
 
-    With `keep`, the single or multi kind is chosen the same way:
+    `keep` only picks the dimension.
+    Whether the result is a single or a multi kind still follows the table above.
+    Two linestrings with `keep="points"` therefore give a Point,
+    and a row where they cross twice raises without `allow_splitting`.
 
     | `keep` | allowed when | single / multi kind | what is dropped |
     | - | - | - | - |
@@ -92,10 +96,12 @@ def intersection(
 
     {computed_by_geos_keeping_z}
     The output has z as soon as either input has it.
-    Where only one input has z, GEOS fills it in from that one.
+    Where only one input has z, GEOS estimates it from the z of that input nearby.
+    This is not always an exact interpolation:
+    a point on a line can get the z of a nearby vertex.
     {empty_and_null}
     Two geometries that do not meet give an empty {output} too.
-    For a point, that is the empty point (NaN x and y).
+    A Point result is then the empty point (NaN on every axis).
 
     {geos_errors}
     The same goes for a result in several parts without `allow_splitting`.
@@ -104,6 +110,7 @@ def intersection(
     {early_finite_check}
 
     {ccw_outer}
+    It only affects a Polygon or MultiPolygon result.
 
     `a` and `b` have to declare the same CRS, or neither one.
     The result has the CRS of `a`.
@@ -114,9 +121,8 @@ def intersection(
     df.select(geo.intersection("road", "river", keep="points", allow_splitting=True))
     ```
     """
-    if keep is not None and keep not in _KEEP:
-        msg = f"intersection expects `keep` to be one of {_KEEP} or None, got: {keep!r}"
-        raise ValueError(msg)
+    if keep is not None:
+        validate_one_of("keep", keep, Keep)
     kwargs = {
         "keep": keep,
         "allow_splitting": allow_splitting,
@@ -129,7 +135,7 @@ def intersection(
         a: pl.Expr, a_dtype: GeoArrowType, b: pl.Expr, b_dtype: GeoArrowType
     ) -> pl.Expr:
         ensure_same_crs(a_dtype, b_dtype)
-        lowest = min(_dimension(a_dtype), _dimension(b_dtype))
+        lowest = min(_topological_dimension(a_dtype), _topological_dimension(b_dtype))
         if keep is not None and _KEEP.index(keep) > lowest:
             msg = (
                 f"the intersection of {a_dtype!r} and {b_dtype!r} has no {keep};"

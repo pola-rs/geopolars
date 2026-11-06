@@ -46,7 +46,7 @@ pub struct IntersectionOutput {
     pub parts: IntersectionParts,
     /// A row that splits into several parts fails with [`GeoComputeError::Split`] if `multi=false`.
     pub multi: bool,
-    /// The output never has m, even if `z=true`.
+    /// m is always dropped, whatever the inputs have.
     pub z: bool,
     /// GEOS gives a clockwise exterior, so `ccw_outer=true` reverses every ring of a polygon.
     pub ccw_outer: bool,
@@ -124,8 +124,8 @@ pub fn intersection_against_one(
 }
 
 fn summed_size_hint(a: SizeHint<2>, b: SizeHint<2>) -> SizeHint<2> {
-    // The intersection lies within both, but overlay can add vertices where the two cross.
-    // So the sum is not an upper bound.
+    // Overlay adds a vertex wherever the two cross,
+    // so the result can have more vertices than both inputs together.
     SizeHint {
         coords: a.coords + b.coords,
         parts: [a.parts[0] + b.parts[0], a.parts[1] + b.parts[1]],

@@ -34,18 +34,11 @@ pub struct BoundsKwargs {
     per_part: bool,
 }
 
-fn is_multi(kind: Kind) -> bool {
-    matches!(
-        kind,
-        Kind::MultiPoint | Kind::MultiLineString | Kind::MultiPolygon
-    )
-}
-
 /// The box of `dtype`'s dimension and metadata, in a list if each part gets one.
 fn bounds_dtype(dtype: &DataType, per_part: bool) -> PolarsResult<DataType> {
     let geo = describe(dtype)?;
     let bbox = GeoBox::new(geo.dim, geo.metadata.clone()).dtype();
-    Ok(if per_part && is_multi(geo.kind) {
+    Ok(if per_part && geo.kind.is_multi() {
         DataType::List(Box::new(bbox))
     } else {
         bbox

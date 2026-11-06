@@ -386,7 +386,7 @@ fn coord_seq(axes: &Axes, vertices: Range<usize>) -> GeoComputeResult<CoordSeq> 
 /// to copy into one of our arrays with an `into_*_array` conversion.
 pub struct GeosGeometries {
     pub geometries: Vec<GeosRow>,
-    /// An upper bound, sized for the deepest kind, a multipolygon:
+    /// Sized for the deepest kind, a multipolygon:
     /// rings (or lines), then polygons.
     pub size_hint: SizeHint<2>,
 }

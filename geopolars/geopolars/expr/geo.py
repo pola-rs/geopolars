@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         OutOfBounds,
         OutOfBoundsAction,
     )
+    from geopolars.geo.intersection import Keep
     from geopolars.geo.snap_to_grid import RoundMode
 
 
@@ -529,7 +530,7 @@ class ExprGeoNameSpace:
         self,
         other: IntoExprColumn,
         *,
-        keep: Literal["points", "lines", "polygons"] | None = None,
+        keep: Keep | None = None,
         allow_splitting: bool = False,
         ccw_outer: bool = False,
         ignore_per_row_errors: bool = False,

@@ -62,6 +62,13 @@ impl Kind {
         }
     }
 
+    pub const fn is_multi(self) -> bool {
+        matches!(
+            self,
+            Kind::MultiPoint | Kind::MultiLineString | Kind::MultiPolygon
+        )
+    }
+
     /// Tells us how deeply nested the data type is.
     /// A geoarrow.linestring is a collection of points, so it is 1.
     /// A geoarrow.polygon is a collection of linestings, so it is 2.

@@ -24,6 +24,16 @@ enum Keep {
     Polygons,
 }
 
+impl Keep {
+    fn name(self) -> &'static str {
+        match self {
+            Keep::Points => "points",
+            Keep::Lines => "lines",
+            Keep::Polygons => "polygons",
+        }
+    }
+}
+
 impl From<Keep> for IntersectionParts {
     fn from(keep: Keep) -> Self {
         match keep {
@@ -53,13 +63,6 @@ fn dimension(kind: Kind) -> IntersectionParts {
     }
 }
 
-fn is_multi(kind: Kind) -> bool {
-    matches!(
-        kind,
-        Kind::MultiPoint | Kind::MultiLineString | Kind::MultiPolygon
-    )
-}
-
 fn output_kind(parts: IntersectionParts, multi: bool) -> Kind {
     match (parts, multi) {
         (IntersectionParts::Points, false) => Kind::Point,
@@ -84,13 +87,14 @@ fn intersection_type(
     let parts = match kwargs.keep {
         None => lowest,
         Some(keep) => {
-            let keep = keep.into();
+            let parts = keep.into();
+            // Python refuses a higher `keep` itself, so it never gets here.
             polars_ensure!(
-                keep <= lowest,
-                InvalidOperation: "the intersection of a {} and a {} cannot keep {keep:?}",
-                a.kind.display(), b.kind.display()
+                parts <= lowest,
+                InvalidOperation: "the intersection of a {} and a {} cannot keep {}",
+                a.kind.display(), b.kind.display(), keep.name()
             );
-            keep
+            parts
         }
     };
     // A single lowest-dimensional input stays single, unless splitting is allowed.
@@ -98,7 +102,7 @@ fn intersection_type(
     let has_point = a.kind == Kind::Point || b.kind == Kind::Point;
     let single_lowest = [a.kind, b.kind]
         .into_iter()
-        .any(|kind| dimension(kind) == lowest && !is_multi(kind));
+        .any(|kind| dimension(kind) == lowest && !kind.is_multi());
     let multi = !has_point && (kwargs.allow_splitting || !single_lowest);
     let z = a.dim.has_z() || b.dim.has_z();
     let dim = if z {
