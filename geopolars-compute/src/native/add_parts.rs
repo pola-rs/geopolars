@@ -1,5 +1,4 @@
 //! Adding the parts of one multi-geometry column to those of another.
-//! The parts are copied as they are; only `without_empty_parts` looks at them, to find empty ones.
 
 use geopolars_core::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
@@ -18,8 +17,7 @@ fn keep_without_empty(keep: Option<Bitmap>, empty: BooleanArray) -> Option<Bitma
     combine_validities_and(keep.as_ref(), Some(&!empty.values()))
 }
 
-/// Unsetting the empty parts in the mask of a [MaskedParts] too.
-/// The implementations hand the view, unset parts included, to kernels that give one value per part
+/// Enables unsetting the empty parts in the mask of a [MaskedParts]
 /// (see the README on `MaskedParts`).
 pub trait WithoutEmptyParts {
     fn without_empty_parts(self) -> Self;
@@ -35,8 +33,8 @@ const EMPTY_POINTS: CoordinateSelection = CoordinateSelection {
     bounds: None,
 };
 
-/// The empty points have every axis NaN.
 impl WithoutEmptyParts for MaskedParts<MultiPointArray> {
+    /// The empty points have every axis NaN.
     fn without_empty_parts(self) -> Self {
         let not_empty = which_are_not_selected(&self.view.coords, &EMPTY_POINTS);
         let keep = combine_validities_and(self.keep.as_ref(), not_empty.as_ref());
@@ -44,8 +42,8 @@ impl WithoutEmptyParts for MaskedParts<MultiPointArray> {
     }
 }
 
-/// The empty linestrings have no vertices.
 impl WithoutEmptyParts for MaskedParts<MultiLineStringArray> {
+    /// The empty linestrings have no vertices.
     fn without_empty_parts(self) -> Self {
         let lines = LineStringArray::from_parts(
             List::from_offsets(self.view.lines.offsets().clone(), None),
@@ -57,8 +55,8 @@ impl WithoutEmptyParts for MaskedParts<MultiLineStringArray> {
     }
 }
 
-/// The empty polygons have no vertices.
 impl WithoutEmptyParts for MaskedParts<MultiPolygonArray> {
+    /// The empty polygons have no vertices.
     fn without_empty_parts(self) -> Self {
         let polygons = PolygonArray::from_parts(
             List::from_offsets(self.view.polygons.offsets().clone(), None),
@@ -71,8 +69,6 @@ impl WithoutEmptyParts for MaskedParts<MultiPolygonArray> {
     }
 }
 
-/// `base`, each followed by the points on the same row of `added`.
-/// See [multi_line_strings_with_added_parts].
 pub fn multi_points_with_added_parts(
     base: &MaskedParts<MultiPointArray>,
     added: &MaskedParts<MultiPointArray>,

@@ -93,8 +93,7 @@ The type, dimension and CRS of the output geometry are kept from the input.""",
     "keeps_dimension_and_crs": """\
 The result keeps the input's dimension and CRS.""",
     "paired_rows": """\
-`{geometry}` and `{parts}` have the same number of rows,
-or one of them has a single row, which then goes with every row of the other.""",
+`{geometry}` and `{parts}` should have the same number of rows, or a single row which then goes with all.""",
     "same_crs": """\
 `{parts}` have to declare the same CRS as `{geometry}`, or neither may declare one.
 Bare coordinates and an untyped null (`pl.lit(None)`) cannot declare a CRS,

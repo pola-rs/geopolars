@@ -83,7 +83,7 @@ def polygons_from_rings_in_separate_columns(
     `holes` holds one ring per polygon, a list of them, or a multilinestring,
     each ring spelled like the exterior.
     Bare coordinates (the storage of points) work in place of the points.
-    Without `holes`, no polygon has holes.
+    If no `holes` is provided, all polygons will not have holes.
 
     {paired_rows}
 

@@ -291,12 +291,7 @@ pub fn polygons_with_added_holes(
     PolygonArray::from_parts(rows, rings, coords)
 }
 
-/// Where a polygon has room for its holes:
-/// everywhere but a polygon with an empty exterior (or none) that gets holes with vertices.
-/// That is the empty polygon, which may only have empty holes
-/// (see [ScalarPolygon::has_empty_exterior](geopolars_core::ScalarPolygon::has_empty_exterior)).
-/// Without rings, its first hole would even become its exterior, and pass validation.
-/// Only the holes set in the mask count.
+/// An empty polygon cannot accept holes.
 pub fn have_room_for_holes(
     polygons: &PolygonArray,
     holes: &MaskedParts<MultiLineStringArray>,

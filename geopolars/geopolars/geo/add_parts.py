@@ -1,7 +1,4 @@
-"""Adding parts to geometries, from another column.
-
-A native kernel (A-tier) copies the geometries and their new parts into new buffers.
-"""
+"""Adding parts to geometries, from another column."""
 
 from __future__ import annotations
 
@@ -47,7 +44,7 @@ def add_parts(
     null_parts: NullParts = "null",
     empty_parts: EmptyParts = "keep",
 ) -> pl.Expr:
-    """Add the parts of `parts` to each geometry, after the parts it already has.
+    """Append additional parts to each geometry, e.g. more holes to a polygon or an extra linestring to a multilinestring.
     The result is always a multi-geometry.
 
     | geometry | parts | out |
@@ -71,17 +68,16 @@ def add_parts(
     {same_crs}
 
     The parts are not checked for validity: they are copied as they are.
-
-    A null geometry gives a null result.
+    If the geometry you are trying to add parts to is already null,
+    then parts are not added to it, and it stays null.
     {null_parts}
 
     `"drop"` suits a list of parts aggregated from rows of which some are null.
 
-    What an empty part (a point with every axis NaN, or a part without vertices)
-    does is set by `empty_parts`.
-    It applies to the parts that are added,
-    and to a `geometry` that is not a multi-geometry, as that becomes the first part of the result.
-    A multi-geometry keeps every part it already has, empty ones included.
+    What happens with an empty part is set by `empty_parts`.
+    This option also applies to a geometry that becomes the first part of a multi-geometry
+    (e.g. adding a polygon to another polygon creates a multipolygon, then both will be empty-checked)
+    An existing multi-geometry keeps every part it already has, empty ones included.
 
     | `empty_parts` | an empty part |
     | - | - |
@@ -98,6 +94,8 @@ def add_parts(
     )
     ```
     """
+
+    # TODO: Should this really accept Polygon + Polygon -> Multipolygon? Shouldn't you just use the multipolygon constructor in such a case?
     validate_one_of("null_parts", null_parts, NullParts)
     validate_one_of("empty_parts", empty_parts, EmptyParts)
     return on_geometry(

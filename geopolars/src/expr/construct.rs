@@ -629,7 +629,6 @@ fn multipolygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> Polar
     zip(inputs, &kwargs.metadata(), kwargs.close, Kind::MultiPolygon)
 }
 
-/// The kind of the parts of a `kind`, and the multi-geometry of them.
 pub(super) fn part_kinds(kind: Kind) -> (Kind, Kind) {
     match kind {
         Kind::Point | Kind::MultiPoint => (Kind::Point, Kind::MultiPoint),
@@ -654,7 +653,9 @@ fn holds_parts(found: Kind, part: Kind) -> bool {
         }
 }
 
-/// How a column holds parts of a kind, see [parts_layout].
+/// How a column of `dtype` holds parts of the kind `part`:
+/// each spelled as anything that [holds_parts],
+/// or as bare coordinates in place of points.
 pub(super) struct PartsLayout {
     /// A list of parts per row, rather than one.
     pub(super) listed: bool,
@@ -663,11 +664,6 @@ pub(super) struct PartsLayout {
     pub(super) metadata: Option<Arc<ExtensionMetadata>>,
 }
 
-/// How a column of `dtype` holds parts of the kind `part`:
-/// one part per row, a list of them, or a multi-geometry of them,
-/// each spelled as anything that [holds_parts], or as bare coordinates in place of points.
-/// `None` for an untyped null (`pl.lit(None)`), a null list of parts on every row.
-/// The column is called `name` in the error message.
 pub(super) fn parts_layout(
     dtype: &DataType,
     part: Kind,
@@ -722,9 +718,8 @@ pub(super) fn parts_layout(
 
 /// Whether the column `parts` holds a list of parts of the kind `part` per row (see [parts_layout]),
 /// and its metadata (`None` for bare coordinates, or an untyped null).
-/// The parts have to have the dimension `dim` of what they go into.
-/// They are called `names` (what they go into, the parts) in the error message.
-/// Their CRS is left for the caller to check.
+/// `names` are for error message 'what they go into', 'the parts'
+/// CRS is left for the caller to check.
 pub(super) fn listed_parts(
     parts: &Field,
     part: Kind,
@@ -742,9 +737,7 @@ pub(super) fn listed_parts(
     Ok((layout.listed, layout.metadata))
 }
 
-/// The keyword arguments of `polygons_from_rings_in_separate_columns`:
-/// those of [`PolygonKwargs`], plus what a null hole does.
-/// These have to be mirrored on the python side.
+/// [`PolygonKwargs`], plus what a null hole does.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SeparateRingsKwargs {
@@ -810,9 +803,6 @@ fn kernel_output_type_polygon_rings_in_separate_columns(
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-/// `a` and `b` as single chunks of the same length,
-/// where one of a single row goes with every row of the other.
-/// They are called `names` in the error message.
 pub(super) fn paired_rows(
     a: &Series,
     b: &Series,
@@ -839,8 +829,6 @@ pub(super) fn storage_of(series: &Series) -> PolarsResult<Series> {
     })
 }
 
-/// [storage_of] a column of parts (see [parts_layout]),
-/// with an untyped null as null rows of the storage of `multi`s of `dim`.
 pub(super) fn parts_storage(
     parts: &Series,
     multi: Kind,
@@ -859,7 +847,6 @@ pub(super) fn parts_storage(
     }
 }
 
-/// A list of exactly one item per row, for `len` rows that are null where `validity` says.
 fn one_per_row(len: usize, validity: Option<&Bitmap>) -> List {
     let lengths = std::iter::repeat_n(1, len);
     let offsets = Offsets::try_from_lengths(lengths).expect("one per row");
@@ -898,10 +885,7 @@ pub(super) fn one_polygon_per_row(polygons: PolygonArray) -> MultiPolygonArray {
     )
 }
 
-/// What a null part does, in `null_parts` of `add_parts`, `add_holes`,
-/// and `polygons_from_rings_in_separate_columns`.
-/// A null part is a null row of parts, a null in a list of them,
-/// or a part with a null anywhere inside it.
+/// See python docs
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum NullParts {

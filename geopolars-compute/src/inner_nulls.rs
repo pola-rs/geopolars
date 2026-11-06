@@ -39,8 +39,6 @@ fn propagate_inner_nulls_of_lists<const N: usize>(
     (lists, coords)
 }
 
-/// The `N` list levels of `storage` with their validity, and its coordinates without theirs.
-/// Storage with another number of list levels is a bug.
 fn levels_of<const N: usize>(storage: UncheckedStorage) -> ([List; N], ValidCoords) {
     let coords = storage.coords.ignoring_validity().clone();
     let levels = storage.lists.len();
@@ -51,9 +49,7 @@ fn levels_of<const N: usize>(storage: UncheckedStorage) -> ([List; N], ValidCoor
     (lists, coords)
 }
 
-/// Which parts of the rows of `storage` have no null value in or below them.
-/// `None` when every part does.
-fn parts_passing(storage: &UncheckedStorage) -> Option<Bitmap> {
+fn parts_without_nested_null_value(storage: &UncheckedStorage) -> Option<Bitmap> {
     let below_parts = &storage.lists[1..];
     let lists: Vec<&ValidList> = below_parts.iter().map(List::ignoring_validity).collect();
     let validities = (below_parts.iter().map(List::validity)).chain([storage.coords.validity()]);
@@ -63,9 +59,6 @@ fn parts_passing(storage: &UncheckedStorage) -> Option<Bitmap> {
     )
 }
 
-/// The points of `storage`, null where one of their axes is.
-/// The other `propagate_inner_nulls_of_*` functions do the same for their kind:
-/// a row is null where anything below it is.
 pub fn propagate_inner_nulls_of_points(storage: UncheckedStorage) -> PointArray {
     let levels = storage.lists.len();
     assert_eq!(levels, 0, "expected points, got {levels} list levels");
@@ -112,7 +105,7 @@ pub fn propagate_inner_nulls_of_multi_polygons(storage: UncheckedStorage) -> Mul
 pub fn multi_points_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> MaskedParts<MultiPointArray> {
-    let keep = parts_passing(&storage);
+    let keep = parts_without_nested_null_value(&storage);
     let ([rows], coords) = levels_of(storage);
     MaskedParts {
         view: MultiPointArray::from_parts(rows, coords),
@@ -123,7 +116,7 @@ pub fn multi_points_with_null_parts_marked(
 pub fn multi_line_strings_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> MaskedParts<MultiLineStringArray> {
-    let keep = parts_passing(&storage);
+    let keep = parts_without_nested_null_value(&storage);
     let ([rows, lines], coords) = levels_of(storage);
     let view = MultiLineStringArray::from_parts(rows, lines.ignoring_validity().clone(), coords);
     MaskedParts { view, keep }
@@ -132,7 +125,7 @@ pub fn multi_line_strings_with_null_parts_marked(
 pub fn multi_polygons_with_null_parts_marked(
     storage: UncheckedStorage,
 ) -> MaskedParts<MultiPolygonArray> {
-    let keep = parts_passing(&storage);
+    let keep = parts_without_nested_null_value(&storage);
     let ([rows, polygons, rings], coords) = levels_of(storage);
     let view = MultiPolygonArray::from_parts(
         rows,
@@ -156,7 +149,6 @@ pub struct MaskedParts<T> {
     pub(crate) keep: Option<Bitmap>,
 }
 
-/// A plain view has no null values below its rows, so every part is set.
 impl<T> From<T> for MaskedParts<T> {
     fn from(view: T) -> Self {
         Self { view, keep: None }

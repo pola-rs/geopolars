@@ -87,11 +87,10 @@ def add_holes(
     A null polygon gives a null polygon.
     {null_parts}
 
-    An empty list adds no holes,
-    and neither do the holes `null_parts="drop"` leaves out.
+    A null `holes` value, or an empty list adds no holes.
     The polygon's own rings are still checked, as described below.
-    A polygon with an empty exterior has nothing to put a hole with vertices in.
-    What it does when it gets one is set by `empty_exterior`.
+    A polygon with an empty exterior does not accept holes (OGC validity),
+    so what happend then is given by `empty_exterior`.
 
     | `empty_exterior` | a polygon with an empty exterior that gets a hole with vertices |
     | - | - |

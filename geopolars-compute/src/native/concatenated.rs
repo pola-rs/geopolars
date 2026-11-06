@@ -1,6 +1,4 @@
 //! Copying the parts on every row of one array after those of another.
-//! `add_parts` builds on it, and so does `polygons_with_added_holes`,
-//! as a polygon's rings are its parts like a multilinestring's linestrings.
 
 use std::ops::Range;
 use std::{array, mem};
@@ -96,12 +94,6 @@ fn offsets_with_capacity<const N: usize>(capacity: impl Fn(usize) -> usize) -> [
     array::from_fn(|level| Offsets::with_capacity(capacity(level)))
 }
 
-/// A slice of the base's vertices followed by a slice of the added parts' vertices,
-/// as [concatenated] copies them.
-/// A valid row takes one per run of kept items (see [kept_runs]),
-/// an unmasked base or added list counting as one run,
-/// but the last run of the base and the first run of the added parts share one.
-/// Every other run has one to itself, with the other range empty.
 #[derive(Default)]
 struct CopiedVertices {
     /// In the coordinates of the base.
@@ -253,7 +245,6 @@ pub(super) fn concatenated<const N: usize>(
     }
 }
 
-/// The runs of consecutive items of `items` set in `keep`.
 fn kept_runs(keep: &Bitmap, items: Range<usize>) -> impl Iterator<Item = Range<usize>> + '_ {
     let end = items.end;
     let mut next = items.start;

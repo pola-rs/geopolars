@@ -250,7 +250,6 @@ impl MetadataKwargs {
     ///
     /// This labels and never reprojects. `metadata` that already declares a different
     /// CRS is an error rather than being relabelled into the wrong place.
-    /// What carries it is called `name` in the error message.
     pub fn apply(
         &self,
         metadata: Arc<ExtensionMetadata>,
