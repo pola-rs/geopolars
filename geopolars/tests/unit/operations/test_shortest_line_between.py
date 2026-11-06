@@ -142,12 +142,34 @@ def test_against_a_single_null_geometry_no_row_reaches_geos(
     assert out.to_series().to_list() == [None]
 
 
+def test_a_single_null_geometry_against_no_rows_gives_no_lines() -> None:
+    df = pl.DataFrame(_wkt("many", PointXY(), []))
+    one = _wkt("one", PolygonXY(), [None])
+
+    assert df.select(geo.shortest_line_between("many", one)).height == 0
+    assert df.select(geo.shortest_line_between(one, "many")).height == 0
+
+
+def test_against_the_first_of_no_rows_gives_no_lines() -> None:
+    df = pl.DataFrame(
+        [_wkt("a", PointXY(), ["POINT (3 0)"]), _wkt("b", PolygonXY(), [_SQUARE])]
+    )
+
+    out = df.filter(False).select(
+        "a", geo.shortest_line_between("a", pl.col("b").first()).alias("line")
+    )
+
+    assert out.height == 0
+
+
 @pytest.mark.parametrize("early_finite_check", [False, True])
 def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -> None:
     b = _wkt("b", PolygonXY(), [None])
 
     out = pl.select(
-        geo.shortest_line_between(_NOT_FINITE_POINT, b, early_finite_check=early_finite_check)
+        geo.shortest_line_between(
+            _NOT_FINITE_POINT, b, early_finite_check=early_finite_check
+        )
     )
 
     assert out.to_series().to_list() == [None]
@@ -164,7 +186,9 @@ def test_the_early_finite_check_raises_before_geos() -> None:
     b = _wkt("b", PolygonXY(), [_SQUARE])
 
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
-        pl.select(geo.shortest_line_between(_NOT_FINITE_POINT, b, early_finite_check=True))
+        pl.select(
+            geo.shortest_line_between(_NOT_FINITE_POINT, b, early_finite_check=True)
+        )
 
 
 @pytest.mark.parametrize("early_finite_check", [False, True])
@@ -253,8 +277,16 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
     b = [_random_shape(rng, b_kind) for _ in range(100)]
     df = pl.DataFrame(
         [
-            _wkt("a", _ORACLE_DTYPES[a_kind], list(shapely.to_wkt(a, rounding_precision=-1))),
-            _wkt("b", _ORACLE_DTYPES[b_kind], list(shapely.to_wkt(b, rounding_precision=-1))),
+            _wkt(
+                "a",
+                _ORACLE_DTYPES[a_kind],
+                list(shapely.to_wkt(a, rounding_precision=-1)),
+            ),
+            _wkt(
+                "b",
+                _ORACLE_DTYPES[b_kind],
+                list(shapely.to_wkt(b, rounding_precision=-1)),
+            ),
         ]
     )
 

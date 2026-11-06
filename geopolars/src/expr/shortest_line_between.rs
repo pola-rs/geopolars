@@ -101,7 +101,9 @@ fn shortest_line_between(
         (n, m) => polars_bail!(ShapeMismatch: "cannot pair {n} geometries with {m}"),
     };
     let Some(chunks) = chunks else {
-        return Ok(Series::full_null(name, a.len().max(b.len()), &dtype));
+        // A single null geometry: one null line per row of the other side, which can have none.
+        let len = if a.len() == 1 { b.len() } else { a.len() };
+        return Ok(Series::full_null(name, len, &dtype));
     };
     // SAFETY: the shortest lines are XY linestrings, as `dtype` says.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &dtype) })
