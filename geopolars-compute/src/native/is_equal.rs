@@ -53,7 +53,7 @@ fn values_coincide<const NANS_EQUAL: bool>(
         .all(|(&a, &b)| coincide(a, b) || (NANS_EQUAL && a.is_nan() && b.is_nan()))
 }
 
-/// Whether two runs of vertices are as long, and coincide coordinate by coordinate.
+/// Tests whether two runs of vertices have the same length, and coincide coordinate by coordinate.
 #[inline(always)]
 fn coordinates_coincide<const UNIQUE_Z: bool, const UNIQUE_M: bool, const NANS_EQUAL: bool>(
     a: &ValidCoords,

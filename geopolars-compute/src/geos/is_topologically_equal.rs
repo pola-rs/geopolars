@@ -1,8 +1,5 @@
 //! Whether two geometries are topologically equal, forwarded to GEOS.
 //! See `is_topologically_equal` in Python for the rules.
-//!
-//! Both sides take any kind as a `&dyn ToGeosRows`,
-//! so one kernel serves every pair of kinds.
 
 use geos::Geom;
 use polars_arrow::array::BooleanArray;
@@ -24,10 +21,9 @@ fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Op
     }))
 }
 
-/// Whether two arrays of geometries are topologically equal, row by row.
-/// A row that GEOS fails to convert or compare makes this return its error.
-/// That row is null instead if `ignore_per_row_errors=true`.
-/// Each side is converted in full, so a row null on only one side can still fail.
+/// Tests whether two arrays of geometries are topologically equal, row by row.
+/// Implements the Python `is_topologically_equal`, which documents its behaviour.
+/// Each side is converted to GEOS in full, so a row that is null on only one side can still fail.
 ///
 /// `a` and `b` must have the same length.
 pub fn topologically_equal_pairwise(
@@ -52,9 +48,11 @@ pub fn topologically_equal_pairwise(
     Ok(optional_bool_array(&tested))
 }
 
-/// Whether the single geometry `one` is topologically equal to each row of `many`.
+/// Tests whether a single geometry is topologically equal to every row of `many`.
 /// Equality goes both ways, so this serves a single geometry on either side.
-/// See [topologically_equal_pairwise] for the other arguments.
+/// As in [topologically_equal_pairwise], `many` is converted to GEOS in full, even if `one` is null.
+///
+/// `one` must hold a single row.
 pub fn topologically_equal_against_one(
     one: &dyn ToGeosRows,
     many: &dyn ToGeosRows,

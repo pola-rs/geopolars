@@ -67,7 +67,7 @@ fn every_topologically_equal_to_one(
     let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
     let one_chunk = storage_as_single_chunk(one)?;
     let many_chunks = many.ext()?.storage().chunks();
-    // Every result is null, so `many` is not sent to GEOS, where a row could fail.
+    // A null `one` makes every result null, so `many` is not sent to GEOS, where a row could fail.
     if one_chunk.is_null(0) {
         return Ok(many_chunks
             .iter()
