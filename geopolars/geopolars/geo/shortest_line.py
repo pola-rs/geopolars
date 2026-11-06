@@ -27,8 +27,8 @@ def shortest_line(
 ) -> pl.Expr:
     """The shortest line between two geometries, row by row, as a `LineStringXY`.
     It runs from the point on `a` closest to `b`, to the point on `b` closest to `a`.
-    So its length is the distance between them.
-    A single geometry on either side is measured against every row of the other.
+    This line's length is therefore the distance between these two geometries.
+    If you give only a single geometry on either side, it is measured against every row of the other.
 
     Any kind and dimension can be on either side.
     Computed by GEOS in x and y only, so the line has no z or m.
@@ -42,12 +42,10 @@ def shortest_line(
 
     {geos_non_finite}
     GEOS then gives no meaningful answer.
-    Depending on where the vertex is, it raises or gives a line that is not the shortest.
+    Depending on where the vertex is, it raises or might give a line that is not the shortest.
     {early_finite_check}
 
-    `a` and `b` have to declare the same CRS, or neither one.
-    Anything else raises at plan time.
-    The line carries the CRS of `a`.
+    `a` and `b` have to declare the same CRS (or neither should have a CRS).
 
     ```python
     df.with_columns(geo.shortest_line("house", "road").alias("driveway"))
