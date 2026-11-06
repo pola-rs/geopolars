@@ -29,7 +29,8 @@ fn shortest_line_between_rows(
 
 #[inline(always)]
 fn shortest_line_between_geometries(a: &Geometry, b: &Geometry) -> GeoComputeResult<GeosRow> {
-    // GEOS fails on an empty geometry, rather than giving no nearest points.
+    // A geometry with parts can still be empty, such as GeoArrow's empty point (NaN x and y).
+    // GEOS gives no nearest points for it, which `nearest_points` reports as an error.
     if a.is_empty()? || b.is_empty()? {
         return Ok(GeosRow::Empty);
     }
@@ -99,7 +100,11 @@ pub fn shortest_lines_against_one(
         .geometries
         .iter()
         .map(|row| {
-            let (a, b) = if lines_start_on_one { (one, row) } else { (row, one) };
+            let (a, b) = if lines_start_on_one {
+                (one, row)
+            } else {
+                (row, one)
+            };
             shortest_line_between_rows(a, b, ignore_per_row_errors)
         })
         .collect::<GeoComputeResult<Vec<_>>>()?;

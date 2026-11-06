@@ -39,7 +39,7 @@ fn kernel_output_type_shortest_line_between(input_fields: &[Field]) -> PolarsRes
 }
 
 /// Runs [shortest_lines_against_one] on every chunk of `many`, or gives `None` if `one` is null.
-fn every_shortest_line_to_one(
+fn every_shortest_line_against_one(
     one: &Series,
     many: &Series,
     lines_start_on_one: bool,
@@ -96,8 +96,8 @@ fn shortest_line_between(
             let lines = shortest_lines_pairwise(&a, &b, ignore, early).into_polars()?;
             Some(vec![lines.into_list_array().boxed()])
         }
-        (1, _) => every_shortest_line_to_one(a, b, true, &kwargs)?,
-        (_, 1) => every_shortest_line_to_one(b, a, false, &kwargs)?,
+        (1, _) => every_shortest_line_against_one(a, b, true, &kwargs)?,
+        (_, 1) => every_shortest_line_against_one(b, a, false, &kwargs)?,
         (n, m) => polars_bail!(ShapeMismatch: "cannot pair {n} geometries with {m}"),
     };
     let Some(chunks) = chunks else {

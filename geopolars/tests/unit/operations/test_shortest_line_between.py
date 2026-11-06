@@ -10,7 +10,7 @@ import polars as pl
 import pytest
 import shapely
 import shapely.affinity
-from polars.exceptions import ComputeError, ShapeError
+from polars.exceptions import ComputeError
 
 from geopolars import geo
 from geopolars.datatypes import (
@@ -124,6 +124,31 @@ def test_a_single_geometry_is_measured_against_every_row() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "one",
+    [
+        _wkt("one", PolygonXY(), ["POLYGON EMPTY"]),
+        _wkt("one", PointXY(), ["POINT EMPTY"]),
+    ],
+)
+def test_a_single_empty_geometry_gives_empty_lines(one: pl.Series) -> None:
+    df = pl.DataFrame(_wkt("many", PointXY(), ["POINT (3 0)", None]))
+
+    out = df.select(geo.shortest_line_between(one, "many"))
+    assert _as_wkt(out.to_series()) == ["LINESTRING EMPTY", None]
+    out = df.select(geo.shortest_line_between("many", one))
+    assert _as_wkt(out["many"]) == ["LINESTRING EMPTY", None]
+
+
+def test_columns_chunked_differently_are_paired_row_by_row() -> None:
+    a = _chunked([_wkt("a", PointXY(), ["POINT (3 0)"]), _wkt("a", PointXY(), [None])])
+    b = _wkt("b", PolygonXY(), [_SQUARE, _SQUARE])
+
+    out = pl.DataFrame([a, b]).select(geo.shortest_line_between("a", "b"))
+
+    assert _as_wkt(out["a"]) == ["LINESTRING(3 0,1 0)", None]
+
+
 # GEOS fails on a vertex with just one NaN axis, at least when it is the closest one.
 _NOT_FINITE_POINT = pl.Series("a", [{"x": math.nan, "y": 1.0}]).ext.to(PointXY())
 
@@ -222,6 +247,21 @@ def test_a_failing_row_gives_null_with_ignore_per_row_errors(
     assert _as_wkt(out["a"]) == [None, "LINESTRING(3 0,1 0)"]
 
 
+@pytest.mark.parametrize("early_finite_check", [False, True])
+def test_against_a_single_geometry_a_failing_row_gives_null_with_ignore_per_row_errors(
+    early_finite_check: bool,
+) -> None:
+    many = pl.concat([_NOT_FINITE_POINT, _wkt("a", PointXY(), ["POINT (3 0)"])])
+    df = pl.DataFrame(many.alias("many"))
+    one = _wkt("one", PolygonXY(), [_SQUARE])
+    kwargs = {"ignore_per_row_errors": True, "early_finite_check": early_finite_check}
+
+    out = df.select(geo.shortest_line_between(one, "many", **kwargs))
+    assert _as_wkt(out.to_series()) == [None, "LINESTRING(1 0,3 0)"]
+    out = df.select(geo.shortest_line_between("many", one, **kwargs))
+    assert _as_wkt(out["many"]) == [None, "LINESTRING(3 0,1 0)"]
+
+
 def test_the_line_carries_the_crs() -> None:
     df = pl.DataFrame(
         [_wkt("a", PolygonXY(), [_SQUARE]), _wkt("b", PointXY(), ["POINT (3 0)"])]
@@ -241,11 +281,20 @@ def test_different_crss_are_refused() -> None:
         df.select(geo.shortest_line_between("a", "b"))
 
 
+def test_a_crs_on_only_one_side_is_refused() -> None:
+    df = pl.DataFrame(
+        [_wkt("a", PolygonXY(), [_SQUARE]), _wkt("b", PointXY(), ["POINT (0 0)"])]
+    ).with_columns(geo.set_crs("a", "EPSG:4326"))
+
+    with pytest.raises(ValueError, match="only one of the geometries"):
+        df.select(geo.shortest_line_between("a", "b"))
+
+
 def test_unequal_lengths_are_refused() -> None:
     a = _wkt("a", PointXY(), ["POINT (0 0)", "POINT (1 1)"])
     b = _wkt("b", PolygonXY(), [_SQUARE, _SQUARE, _SQUARE])
 
-    with pytest.raises((ShapeError, ComputeError)):
+    with pytest.raises(ComputeError, match="cannot pair 2 geometries with 3"):
         pl.select(geo.shortest_line_between(a, b))
 
 
