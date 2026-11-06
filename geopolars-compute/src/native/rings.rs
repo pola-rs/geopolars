@@ -27,7 +27,7 @@ use polars_arrow::array::ListArray;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
-use super::concatenated::{concatenated, Built, Nested};
+use super::concatenated::{concatenate_parts_onto_geometry, Built, Nested};
 use crate::inner_nulls::MaskedParts;
 
 /// Which of a polygon's rings `rings` to keep.
@@ -267,19 +267,15 @@ pub fn close_open_rings<const Z: bool>(
     ))
 }
 
-/// `polygons`, each followed by the linestrings on the same row of `holes` as extra holes.
-/// A null row of `holes` adds no holes,
-/// and only the linestrings set in its mask are added.
-/// Without `holes`, the polygons are copied as they are.
-/// The rows are null where `validity` says,
-/// which has to cover the null rows of `polygons`.
+/// Appends the linestrings of `holes` to the polygon on the same row of `polygons`, as holes.
+/// Only the linestrings set in the mask of `holes` are added.
 ///
-/// `polygons` and `holes` have to have the same length and dimension.
-/// The vertices are copied into new buffers, one slice per axis per run of copied rings.
+/// `polygons` and `holes` must have the same length and dimension.
+/// `output_validity` must mark every null row of `polygons` as null.
 pub fn polygons_with_added_holes(
     polygons: &PolygonArray,
     holes: Option<&MaskedParts<MultiLineStringArray>>,
-    validity: Option<Bitmap>,
+    output_validity: Option<Bitmap>,
 ) -> PolygonArray {
     let keep = holes.and_then(|holes| holes.keep.as_ref());
     let holes = holes.map(|holes| Nested::from(&holes.view));
@@ -287,11 +283,13 @@ pub fn polygons_with_added_holes(
         rows,
         levels: [rings],
         coords,
-    } = concatenated(polygons.into(), None, holes, keep, validity);
+    } = concatenate_parts_onto_geometry(polygons.into(), None, holes, keep, output_validity);
     PolygonArray::from_parts(rows, rings, coords)
 }
 
-/// An empty polygon cannot accept holes.
+/// Marks which polygons can take the holes on the same row of `holes`.
+/// A polygon with an empty exterior cannot take a hole with vertices.
+/// Only the holes set in the mask of `holes` count towards this.
 pub fn have_room_for_holes(
     polygons: &PolygonArray,
     holes: &MaskedParts<MultiLineStringArray>,

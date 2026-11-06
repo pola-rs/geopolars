@@ -74,7 +74,6 @@ def add_holes(
     Bare coordinates (the storage of points) work in place of the points.
     A list of linestrings is then a list of those.
 
-
     {paired_rows}
     With a single linestring as `holes`, every polygon gets that same hole.
     With a single polygon, the result has one copy of it per row of `holes`,
@@ -87,10 +86,10 @@ def add_holes(
     A null polygon gives a null polygon.
     {null_parts}
 
-    A null `holes` value, or an empty list adds no holes.
+    An empty list adds no holes.
     The polygon's own rings are still checked, as described below.
-    A polygon with an empty exterior does not accept holes (OGC validity),
-    so what happend then is given by `empty_exterior`.
+    A polygon with an empty exterior cannot take holes (OGC validity).
+    What happens then is set by `empty_exterior`.
 
     | `empty_exterior` | a polygon with an empty exterior that gets a hole with vertices |
     | - | - |
@@ -99,11 +98,10 @@ def add_holes(
 
     If it only gets empty holes, it takes them, and stays an empty polygon.
 
-    Every ring of the result has to be a ring (see [`is_ring`][geopolars.geo.is_ring]),
-    the polygon's own existing rings included,
-    or the polygon is null.
+    A polygon is null if any of its rings is not a ring (see [`is_ring`][geopolars.geo.is_ring]),
+    its existing rings included.
     A polygon whose rings are all empty is the exception, and stays as it is.
-    With `close=CloseRings(...)`, an open ring is first closed as `close_rings` does.
+    Passing `close=CloseRings(...)` first closes every open ring, as `close_rings` does.
 
     {closing_rings}
 

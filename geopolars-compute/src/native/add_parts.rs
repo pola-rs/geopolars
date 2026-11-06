@@ -7,18 +7,16 @@ use polars_arrow::array::BooleanArray;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;
 
-use super::concatenated::{concatenated, Built};
+use super::concatenated::{concatenate_parts_onto_geometry, Built};
 use super::coordinate_selection::{which_are_not_selected, CoordinateSelection, NonFinite};
 use super::is_empty::{line_strings_are_empty, polygons_are_empty};
 use crate::inner_nulls::MaskedParts;
 
-/// `keep`, with every part that `empty` holds as `true` unset as well.
-fn keep_without_empty(keep: Option<Bitmap>, empty: BooleanArray) -> Option<Bitmap> {
-    combine_validities_and(keep.as_ref(), Some(&!empty.values()))
+fn keep_without_empty(keep: Option<Bitmap>, is_empty: BooleanArray) -> Option<Bitmap> {
+    combine_validities_and(keep.as_ref(), Some(&!is_empty.values()))
 }
 
-/// Enables unsetting the empty parts in the mask of a [MaskedParts]
-/// (see the README on `MaskedParts`).
+/// Unsets the empty parts in the mask of a [MaskedParts].
 pub trait WithoutEmptyParts {
     fn without_empty_parts(self) -> Self;
 }
@@ -69,64 +67,62 @@ impl WithoutEmptyParts for MaskedParts<MultiPolygonArray> {
     }
 }
 
+/// [multi_line_strings_with_added_parts], for multipoints.
 pub fn multi_points_with_added_parts(
-    base: &MaskedParts<MultiPointArray>,
-    added: &MaskedParts<MultiPointArray>,
-    validity: Option<Bitmap>,
+    base_geometry: &MaskedParts<MultiPointArray>,
+    parts_added: &MaskedParts<MultiPointArray>,
+    output_validity: Option<Bitmap>,
 ) -> MultiPointArray {
-    let Built { rows, coords, .. } = concatenated(
-        (&base.view).into(),
-        base.keep.as_ref(),
-        Some((&added.view).into()),
-        added.keep.as_ref(),
-        validity,
+    let Built { rows, coords, .. } = concatenate_parts_onto_geometry(
+        (&base_geometry.view).into(),
+        base_geometry.keep.as_ref(),
+        Some((&parts_added.view).into()),
+        parts_added.keep.as_ref(),
+        output_validity,
     );
     MultiPointArray::from_parts(rows, coords)
 }
 
-/// `base`, each followed by the linestrings on the same row of `added`.
-/// A null row of `added` adds nothing.
-/// Only the linestrings of `base` and `added` set in their masks are taken.
-/// The rows are null where `validity` says.
-/// Every null row of `base` has to be null in it too.
+/// Appends the linestrings of `parts_added` to the multilinestring on the same row of `base_geometry`.
+/// Only the linestrings set in the masks of both are kept.
 ///
-/// `base` and `added` have to have the same length and dimension.
+/// `base_geometry` and `parts_added` must have the same length and dimension.
+/// `output_validity` must mark every null row of `base_geometry` as null.
 pub fn multi_line_strings_with_added_parts(
-    base: &MaskedParts<MultiLineStringArray>,
-    added: &MaskedParts<MultiLineStringArray>,
-    validity: Option<Bitmap>,
+    base_geometry: &MaskedParts<MultiLineStringArray>,
+    parts_added: &MaskedParts<MultiLineStringArray>,
+    output_validity: Option<Bitmap>,
 ) -> MultiLineStringArray {
     let Built {
         rows,
         levels: [lines],
         coords,
-    } = concatenated(
-        (&base.view).into(),
-        base.keep.as_ref(),
-        Some((&added.view).into()),
-        added.keep.as_ref(),
-        validity,
+    } = concatenate_parts_onto_geometry(
+        (&base_geometry.view).into(),
+        base_geometry.keep.as_ref(),
+        Some((&parts_added.view).into()),
+        parts_added.keep.as_ref(),
+        output_validity,
     );
     MultiLineStringArray::from_parts(rows, lines, coords)
 }
 
-/// `base`, each followed by the polygons on the same row of `added`.
-/// See [multi_line_strings_with_added_parts].
+/// [multi_line_strings_with_added_parts], for multipolygons.
 pub fn multi_polygons_with_added_parts(
-    base: &MaskedParts<MultiPolygonArray>,
-    added: &MaskedParts<MultiPolygonArray>,
-    validity: Option<Bitmap>,
+    base_geometry: &MaskedParts<MultiPolygonArray>,
+    parts_added: &MaskedParts<MultiPolygonArray>,
+    output_validity: Option<Bitmap>,
 ) -> MultiPolygonArray {
     let Built {
         rows,
         levels: [polygons, rings],
         coords,
-    } = concatenated(
-        (&base.view).into(),
-        base.keep.as_ref(),
-        Some((&added.view).into()),
-        added.keep.as_ref(),
-        validity,
+    } = concatenate_parts_onto_geometry(
+        (&base_geometry.view).into(),
+        base_geometry.keep.as_ref(),
+        Some((&parts_added.view).into()),
+        parts_added.keep.as_ref(),
+        output_validity,
     );
     MultiPolygonArray::from_parts(rows, polygons, rings, coords)
 }

@@ -83,19 +83,19 @@ def polygons_from_rings_in_separate_columns(
     `holes` holds one ring per polygon, a list of them, or a multilinestring,
     each ring spelled like the exterior.
     Bare coordinates (the storage of points) work in place of the points.
-    If no `holes` is provided, all polygons will not have holes.
+    Without `holes`, no polygon has holes.
 
     {paired_rows}
 
     A null exterior gives a null polygon.
     {null_parts}
 
-    The CRS is `crs`, or else the exterior's,
-    or else that of the holes when the exterior is bare coordinates.
-    `crs` also sets the CRS of holes that declare none.
-    An exterior or holes that already declare another CRS than `crs` are refused.
-    The holes then have to declare the polygon's CRS, or none when it has none.
-    Holes as bare coordinates go with any CRS.
+    The polygon takes the CRS of the exterior,
+    or that of the holes if the exterior is bare coordinates.
+    The exterior and the holes have to declare the same CRS, or neither may declare one.
+    Bare coordinates go with any CRS.
+    `crs` sets the CRS of an exterior or holes that declare none,
+    and refuses one that already declares another.
     Rings are checked (and closed with `close`)
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
 

@@ -31,7 +31,7 @@ enum EmptyParts {
 }
 
 /// The keyword arguments of `add_parts`.
-/// These have to be mirrored on the python side.
+/// These have to be mirrored on the Python side.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AddPartsKwargs {
@@ -39,8 +39,8 @@ pub struct AddPartsKwargs {
     empty_parts: EmptyParts,
 }
 
-/// The multi-geometries `add_parts` gives back,
-/// and whether the parts are a list of them per row rather than one part.
+/// Checks the input fields of `add_parts`.
+/// Returns the type of the result, and whether `parts` holds a list of parts per row.
 fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     let geo = describe(input_fields[0].dtype())?;
     let (part, multi) = part_kinds(geo.kind);
@@ -63,25 +63,27 @@ fn without_empty_parts_if<T: WithoutEmptyParts>(drop: bool, parts: T) -> T {
     }
 }
 
-/// One chunk of `base` (of `kind`) with one chunk of `parts` added.
-/// `parts` holds one part per row, or with `listed=true` a list of them.
-/// With [EmptyParts::Drop], an empty single `base` is dropped like an empty part,
-/// as that is what it is once a multi-geometry.
+/// Adds `parts` to the geometries of `kind` in `base_geometry`, one chunk of each.
+/// `parts` only holds a single part per row if `listed=false`.
+/// A single base geometry is turned into a Multi* geometry.
+/// It is therefore also affected by `kwargs=`[EmptyParts::Drop].
 fn chunk_with_added_parts(
     kind: Kind,
-    base: &dyn Array,
+    base_geometry: &dyn Array,
     parts: &dyn Array,
     listed: bool,
     kwargs: AddPartsKwargs,
 ) -> PolarsResult<Box<dyn Array>> {
-    let rows = |what| downcast(base, what);
+    let rows = |what| downcast(base_geometry, what);
     let drop = kwargs.empty_parts == EmptyParts::Drop;
     Ok(match kind {
         Kind::Point | Kind::MultiPoint => {
             let base = match kind {
                 Kind::Point => without_empty_parts_if(
                     drop,
-                    MaskedParts::from(one_point_per_row(PointArray::new(Coords::new(base)?))),
+                    MaskedParts::from(one_point_per_row(PointArray::new(Coords::new(
+                        base_geometry,
+                    )?))),
                 ),
                 _ => MultiPointArray::new(rows("a list of coordinates")?)?.into(),
             };

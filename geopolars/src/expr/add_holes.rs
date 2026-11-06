@@ -17,11 +17,11 @@ use super::construct::{
 use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo, Kind};
 
 /// The keyword arguments of `add_holes`.
-/// These have to be mirrored on the python side.
+/// These have to be mirrored on the Python side.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AddHolesKwargs {
-    /// How to close every open ring, as `close_rings` does. `None` closes nothing.
+    /// How to close every open ring, as `close_rings` does.
     pub close: Option<CloseRingsKwargs>,
     null_parts: NullParts,
     empty_exterior: EmptyExterior,
@@ -36,8 +36,8 @@ enum EmptyExterior {
     Keep,
 }
 
-/// The polygons `add_holes` gives back,
-/// and whether the holes are a list of rings per row.
+/// Checks the input fields of `add_holes`.
+/// Returns the type of the result, and whether `holes` holds a list of rings per row.
 fn holes_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     let dtype = input_fields[0].dtype();
     let geo = describe(dtype)?;
@@ -60,8 +60,8 @@ fn kernel_output_type_add_holes(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-/// One chunk of `polygons` with one chunk of `holes` added.
-/// `holes` holds one ring per row, or with `listed=true` a list of them.
+/// Adds `holes` to `polygons`, one chunk of each.
+/// `holes` only holds a single ring per row if `listed=false`.
 /// See `add_holes` for the null values.
 fn chunk_with_added_holes(
     polygons: &ListArray<i64>,

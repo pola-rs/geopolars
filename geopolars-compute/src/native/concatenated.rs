@@ -1,4 +1,4 @@
-//! Copying the parts on every row of one array after those of another.
+//! Per-row concatenation of parts onto geometries.
 
 use std::ops::Range;
 use std::{array, mem};
@@ -60,15 +60,15 @@ impl<'a> From<&'a MultiPolygonArray> for Nested<'a, 2> {
     }
 }
 
-/// The rows, list levels, and coordinates [concatenated] builds.
+/// The rows, list levels, and coordinates [concatenate_parts_onto_geometry] builds.
 pub(super) struct Built<const N: usize> {
     pub(super) rows: List,
     pub(super) levels: [ValidList; N],
     pub(super) coords: ValidCoords,
 }
 
-/// Extends `offsets` with those of the items `items` at every level below them,
-/// and gives the range their coordinates take up.
+/// Copies the offsets of `items`, and of every level below them, onto `offsets`.
+/// Returns the range of their vertices.
 #[inline(always)]
 fn copied_offsets<const N: usize>(
     levels: &[&ValidList; N],
@@ -102,10 +102,15 @@ struct CopiedVertices {
     added: Range<usize>,
 }
 
-/// One axis of the base and of the added parts,
-/// with every row's base followed by its added parts, in `len` values.
-fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: usize) -> Vec<f64> {
-    let mut assembled = Vec::with_capacity(len);
+/// Assembles one axis from the vertex ranges in `copies`.
+/// Each copy takes its range of `base`, then its range of `added`.
+fn assembled_axis(
+    base: &[f64],
+    added: &[f64],
+    copies: &[CopiedVertices],
+    assembled_len: usize,
+) -> Vec<f64> {
+    let mut assembled = Vec::with_capacity(assembled_len);
     for copy in copies {
         assembled.extend_from_slice(&base[copy.base.clone()]);
         assembled.extend_from_slice(&added[copy.added.clone()]);
@@ -113,43 +118,48 @@ fn assembled_axis(base: &[f64], added: &[f64], copies: &[CopiedVertices], len: u
     assembled
 }
 
-/// Every row of `base`, followed by the items on the same row of `added`.
-/// The items are the entries of a row's list:
-/// the parts of a multi-geometry, or the rings of a polygon.
-/// A null row of `added` adds nothing.
-/// With `base_keep` or `added_keep`, only the items of `base` or `added` set in it are taken
-/// (one bit per item).
-/// Without `added`, `base` is copied as it is (apart from what `base_keep` leaves out).
-/// The rows are null where `validity` says.
-/// Every null row of `base` has to be null in it too.
+/// Performs a per-row concatenation of parts
+/// (the rings of a polygon, or the linestrings of a multilinestring)
+/// onto a base geometry.
+/// Only the parts set in `base_keep` and `parts_keep` are kept,
+/// so without `parts_added` this only filters `base_geometry`.
 ///
-/// `base` and `added` have to have the same length and dimension.
-/// The vertices are copied into new buffers, two slices per axis per [CopiedVertices].
-pub(super) fn concatenated<const N: usize>(
-    base: Nested<N>,
+/// `base_geometry` and `parts_added` must have the same length and dimension.
+/// `output_validity` must mark every null row of `base_geometry` as null.
+pub(super) fn concatenate_parts_onto_geometry<const N: usize>(
+    base_geometry: Nested<N>,
     base_keep: Option<&Bitmap>,
-    added: Option<Nested<N>>,
-    added_keep: Option<&Bitmap>,
-    validity: Option<Bitmap>,
+    parts_added: Option<Nested<N>>,
+    parts_keep: Option<&Bitmap>,
+    output_validity: Option<Bitmap>,
 ) -> Built<N> {
     let base_keep = base_keep.filter(|keep| keep.unset_bits() > 0);
-    let added_keep = added_keep.filter(|keep| keep.unset_bits() > 0);
-    let len = base.rows.len();
-    if let Some(added) = &added {
+    let parts_keep = parts_keep.filter(|keep| keep.unset_bits() > 0);
+    let len = base_geometry.rows.len();
+    if let Some(added) = &parts_added {
         assert_eq!(added.rows.len(), len, "the arrays differ in length");
         assert_eq!(
             added.coords.dim(),
-            base.coords.dim(),
+            base_geometry.coords.dim(),
             "the arrays differ in dimension"
         );
     }
-    let is_valid = |i: usize| validity.as_ref().is_none_or(|validity| validity.get_bit(i));
+    let is_valid = |i: usize| {
+        output_validity
+            .as_ref()
+            .is_none_or(|validity| validity.get_bit(i))
+    };
 
     // One pass builds the offsets of every level, and the vertex ranges to copy.
     // The coordinates are copied per axis afterwards from those ranges.
-    let added_items = |level: usize| added.as_ref().map_or(0, |added| added.levels[level].len());
+    let added_items = |level: usize| {
+        parts_added
+            .as_ref()
+            .map_or(0, |added| added.levels[level].len())
+    };
     let mut row_offsets = Offsets::<i64>::with_capacity(len);
-    let mut offsets = offsets_with_capacity(|level| base.levels[level].len() + added_items(level));
+    let mut offsets =
+        offsets_with_capacity(|level| base_geometry.levels[level].len() + added_items(level));
     let mut copies = Vec::with_capacity(len);
     let mut coords_len = 0;
     for i in 0..len {
@@ -158,28 +168,25 @@ pub(super) fn concatenated<const N: usize>(
             row_offsets.try_push(0).expect(NO_OVERFLOW);
             continue;
         }
-        let items = base.rows.range(i);
+        let items = base_geometry.rows.range(i);
         let mut item_count = 0;
         let mut copy = CopiedVertices::default();
         match base_keep {
             None => {
                 item_count = items.len();
-                copy.base = copied_offsets(&base.levels, items, &mut offsets);
+                copy.base = copied_offsets(&base_geometry.levels, items, &mut offsets);
             }
             // A single item, as every row of a single geometry has, needs no search for runs.
             Some(keep) if items.len() == 1 => {
                 if keep.get_bit(items.start) {
                     item_count = 1;
-                    copy.base = copied_offsets(&base.levels, items, &mut offsets);
+                    copy.base = copied_offsets(&base_geometry.levels, items, &mut offsets);
                 }
             }
             // As for the added items below, every run is a slice of its own.
             // The last run shares its `CopiedVertices` with the first run of the added items.
-            // This is there so `concatenated` can serve as a general helper later.
-            // Nothing reaches it yet, so it is untested:
-            // `add_parts` only masks a single base, of one item per row.
-            // It would be reached by dropping the empty parts of a multi base in `add_parts`,
-            // or by an expression that drops parts of one column, without `added`.
+            // Untested, as nothing masks a base of more than one item per row yet.
+            // It is there for dropping parts of a multi base, such as its empty ones.
             Some(keep) => {
                 for run in kept_runs(keep, items) {
                     if item_count > 0 {
@@ -187,18 +194,18 @@ pub(super) fn concatenated<const N: usize>(
                         copies.push(mem::take(&mut copy));
                     }
                     item_count += run.len();
-                    copy.base = copied_offsets(&base.levels, run, &mut offsets);
+                    copy.base = copied_offsets(&base_geometry.levels, run, &mut offsets);
                 }
             }
         }
-        let added = added.as_ref().filter(|added| added.rows.is_valid(i));
+        let added = parts_added.as_ref().filter(|added| added.rows.is_valid(i));
         let Some(added) = added else {
             row_offsets.try_push(item_count).expect(NO_OVERFLOW);
             coords_len += copy.base.len();
             copies.push(copy);
             continue;
         };
-        let Some(keep) = added_keep else {
+        let Some(keep) = parts_keep else {
             let items = added.rows.range(i);
             item_count += items.len();
             copy.added = copied_offsets(&added.levels, items, &mut offsets);
@@ -229,12 +236,13 @@ pub(super) fn concatenated<const N: usize>(
         row_offsets.try_push(item_count).expect(NO_OVERFLOW);
     }
 
-    let (base_coords, added_coords) = (base.coords, added.as_ref().map(|added| added.coords));
+    let base_coords = base_geometry.coords;
+    let added_coords = parts_added.as_ref().map(|added| added.coords);
     let axis = |base: &[f64], added: Option<&[f64]>| {
         assembled_axis(base, added.unwrap_or_default(), &copies, coords_len)
     };
     Built {
-        rows: List::from_offsets(row_offsets.into(), validity),
+        rows: List::from_offsets(row_offsets.into(), output_validity),
         levels: offsets.map(|offsets| ValidList::from_offsets(offsets.into())),
         coords: ValidCoords::from_axes((
             axis(base_coords.x(), added_coords.map(ValidCoords::x)),

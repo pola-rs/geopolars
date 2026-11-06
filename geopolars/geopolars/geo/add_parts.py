@@ -44,7 +44,7 @@ def add_parts(
     null_parts: NullParts = "null",
     empty_parts: EmptyParts = "keep",
 ) -> pl.Expr:
-    """Append additional parts to each geometry, e.g. more holes to a polygon or an extra linestring to a multilinestring.
+    """Add the parts of `parts` to each geometry, after the parts it already has.
     The result is always a multi-geometry.
 
     | geometry | parts | out |
@@ -68,15 +68,13 @@ def add_parts(
     {same_crs}
 
     The parts are not checked for validity: they are copied as they are.
-    If the geometry you are trying to add parts to is already null,
-    then parts are not added to it, and it stays null.
+    A null geometry gives a null multi-geometry.
     {null_parts}
 
     `"drop"` suits a list of parts aggregated from rows of which some are null.
 
     What happens with an empty part is set by `empty_parts`.
-    This option also applies to a geometry that becomes the first part of a multi-geometry
-    (e.g. adding a polygon to another polygon creates a multipolygon, then both will be empty-checked)
+    A single geometry becomes the first part of the result, so `empty_parts` applies to it as well.
     An existing multi-geometry keeps every part it already has, empty ones included.
 
     | `empty_parts` | an empty part |

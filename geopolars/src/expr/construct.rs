@@ -32,13 +32,13 @@ use polars_arrow::offset::Offsets;
 
 /// The keyword arguments of the constructors that build polygons:
 /// [`MetadataKwargs`], plus whether and how to close open rings.
-/// These have to be mirrored on the python side.
+/// These have to be mirrored on the Python side.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PolygonKwargs {
     /// The CRS the coordinates are in, in any form PROJ accepts.
     pub crs: Option<String>,
-    /// How to close every open ring, as `close_rings` does. `None` closes nothing.
+    /// How to close every open ring, as `close_rings` does.
     pub close: Option<CloseRingsKwargs>,
 }
 
@@ -629,6 +629,7 @@ fn multipolygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> Polar
     zip(inputs, &kwargs.metadata(), kwargs.close, Kind::MultiPolygon)
 }
 
+/// The single and the multi kind of the family `kind` is in.
 pub(super) fn part_kinds(kind: Kind) -> (Kind, Kind) {
     match kind {
         Kind::Point | Kind::MultiPoint => (Kind::Point, Kind::MultiPoint),
@@ -637,11 +638,11 @@ pub(super) fn part_kinds(kind: Kind) -> (Kind, Kind) {
     }
 }
 
-/// Whether a column of `found`s can hold `part`s:
-/// as those parts, as multi-geometries of them,
-/// or as whatever can hold the items a part is a list of
-/// (a polygon is a list of linestrings, a linestring a list of points).
-/// The lists around it decide which level it stands for.
+/// Whether a column of `found` can hold parts of kind `part`.
+/// It can if `found` is `part` or its multi kind.
+/// It can also be anything that holds the items of `part`
+/// (the linestrings of a polygon, or the points of a linestring).
+/// The lists around the column then decide which level it stands for.
 fn holds_parts(found: Kind, part: Kind) -> bool {
     let (part, multi) = part_kinds(part);
     found == part
@@ -653,9 +654,7 @@ fn holds_parts(found: Kind, part: Kind) -> bool {
         }
 }
 
-/// How a column of `dtype` holds parts of the kind `part`:
-/// each spelled as anything that [holds_parts],
-/// or as bare coordinates in place of points.
+/// How a column holds parts, as [parts_layout] finds it.
 pub(super) struct PartsLayout {
     /// A list of parts per row, rather than one.
     pub(super) listed: bool,
@@ -664,6 +663,9 @@ pub(super) struct PartsLayout {
     pub(super) metadata: Option<Arc<ExtensionMetadata>>,
 }
 
+/// Finds how a column of `dtype` holds parts of kind `part`.
+/// Each part can be anything that [holds_parts], and bare coordinates can take the place of points.
+/// Returns `None` for an untyped null.
 pub(super) fn parts_layout(
     dtype: &DataType,
     part: Kind,
@@ -716,9 +718,10 @@ pub(super) fn parts_layout(
     }))
 }
 
-/// Whether the column `parts` holds a list of parts of the kind `part` per row (see [parts_layout]),
-/// and its metadata (`None` for bare coordinates, or an untyped null).
-/// CRS is left for the caller to check.
+/// Checks that the column `parts` holds parts of kind `part` and dimension `dim` (see [parts_layout]).
+/// Returns whether it holds a list of them per row, and its metadata.
+/// The metadata is `None` for bare coordinates and an untyped null.
+/// The CRS is left for the caller to check.
 pub(super) fn listed_parts(
     parts: &Field,
     part: Kind,
@@ -742,7 +745,7 @@ pub(super) fn listed_parts(
 pub struct SeparateRingsKwargs {
     /// The CRS the coordinates are in, in any form PROJ accepts.
     pub crs: Option<String>,
-    /// How to close every open ring, as `close_rings` does. `None` closes nothing.
+    /// How to close every open ring, as `close_rings` does.
     pub close: Option<CloseRingsKwargs>,
     null_parts: NullParts,
 }
@@ -755,10 +758,10 @@ impl SeparateRingsKwargs {
     }
 }
 
-/// The polygons `polygon_rings_in_separate_columns` builds,
-/// and whether the holes (if passed) are a list of rings per row.
-/// `crs` declares itself on the exterior and the holes where they declare none,
-/// and then they are checked against each other.
+/// Checks the input fields of `polygon_rings_in_separate_columns`.
+/// Returns the type of the result, and whether the holes are a list of rings per row.
+/// The CRS in `kwargs` is set on an exterior or holes that declare none,
+/// before their CRS are checked against each other.
 fn separate_rings(input_fields: &[Field], kwargs: &MetadataKwargs) -> PolarsResult<(Geo, bool)> {
     let exterior = input_fields[0].dtype();
     let layout = parts_layout(exterior, Kind::LineString, "exterior")
@@ -802,6 +805,7 @@ fn kernel_output_type_polygon_rings_in_separate_columns(
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
+/// Rechunks `a` and `b`, repeating a single row to the length of the other.
 pub(super) fn paired_rows(
     a: &Series,
     b: &Series,
@@ -884,7 +888,6 @@ pub(super) fn one_polygon_per_row(polygons: PolygonArray) -> MultiPolygonArray {
     )
 }
 
-/// See python docs
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum NullParts {
@@ -895,8 +898,8 @@ pub(super) enum NullParts {
     Null,
 }
 
-/// The rows of a result built out of `base` and `parts`: null where `base` is,
-/// and with [NullParts::Null] also where `parts` is.
+/// Combines the validity of `base` and `parts` into that of a result built out of them.
+/// A null row of `parts` only makes the result null with [NullParts::Null].
 pub(super) fn rows_validity(base: &List, parts: &List, null_parts: NullParts) -> Option<Bitmap> {
     match null_parts {
         NullParts::Drop => base.validity().cloned(),
@@ -904,10 +907,10 @@ pub(super) fn rows_validity(base: &List, parts: &List, null_parts: NullParts) ->
     }
 }
 
-/// One chunk of linestrings, holding one per row, or with `listed=true` a list of them,
-/// as a list of them per row.
-/// A row holding a null value is null.
-/// With `listed=true` and [NullParts::Drop], a linestring holding one is unset in the mask instead.
+/// Reads a chunk of linestrings as multilinestrings.
+/// `chunk` only holds a single linestring per row if `listed=false`.
+/// A linestring holding a null value makes its row null.
+/// In a list of linestrings, [NullParts::Drop] unsets it in the mask instead.
 pub(super) fn lines_per_row(
     chunk: &dyn Array,
     listed: bool,
@@ -949,8 +952,8 @@ pub(super) fn polygons_per_row(
     })
 }
 
-/// One chunk of polygons out of one chunk of exterior rings,
-/// and of holes: one ring per row, or with `listed=true` a list of them.
+/// Assembles one chunk of polygons from one chunk of exterior rings and one of holes.
+/// The holes only hold a single ring per row if `listed=false`.
 /// See `polygons_from_rings_in_separate_columns` for the null values.
 fn assembled_polygons(
     exteriors: &dyn Array,

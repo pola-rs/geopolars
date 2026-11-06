@@ -48,7 +48,7 @@ pub fn dimension_of_storage(storage: &DataType, nesting: u8) -> Option<GeoDimens
     dimension_of(inner)
 }
 
-/// The dtype below the outer list levels of `dtype` + how many tehre are
+/// The dtype below the outer list levels of `dtype`, and how many there are.
 pub fn under_lists(mut dtype: &DataType) -> (&DataType, u8) {
     let mut lists = 0;
     while let DataType::List(inner) = dtype {

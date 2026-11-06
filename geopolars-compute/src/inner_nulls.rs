@@ -1,10 +1,6 @@
-//! Moving every null value below a row out to the row,
-//! so that the views hold to GeoArrow's rule on null values:
-//! nulls only at the outermost level.
-//! Of a multi-geometry, the parts with a null value can instead be unset in a mask.
-//! They stay in the view, with arbitrary values.
-//! The view is then wrapped in a [MaskedParts], so that only a kernel that takes the mask reads it.
-//! This is a separate pass, before any kernel reads the views.
+//! Moving every null value below a row out to the row.
+//! The views then hold to GeoArrow's rule that only the outermost level has nulls.
+//! The parts of a multi-geometry that hold a null value can instead be unset in the mask of a [MaskedParts].
 
 use geopolars_core::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
@@ -15,9 +11,8 @@ use polars_arrow::compute::utils::combine_validities_and;
 
 use crate::passing::rows_passing;
 
-/// The validity of the rows of `storage`, with every null value below a row moved out to it:
-/// a row is also null where a part or coordinate (or one of its axes) below it is.
-/// `None` when every row is there.
+/// Combines the validity of every level of `storage` into that of its rows,
+/// so a row is null where anything below it is.
 fn propagate_inner_nulls(storage: &UncheckedStorage) -> Option<Bitmap> {
     let lists: Vec<&ValidList> = storage.lists.iter().map(List::ignoring_validity).collect();
     let validities = (storage.lists.iter().map(List::validity)).chain([storage.coords.validity()]);
@@ -27,9 +22,10 @@ fn propagate_inner_nulls(storage: &UncheckedStorage) -> Option<Bitmap> {
     )
 }
 
-/// The `N` list levels of `storage`, the rows with the validity of [propagate_inner_nulls],
-/// and its coordinates.
-/// Storage with another number of list levels is a bug.
+/// Splits `storage` into its `N` list levels and its coordinates,
+/// with the rows made null as [propagate_inner_nulls] does.
+///
+/// `storage` must have `N` list levels.
 fn propagate_inner_nulls_of_lists<const N: usize>(
     storage: UncheckedStorage,
 ) -> ([List; N], ValidCoords) {
@@ -98,9 +94,8 @@ pub fn propagate_inner_nulls_of_multi_polygons(storage: UncheckedStorage) -> Mul
     )
 }
 
-/// The multipoints of `storage`, with only the null rows null.
-/// The points without a null value are set in the mask (see [parts_passing]).
-/// The other points stay in the view, with arbitrary values.
+/// Reads `storage` as multipoints.
+/// A point holding a null value does not make its row null, but is unset in the mask instead.
 /// The other `*_with_null_parts_marked` functions do the same for their kind.
 pub fn multi_points_with_null_parts_marked(
     storage: UncheckedStorage,
@@ -136,14 +131,12 @@ pub fn multi_polygons_with_null_parts_marked(
     MaskedParts { view, keep }
 }
 
-/// A view and a mask of the parts of it to read.
-/// The parts with a null value in the input are unset in it,
-/// and after [without_empty_parts](crate::native::WithoutEmptyParts::without_empty_parts) the empty ones too.
-/// The unset parts may hold arbitrary values,
-/// so the view is not handed out as a plain one.
+/// A view with a mask of the parts to read (see "Valid input" in the README).
+/// The parts holding a null value in the input are unset in the mask.
+/// [without_empty_parts](crate::native::WithoutEmptyParts::without_empty_parts) unsets the empty ones too.
 pub struct MaskedParts<T> {
     pub(crate) view: T,
-    /// One bit per part. `None` when every part is set.
+    /// One bit per part.
     // Without `native`, nothing reads the mask.
     #[cfg_attr(not(feature = "native"), allow(dead_code))]
     pub(crate) keep: Option<Bitmap>,
