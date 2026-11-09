@@ -18,17 +18,15 @@
 //!
 //! # Const generic flags
 //!
-//! ## `SKIP_EMPTY`
+//! ## `SKIP`
 //!
-//! Every kernel is generic over `SKIP_EMPTY`, or takes it as `skip_empty`.
-//! If `SKIP_EMPTY=true`, an empty point is left out of the search.
-//! Otherwise a row holding one fails.
-//!
-//! ## `SKIP_NON_FINITE`
-//!
-//! Every kernel is generic over `SKIP_NON_FINITE`, or takes it as `skip_non_finite`.
-//! If `SKIP_NON_FINITE=true`, a coordinate that is not finite (and not empty) is left out of the search.
-//! Otherwise a row holding one fails.
+//! The search is generic over `SKIP`, which is set when [HausdorffOptions] lets it leave out
+//! the empty point, other coordinates that are not finite, or both.
+//! If `SKIP=true`, it leaves out every coordinate that is not finite in the axes that count,
+//! without telling those apart.
+//! The options are only told apart by [Side::ensure_row_passes],
+//! which fails a row holding a coordinate they do not let the search leave out,
+//! before the search sees that row.
 
 // PERF: There's plenty of opportunity to make stuff a little faster here.
 
@@ -53,6 +51,12 @@ pub struct HausdorffOptions {
     pub skip_non_finite: bool,
     pub ignore_z: bool,
     pub ignore_m: bool,
+}
+
+impl HausdorffOptions {
+    fn skip(self) -> bool {
+        self.skip_empty || self.skip_non_finite
+    }
 }
 
 /// How the rows of a geometry split into parts, level by level.
@@ -463,6 +467,7 @@ fn push_line<const SKIP: bool>(
     b: &Side,
     j: usize,
 ) -> GeoComputeResult<()> {
+    // Before the search, as `SKIP` leaves out every coordinate that is not finite.
     a.ensure_row_passes(i)?;
     b.ensure_row_passes(j)?;
     // A side without a vertex to search: the line is empty.
@@ -485,14 +490,13 @@ fn push_line<const SKIP: bool>(
 
 /// The lines from row `i` of `a` to row `j` of `b` for every `(i, j)` of `rows`.
 /// A row that is null in `validity` gets a null line.
-fn lines_between<const SKIP_EMPTY: bool, const SKIP_NON_FINITE: bool>(
+fn lines_between<const SKIP: bool>(
     a: &Side,
     b: &Side,
     rows: impl ExactSizeIterator<Item = (usize, usize)>,
     validity: Option<Bitmap>,
     ignore_per_row_errors: bool,
 ) -> GeoComputeResult<LineStringArray> {
-    let skip = SKIP_EMPTY || SKIP_NON_FINITE;
     let dim = a.coords.dim().shared_with(b.coords.dim());
     let mut lines = Lines::new(rows.len(), dim);
     for (row, (i, j)) in rows.enumerate() {
@@ -500,12 +504,7 @@ fn lines_between<const SKIP_EMPTY: bool, const SKIP_NON_FINITE: bool>(
             .as_ref()
             .is_none_or(|validity| validity.get_bit(row))
         {
-            let line = if skip {
-                push_line::<true>(&mut lines, a, i, b, j)
-            } else {
-                push_line::<false>(&mut lines, a, i, b, j)
-            };
-            match line {
+            match push_line::<SKIP>(&mut lines, a, i, b, j) {
                 Err(_) if ignore_per_row_errors => lines.failed.push(row),
                 line => line?,
             }
@@ -531,9 +530,8 @@ pub fn hausdorff_lines_pairwise(
     let validity = combine_validities_and(a.validity(), b.validity());
     let (a, b) = (Side::new(a, options), Side::new(b, options));
     with_const_flags!(
-        SKIP_EMPTY = options.skip_empty,
-        SKIP_NON_FINITE = options.skip_non_finite;
-        lines_between::<SKIP_EMPTY, SKIP_NON_FINITE>(&a, &b, rows, validity, ignore_per_row_errors)
+        SKIP = options.skip();
+        lines_between::<SKIP>(&a, &b, rows, validity, ignore_per_row_errors)
     )
 }
 
@@ -565,8 +563,7 @@ pub fn hausdorff_lines_against_one(
         false => (i, 0),
     });
     with_const_flags!(
-        SKIP_EMPTY = options.skip_empty,
-        SKIP_NON_FINITE = options.skip_non_finite;
-        lines_between::<SKIP_EMPTY, SKIP_NON_FINITE>(a, b, rows, validity, ignore_per_row_errors)
+        SKIP = options.skip();
+        lines_between::<SKIP>(a, b, rows, validity, ignore_per_row_errors)
     )
 }
