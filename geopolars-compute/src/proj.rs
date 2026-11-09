@@ -33,36 +33,73 @@ use geopolars_core::{Coords, ValidCoords};
 use polars_arrow::bitmap::utils::SlicesIterator;
 use proj::ProjError;
 use proj_sys::{
-    proj_context_create, proj_context_destroy, proj_context_errno, proj_context_errno_string,
-    proj_create_crs_to_crs, proj_destroy, proj_errno, proj_errno_reset, proj_log_level,
-    proj_normalize_for_visualization, proj_trans, proj_trans_generic, PJ, PJ_CONTEXT, PJ_COORD,
-    PJ_DIRECTION_PJ_FWD, PJ_LOG_LEVEL_PJ_LOG_NONE, PJ_XYZT,
+    proj_clone, proj_context_create, proj_context_destroy, proj_context_errno,
+    proj_context_errno_string, proj_create_crs_to_crs, proj_destroy, proj_errno, proj_errno_reset,
+    proj_log_level, proj_normalize_for_visualization, proj_trans, proj_trans_generic, PJ,
+    PJ_CONTEXT, PJ_COORD, PJ_DIRECTION_PJ_FWD, PJ_LOG_LEVEL_PJ_LOG_NONE, PJ_XYZT,
 };
 
 use crate::{GeoComputeError, GeoComputeResult};
 
 /// A PROJ transformation from one CRS to another.
 /// `x` is the easting or longitude, and `y` the northing or latitude, whatever the CRSs' axis order.
-/// Cannot be shared between threads.
+/// Can be moved to another thread, but not shared between threads.
 pub struct Transformation {
     ctx: *mut PJ_CONTEXT,
     pj: *mut PJ,
+    from: String,
+    to: String,
 }
+
+// SAFETY: a `Transformation` owns its context and every PROJ object in it.
+// PROJ lets a context move between threads, as long as one thread at a time uses it,
+// which holds as `Transformation` is not `Sync`.
+unsafe impl Send for Transformation {}
 
 impl Transformation {
     /// `from` and `to` are anything PROJ accepts.
     pub fn new(from: &str, to: &str) -> GeoComputeResult<Self> {
+        let nul = |_| GeoComputeError::Transformation {
+            from: from.to_owned(),
+            to: to.to_owned(),
+            message: "a CRS cannot contain a NUL byte".to_owned(),
+        };
+        let (c_from, c_to) = (
+            CString::new(from).map_err(nul)?,
+            CString::new(to).map_err(nul)?,
+        );
+        // SAFETY: `ctx` is alive, and a null PJ is not used.
+        Self::in_new_context(from, to, |ctx| unsafe {
+            let pj = proj_create_crs_to_crs(ctx, c_from.as_ptr(), c_to.as_ptr(), ptr::null_mut());
+            if pj.is_null() {
+                return pj;
+            }
+            let normalised = proj_normalize_for_visualization(ctx, pj);
+            proj_destroy(pj);
+            normalised
+        })
+    }
+
+    /// The same transformation, in a PROJ context of its own.
+    /// This costs a few percent of [new](Self::new), which has to look the transformation up in PROJ's database.
+    pub fn try_clone(&self) -> GeoComputeResult<Self> {
+        // SAFETY: `self.pj` is alive while `self` is, and PROJ only reads it.
+        Self::in_new_context(&self.from, &self.to, |ctx| unsafe {
+            proj_clone(ctx, self.pj)
+        })
+    }
+
+    /// A new context, with the PJ that `create_pj` makes in it, where null means PROJ failed.
+    fn in_new_context(
+        from: &str,
+        to: &str,
+        create_pj: impl FnOnce(*mut PJ_CONTEXT) -> *mut PJ,
+    ) -> GeoComputeResult<Self> {
         let error = |message: String| GeoComputeError::Transformation {
             from: from.to_owned(),
             to: to.to_owned(),
             message,
         };
-        let nul = |_| error("a CRS cannot contain a NUL byte".to_owned());
-        let (c_from, c_to) = (
-            CString::new(from).map_err(nul)?,
-            CString::new(to).map_err(nul)?,
-        );
-
         // SAFETY: no preconditions; null is checked.
         let ctx = unsafe { proj_context_create() };
         if ctx.is_null() {
@@ -72,20 +109,15 @@ impl Transformation {
         let mut transformation = Self {
             ctx,
             pj: ptr::null_mut(),
+            from: from.to_owned(),
+            to: to.to_owned(),
         };
-        // SAFETY: `ctx` is alive, and every PJ created in it is checked for null.
-        unsafe {
-            let pj = proj_create_crs_to_crs(ctx, c_from.as_ptr(), c_to.as_ptr(), ptr::null_mut());
-            if pj.is_null() {
-                return Err(error(context_error(ctx)));
-            }
-            let normalised = proj_normalize_for_visualization(ctx, pj);
-            proj_destroy(pj);
-            if normalised.is_null() {
-                return Err(error(context_error(ctx)));
-            }
-            transformation.pj = normalised;
+        let pj = create_pj(ctx);
+        if pj.is_null() {
+            // SAFETY: `ctx` is alive.
+            return Err(error(unsafe { context_error(ctx) }));
         }
+        transformation.pj = pj;
         Ok(transformation)
     }
 }

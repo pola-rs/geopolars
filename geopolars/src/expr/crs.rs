@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use geopolars_compute::proj::{reproject_coords, reproject_valid_coords, Transformation};
 use geopolars_compute::GeoComputeError;
@@ -46,27 +46,31 @@ fn kernel_output_type_to_crs(input_fields: &[Field], kwargs: ToCrsKwargs) -> Pol
     Ok(Field::new(field.name().clone(), geo.dtype()))
 }
 
-/// How many transformations each thread keeps.
+/// How many transformations the process, and each thread, keeps.
 /// If more are used, it starts over.
 const CACHED_TRANSFORMATIONS: usize = 16;
 
+/// One transformation per pair of CRSs for the whole process, which every thread clones.
+/// Creating one costs milliseconds, more than reprojecting a streaming batch,
+/// and threads creating them queue for the one connection PROJ shares to its database.
+/// A clone costs a few percent of that.
+static TEMPLATES: LazyLock<Mutex<HashMap<(String, String), Transformation>>> =
+    LazyLock::new(Default::default);
+
 thread_local! {
-    /// Creating a transformation costs milliseconds, more than reprojecting a streaming batch.
-    /// Threads creating them also queue for the one connection PROJ shares to its database.
-    /// Per thread, because a [`Transformation`] can't be shared between threads.
+    /// This thread's clones of [`TEMPLATES`],
+    /// as a [`Transformation`] can't be shared between threads.
     static TRANSFORMATIONS: RefCell<HashMap<(String, String), Rc<Transformation>>> =
         RefCell::new(HashMap::new());
 }
 
-/// The PROJ transformation from the CRS of `dtype` to `to`, created once per thread.
+/// The PROJ transformation from the CRS of `dtype` to `to`, made once per thread.
 fn transformation(dtype: &DataType, to: &str) -> PolarsResult<Rc<Transformation>> {
     let key = (describe(dtype)?.metadata.crs()?.to_owned(), to.to_owned());
     if let Some(cached) = TRANSFORMATIONS.with_borrow(|cache| cache.get(&key).cloned()) {
         return Ok(cached);
     }
-    // One that fails to build is not cached, and fails again the next time.
-    let transformation =
-        Rc::new(Transformation::new(&key.0, &key.1).map_err(|e| polars_err!(ComputeError: "{e}"))?);
+    let transformation = Rc::new(transformation_from_template(&key)?);
     TRANSFORMATIONS.with_borrow_mut(|cache| {
         if cache.len() >= CACHED_TRANSFORMATIONS {
             cache.clear();
@@ -74,6 +78,22 @@ fn transformation(dtype: &DataType, to: &str) -> PolarsResult<Rc<Transformation>
         cache.insert(key, Rc::clone(&transformation));
     });
     Ok(transformation)
+}
+
+fn transformation_from_template(key: &(String, String)) -> PolarsResult<Transformation> {
+    let err = |e: GeoComputeError| polars_err!(ComputeError: "{e}");
+    // Held while creating, so the other threads wait for this one rather than each creating their own.
+    // Held while cloning too, as that reads the template.
+    let mut templates = TEMPLATES.lock().unwrap_or_else(PoisonError::into_inner);
+    if !templates.contains_key(key) {
+        // One that fails to build is not cached, and fails again the next time.
+        let template = Transformation::new(&key.0, &key.1).map_err(err)?;
+        if templates.len() >= CACHED_TRANSFORMATIONS {
+            templates.clear();
+        }
+        templates.insert(key.clone(), template);
+    }
+    templates[key].try_clone().map_err(err)
 }
 
 /// Whether the `z` of `dtype` goes through PROJ, as in the table of `to_crs` in `geo/crs.py`.
