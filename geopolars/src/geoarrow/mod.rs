@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
+use polars_arrow::compute::utils::combine_validities_and;
 use polars_core::datatypes::extension::{register_extension_type, ExtensionTypeInstance};
 
 use geopolars_core::{
@@ -99,7 +100,7 @@ pub fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
 }
 
 /// The storage of a geometry column, rechunked into a single chunk.
-pub fn storage_as_single_chunk(geometries: &Series) -> PolarsResult<ArrayRef> {
+fn storage_as_single_chunk(geometries: &Series) -> PolarsResult<ArrayRef> {
     Ok(geometries.ext()?.storage().rechunk().chunks()[0].clone())
 }
 
@@ -116,6 +117,41 @@ pub fn geometry_array(chunk: &dyn Array, kind: Kind) -> PolarsResult<GeometryArr
         Kind::Polygon => GeometryArray::Polygon(PolygonArray::new(rows(chunk)?)?),
         Kind::MultiPolygon => GeometryArray::MultiPolygon(MultiPolygonArray::new(rows(chunk)?)?),
     })
+}
+
+/// Pairs `a` and `b` row by row when they are as long,
+/// or the single row of one against every row of the other.
+/// Row by row, both sides are made a single chunk, as their kinds (and so storages) can differ,
+/// and a row null on either side is made null on both.
+/// Against one, `against_one(one, many, one_is_a)` runs once per chunk of the other side.
+pub fn pair_geometries<T>(
+    a: &Series,
+    b: &Series,
+    pairwise: impl FnOnce(GeometryArray, GeometryArray) -> PolarsResult<T>,
+    mut against_one: impl FnMut(&GeometryArray, &GeometryArray, bool) -> PolarsResult<T>,
+) -> PolarsResult<Vec<T>> {
+    let (one, many, one_is_a) = match (a.len(), b.len()) {
+        (n, m) if n == m => {
+            let (a_chunk, b_chunk) = (storage_as_single_chunk(a)?, storage_as_single_chunk(b)?);
+            let validity = combine_validities_and(a_chunk.validity(), b_chunk.validity());
+            let a_chunk = a_chunk.with_validity(validity.clone());
+            let b_chunk = b_chunk.with_validity(validity);
+            let a = geometry_array(a_chunk.as_ref(), kind_of(a)?)?;
+            let b = geometry_array(b_chunk.as_ref(), kind_of(b)?)?;
+            return Ok(vec![pairwise(a, b)?]);
+        }
+        (1, _) => (a, b, true),
+        (_, 1) => (b, a, false),
+        (n, m) => polars_bail!(ShapeMismatch: "cannot pair {n} geometries with {m}"),
+    };
+    let one = geometry_array(storage_as_single_chunk(one)?.as_ref(), kind_of(one)?)?;
+    let kind = kind_of(many)?;
+    many.ext()?
+        .storage()
+        .chunks()
+        .iter()
+        .map(|many| against_one(&one, &geometry_array(many.as_ref(), kind)?, one_is_a))
+        .collect()
 }
 
 /// Errors unless `a` and `b` declare the same CRS, or neither declares one.
