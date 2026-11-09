@@ -41,6 +41,7 @@ the comment says when one without a CRS takes a different tier.
 | `is_topologically_equal` | B | GEOS; x/y only; any two kinds; pairwise or against one | B | | B | | B | | B | | B | |
 | `shortest_line_between` | B | GEOS; x/y only, `LineStringXY`; any two kinds; pairwise or against one | B | | B | | B | | B | | B | |
 | `intersection` | B | GEOS; z kept, m dropped; any two kinds; pairwise or against one; `keep` picks the dimension; always gives a point | B | `allow_splitting` gives the multi kind | B | `allow_splitting` gives the multi kind | B | | B | | B | |
+| `hausdorff_line_between` | A | discrete; any two kinds; pairwise or against one; axes both sides have | A | | A | measured to the rings | A | | A | | A | |
 | `is_valid_geoarrow` | A | bounds from PROJ (plan-time) | A | | A | | A | EP | A | EP | A | EP |
 | `null_out_invalid_geoarrow` | A | nulls what `is_valid_geoarrow` rejects | A | | A | | A | | A | | A | |
 | `is_valid_ogc` | A | bounds from PROJ (plan-time) | A | | A/B | topology through GEOS | A | EP | A | EP | A/B | EP and GEOS |

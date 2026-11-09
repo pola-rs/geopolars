@@ -23,6 +23,14 @@ pub enum GeoComputeError {
     NotClosed { vertices: usize },
     /// A coordinate with a NaN or infinite x or y, which GEOS cannot take.
     NotFinite { position: (f64, f64) },
+    /// A coordinate with a NaN or infinite value that the kernel cannot skip.
+    /// `z` and `m` are `None` where the coordinate does not have them.
+    NotFiniteCoordinate {
+        x: f64,
+        y: f64,
+        z: Option<f64>,
+        m: Option<f64>,
+    },
     /// A NaN or infinite distance.
     NotFiniteDistance { distance: f64 },
     /// A negative distance for a buffer of one side, whose side is not given by the sign.
@@ -73,6 +81,13 @@ impl fmt::Display for GeoComputeError {
                 "GEOS expects finite x and y, got ({x}, {y}). \
                 GEOS does not support empty points inside a geometry"
             ),
+            Self::NotFiniteCoordinate { x, y, z, m } => {
+                write!(f, "expects finite coordinates, got ({x}, {y}")?;
+                for value in [z, m].into_iter().flatten() {
+                    write!(f, ", {value}")?;
+                }
+                write!(f, ")")
+            }
             Self::NotFiniteDistance { distance } => {
                 write!(f, "expects a finite distance, got: {distance}")
             }
@@ -99,6 +114,7 @@ impl std::error::Error for GeoComputeError {
             | Self::NotARing { .. }
             | Self::NotClosed { .. }
             | Self::NotFinite { .. }
+            | Self::NotFiniteCoordinate { .. }
             | Self::NotFiniteDistance { .. }
             | Self::NegativeOneSidedDistance { .. }
             | Self::Split { .. } => None,

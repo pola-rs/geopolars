@@ -73,6 +73,16 @@ impl GeoDimension {
         matches!(self, GeoDimension::XYM | GeoDimension::XYZM)
     }
 
+    /// The dimension with only the axes both `self` and `other` have.
+    pub const fn shared_with(self, other: GeoDimension) -> GeoDimension {
+        match (self.has_z() && other.has_z(), self.has_m() && other.has_m()) {
+            (false, false) => GeoDimension::XY,
+            (true, false) => GeoDimension::XYZ,
+            (false, true) => GeoDimension::XYM,
+            (true, true) => GeoDimension::XYZM,
+        }
+    }
+
     /// A `geoarrow.box`'s field names, in the order the spec requires:
     /// every minimum, then every maximum.
     pub const fn box_field_names(self) -> &'static [&'static str] {

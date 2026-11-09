@@ -548,6 +548,26 @@ class ExprGeoNameSpace:
             early_finite_check=early_finite_check,
         )
 
+    def hausdorff_line_between(
+        self,
+        other: IntoExprColumn,
+        *,
+        non_finite: Literal["raise", "skip", "skip_empty"] = "raise",
+        ignore_z: bool = False,
+        ignore_m: bool = False,
+        ignore_per_row_errors: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.hausdorff_line_between import hausdorff_line_between
+
+        return hausdorff_line_between(
+            self._expr,
+            other,
+            non_finite=non_finite,
+            ignore_z=ignore_z,
+            ignore_m=ignore_m,
+            ignore_per_row_errors=ignore_per_row_errors,
+        )
+
     def is_ccw(self, *, holes_cw: bool = True) -> pl.Expr:
         from geopolars.geo.is_ccw import is_ccw
 
