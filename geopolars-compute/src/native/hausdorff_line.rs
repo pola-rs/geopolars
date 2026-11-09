@@ -303,8 +303,25 @@ fn nearest_on_segment(
     } else {
         0.0
     };
-    let (ex, ey) = (px - (x0 + t * dx), py - (y0 + t * dy));
-    (ex * ex + ey * ey, OnPart { start, end, t })
+    // A segment too long to square projects to `inf / inf`.
+    // Like GEOS, take the nearer end then.
+    if t.is_nan() {
+        let to_start = distance_squared((px, py), (x0, y0));
+        let to_end = distance_squared((px, py), (x1, y1));
+        let t = if to_start <= to_end { 0.0 } else { 1.0 };
+        return (to_start.min(to_end), OnPart { start, end, t });
+    }
+    let on_segment = (x0 + t * dx, y0 + t * dy);
+    (
+        distance_squared((px, py), on_segment),
+        OnPart { start, end, t },
+    )
+}
+
+#[inline(always)]
+fn distance_squared((x0, y0): (f64, f64), (x1, y1): (f64, f64)) -> f64 {
+    let (dx, dy) = (x1 - x0, y1 - y0);
+    dx * dx + dy * dy
 }
 
 #[inline(always)]
@@ -341,9 +358,10 @@ fn nearest_on_row<const SKIP: bool>(
             previous = vertex;
         }
         if previous == first {
-            let (x, y) = side.xy(first);
-            let (ex, ey) = (point.0 - x, point.1 - y);
-            let candidate = (ex * ex + ey * ey, OnPart::vertex(first));
+            let candidate = (
+                distance_squared(point, side.xy(first)),
+                OnPart::vertex(first),
+            );
             keep_nearer(&mut nearest, candidate);
             if candidate.0 <= bound {
                 return nearest;
@@ -481,7 +499,7 @@ fn push_line<const SKIP: bool>(
     // Before the search, as `SKIP` leaves out every coordinate that is not finite.
     a.ensure_row_passes(i)?;
     b.ensure_row_passes(j)?;
-    // Only a NaN distance, from coordinates too large to square, leaves no furthest vertex.
+    // Only a NaN distance, from coordinates more than `f64::MAX` apart, leaves no furthest vertex.
     let Some(a_to_b) = furthest::<SKIP>(a, i, b, j, f64::NEG_INFINITY) else {
         return Ok(());
     };

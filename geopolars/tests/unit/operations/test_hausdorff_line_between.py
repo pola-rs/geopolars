@@ -283,6 +283,17 @@ def test_a_single_vertex_line_string_counts_as_a_point() -> None:
     assert lines == ["LINESTRING(3 0,0 1)"]
 
 
+def test_a_segment_too_long_to_square_is_measured_to_its_nearer_end() -> None:
+    # Projecting (1e200 3) onto `b` gives inf / inf.
+    a = _line_strings("a", [[(-1e200, 0), (1e200, 3)]])
+    b = _line_strings("b", [[(-1e200, 0), (1e200, 0)]])
+
+    out = pl.DataFrame([a, b]).select(geo.hausdorff_line_between("a", "b"))
+
+    expected = [[{"x": 1e200, "y": 3.0}, {"x": 1e200, "y": 0.0}]]
+    assert out["a"].ext.storage().to_list() == expected
+
+
 def test_a_single_geometry_is_measured_against_every_row() -> None:
     many = _chunked(
         [
