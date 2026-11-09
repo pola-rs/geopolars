@@ -229,19 +229,33 @@ impl<'a> Side<'a> {
         }
     }
 
+    /// Whether `row` has no vertex left once the search leaves out those that are not finite.
+    /// A row holding a coordinate that fails it is never left without vertices, as it has to raise.
     #[inline(always)]
-    fn has_no_vertices(&self, row: usize) -> bool {
-        self.parts(row).flatten().next().is_none()
+    fn is_left_without_vertices<const SKIP: bool>(&self, row: usize) -> bool {
+        !self
+            .parts(row)
+            .flatten()
+            .any(|i| self.is_searched::<SKIP>(i))
+            && self.row_passes(row)
+    }
+
+    #[inline(always)]
+    fn row_passes(&self, row: usize) -> bool {
+        self.failing
+            .as_ref()
+            .is_none_or(|(_, rows)| rows.as_ref().is_none_or(|rows| rows.get_bit(row)))
     }
 
     /// Fails if `row` holds a coordinate the search cannot leave out.
     fn ensure_row_passes(&self, row: usize) -> GeoComputeResult<()> {
-        let Some((failing, rows)) = &self.failing else {
-            return Ok(());
-        };
-        if rows.as_ref().is_none_or(|rows| rows.get_bit(row)) {
+        if self.row_passes(row) {
             return Ok(());
         }
+        let (failing, _) = self
+            .failing
+            .as_ref()
+            .expect("failing coordinates, in a row that does not pass");
         let i = self
             .parts(row)
             .flatten()
@@ -460,13 +474,14 @@ fn push_line<const SKIP: bool>(
     b: &Side,
     j: usize,
 ) -> GeoComputeResult<()> {
-    if a.has_no_vertices(i) || b.has_no_vertices(j) {
+    // Before the rows are checked, so that an empty side gives an empty line even if the other fails.
+    if a.is_left_without_vertices::<SKIP>(i) || b.is_left_without_vertices::<SKIP>(j) {
         return Ok(());
     }
     // Before the search, as `SKIP` leaves out every coordinate that is not finite.
     a.ensure_row_passes(i)?;
     b.ensure_row_passes(j)?;
-    // A side left without a vertex to search gives an empty line.
+    // Only a NaN distance, from coordinates too large to square, leaves no furthest vertex.
     let Some(a_to_b) = furthest::<SKIP>(a, i, b, j, f64::NEG_INFINITY) else {
         return Ok(());
     };

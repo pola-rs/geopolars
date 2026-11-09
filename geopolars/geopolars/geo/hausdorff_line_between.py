@@ -64,9 +64,10 @@ def hausdorff_line_between(
       A line or ring then runs straight from the vertex before it to the vertex after it.
       A ring that loses its first vertex also loses its last one, and is no longer closed.
       It is then measured as a line up to the last vertex it keeps.
-      A geometry left without vertices counts as empty.
     - `"drop_empty"`: the empty point is left out, as with `"drop"`.
       Any other vertex that is not finite raises.
+
+    A geometry that `"drop"` or `"drop_empty"` leaves without vertices counts as empty.
 
     Whether a vertex is finite depends on its x, y, z, and m.
     `ignore_z=True` leaves z out of that check, and `ignore_m=True` leaves out m.

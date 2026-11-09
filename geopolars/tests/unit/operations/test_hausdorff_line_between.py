@@ -411,6 +411,30 @@ def test_drop_empty_raises_on_any_other_vertex_that_is_not_finite() -> None:
         _lines_with_vertex((math.nan, 1.0), non_finite="drop_empty")
 
 
+@pytest.mark.parametrize("empty_first", [True, False])
+def test_drop_empty_a_geometry_of_only_empty_points_is_empty_against_a_failing_one(
+    empty_first: bool,
+) -> None:
+    only_empty = _multi_points("a", [[(math.nan, math.nan)]])
+    failing = _line_strings("b", [[(0, 0), (math.nan, 1)]])
+    a, b = ("a", "b") if empty_first else ("b", "a")
+
+    out = pl.DataFrame([only_empty, failing]).select(
+        geo.hausdorff_line_between(a, b, non_finite="drop_empty")
+    )
+
+    assert _as_wkt(out[a]) == ["LINESTRING EMPTY"]
+
+
+def test_drop_empty_a_geometry_of_only_empty_and_failing_points_raises() -> None:
+    a = _multi_points("a", [[(math.nan, math.nan), (math.nan, 1)]])
+
+    with pytest.raises(ComputeError, match=r"expects finite coordinates, got \(NaN, 1"):
+        pl.DataFrame([a, _BUMP_SERIES]).select(
+            geo.hausdorff_line_between("a", "b", non_finite="drop_empty")
+        )
+
+
 @pytest.mark.parametrize("non_finite", ["raise", "drop_empty"])
 def test_an_empty_point_inside_a_multipoint_raises_without_drop(
     non_finite: str,
