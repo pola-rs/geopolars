@@ -307,13 +307,11 @@ fn nearest_on_segment(
     (ex * ex + ey * ey, OnPart { start, end, t })
 }
 
-/// Keeps `candidate` if it is nearer than `nearest`, and tells whether it lies at most `bound` away.
 #[inline(always)]
-fn keep_nearer(nearest: &mut Option<(f64, OnPart)>, candidate: (f64, OnPart), bound: f64) -> bool {
+fn keep_nearer(nearest: &mut Option<(f64, OnPart)>, candidate: (f64, OnPart)) {
     if nearest.is_none_or(|(distance_squared, _)| candidate.0 < distance_squared) {
         *nearest = Some(candidate);
     }
-    candidate.0 <= bound
 }
 
 /// The point on row `row` of `side` nearest to `point`, and its squared distance.
@@ -335,7 +333,8 @@ fn nearest_on_row<const SKIP: bool>(
         let mut previous = first;
         for vertex in vertices {
             let candidate = nearest_on_segment(side, previous, vertex, point);
-            if keep_nearer(&mut nearest, candidate, bound) {
+            keep_nearer(&mut nearest, candidate);
+            if candidate.0 <= bound {
                 return nearest;
             }
             previous = vertex;
@@ -344,7 +343,8 @@ fn nearest_on_row<const SKIP: bool>(
             let (x, y) = side.xy(first);
             let (ex, ey) = (point.0 - x, point.1 - y);
             let candidate = (ex * ex + ey * ey, OnPart::vertex(first));
-            if keep_nearer(&mut nearest, candidate, bound) {
+            keep_nearer(&mut nearest, candidate);
+            if candidate.0 <= bound {
                 return nearest;
             }
         }
@@ -356,7 +356,8 @@ fn nearest_on_row<const SKIP: bool>(
 /// `None` if no vertex is, or if either row has no vertex to search.
 ///
 /// A vertex stops being measured once it lies at most as far as the furthest so far, as it can then no longer win.
-/// It is first measured to where the previous vertex's nearest point lay, which often settles that at once.
+/// It is first measured to the segment (or vertex) that held the previous vertex's nearest point,
+/// which often settles that at once.
 /// The vertex that wins is therefore always measured in full.
 fn furthest<const SKIP: bool>(
     from: &Side,
