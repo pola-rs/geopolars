@@ -89,3 +89,17 @@ def test_a_geometry_without_z_ignores_the_flags() -> None:
     )
 
     assert plain.equals(flagged)
+
+
+def test_a_bound_crs_reprojects_a_geometry_without_z() -> None:
+    # A BoundCRS, of which PROJ cannot tell whether it specifies z.
+    bessel = "+proj=longlat +ellps=bessel +towgs84=565.4,50.3,465.6 +no_defs +type=crs"
+    points = pl.DataFrame({"x": [5.0], "y": [52.0]}).select(
+        geo.point("x", "y", crs=bessel).alias("point")
+    )
+
+    out = points.select(geo.to_crs("point", WEB_MERCATOR))
+
+    # (5, 52) in Web Mercator, give or take the datum shift.
+    xy = out.select(geo.x("point"), geo.y("point").alias("y")).row(0)
+    assert xy == pytest.approx((556597.5, 6800125.5), abs=200)

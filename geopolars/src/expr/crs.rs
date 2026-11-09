@@ -1,6 +1,6 @@
 //! Moving a geometry from one coordinate reference system to another.
 
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
@@ -40,8 +40,8 @@ fn reprojected_geometry_type(dtype: &DataType, to: &str) -> PolarsResult<Geo> {
 fn kernel_output_type_to_crs(input_fields: &[Field], kwargs: ToCrsKwargs) -> PolarsResult<Field> {
     let field = &input_fields[0];
     // Built here as well as in the kernel, so a CRS PROJ cannot use fails while the plan is built.
-    transformation(field.dtype(), &kwargs.to)?;
-    reprojects_z(field.dtype(), &kwargs)?;
+    let cached = transformation(field.dtype(), &kwargs.to)?;
+    reprojects_z(field.dtype(), &kwargs, &cached)?;
     let geo = reprojected_geometry_type(field.dtype(), &kwargs.to)?;
     Ok(Field::new(field.name().clone(), geo.dtype()))
 }
@@ -60,17 +60,40 @@ static TEMPLATES: LazyLock<Mutex<HashMap<(String, String), Transformation>>> =
 thread_local! {
     /// This thread's clones of [`TEMPLATES`],
     /// as a [`Transformation`] can't be shared between threads.
-    static TRANSFORMATIONS: RefCell<HashMap<(String, String), Rc<Transformation>>> =
+    static TRANSFORMATIONS: RefCell<HashMap<(String, String), Rc<CachedTransformation>>> =
         RefCell::new(HashMap::new());
 }
 
-/// The PROJ transformation from the CRS of `dtype` to `to`, made once per thread.
-fn transformation(dtype: &DataType, to: &str) -> PolarsResult<Rc<Transformation>> {
+/// A transformation, with whether its CRSs specify z, once a geometry with a z needed to know.
+/// Looking that up creates a PROJ context and reads PROJ's database, so it is kept too.
+struct CachedTransformation {
+    transformation: Transformation,
+    specify_z: OnceCell<(bool, bool)>,
+}
+
+impl CachedTransformation {
+    /// Whether `from`, and `to`, each specify z (see [`specifies_z`]).
+    /// Not known up front, as [`specifies_z`] fails on some CRSs that reproject fine without z.
+    fn specify_z(&self, from: &str, to: &str) -> PolarsResult<(bool, bool)> {
+        if let Some(&specify_z) = self.specify_z.get() {
+            return Ok(specify_z);
+        }
+        // One that fails is not cached, and fails again the next time.
+        let specify_z = (specifies_z(from)?, specifies_z(to)?);
+        Ok(*self.specify_z.get_or_init(|| specify_z))
+    }
+}
+
+/// The PROJ transformation from the CRS of `dtype` to `to`, cloned once per thread.
+fn transformation(dtype: &DataType, to: &str) -> PolarsResult<Rc<CachedTransformation>> {
     let key = (describe(dtype)?.metadata.crs()?.to_owned(), to.to_owned());
     if let Some(cached) = TRANSFORMATIONS.with_borrow(|cache| cache.get(&key).cloned()) {
         return Ok(cached);
     }
-    let transformation = Rc::new(transformation_from_template(&key)?);
+    let transformation = Rc::new(CachedTransformation {
+        transformation: transformation_from_template(&key)?,
+        specify_z: OnceCell::new(),
+    });
     TRANSFORMATIONS.with_borrow_mut(|cache| {
         if cache.len() >= CACHED_TRANSFORMATIONS {
             cache.clear();
@@ -98,13 +121,17 @@ fn transformation_from_template(key: &(String, String)) -> PolarsResult<Transfor
 
 /// Whether the `z` of `dtype` goes through PROJ, as in the table of `to_crs` in `geo/crs.py`.
 /// Errors where that table needs a flag that is not set.
-fn reprojects_z(dtype: &DataType, kwargs: &ToCrsKwargs) -> PolarsResult<bool> {
+fn reprojects_z(
+    dtype: &DataType,
+    kwargs: &ToCrsKwargs,
+    cached: &CachedTransformation,
+) -> PolarsResult<bool> {
     let geo = describe(dtype)?;
     if !geo.dim.has_z() {
         return Ok(false);
     }
     let (from, to) = (geo.metadata.crs()?, kwargs.to.as_str());
-    match (specifies_z(from)?, specifies_z(to)?) {
+    match cached.specify_z(from, to)? {
         (true, true) => Ok(true),
         (true, false) => {
             polars_ensure!(
@@ -189,14 +216,14 @@ fn chunk_reprojected(
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_to_crs)]
 fn to_crs(inputs: &[Series], kwargs: ToCrsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
-    let transformation = transformation(inputs[0].dtype(), &kwargs.to)?;
-    let z = reprojects_z(inputs[0].dtype(), &kwargs)?;
+    let cached = transformation(inputs[0].dtype(), &kwargs.to)?;
+    let z = reprojects_z(inputs[0].dtype(), &kwargs, &cached)?;
 
     let storage = inputs[0].ext()?.storage();
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| chunk_reprojected(chunk.as_ref(), geo.kind, &transformation, z))
+        .map(|chunk| chunk_reprojected(chunk.as_ref(), geo.kind, &cached.transformation, z))
         .collect::<PolarsResult<_>>()?;
     // SAFETY: the geometries keep their kind and dimension, so this is still the storage.
     let out = unsafe {
