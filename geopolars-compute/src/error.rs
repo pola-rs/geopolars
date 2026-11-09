@@ -22,8 +22,8 @@ pub enum GeoComputeError {
     /// A ring that has to be closed or empty, but is neither.
     NotClosed { vertices: usize },
     /// A coordinate with a NaN or infinite x or y, which GEOS cannot take.
-    NotFinite { position: (f64, f64) },
-    /// A coordinate with a NaN or infinite value that the kernel cannot skip.
+    GeosNotFinite { position: (f64, f64) },
+    /// A coordinate with a NaN or infinite value that the options do not let the kernel leave out.
     /// `z` and `m` are `None` where the coordinate does not have them.
     NotFiniteCoordinate {
         x: f64,
@@ -76,7 +76,7 @@ impl fmt::Display for GeoComputeError {
                 "expects closed rings (the last vertex at the first) or empty ones, \
                 got a ring of {vertices} vertices that is not closed"
             ),
-            Self::NotFinite { position: (x, y) } => write!(
+            Self::GeosNotFinite { position: (x, y) } => write!(
                 f,
                 "GEOS expects finite x and y, got ({x}, {y}). \
                 GEOS does not support empty points inside a geometry"
@@ -113,7 +113,7 @@ impl std::error::Error for GeoComputeError {
             Self::Transformation { .. }
             | Self::NotARing { .. }
             | Self::NotClosed { .. }
-            | Self::NotFinite { .. }
+            | Self::GeosNotFinite { .. }
             | Self::NotFiniteCoordinate { .. }
             | Self::NotFiniteDistance { .. }
             | Self::NegativeOneSidedDistance { .. }

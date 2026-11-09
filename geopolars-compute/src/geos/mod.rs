@@ -404,7 +404,7 @@ fn xy_is_finite_or_error(x: &[f64], y: &[f64]) -> GeoComputeResult<()> {
         .map(|(&x, &y)| (x, y))
         .find(|(x, y)| !(x.is_finite() && y.is_finite()))
         .expect("a non-finite coordinate, as the check above failed");
-    Err(GeoComputeError::NotFinite { position })
+    Err(GeoComputeError::GeosNotFinite { position })
 }
 
 /// The coordinates at `vertices`, copied from `axes` in one go.
