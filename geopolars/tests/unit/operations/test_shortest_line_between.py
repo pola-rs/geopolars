@@ -11,6 +11,7 @@ import pytest
 import shapely
 import shapely.affinity
 from polars.exceptions import ComputeError
+from polars.testing import assert_series_equal
 
 from geopolars import geo
 from geopolars.datatypes import (
@@ -194,7 +195,8 @@ def test_against_the_first_of_no_rows_gives_no_lines() -> None:
     )
 
     out = df.filter(False).select(
-        "a", geo.shortest_line_between("a", pl.col("b").first()).alias("line")
+        "a",
+        geo.shortest_line_between("a", pl.col("b").first()).alias("line"),
     )
 
     assert out.height == 0
@@ -298,7 +300,9 @@ def test_a_failing_row_gives_null_with_ignore_per_row_errors(
 
     out = df.select(
         pl.col("a").geo.shortest_line_between(
-            "b", ignore_per_row_errors=True, early_finite_check=early_finite_check
+            "b",
+            ignore_per_row_errors=True,
+            early_finite_check=early_finite_check,
         )
     )
 
@@ -346,6 +350,128 @@ def test_a_crs_on_only_one_side_is_refused() -> None:
 
     with pytest.raises(ValueError, match="only one of the geometries"):
         df.select(geo.shortest_line_between("a", "b"))
+
+
+def _with_crs(name: str, dtype: GeoArrowType, wkt: str, crs: str) -> pl.Series:
+    return pl.select(geo.set_crs(_wkt(name, dtype, [wkt]), crs)).to_series()
+
+
+# At 60°N, (0 61) is 111 km away and (1.5 60) 84 km,
+# but in longitude/latitude (0 61) is the nearer one.
+_AT_60_NORTH = pl.DataFrame(
+    [
+        _with_crs("a", PointXY(), "POINT (0 60)", "EPSG:4326"),
+        _with_crs("b", MultiPointXY(), "MULTIPOINT ((0 61), (1.5 60))", "EPSG:4326"),
+    ]
+)
+
+
+def test_the_line_is_found_and_given_in_in_crs() -> None:
+    out = _AT_60_NORTH.select(geo.shortest_line_between("a", "b", in_crs="EPSG:3857"))
+
+    expected = _with_crs("a", LineStringXY(), "LINESTRING (0 60, 1.5 60)", "EPSG:4326")
+    expected = pl.select(geo.to_crs(expected, "EPSG:3857")).to_series()
+    assert out.schema["a"] == LineStringXY(crs="EPSG:3857")
+    assert_series_equal(out["a"], expected)
+
+
+def test_by_default_the_line_is_found_in_the_coordinates() -> None:
+    out = _AT_60_NORTH.select(geo.shortest_line_between("a", "b"))
+
+    assert out.schema["a"] == LineStringXY(crs="EPSG:4326")
+    assert _as_wkt(out["a"]) == ["LINESTRING(0 60,0 61)"]
+
+
+def test_the_line_is_given_in_any_in_crs() -> None:
+    out = _AT_60_NORTH.select(geo.shortest_line_between("a", "b", in_crs="EPSG:28992"))
+
+    assert out.schema["a"] == LineStringXY(crs="EPSG:28992")
+
+
+def test_different_crss_are_accepted_with_in_crs() -> None:
+    df = pl.DataFrame(
+        [
+            _with_crs("a", PointXY(), "POINT (0 0)", "EPSG:4326"),
+            _with_crs("b", PointXY(), "POINT (1000 0)", "EPSG:3857"),
+        ]
+    )
+
+    out = df.select(geo.shortest_line_between("a", "b", in_crs="EPSG:3857"))
+
+    assert _as_wkt(out["a"]) == ["LINESTRING(0 0,1000 0)"]
+
+
+@pytest.mark.parametrize(("b_crs", "reprojected"), [("EPSG:3857", 0), ("EPSG:4326", 1)])
+def test_a_geometry_already_in_in_crs_is_not_reprojected(
+    b_crs: str, reprojected: int
+) -> None:
+    lf = pl.LazyFrame(
+        [
+            _with_crs("a", PointXY(), "POINT (0 0)", "EPSG:3857"),
+            _with_crs("b", PointXY(), "POINT (1 0)", b_crs),
+        ]
+    )
+
+    plan = lf.select(geo.shortest_line_between("a", "b", in_crs="EPSG:3857")).explain()
+
+    assert plan.count(":to_crs(") == reprojected
+
+
+@pytest.mark.parametrize("side", ["a", "b"])
+def test_a_geometry_without_a_crs_is_refused_with_in_crs(side: str) -> None:
+    df = pl.DataFrame(
+        [
+            _wkt("a", PointXY(), ["POINT (0 0)"]),
+            _with_crs("b", PointXY(), "POINT (1 0)", "EPSG:4326"),
+        ]
+    )
+    a, b = ("a", "b") if side == "a" else ("b", "a")
+
+    with pytest.raises(ValueError, match="both geometries need a CRS"):
+        df.select(geo.shortest_line_between(a, b, in_crs="EPSG:3857"))
+
+
+def test_z_does_not_need_a_flag_to_be_reprojected() -> None:
+    df = pl.DataFrame(
+        [
+            _with_crs("a", PointXYZ(), "POINT Z (0 60 100)", "EPSG:4979"),
+            _with_crs("b", PointXY(), "POINT (1 60)", "EPSG:4326"),
+        ]
+    )
+
+    out = df.select(geo.shortest_line_between("a", "b", in_crs="EPSG:3857"))
+
+    assert out.schema["a"] == LineStringXY(crs="EPSG:3857")
+
+
+def test_z_does_not_need_a_flag_to_be_reprojected_to_a_crs_with_z() -> None:
+    df = pl.DataFrame(
+        [
+            _with_crs("a", PointXYZ(), "POINT Z (0 60 100)", "EPSG:4326"),
+            _with_crs("b", PointXY(), "POINT (1 60)", "EPSG:4326"),
+        ]
+    )
+
+    out = df.select(geo.shortest_line_between("a", "b", in_crs="EPSG:4979"))
+
+    assert out.schema["a"] == LineStringXY(crs="EPSG:4979")
+
+
+def test_nulls_and_empty_geometries_survive_the_reprojection() -> None:
+    many = _wkt("many", PointXY(), ["POINT (3 60)", None, "POINT EMPTY"])
+    many = pl.select(geo.set_crs(many, "EPSG:4326")).to_series()
+    one = _with_crs(
+        "one", PolygonXY(), "POLYGON ((0 59, 1 59, 1 61, 0 61, 0 59))", "EPSG:4326"
+    )
+    df = pl.DataFrame(many)
+
+    out = df.select(geo.shortest_line_between("many", one, in_crs="EPSG:3857"))
+    assert out.schema["many"] == LineStringXY(crs="EPSG:3857")
+    lines = _as_wkt(out["many"])
+    assert lines[0] is not None
+    assert lines[1:] == [None, "LINESTRING EMPTY"]
+    out = df.select(geo.shortest_line_between(one, "many", in_crs="EPSG:3857"))
+    assert _as_wkt(out.to_series())[1:] == [None, "LINESTRING EMPTY"]
 
 
 def test_unequal_lengths_are_refused() -> None:

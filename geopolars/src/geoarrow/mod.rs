@@ -99,7 +99,7 @@ pub fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
 }
 
 /// The storage of a geometry column, rechunked into a single chunk.
-pub fn storage_as_single_chunk(geometries: &Series) -> PolarsResult<ArrayRef> {
+fn storage_as_single_chunk(geometries: &Series) -> PolarsResult<ArrayRef> {
     Ok(geometries.ext()?.storage().rechunk().chunks()[0].clone())
 }
 

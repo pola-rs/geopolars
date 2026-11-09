@@ -55,7 +55,7 @@ pub(crate) fn is_empty_point(coords: &ValidCoords, i: usize) -> bool {
 /// Whether a coordinate has a NaN or infinite value.
 /// Pass `None` for an axis that is not there, or that is ignored.
 #[inline(always)]
-fn is_non_finite_value(x: f64, y: f64, z: Option<f64>, m: Option<f64>) -> bool {
+pub(crate) fn is_non_finite_value(x: f64, y: f64, z: Option<f64>, m: Option<f64>) -> bool {
     !(x.is_finite() & y.is_finite() & z.is_none_or(f64::is_finite) & m.is_none_or(f64::is_finite))
 }
 

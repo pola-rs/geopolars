@@ -22,7 +22,14 @@ pub enum GeoComputeError {
     /// A ring that has to be closed or empty, but is neither.
     NotClosed { vertices: usize },
     /// A coordinate with a NaN or infinite x or y, which GEOS cannot take.
-    NotFinite { position: (f64, f64) },
+    GeosNotFinite { position: (f64, f64) },
+    /// A coordinate with a NaN or infinite value where a native kernel needs a finite one.
+    NotFiniteCoordinate {
+        x: f64,
+        y: f64,
+        z: Option<f64>,
+        m: Option<f64>,
+    },
     /// A NaN or infinite distance.
     NotFiniteDistance { distance: f64 },
     /// A negative distance for a buffer of one side, whose side is not given by the sign.
@@ -68,11 +75,18 @@ impl fmt::Display for GeoComputeError {
                 "expects closed rings (the last vertex at the first) or empty ones, \
                 got a ring of {vertices} vertices that is not closed"
             ),
-            Self::NotFinite { position: (x, y) } => write!(
+            Self::GeosNotFinite { position: (x, y) } => write!(
                 f,
                 "GEOS expects finite x and y, got ({x}, {y}). \
                 GEOS does not support empty points inside a geometry"
             ),
+            Self::NotFiniteCoordinate { x, y, z, m } => {
+                write!(f, "expects finite coordinates, got ({x}, {y}")?;
+                for value in [z, m].into_iter().flatten() {
+                    write!(f, ", {value}")?;
+                }
+                write!(f, ")")
+            }
             Self::NotFiniteDistance { distance } => {
                 write!(f, "expects a finite distance, got: {distance}")
             }
@@ -98,7 +112,8 @@ impl std::error::Error for GeoComputeError {
             Self::Transformation { .. }
             | Self::NotARing { .. }
             | Self::NotClosed { .. }
-            | Self::NotFinite { .. }
+            | Self::GeosNotFinite { .. }
+            | Self::NotFiniteCoordinate { .. }
             | Self::NotFiniteDistance { .. }
             | Self::NegativeOneSidedDistance { .. }
             | Self::Split { .. } => None,

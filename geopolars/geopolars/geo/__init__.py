@@ -54,6 +54,7 @@ from geopolars.geo.filter_coordinates import NonFinite, filter_coordinates
 from geopolars.geo.fix_out_of_bounds import OutOfBounds, fix_out_of_bounds
 from geopolars.geo.force_dimension import force_2d, force_3d, force_m, without_m
 from geopolars.geo.has_repeats_in_succession import has_repeats_in_succession
+from geopolars.geo.hausdorff_line_between import hausdorff_line_between
 from geopolars.geo.interior import interior
 from geopolars.geo.intersection import intersection
 from geopolars.geo.is_ccw import is_ccw
@@ -115,6 +116,7 @@ __all__ = [
     "from_wkb",
     "from_wkt",
     "has_repeats_in_succession",
+    "hausdorff_line_between",
     "interior",
     "intersection",
     "is_ccw",

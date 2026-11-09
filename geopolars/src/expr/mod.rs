@@ -25,6 +25,7 @@ pub mod distance;
 pub mod filter_coordinates;
 pub mod fix_out_of_bounds;
 pub mod has_repeats_in_succession;
+pub mod hausdorff_line_between;
 pub mod intersection;
 pub mod is_ccw;
 pub mod is_empty;

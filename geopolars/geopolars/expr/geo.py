@@ -514,6 +514,7 @@ class ExprGeoNameSpace:
         self,
         other: IntoExprColumn,
         *,
+        in_crs: str | None = None,
         ignore_per_row_errors: bool = False,
         early_finite_check: bool = False,
     ) -> pl.Expr:
@@ -522,6 +523,7 @@ class ExprGeoNameSpace:
         return shortest_line_between(
             self._expr,
             other,
+            in_crs=in_crs,
             ignore_per_row_errors=ignore_per_row_errors,
             early_finite_check=early_finite_check,
         )
@@ -546,6 +548,26 @@ class ExprGeoNameSpace:
             ccw_outer=ccw_outer,
             ignore_per_row_errors=ignore_per_row_errors,
             early_finite_check=early_finite_check,
+        )
+
+    def hausdorff_line_between(
+        self,
+        other: IntoExprColumn,
+        *,
+        non_finite: Literal["raise", "drop", "drop_empty"] = "raise",
+        ignore_z: bool = False,
+        ignore_m: bool = False,
+        ignore_per_row_errors: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.hausdorff_line_between import hausdorff_line_between
+
+        return hausdorff_line_between(
+            self._expr,
+            other,
+            non_finite=non_finite,
+            ignore_z=ignore_z,
+            ignore_m=ignore_m,
+            ignore_per_row_errors=ignore_per_row_errors,
         )
 
     def is_ccw(self, *, holes_cw: bool = True) -> pl.Expr:

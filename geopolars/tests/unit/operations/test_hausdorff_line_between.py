@@ -1,0 +1,770 @@
+"""The line spanning the Hausdorff distance between two geometries."""
+
+from __future__ import annotations
+
+import math
+import random
+from typing import Any
+
+import numpy as np
+import polars as pl
+import pytest
+import shapely
+import shapely.affinity
+from polars.exceptions import ComputeError
+
+from geopolars import geo
+from geopolars.datatypes import (
+    GeoArrowType,
+    LineStringXY,
+    LineStringXYM,
+    LineStringXYZ,
+    LineStringXYZM,
+    MultiLineStringXY,
+    MultiPointXY,
+    MultiPolygonXY,
+    PointXY,
+    PointXYM,
+    PointXYZ,
+    PolygonXY,
+)
+
+
+def _wkt(name: str, dtype: GeoArrowType, wkts: list[str | None]) -> pl.Series:
+    out = pl.select(geo.from_wkt(pl.Series(wkts, dtype=pl.String), type(dtype)))
+    return out.to_series().alias(name)
+
+
+def _chunked(series: list[pl.Series]) -> pl.Series:
+    out = pl.concat(series, rechunk=False)
+    assert out.n_chunks() == len(series)
+    return out
+
+
+def _as_wkt(lines: pl.Series) -> list[str | None]:
+    return pl.select(geo.to_wkt(lines)).to_series().to_list()
+
+
+def _hausdorff_lines(
+    a: tuple[GeoArrowType, list[str | None]],
+    b: tuple[GeoArrowType, list[str | None]],
+    **kwargs: Any,
+) -> list[str | None]:
+    df = pl.DataFrame([_wkt("a", *a), _wkt("b", *b)])
+    return _as_wkt(df.select(geo.hausdorff_line_between("a", "b", **kwargs))["a"])
+
+
+def _coords_storage(axes: str) -> pl.Struct:
+    return pl.Struct(dict.fromkeys(axes, pl.Float64))
+
+
+def _line_strings(
+    name: str, rows: list[list[tuple[float, ...]]], axes: str = "xy"
+) -> pl.Series:
+    coords = [[dict(zip(axes, vertex, strict=True)) for vertex in row] for row in rows]
+    series = pl.Series(name, coords, dtype=pl.List(_coords_storage(axes)))
+    dtype = {"xy": LineStringXY(), "xyz": LineStringXYZ()}[axes]
+    return series.ext.to(dtype)
+
+
+def _multi_points(name: str, rows: list[list[tuple[float, float]]]) -> pl.Series:
+    coords = [[{"x": x, "y": y} for x, y in row] for row in rows]
+    series = pl.Series(name, coords, dtype=pl.List(_coords_storage("xy")))
+    return series.ext.to(MultiPointXY())
+
+
+_SQUARE = "POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))"
+_BUMP = "LINESTRING (0 1, 5 4, 10 1)"
+
+
+def test_the_line_runs_from_a_to_b() -> None:
+    line = (LineStringXY(), ["LINESTRING (0 0, 10 0)"])
+    point = (PointXY(), ["POINT (0 1)"])
+
+    assert _hausdorff_lines(line, point) == ["LINESTRING(10 0,0 1)"]
+    assert _hausdorff_lines(point, line) == ["LINESTRING(0 1,10 0)"]
+
+
+def test_the_line_can_end_between_two_vertices() -> None:
+    lines = _hausdorff_lines(
+        (LineStringXY(), ["LINESTRING (0 0, 10 0)"]), (LineStringXY(), [_BUMP])
+    )
+
+    assert lines == ["LINESTRING(5 0,5 4)"]
+
+
+def test_a_tie_between_the_directions_goes_to_a_to_b() -> None:
+    # (0 0) is sqrt(26) from b, and (15 1) is sqrt(26) from a.
+    lines = _hausdorff_lines(
+        (LineStringXY(), ["LINESTRING (0 0, 10 0)"]),
+        (LineStringXY(), ["LINESTRING (5 1, 15 1)"]),
+    )
+
+    assert lines == ["LINESTRING(0 0,5 1)"]
+
+
+def test_a_tie_between_two_vertices_goes_to_the_first() -> None:
+    lines = _hausdorff_lines(
+        (MultiPointXY(), ["MULTIPOINT ((0 0), (10 0))"]),
+        (MultiPointXY(), ["MULTIPOINT ((-1 0), (11 0))"]),
+    )
+
+    assert lines == ["LINESTRING(0 0,-1 0)"]
+
+
+@pytest.mark.parametrize(
+    ("b", "expected"),
+    [
+        ("MULTIPOINT ((0 1), (3 0), (0 3))", "LINESTRING(0 0,3 0)"),
+        ("MULTIPOINT ((0 1), (0 3), (3 0))", "LINESTRING(0 0,0 3)"),
+    ],
+)
+def test_a_tie_between_two_vertices_of_b_goes_to_the_first(
+    b: str, expected: str
+) -> None:
+    lines = _hausdorff_lines((PointXY(), ["POINT (0 0)"]), (MultiPointXY(), [b]))
+
+    assert lines == [expected]
+
+
+@pytest.mark.parametrize(
+    ("dtype", "wkt", "expected"),
+    [
+        (PointXY(), "POINT (2 3)", "LINESTRING(2 3,2 3)"),
+        (LineStringXY(), "LINESTRING (0 0, 1 0)", "LINESTRING(0 0,0 0)"),
+        (PolygonXY(), _SQUARE, "LINESTRING(0 0,0 0)"),
+    ],
+)
+def test_equal_geometries_give_a_line_of_length_zero(
+    dtype: GeoArrowType, wkt: str, expected: str
+) -> None:
+    assert _hausdorff_lines((dtype, [wkt]), (dtype, [wkt])) == [expected]
+
+
+def test_a_polygon_is_measured_by_its_rings() -> None:
+    corners_and_centre = "MULTIPOINT ((0 0), (1 0), (1 1), (0 1), (0.5 0.5))"
+
+    lines = _hausdorff_lines(
+        (MultiPointXY(), [corners_and_centre]), (PolygonXY(), [_SQUARE])
+    )
+
+    assert lines == ["LINESTRING(0.5 0.5,0.5 0)"]
+
+
+_HOLED = "((0 0, 10 0, 10 10, 0 10, 0 0), (4 4, 6 4, 6 6, 4 6, 4 4))"
+
+
+@pytest.mark.parametrize(
+    ("dtype", "wkt"),
+    [
+        (PolygonXY(), f"POLYGON {_HOLED}"),
+        # The holed polygon comes second, so its rings' indices differ from its own.
+        (
+            MultiPolygonXY(),
+            f"MULTIPOLYGON (((10 10, 10 9.5, 9.5 10, 10 10)), {_HOLED})",
+        ),
+    ],
+)
+def test_a_polygon_is_measured_by_its_holes_too(dtype: GeoArrowType, wkt: str) -> None:
+    corners = "(0 0), (10 0), (10 10), (0 10), (4 4), (6 4), (6 6), (4 6)"
+    vertices = f"MULTIPOINT ({corners}, (5 5))"
+
+    lines = _hausdorff_lines((MultiPointXY(), [vertices]), (dtype, [wkt]))
+
+    # Without the hole, (5 5) would be 5 from the shell.
+    assert lines == ["LINESTRING(5 5,5 4)"]
+
+
+def test_z_and_m_are_kept_and_interpolated_between_two_vertices() -> None:
+    a = _wkt("a", LineStringXYZM(), ["LINESTRING ZM (0 0 0 20, 10 0 10 40)"])
+    b = _wkt("b", LineStringXYZM(), ["LINESTRING ZM (0 1 7 1, 5 4 7 2, 10 1 7 3)"])
+
+    out = pl.DataFrame([a, b]).select(geo.hausdorff_line_between("a", "b"))
+    assert out.schema["a"] == LineStringXYZM()
+    assert _as_wkt(out["a"]) == ["LINESTRING ZM(5 0 5 30,5 4 7 2)"]
+    out = pl.DataFrame([b.alias("a"), a.alias("b")]).select(
+        geo.hausdorff_line_between("a", "b")
+    )
+    assert _as_wkt(out["a"]) == ["LINESTRING ZM(5 4 7 2,5 0 5 30)"]
+
+
+def test_an_end_on_a_vertex_keeps_its_z_beside_an_ignored_nan() -> None:
+    a = _line_strings("a", [[(0, 0, math.nan), (10, 0, 1)]], axes="xyz")
+    b = _line_strings("b", [[(0, 1, 0), (20, 0, 0)]], axes="xyz")
+
+    out = pl.DataFrame([a, b]).select(
+        geo.hausdorff_line_between("a", "b", ignore_z=True)
+    )
+
+    # (20 0) is nearest to the end of `a`.
+    assert _as_wkt(out["a"]) == ["LINESTRING Z(10 0 1,20 0 0)"]
+
+
+@pytest.mark.parametrize(
+    ("b_dtype", "axis", "expected_dtype", "expected"),
+    [
+        (PointXYZ(), "z", LineStringXYZ(), "LINESTRING Z(10 0 2,0 1 3)"),
+        (PointXYM(), "m", LineStringXY(), "LINESTRING(10 0,0 1)"),
+    ],
+)
+def test_the_line_has_the_axes_both_sides_have(
+    b_dtype: GeoArrowType, axis: str, expected_dtype: GeoArrowType, expected: str
+) -> None:
+    a = _wkt("a", LineStringXYZ(), ["LINESTRING Z (0 0 1, 10 0 2)"])
+    b = pl.Series("b", [{"x": 0.0, "y": 1.0, axis: 3.0}]).ext.to(b_dtype)
+
+    out = pl.DataFrame([a, b]).select(geo.hausdorff_line_between("a", "b"))
+
+    assert out.schema["a"] == expected_dtype
+    assert _as_wkt(out["a"]) == [expected]
+
+
+def test_the_line_keeps_an_m_both_sides_have() -> None:
+    a = _wkt("a", LineStringXYM(), ["LINESTRING M (0 0 20, 10 0 40)"])
+    b = _wkt("b", LineStringXYZM(), ["LINESTRING ZM (0 1 7 1, 5 4 7 2, 10 1 7 3)"])
+
+    out = pl.DataFrame([a, b]).select(geo.hausdorff_line_between("a", "b"))
+
+    assert out.schema["a"] == LineStringXYM()
+    assert _as_wkt(out["a"]) == ["LINESTRING M(5 0 30,5 4 2)"]
+
+
+def test_an_empty_geometry_on_either_side_gives_an_empty_line() -> None:
+    a = (PointXY(), ["POINT EMPTY", "POINT (0 0)", "POINT (0 0)"])
+    b = (PolygonXY(), [_SQUARE, "POLYGON EMPTY", "POLYGON (EMPTY)"])
+    expected = ["LINESTRING EMPTY"] * 3
+
+    assert _hausdorff_lines(a, b) == expected
+    assert _hausdorff_lines(b, a) == expected
+
+
+def test_a_null_geometry_on_either_side_gives_a_null_line() -> None:
+    a = (PolygonXY(), [_SQUARE, None, None])
+    b = (PointXY(), [None, "POINT (0 0)", None])
+
+    assert _hausdorff_lines(a, b) == [None, None, None]
+
+
+def test_a_row_paired_with_a_null_never_raises() -> None:
+    a = _wkt("a", PointXY(), [None, "POINT (3 0)"])
+    b = _line_strings("b", [[(0, 0), (math.nan, 1)], [(0, 0), (1, 0)]])
+
+    out = pl.DataFrame([a, b]).select(geo.hausdorff_line_between("a", "b"))
+    assert _as_wkt(out["a"]) == [None, "LINESTRING(3 0,0 0)"]
+    one = _wkt("one", PointXY(), [None])
+    out = pl.DataFrame(b).select(geo.hausdorff_line_between(one, "b"))
+    assert _as_wkt(out.to_series()) == [None, None]
+
+
+def test_a_null_row_holding_a_nan_never_raises() -> None:
+    storage = pl.Series(
+        "a",
+        [[{"x": math.nan, "y": 1.0}], [{"x": 3.0, "y": 0.0}]],
+        dtype=LineStringXY()._geo_storage,
+    )
+    # `when/then` keeps the NaN under the null row.
+    masked = pl.select(
+        pl.when(pl.int_range(2) == 0).then(None).otherwise(storage).alias("a")
+    ).to_series()
+    b = _wkt("b", PointXY(), ["POINT (0 0)", "POINT (0 0)"])
+
+    out = pl.DataFrame([masked.ext.to(LineStringXY()), b]).select(
+        geo.hausdorff_line_between("a", "b")
+    )
+
+    assert _as_wkt(out["a"]) == [None, "LINESTRING(3 0,0 0)"]
+
+
+def test_a_single_vertex_line_string_counts_as_a_point() -> None:
+    lines = _hausdorff_lines(
+        (LineStringXY(), ["LINESTRING (3 0)"]), (PolygonXY(), [_SQUARE])
+    )
+
+    assert lines == ["LINESTRING(3 0,0 1)"]
+
+
+def test_a_segment_too_long_to_square_is_measured_to_its_nearer_end() -> None:
+    # Projecting (1e200 3) onto `b` gives inf / inf.
+    a = _line_strings("a", [[(-1e200, 0), (1e200, 3)]])
+    b = _line_strings("b", [[(-1e200, 0), (1e200, 0)]])
+
+    out = pl.DataFrame([a, b]).select(geo.hausdorff_line_between("a", "b"))
+
+    expected = [[{"x": 1e200, "y": 3.0}, {"x": 1e200, "y": 0.0}]]
+    assert out["a"].ext.storage().to_list() == expected
+
+
+def test_a_single_geometry_is_measured_against_every_row() -> None:
+    many = _chunked(
+        [
+            _wkt("many", PointXY(), ["POINT (3 0)", None]),
+            _wkt("many", PointXY(), ["POINT (0 3)", "POINT EMPTY"]),
+        ]
+    )
+    one = _wkt("one", LineStringXY(), ["LINESTRING (0 0, 1 0)"])
+    df = pl.DataFrame(many)
+
+    out = df.select(geo.hausdorff_line_between(one, "many"))
+    assert _as_wkt(out.to_series()) == [
+        "LINESTRING(0 0,3 0)",
+        None,
+        "LINESTRING(1 0,0 3)",
+        "LINESTRING EMPTY",
+    ]
+    out = df.select(geo.hausdorff_line_between("many", one))
+    assert _as_wkt(out["many"]) == [
+        "LINESTRING(3 0,0 0)",
+        None,
+        "LINESTRING(0 3,1 0)",
+        "LINESTRING EMPTY",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("one", "expected"),
+    [
+        (_wkt("one", PolygonXY(), ["POLYGON EMPTY"]), ["LINESTRING EMPTY", None]),
+        (_wkt("one", PointXY(), ["POINT EMPTY"]), ["LINESTRING EMPTY", None]),
+        (_wkt("one", PointXY(), [None]), [None, None]),
+    ],
+)
+def test_a_single_empty_or_null_geometry(
+    one: pl.Series, expected: list[str | None]
+) -> None:
+    df = pl.DataFrame(_wkt("many", PointXY(), ["POINT (3 0)", None]))
+
+    out = df.select(geo.hausdorff_line_between(one, "many"))
+    assert _as_wkt(out.to_series()) == expected
+    out = df.select(geo.hausdorff_line_between("many", one))
+    assert _as_wkt(out["many"]) == expected
+
+
+def test_a_single_null_geometry_against_no_rows_gives_no_lines() -> None:
+    df = pl.DataFrame(_wkt("many", PointXY(), []))
+    one = _wkt("one", PolygonXY(), [None])
+
+    assert df.select(geo.hausdorff_line_between("many", one)).height == 0
+    assert df.select(geo.hausdorff_line_between(one, "many")).height == 0
+
+
+def test_against_the_first_of_no_rows_gives_no_lines() -> None:
+    df = pl.DataFrame(
+        [_wkt("a", PointXY(), ["POINT (3 0)"]), _wkt("b", PolygonXY(), [_SQUARE])]
+    )
+
+    out = df.filter(False).select(
+        "a", geo.hausdorff_line_between("a", pl.col("b").first()).alias("line")
+    )
+
+    assert out.height == 0
+
+
+def test_columns_chunked_differently_are_paired_row_by_row() -> None:
+    a = _chunked([_wkt("a", PointXY(), ["POINT (3 0)"]), _wkt("a", PointXY(), [None])])
+    b = _wkt("b", PolygonXY(), [_SQUARE, _SQUARE])
+
+    out = pl.DataFrame([a, b]).select(geo.hausdorff_line_between("a", "b"))
+
+    assert _as_wkt(out["a"]) == ["LINESTRING(3 0,0 1)", None]
+
+
+_BUMP_SERIES = _wkt("b", LineStringXY(), [_BUMP])
+
+
+def _lines_with_vertex(vertex: tuple[float, float], **kwargs: Any) -> list[str | None]:
+    a = _line_strings("a", [[(0, 0), vertex, (10, 0)]])
+    out = pl.DataFrame([a, _BUMP_SERIES]).select(
+        geo.hausdorff_line_between("a", "b", **kwargs)
+    )
+    return _as_wkt(out["a"])
+
+
+@pytest.mark.parametrize("vertex", [(math.nan, 1.0), (math.inf, 1.0), (math.nan,) * 2])
+def test_a_vertex_that_is_not_finite_raises_by_default(
+    vertex: tuple[float, float],
+) -> None:
+    with pytest.raises(ComputeError, match="expects finite coordinates"):
+        _lines_with_vertex(vertex)
+
+
+@pytest.mark.parametrize("vertex", [(math.nan, 1.0), (math.inf, 1.0), (math.nan,) * 2])
+def test_drop_runs_the_line_on_past_a_vertex_that_is_not_finite(
+    vertex: tuple[float, float],
+) -> None:
+    assert _lines_with_vertex(vertex, non_finite="drop") == ["LINESTRING(5 0,5 4)"]
+
+
+@pytest.mark.parametrize("dtype", [MultiLineStringXY(), MultiPolygonXY()])
+def test_drop_measures_a_part_left_with_one_vertex_as_a_point(
+    dtype: GeoArrowType,
+) -> None:
+    gone = [{"x": math.nan, "y": 5.0}, {"x": math.nan, "y": 6.0}]
+    one_left = [{"x": 3.0, "y": 4.0}, {"x": math.nan, "y": math.nan}]
+    parts = [gone, one_left] if dtype == MultiLineStringXY() else [[gone], [one_left]]
+    b = pl.Series("b", [parts], dtype=dtype._geo_storage).ext.to(dtype)
+    a = _wkt("a", PointXY(), ["POINT (0 0)"])
+
+    out = pl.DataFrame([a, b]).select(
+        geo.hausdorff_line_between("a", "b", non_finite="drop")
+    )
+
+    assert _as_wkt(out["a"]) == ["LINESTRING(0 0,3 4)"]
+
+
+def test_drop_empty_drops_an_empty_point() -> None:
+    lines = _lines_with_vertex((math.nan, math.nan), non_finite="drop_empty")
+
+    assert lines == ["LINESTRING(5 0,5 4)"]
+
+
+def test_drop_empty_raises_on_any_other_vertex_that_is_not_finite() -> None:
+    with pytest.raises(ComputeError, match=r"expects finite coordinates, got \(NaN, 1"):
+        _lines_with_vertex((math.nan, 1.0), non_finite="drop_empty")
+
+
+@pytest.mark.parametrize("empty_first", [True, False])
+def test_drop_empty_a_geometry_of_only_empty_points_is_empty_against_a_failing_one(
+    empty_first: bool,
+) -> None:
+    only_empty = _multi_points("a", [[(math.nan, math.nan)]])
+    failing = _line_strings("b", [[(0, 0), (math.nan, 1)]])
+    a, b = ("a", "b") if empty_first else ("b", "a")
+
+    out = pl.DataFrame([only_empty, failing]).select(
+        geo.hausdorff_line_between(a, b, non_finite="drop_empty")
+    )
+
+    assert _as_wkt(out[a]) == ["LINESTRING EMPTY"]
+
+
+def test_drop_empty_a_geometry_of_only_empty_and_failing_points_raises() -> None:
+    a = _multi_points("a", [[(math.nan, math.nan), (math.nan, 1)]])
+
+    with pytest.raises(ComputeError, match=r"expects finite coordinates, got \(NaN, 1"):
+        pl.DataFrame([a, _BUMP_SERIES]).select(
+            geo.hausdorff_line_between("a", "b", non_finite="drop_empty")
+        )
+
+
+@pytest.mark.parametrize("non_finite", ["raise", "drop_empty"])
+def test_an_empty_point_inside_a_multipoint_raises_only_with_raise(
+    non_finite: str,
+) -> None:
+    a = _multi_points("a", [[(0, 0), (math.nan, math.nan)]])
+    df = pl.DataFrame([a, _wkt("b", PointXY(), ["POINT (0 1)"])])
+    if non_finite == "raise":
+        with pytest.raises(ComputeError, match="expects finite coordinates"):
+            df.select(geo.hausdorff_line_between("a", "b", non_finite=non_finite))
+    else:
+        out = df.select(geo.hausdorff_line_between("a", "b", non_finite=non_finite))
+        assert _as_wkt(out["a"]) == ["LINESTRING(0 0,0 1)"]
+
+
+@pytest.mark.parametrize("left_without_vertices_first", [True, False])
+def test_a_geometry_left_without_vertices_gives_an_empty_line(
+    left_without_vertices_first: bool,
+) -> None:
+    a = _multi_points("a", [[(math.nan, math.nan), (math.nan, 1.0)]])
+    df = pl.DataFrame([a, _wkt("b", PointXY(), ["POINT (0 1)"])])
+    x, y = ("a", "b") if left_without_vertices_first else ("b", "a")
+
+    out = df.select(geo.hausdorff_line_between(x, y, non_finite="drop"))
+
+    assert _as_wkt(out[x]) == ["LINESTRING EMPTY"]
+
+
+def _xy(vertices: list[tuple[float, float]]) -> list[dict[str, float]]:
+    return [{"x": x, "y": y} for x, y in vertices]
+
+
+_CLEAN = _xy([(0, 0), (1, 0), (1, 1), (0, 0)])
+_WITH_A_NAN = _xy([(0, 0), (math.nan, 0), (1, 1), (0, 0)])
+# Per kind, a row holding (NaN 0) and a clean row.
+_ROWS_WITH_A_NAN = {
+    "Point": (PointXY(), [{"x": math.nan, "y": 0.0}, {"x": 0.0, "y": 0.0}]),
+    "MultiPoint": (MultiPointXY(), [_WITH_A_NAN, _CLEAN]),
+    "LineString": (LineStringXY(), [_WITH_A_NAN, _CLEAN]),
+    "MultiLineString": (MultiLineStringXY(), [[_CLEAN, _WITH_A_NAN], [_CLEAN]]),
+    "Polygon": (PolygonXY(), [[_CLEAN, _WITH_A_NAN], [_CLEAN]]),
+    "MultiPolygon": (
+        MultiPolygonXY(),
+        [[[_CLEAN], [_CLEAN, _WITH_A_NAN]], [[_CLEAN]]],
+    ),
+}
+
+
+@pytest.mark.parametrize("nan_first", [True, False])
+@pytest.mark.parametrize("kind", _ROWS_WITH_A_NAN)
+def test_every_kind_follows_non_finite(kind: str, nan_first: bool) -> None:
+    dtype, rows = _ROWS_WITH_A_NAN[kind]
+    g = pl.Series("g", rows, dtype=dtype._geo_storage).ext.to(dtype)
+    df = pl.DataFrame([g, _wkt("o", PointXY(), ["POINT (5 5)"] * 2)])
+    a, b = ("g", "o") if nan_first else ("o", "g")
+    line = "LINESTRING(0 0,5 5)" if nan_first else "LINESTRING(5 5,0 0)"
+
+    for non_finite in ["raise", "drop_empty"]:
+        with pytest.raises(
+            ComputeError, match=r"expects finite coordinates, got \(NaN, 0\)"
+        ):
+            df.select(geo.hausdorff_line_between(a, b, non_finite=non_finite))
+        out = df.select(
+            geo.hausdorff_line_between(
+                a, b, non_finite=non_finite, ignore_per_row_errors=True
+            )
+        )
+        assert _as_wkt(out[a]) == [None, line]
+    out = df.select(geo.hausdorff_line_between(a, b, non_finite="drop"))
+    # The point is left without vertices, any other kind still has (0 0).
+    first = "LINESTRING EMPTY" if kind == "Point" else line
+    assert _as_wkt(out[a]) == [first, line]
+
+
+def test_drop_leaves_a_ring_that_loses_its_first_vertex_open() -> None:
+    ring = _xy([(math.nan, math.nan), (10, 0), (10, 10), (0, 10), (math.nan, math.nan)])
+    b = pl.Series("b", [[ring]], dtype=PolygonXY()._geo_storage).ext.to(PolygonXY())
+    a = _multi_points("a", [[(3, 3), (10, 0), (10, 10), (0, 10)]])
+
+    out = pl.DataFrame([a, b]).select(
+        geo.hausdorff_line_between("a", "b", non_finite="drop")
+    )
+
+    # Closed, the ring would run from (0 10) back to (10 0), within 3 of (3 3).
+    assert _as_wkt(out["a"]) == ["LINESTRING(3 3,10 3)"]
+
+
+def test_an_empty_point_row_never_raises() -> None:
+    lines = _hausdorff_lines((PointXY(), ["POINT EMPTY"]), (PolygonXY(), [_SQUARE]))
+
+    assert lines == ["LINESTRING EMPTY"]
+
+
+def test_a_z_that_is_not_finite_only_counts_without_ignore_z() -> None:
+    a = _line_strings("a", [[(0, 0, math.nan), (10, 0, 1)]], axes="xyz")
+    b = _wkt("b", PointXYZ(), ["POINT Z (0 1 2)"])
+    df = pl.DataFrame([a, b])
+
+    with pytest.raises(ComputeError, match="expects finite coordinates"):
+        df.select(geo.hausdorff_line_between("a", "b"))
+    out = df.select(geo.hausdorff_line_between("a", "b", ignore_z=True))
+    assert _as_wkt(out["a"]) == ["LINESTRING Z(10 0 1,0 1 2)"]
+
+
+def test_drop_leaves_out_a_vertex_whose_z_is_not_finite() -> None:
+    a = _line_strings("a", [[(0, 0, 1), (10, 0, 1), (30, 0, math.nan)]], axes="xyz")
+    b = _wkt("b", PointXYZ(), ["POINT Z (0 1 2)"])
+    df = pl.DataFrame([a, b])
+
+    out = df.select(geo.hausdorff_line_between("a", "b", non_finite="drop"))
+    assert _as_wkt(out["a"]) == ["LINESTRING Z(10 0 1,0 1 2)"]
+    out = df.select(
+        geo.hausdorff_line_between("a", "b", non_finite="drop", ignore_z=True)
+    )
+    [line] = _as_wkt(out["a"])
+    assert line is not None
+    assert line.startswith("LINESTRING Z(30 0 ")
+
+
+def test_ignore_z_does_not_make_a_vertex_the_empty_point() -> None:
+    def lines(vertex: tuple[float, float, float], **kwargs: Any) -> list[str | None]:
+        a = _line_strings("a", [[(0, 0, 1), vertex, (10, 0, 1)]], axes="xyz")
+        out = pl.DataFrame([a, _BUMP_SERIES]).select(
+            geo.hausdorff_line_between("a", "b", non_finite="drop_empty", **kwargs)
+        )
+        return _as_wkt(out["a"])
+
+    with pytest.raises(ComputeError, match=r"got \(NaN, NaN, 5\)"):
+        lines((math.nan, math.nan, 5), ignore_z=True)
+    assert lines((math.nan, math.nan, math.nan)) == ["LINESTRING(5 0,5 4)"]
+
+
+def test_an_m_that_is_not_finite_only_counts_without_ignore_m() -> None:
+    coords = [[{"x": 0.0, "y": 0.0, "m": math.nan}, {"x": 10.0, "y": 0.0, "m": 1.0}]]
+    a = pl.Series("a", coords, dtype=pl.List(_coords_storage("xym")))
+    b = _wkt("b", PointXYM(), ["POINT M (0 1 2)"])
+    df = pl.DataFrame([a.ext.to(LineStringXYM()), b])
+
+    with pytest.raises(ComputeError, match="expects finite coordinates"):
+        df.select(geo.hausdorff_line_between("a", "b", ignore_z=True))
+    out = df.select(geo.hausdorff_line_between("a", "b", ignore_m=True))
+    assert _as_wkt(out["a"]) == ["LINESTRING M(10 0 1,0 1 2)"]
+
+
+def test_a_failing_row_gives_null_with_ignore_per_row_errors() -> None:
+    a = _line_strings("a", [[(0, 0), (math.nan, 1), (10, 0)], [(0, 0), (10, 0)]])
+    b = _wkt("b", LineStringXY(), [_BUMP, _BUMP])
+
+    out = pl.DataFrame([a, b]).select(
+        pl.col("a").geo.hausdorff_line_between("b", ignore_per_row_errors=True)
+    )
+
+    assert _as_wkt(out["a"]) == [None, "LINESTRING(5 0,5 4)"]
+
+
+def test_an_empty_geometry_against_a_failing_one_gives_an_empty_line() -> None:
+    a = _wkt("a", PolygonXY(), ["POLYGON EMPTY", "POLYGON (EMPTY)"])
+    failing = [[(0, 0), (math.nan, 1)]] * 2
+    df = pl.DataFrame([a, _line_strings("b", failing)])
+    expected = ["LINESTRING EMPTY"] * 2
+
+    assert _as_wkt(df.select(geo.hausdorff_line_between("a", "b"))["a"]) == expected
+    assert _as_wkt(df.select(geo.hausdorff_line_between("b", "a"))["b"]) == expected
+
+
+def test_against_a_single_failing_geometry_every_row_is_null_with_ignore_per_row_errors() -> (
+    None
+):
+    one = _line_strings("one", [[(0, 0), (math.nan, 1), (10, 0)]])
+    df = pl.DataFrame(_wkt("many", PointXY(), ["POINT (3 0)", None]))
+
+    out = df.select(geo.hausdorff_line_between(one, "many", ignore_per_row_errors=True))
+    assert _as_wkt(out.to_series()) == [None, None]
+    out = df.select(geo.hausdorff_line_between("many", one, ignore_per_row_errors=True))
+    assert _as_wkt(out["many"]) == [None, None]
+
+
+def test_against_a_single_geometry_a_failing_row_gives_null_with_ignore_per_row_errors() -> (
+    None
+):
+    # The failing row is in the second chunk, which the kernel gets on its own.
+    many = _chunked(
+        [
+            _line_strings("many", [[(3, 0), (4, 0)]]),
+            _line_strings("many", [[(0, 0), (math.nan, 1)], [(3, 0), (4, 0)]]),
+        ]
+    )
+    one = _wkt("one", PointXY(), ["POINT (0 0)"])
+    df = pl.DataFrame(many)
+
+    with pytest.raises(ComputeError, match="expects finite coordinates"):
+        df.select(geo.hausdorff_line_between(one, "many"))
+    out = df.select(geo.hausdorff_line_between(one, "many", ignore_per_row_errors=True))
+    assert _as_wkt(out.to_series()) == [
+        "LINESTRING(0 0,4 0)",
+        None,
+        "LINESTRING(0 0,4 0)",
+    ]
+    out = df.select(geo.hausdorff_line_between("many", one, ignore_per_row_errors=True))
+    assert _as_wkt(out["many"]) == ["LINESTRING(4 0,0 0)", None, "LINESTRING(4 0,0 0)"]
+
+
+def test_an_unknown_non_finite_mode_is_refused() -> None:
+    with pytest.raises(ValueError, match="`non_finite` must be one of"):
+        geo.hausdorff_line_between("a", "b", non_finite="skip")  # type: ignore[arg-type]
+
+
+def test_the_line_carries_the_crs() -> None:
+    df = pl.DataFrame(
+        [_wkt("a", PolygonXY(), [_SQUARE]), _wkt("b", PointXY(), ["POINT (3 0)"])]
+    ).with_columns(geo.set_crs("a", "EPSG:28992"), geo.set_crs("b", "EPSG:28992"))
+
+    out = df.select(geo.hausdorff_line_between("a", "b"))
+
+    assert out.schema["a"] == LineStringXY(crs="EPSG:28992")
+
+
+def test_different_crss_are_refused() -> None:
+    df = pl.DataFrame(
+        [_wkt("a", PolygonXY(), [_SQUARE]), _wkt("b", PointXY(), ["POINT (0 0)"])]
+    ).with_columns(geo.set_crs("a", "EPSG:4326"), geo.set_crs("b", "EPSG:3857"))
+
+    with pytest.raises(ValueError, match="different CRSs"):
+        df.select(geo.hausdorff_line_between("a", "b"))
+
+
+def test_unequal_lengths_are_refused() -> None:
+    a = _wkt("a", PointXY(), ["POINT (0 0)", "POINT (1 1)"])
+    b = _wkt("b", PolygonXY(), [_SQUARE, _SQUARE, _SQUARE])
+
+    with pytest.raises(ComputeError, match="cannot pair 2 geometries with 3"):
+        pl.select(geo.hausdorff_line_between(a, b))
+
+
+_ORACLE_DTYPES = {
+    "Point": PointXY(),
+    "MultiPoint": MultiPointXY(),
+    "LineString": LineStringXY(),
+    "MultiLineString": MultiLineStringXY(),
+    "Polygon": PolygonXY(),
+    "MultiPolygon": MultiPolygonXY(),
+}
+
+
+def _random_shape(rng: random.Random, kind: str) -> Any:
+    def vertices(n: int) -> list[tuple[float, float]]:
+        return [(rng.uniform(-5, 5), rng.uniform(-5, 5)) for _ in range(n)]
+
+    def polygon() -> Any:
+        hull = shapely.convex_hull(shapely.MultiPoint(vertices(5)))
+        if rng.random() < 0.5:
+            return hull
+        # Shrunk about its centre, a convex hull lies inside itself.
+        hole = shapely.affinity.scale(hull, 0.3, 0.3)
+        return shapely.Polygon(hull.exterior, [hole.exterior])
+
+    if rng.random() < 0.05:
+        return shapely.from_wkt(f"{kind.upper()} EMPTY")
+    match kind:
+        case "Point":
+            return shapely.Point(vertices(1))
+        case "MultiPoint":
+            return shapely.MultiPoint(vertices(3))
+        case "LineString":
+            return shapely.LineString(vertices(3))
+        case "MultiLineString":
+            return shapely.MultiLineString([vertices(2), vertices(3)])
+        case "Polygon":
+            return polygon()
+        case _:
+            far = shapely.affinity.translate(polygon(), 20)
+            return shapely.MultiPolygon([polygon(), far])
+
+
+def _measured_part(geometries: np.ndarray) -> np.ndarray:
+    # A point inside a polygon is 0 away from it, but the line ends on its rings.
+    polygonal = np.isin(
+        shapely.get_type_id(geometries),
+        [shapely.GeometryType.POLYGON, shapely.GeometryType.MULTIPOLYGON],
+    )
+    return np.where(polygonal, shapely.boundary(geometries), geometries)
+
+
+# "drop" runs the search that leaves out vertices that are not finite,
+# which must give the same lines on finite data.
+@pytest.mark.parametrize("non_finite", ["raise", "drop"])
+@pytest.mark.parametrize("b_kind", _ORACLE_DTYPES)
+@pytest.mark.parametrize("a_kind", _ORACLE_DTYPES)
+def test_matches_shapely(a_kind: str, b_kind: str, non_finite: str) -> None:
+    rng = random.Random(f"{a_kind} {b_kind}")
+    a = [_random_shape(rng, a_kind) for _ in range(100)]
+    b = [_random_shape(rng, b_kind) for _ in range(100)]
+    df = pl.DataFrame(
+        [
+            _wkt(
+                "a",
+                _ORACLE_DTYPES[a_kind],
+                list(shapely.to_wkt(a, rounding_precision=-1)),
+            ),
+            _wkt(
+                "b",
+                _ORACLE_DTYPES[b_kind],
+                list(shapely.to_wkt(b, rounding_precision=-1)),
+            ),
+        ]
+    )
+
+    out = shapely.from_wkt(
+        _as_wkt(
+            df.select(geo.hausdorff_line_between("a", "b", non_finite=non_finite))["a"]
+        )
+    )
+
+    either_empty = shapely.is_empty(a) | shapely.is_empty(b)
+    assert all(shapely.is_empty(out) == either_empty)
+    kept = ~either_empty
+    out, a, b = out[kept], np.asarray(a)[kept], np.asarray(b)[kept]
+    starts = shapely.get_point(out, 0)
+    ends = shapely.get_point(out, 1)
+    expected = shapely.hausdorff_distance(a, b)
+    assert np.allclose(shapely.length(out), expected, rtol=0, atol=1e-12)
+    assert np.all(shapely.distance(starts, _measured_part(a)) < 1e-12)
+    assert np.all(shapely.distance(ends, _measured_part(b)) < 1e-12)
