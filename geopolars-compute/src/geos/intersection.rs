@@ -56,6 +56,7 @@ pub struct IntersectionPairs {
 impl IntersectionPairs {
     /// Implements the Python `intersection`, which documents its behaviour.
     /// Each side is converted to GEOS in full, so a row paired with a null can still fail.
+    /// A row paired with an empty geometry is not converted.
     /// If `ignore_per_row_errors=true`, a row that fails here or in the `into_*` method is null.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
@@ -66,7 +67,12 @@ impl IntersectionPairs {
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
         Ok(Self {
-            pairs: GeosPairs::new(a, b, ignore_per_row_errors, early_finite_check)?,
+            pairs: GeosPairs::new_skipping_partners_of_empty(
+                a,
+                b,
+                ignore_per_row_errors,
+                early_finite_check,
+            )?,
             ignore_per_row_errors,
         })
     }
@@ -155,7 +161,8 @@ fn intersect_rows(
 ) -> GeoComputeResult<GeosRow> {
     let intersection = match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(GeosRow::Null),
-        // An empty row never went to GEOS, and has nothing in common with anything.
+        // An empty row never went to GEOS, nor did its partner.
+        // Their intersection is empty.
         (GeosRow::Empty, _) | (_, GeosRow::Empty) => return Ok(GeosRow::Empty),
         (GeosRow::Geometry(a), GeosRow::Geometry(b)) => a
             .intersection(b)

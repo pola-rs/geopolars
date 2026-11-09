@@ -11,6 +11,7 @@ use geopolars_core::{
     List, MultiPolygonArray, PolygonArray, ScalarMultiPolygon, ScalarPolygon, ValidList,
 };
 use geos::{Geom, Geometry, GeometryTypes};
+use polars_arrow::bitmap::Bitmap;
 
 use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
@@ -27,8 +28,9 @@ impl ToGeos for ScalarPolygon<'_> {
 }
 
 impl ToGeosRows for PolygonArray {
-    fn to_geos_rows(
+    fn to_geos_rows_taking_as_empty(
         &self,
+        as_empty: Option<&Bitmap>,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
@@ -37,15 +39,19 @@ impl ToGeosRows for PolygonArray {
             coords: self.coords.len(),
             parts: [self.rings.len(), 0],
         };
-        rows_to_geos(
+        let geometries = rows_to_geos(
             &self.rows,
             &axes,
-            size_hint,
+            as_empty,
             ignore_per_row_errors,
             early_finite_check,
             |parts| self.rings.span(parts),
             |parts| polygon_to_geos(&axes, &self.rings, parts),
-        )
+        )?;
+        Ok(GeosGeometries {
+            geometries,
+            size_hint,
+        })
     }
 }
 
@@ -63,8 +69,9 @@ impl ToGeos for ScalarMultiPolygon<'_> {
 }
 
 impl ToGeosRows for MultiPolygonArray {
-    fn to_geos_rows(
+    fn to_geos_rows_taking_as_empty(
         &self,
+        as_empty: Option<&Bitmap>,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
@@ -73,15 +80,19 @@ impl ToGeosRows for MultiPolygonArray {
             coords: self.coords.len(),
             parts: [self.rings.len(), self.polygons.len()],
         };
-        rows_to_geos(
+        let geometries = rows_to_geos(
             &self.rows,
             &axes,
-            size_hint,
+            as_empty,
             ignore_per_row_errors,
             early_finite_check,
             |parts| self.rings.span(self.polygons.span(parts)),
             |parts| multi_polygon_to_geos(&axes, &self.polygons, &self.rings, parts),
-        )
+        )?;
+        Ok(GeosGeometries {
+            geometries,
+            size_hint,
+        })
     }
 }
 

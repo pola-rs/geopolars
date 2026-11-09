@@ -11,6 +11,7 @@ use geopolars_core::{
     LineStringArray, List, MultiLineStringArray, ScalarLineString, ScalarMultiLineString, ValidList,
 };
 use geos::{Geom, Geometry, GeometryTypes};
+use polars_arrow::bitmap::Bitmap;
 
 use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
@@ -27,8 +28,9 @@ impl ToGeos for ScalarLineString<'_> {
 }
 
 impl ToGeosRows for LineStringArray {
-    fn to_geos_rows(
+    fn to_geos_rows_taking_as_empty(
         &self,
+        as_empty: Option<&Bitmap>,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
@@ -37,15 +39,19 @@ impl ToGeosRows for LineStringArray {
             coords: self.coords.len(),
             parts: [0, 0],
         };
-        rows_to_geos(
+        let geometries = rows_to_geos(
             &self.rows,
             &axes,
-            size_hint,
+            as_empty,
             ignore_per_row_errors,
             early_finite_check,
             |vertices| vertices,
             |vertices| line_string_to_geos(&axes, vertices),
-        )
+        )?;
+        Ok(GeosGeometries {
+            geometries,
+            size_hint,
+        })
     }
 }
 
@@ -58,20 +64,23 @@ impl ToGeos for ScalarMultiLineString<'_> {
 }
 
 impl ToGeosRows for MultiLineStringArray {
-    fn to_geos_rows(
+    fn to_geos_rows_taking_as_empty(
         &self,
+        as_empty: Option<&Bitmap>,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
-        multi_line_strings_to_geos_rows(self, false, ignore_per_row_errors, early_finite_check)
+        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+        multi_line_strings_to_geos_rows(self, false, as_empty, ignore, early)
     }
 }
 
-/// Like [`ToGeosRows::to_geos_rows`].
+/// Like [`ToGeosRows::to_geos_rows_taking_as_empty`].
 /// If `drop_empty_parts=true`, a part without vertices is left out.
 pub(super) fn multi_line_strings_to_geos_rows(
     array: &MultiLineStringArray,
     drop_empty_parts: bool,
+    as_empty: Option<&Bitmap>,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 ) -> GeoComputeResult<GeosGeometries> {
@@ -80,15 +89,19 @@ pub(super) fn multi_line_strings_to_geos_rows(
         coords: array.coords.len(),
         parts: [array.lines.len(), 0],
     };
-    rows_to_geos(
+    let geometries = rows_to_geos(
         &array.rows,
         &axes,
-        size_hint,
+        as_empty,
         ignore_per_row_errors,
         early_finite_check,
         |parts| array.lines.span(parts),
         |parts| multi_line_string_to_geos(&axes, &array.lines, parts, drop_empty_parts),
-    )
+    )?;
+    Ok(GeosGeometries {
+        geometries,
+        size_hint,
+    })
 }
 
 /// Can copy from axes in one go.

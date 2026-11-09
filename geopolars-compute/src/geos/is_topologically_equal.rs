@@ -35,6 +35,9 @@ pub fn topologically_equal(
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 ) -> GeoComputeResult<BooleanArray> {
+    // TODO: Skip the partner of an empty row, as `intersection` does.
+    // That needs emptiness by coordinate count rather than by parts:
+    // `MULTIPOLYGON (EMPTY)` has a part, and GEOS finds it equal to `POLYGON EMPTY`.
     let pairs = GeosPairs::new(a, b, ignore_per_row_errors, early_finite_check)?;
     let tested = pairs
         .iter()

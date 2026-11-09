@@ -638,6 +638,48 @@ def test_against_a_single_null_geometry_no_row_reaches_geos(
     assert out.to_list() == [None, None]
 
 
+@pytest.mark.parametrize("early_finite_check", [False, True])
+def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
+    early_finite_check: bool,
+) -> None:
+    around = "POLYGON ((-1 -1, 3 -1, 3 3, -1 3, -1 -1))"
+    df = pl.DataFrame(
+        [
+            _series(
+                "a", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE, _FINITE_LINE]
+            ),
+            _wkt("b", PolygonXY(), ["POLYGON EMPTY", "POLYGON EMPTY", around]),
+        ]
+    )
+    expected = ["LINESTRING EMPTY", "LINESTRING EMPTY", "LINESTRING (0 0, 1 0, 1 1)"]
+    kwargs = {"early_finite_check": early_finite_check}
+
+    _assert_geometries(df.select(geo.intersection("a", "b", **kwargs))["a"], expected)
+    _assert_geometries(df.select(geo.intersection("b", "a", **kwargs))["b"], expected)
+
+
+@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize(
+    ("one", "empty"),
+    [
+        (_wkt("one", PolygonXY(), ["POLYGON EMPTY"]), "LINESTRING EMPTY"),
+        (_series("one", PointXY(), [{"x": math.nan, "y": math.nan}]), "POINT EMPTY"),
+    ],
+    ids=["polygon", "point"],
+)
+def test_against_a_single_empty_geometry_no_row_reaches_geos(
+    one: pl.Series, empty: str, early_finite_check: bool
+) -> None:
+    many = _series("many", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE])
+    df = pl.DataFrame(many)
+    kwargs = {"early_finite_check": early_finite_check}
+
+    out = df.select(geo.intersection("many", one, **kwargs))["many"]
+    assert _to_wkt(out) == [empty, empty]
+    out = df.select(geo.intersection(one, "many", **kwargs)).to_series()
+    assert _to_wkt(out) == [empty, empty]
+
+
 def _not_finite_lines(**kwargs: bool) -> pl.Series:
     """A line that is not finite, then one that is, each intersected with a square around both."""
     df = pl.DataFrame(

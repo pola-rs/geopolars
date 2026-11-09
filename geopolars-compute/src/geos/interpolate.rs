@@ -60,7 +60,13 @@ pub fn interpolate_multi_line_strings(
 ) -> GeoComputeResult<PointArray> {
     // GEOS reads a vertex of every part it walks, beyond the end of an empty one.
     interpolate_via_geos(
-        multi_line_strings_to_geos_rows(array, true, ignore_per_row_errors, early_finite_check)?,
+        multi_line_strings_to_geos_rows(
+            array,
+            true,
+            None,
+            ignore_per_row_errors,
+            early_finite_check,
+        )?,
         distance,
         mode,
         ignore_per_row_errors,

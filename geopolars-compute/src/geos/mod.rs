@@ -106,23 +106,47 @@ pub trait ToGeosRows {
         &self,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
+    ) -> GeoComputeResult<GeosGeometries> {
+        self.to_geos_rows_taking_as_empty(None, ignore_per_row_errors, early_finite_check)
+    }
+
+    /// See [`ToGeosRows::to_geos_rows`].
+    /// A row that is set in `as_empty` and not null is also `Empty`, without going to GEOS.
+    fn to_geos_rows_taking_as_empty(
+        &self,
+        as_empty: Option<&Bitmap>,
+        ignore_per_row_errors: bool,
+        early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries>;
 }
 
 impl ToGeosRows for GeometryArray {
-    fn to_geos_rows(
+    fn to_geos_rows_taking_as_empty(
         &self,
+        as_empty: Option<&Bitmap>,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let (ignore, early) = (ignore_per_row_errors, early_finite_check);
         match self {
-            GeometryArray::Point(array) => array.to_geos_rows(ignore, early),
-            GeometryArray::LineString(array) => array.to_geos_rows(ignore, early),
-            GeometryArray::Polygon(array) => array.to_geos_rows(ignore, early),
-            GeometryArray::MultiPoint(array) => array.to_geos_rows(ignore, early),
-            GeometryArray::MultiLineString(array) => array.to_geos_rows(ignore, early),
-            GeometryArray::MultiPolygon(array) => array.to_geos_rows(ignore, early),
+            GeometryArray::Point(array) => {
+                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+            }
+            GeometryArray::LineString(array) => {
+                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+            }
+            GeometryArray::Polygon(array) => {
+                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+            }
+            GeometryArray::MultiPoint(array) => {
+                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+            }
+            GeometryArray::MultiLineString(array) => {
+                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+            }
+            GeometryArray::MultiPolygon(array) => {
+                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+            }
         }
     }
 }
@@ -152,14 +176,15 @@ impl ToGeos for ScalarPoint<'_> {
 }
 
 impl ToGeosRows for PointArray {
-    fn to_geos_rows(
+    fn to_geos_rows_taking_as_empty(
         &self,
+        as_empty: Option<&Bitmap>,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let geometries = with_const_flags!(
             EARLY_FINITE_CHECK = early_finite_check;
-            points_to_geos::<EARLY_FINITE_CHECK>(&self.coords, ignore_per_row_errors)
+            points_to_geos::<EARLY_FINITE_CHECK>(&self.coords, as_empty, ignore_per_row_errors)
         )?;
         Ok(GeosGeometries {
             geometries,
@@ -173,6 +198,7 @@ impl ToGeosRows for PointArray {
 
 fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
     coords: &Coords,
+    as_empty: Option<&Bitmap>,
     ignore_per_row_errors: bool,
 ) -> GeoComputeResult<Vec<GeosRow>> {
     // GEOS has no batch constructor, so only the per-column work is shared.
@@ -181,6 +207,10 @@ fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
     let coord_type = coord_type(dim);
     let mut geometries = Vec::with_capacity(coords.len());
     for i in 0..coords.len() {
+        if is_taken_as_empty(as_empty, i) && coords.is_valid(i) {
+            geometries.push(GeosRow::Empty);
+            continue;
+        }
         let point = point_to_geos::<EARLY_FINITE_CHECK>(coords, i, len, coord_type);
         geometries.push(row_or_null(point, ignore_per_row_errors)?.into());
     }
@@ -188,8 +218,9 @@ fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
 }
 
 impl ToGeosRows for MultiPointArray {
-    fn to_geos_rows(
+    fn to_geos_rows_taking_as_empty(
         &self,
+        as_empty: Option<&Bitmap>,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
@@ -198,15 +229,19 @@ impl ToGeosRows for MultiPointArray {
             coords: self.coords.len(),
             parts: [0, 0],
         };
-        rows_to_geos(
+        let geometries = rows_to_geos(
             &self.rows,
             &axes,
-            size_hint,
+            as_empty,
             ignore_per_row_errors,
             early_finite_check,
             |vertices| vertices,
             |vertices| multi_point_to_geos(&axes, vertices),
-        )
+        )?;
+        Ok(GeosGeometries {
+            geometries,
+            size_hint,
+        })
     }
 }
 
@@ -276,32 +311,29 @@ fn point_to_geos<const EARLY_FINITE_CHECK: bool>(
     Ok(Some(Geometry::create_point(seq)?))
 }
 
-/// [`ToGeosRows`] for the rows of a list array, whose size is `size_hint`.
+/// The rows of [`ToGeosRows`] for a list array.
 /// `to_geos` builds one geometry from the range of a row's parts.
 /// `span` gives where the coordinates of those parts sit in `axes`.
 fn rows_to_geos(
     rows: &List,
     axes: &Axes,
-    size_hint: SizeHint<2>,
+    as_empty: Option<&Bitmap>,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
     span: impl Fn(Range<usize>) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
-) -> GeoComputeResult<GeosGeometries> {
-    let geometries = with_const_flags!(
+) -> GeoComputeResult<Vec<GeosRow>> {
+    with_const_flags!(
         ALL_VALID = rows.is_all_valid(), EARLY_FINITE_CHECK = early_finite_check;
         rows_to_geos_with::<ALL_VALID, EARLY_FINITE_CHECK>(
             rows,
             axes,
+            as_empty,
             ignore_per_row_errors,
             span,
             to_geos,
         )
-    )?;
-    Ok(GeosGeometries {
-        geometries,
-        size_hint,
-    })
+    )
 }
 
 /// See [`rows_to_geos`].
@@ -309,6 +341,7 @@ fn rows_to_geos(
 fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
     rows: &List,
     axes: &Axes,
+    as_empty: Option<&Bitmap>,
     ignore_per_row_errors: bool,
     span: impl Fn(Range<usize>) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
@@ -322,7 +355,7 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
             continue;
         }
         let parts = rows.range(i);
-        geometries.push(if parts.is_empty() {
+        geometries.push(if parts.is_empty() || is_taken_as_empty(as_empty, i) {
             GeosRow::Empty
         } else {
             let geometry = if EARLY_FINITE_CHECK {
@@ -335,6 +368,11 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
         });
     }
     Ok(geometries)
+}
+
+#[inline(always)]
+fn is_taken_as_empty(as_empty: Option<&Bitmap>, i: usize) -> bool {
+    as_empty.is_some_and(|as_empty| as_empty.get_bit(i))
 }
 
 /// The x, y, z and m values of every coordinate, as [`CoordSeq::new_from_arrays`] takes them.
