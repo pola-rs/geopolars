@@ -455,6 +455,36 @@ def test_z_does_not_need_a_flag_to_be_reprojected() -> None:
     assert out.schema["a"] == LineStringXY(crs="EPSG:3857")
 
 
+def test_z_does_not_need_a_flag_to_be_reprojected_to_a_crs_with_z() -> None:
+    df = pl.DataFrame(
+        [
+            _with_crs("a", PointXYZ(), "POINT Z (0 60 100)", "EPSG:4326"),
+            _with_crs("b", PointXY(), "POINT (1 60)", "EPSG:4326"),
+        ]
+    )
+
+    out = df.select(geo.shortest_line_between("a", "b", in_crs="EPSG:4979"))
+
+    assert out.schema["a"] == LineStringXY(crs="EPSG:4979")
+
+
+def test_by_default_nulls_and_empty_geometries_survive_the_reprojection() -> None:
+    many = _wkt("many", PointXY(), ["POINT (3 60)", None, "POINT EMPTY"])
+    many = pl.select(geo.set_crs(many, "EPSG:4326")).to_series()
+    one = _with_crs(
+        "one", PolygonXY(), "POLYGON ((0 59, 1 59, 1 61, 0 61, 0 59))", "EPSG:4326"
+    )
+    df = pl.DataFrame(many)
+
+    out = df.select(geo.shortest_line_between("many", one))
+    assert out.schema["many"] == LineStringXY(crs="EPSG:3857")
+    lines = _as_wkt(out["many"])
+    assert lines[0] is not None
+    assert lines[1:] == [None, "LINESTRING EMPTY"]
+    out = df.select(geo.shortest_line_between(one, "many"))
+    assert _as_wkt(out.to_series())[1:] == [None, "LINESTRING EMPTY"]
+
+
 def test_unequal_lengths_are_refused() -> None:
     a = _wkt("a", PointXY(), ["POINT (0 0)", "POINT (1 1)"])
     b = _wkt("b", PolygonXY(), [_SQUARE, _SQUARE, _SQUARE])
