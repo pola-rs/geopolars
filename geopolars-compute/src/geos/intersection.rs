@@ -17,15 +17,15 @@ use super::pairs::GeosPairs;
 use super::{GeosGeometries, GeosRow};
 use crate::{row_or_null, GeoComputeError, GeoComputeResult};
 
-/// The dimension of the parts an intersection keeps.
+/// The topological dimension of the parts an intersection keeps.
 #[derive(Debug, Clone, Copy)]
-enum IntersectionParts {
+enum TopologicalDimension {
     Points,
     Lines,
     Polygons,
 }
 
-impl IntersectionParts {
+impl TopologicalDimension {
     fn single_and_multi_types(self) -> (GeometryTypes, GeometryTypes) {
         match self {
             Self::Points => (GeometryTypes::Point, GeometryTypes::MultiPoint),
@@ -84,30 +84,30 @@ impl IntersectionPairs {
         } else {
             GeoDimension::XY
         };
-        self.intersected(IntersectionParts::Points, false)?
+        self.intersected(TopologicalDimension::Points, false)?
             .into_point_array(dim)
     }
 
     pub fn into_multi_points(self, z: bool) -> GeoComputeResult<MultiPointArray> {
-        let intersections = self.intersected(IntersectionParts::Points, true)?;
+        let intersections = self.intersected(TopologicalDimension::Points, true)?;
         with_const_flags!(Z = z; intersections.into_multi_point_array::<Z>(self.ignore_per_row_errors))
     }
 
     /// Several linestrings fail with [`GeoComputeError::Split`].
     pub fn into_line_strings(self, z: bool) -> GeoComputeResult<LineStringArray> {
-        let intersections = self.intersected(IntersectionParts::Lines, false)?;
+        let intersections = self.intersected(TopologicalDimension::Lines, false)?;
         with_const_flags!(Z = z; intersections.into_line_string_array::<Z>(self.ignore_per_row_errors))
     }
 
     pub fn into_multi_line_strings(self, z: bool) -> GeoComputeResult<MultiLineStringArray> {
-        let intersections = self.intersected(IntersectionParts::Lines, true)?;
+        let intersections = self.intersected(TopologicalDimension::Lines, true)?;
         with_const_flags!(Z = z; intersections.into_multi_line_string_array::<Z>(self.ignore_per_row_errors))
     }
 
     /// Several polygons fail with [`GeoComputeError::Split`].
     /// GEOS gives a clockwise exterior, so `ccw_outer=true` reverses every ring.
     pub fn into_polygons(self, z: bool, ccw_outer: bool) -> GeoComputeResult<PolygonArray> {
-        self.intersected(IntersectionParts::Polygons, false)?
+        self.intersected(TopologicalDimension::Polygons, false)?
             .into_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
     }
 
@@ -117,23 +117,23 @@ impl IntersectionPairs {
         z: bool,
         ccw_outer: bool,
     ) -> GeoComputeResult<MultiPolygonArray> {
-        self.intersected(IntersectionParts::Polygons, true)?
+        self.intersected(TopologicalDimension::Polygons, true)?
             .into_multi_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
     }
 
-    /// Every pair intersected, and narrowed down to its `parts`,
+    /// Every pair intersected, and narrowed down to its parts of `kept_dimension`,
     /// which the `into_*_array` of that kind takes:
     /// a single geometry, or with `multi=true` a single or a multi one.
     fn intersected(
         &self,
-        parts: IntersectionParts,
+        kept_dimension: TopologicalDimension,
         multi: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let ignore = self.ignore_per_row_errors;
         let geometries = self
             .pairs
             .iter()
-            .map(|(a, b)| intersect_rows(a, b, parts, multi, ignore))
+            .map(|(a, b)| intersect_rows(a, b, kept_dimension, multi, ignore))
             .collect::<GeoComputeResult<Vec<_>>>()?;
         Ok(GeosGeometries {
             geometries,
@@ -155,7 +155,7 @@ fn summed_size_hint((a, b): (SizeHint<2>, SizeHint<2>)) -> SizeHint<2> {
 fn intersect_rows(
     a: &GeosRow,
     b: &GeosRow,
-    parts: IntersectionParts,
+    kept_dimension: TopologicalDimension,
     multi: bool,
     ignore_per_row_errors: bool,
 ) -> GeoComputeResult<GeosRow> {
@@ -167,23 +167,23 @@ fn intersect_rows(
         (GeosRow::Geometry(a), GeosRow::Geometry(b)) => a
             .intersection(b)
             .map_err(GeoComputeError::from)
-            .and_then(|intersection| kept_parts(intersection, parts, multi)),
+            .and_then(|intersection| kept_parts(intersection, kept_dimension, multi)),
     };
     Ok(row_or_null(intersection.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
 
-/// Narrows an intersection down to its `parts`,
+/// Narrows an intersection down to its parts of `kept_dimension`,
 /// as one geometry if `multi=false` (or [`GeoComputeError::Split`] if it has several).
 /// With `multi=true`, a single part can stay a single geometry.
 fn kept_parts(
     intersection: Geometry,
-    parts: IntersectionParts,
+    kept_dimension: TopologicalDimension,
     multi: bool,
 ) -> GeoComputeResult<GeosRow> {
     if intersection.is_empty()? {
         return Ok(GeosRow::Empty);
     }
-    let (single_type, multi_type) = parts.single_and_multi_types();
+    let (single_type, multi_type) = kept_dimension.single_and_multi_types();
     let found = intersection.geometry_type()?;
     // The common cases: GEOS gave the kept dimension only, so nothing is copied.
     if found == single_type || (found == multi_type && multi) {
@@ -203,7 +203,7 @@ fn kept_parts(
     }
     match kept.len() {
         0 => Ok(GeosRow::Empty),
-        _ if multi => Ok(GeosRow::Geometry(parts.create_multi(kept)?)),
+        _ if multi => Ok(GeosRow::Geometry(kept_dimension.create_multi(kept)?)),
         1 => Ok(GeosRow::Geometry(kept.pop().expect("one part"))),
         // WARNING: Only since GEOS 3.15 are line pieces that join end to end
         // merged into one linestring.
@@ -215,6 +215,6 @@ fn kept_parts(
         // Pieces that meet where three or more lines do, such as where a line crosses itself,
         // are still apart.
         // This counts the parts as GEOS gives them.
-        parts => Err(GeoComputeError::Split { parts }),
+        count => Err(GeoComputeError::Split { parts: count }),
     }
 }

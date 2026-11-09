@@ -12,22 +12,22 @@ use crate::geoarrow::{
     GeoDimension, GeometryPairs, Kind,
 };
 
-/// The dimension of the parts an intersection keeps.
-/// Ordered by dimension, from points up to polygons.
+/// A topological dimension: of an input, or of the parts an intersection keeps.
+/// Ordered from points up to polygons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "lowercase")]
-enum Parts {
+enum TopologicalDimension {
     Points,
     Lines,
     Polygons,
 }
 
-impl Parts {
+impl TopologicalDimension {
     fn name(self) -> &'static str {
         match self {
-            Parts::Points => "points",
-            Parts::Lines => "lines",
-            Parts::Polygons => "polygons",
+            TopologicalDimension::Points => "points",
+            TopologicalDimension::Lines => "lines",
+            TopologicalDimension::Polygons => "polygons",
         }
     }
 }
@@ -36,29 +36,29 @@ impl Parts {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct IntersectionKwargs {
-    keep: Option<Parts>,
+    keep: Option<TopologicalDimension>,
     allow_splitting: bool,
     ccw_outer: bool,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 }
 
-fn dimension(kind: Kind) -> Parts {
+fn topological_dimension(kind: Kind) -> TopologicalDimension {
     match kind {
-        Kind::Point | Kind::MultiPoint => Parts::Points,
-        Kind::LineString | Kind::MultiLineString => Parts::Lines,
-        Kind::Polygon | Kind::MultiPolygon => Parts::Polygons,
+        Kind::Point | Kind::MultiPoint => TopologicalDimension::Points,
+        Kind::LineString | Kind::MultiLineString => TopologicalDimension::Lines,
+        Kind::Polygon | Kind::MultiPolygon => TopologicalDimension::Polygons,
     }
 }
 
-fn output_kind(parts: Parts, multi: bool) -> Kind {
-    match (parts, multi) {
-        (Parts::Points, false) => Kind::Point,
-        (Parts::Points, true) => Kind::MultiPoint,
-        (Parts::Lines, false) => Kind::LineString,
-        (Parts::Lines, true) => Kind::MultiLineString,
-        (Parts::Polygons, false) => Kind::Polygon,
-        (Parts::Polygons, true) => Kind::MultiPolygon,
+fn output_kind(kept_dimension: TopologicalDimension, multi: bool) -> Kind {
+    match (kept_dimension, multi) {
+        (TopologicalDimension::Points, false) => Kind::Point,
+        (TopologicalDimension::Points, true) => Kind::MultiPoint,
+        (TopologicalDimension::Lines, false) => Kind::LineString,
+        (TopologicalDimension::Lines, true) => Kind::MultiLineString,
+        (TopologicalDimension::Polygons, false) => Kind::Polygon,
+        (TopologicalDimension::Polygons, true) => Kind::MultiPolygon,
     }
 }
 
@@ -66,8 +66,8 @@ fn output_kind(parts: Parts, multi: bool) -> Kind {
 fn intersection_type(a: &DataType, b: &DataType, kwargs: &IntersectionKwargs) -> PolarsResult<Geo> {
     let (a, b) = (describe(a)?, describe(b)?);
     ensure_same_crs(&a, &b)?;
-    let lowest = dimension(a.kind).min(dimension(b.kind));
-    let parts = match kwargs.keep {
+    let lowest = topological_dimension(a.kind).min(topological_dimension(b.kind));
+    let kept_dimension = match kwargs.keep {
         None => lowest,
         Some(keep) => {
             // Python refuses a higher `keep` itself, so it never gets here.
@@ -84,7 +84,7 @@ fn intersection_type(a: &DataType, b: &DataType, kwargs: &IntersectionKwargs) ->
     let has_point = a.kind == Kind::Point || b.kind == Kind::Point;
     let single_lowest = [a.kind, b.kind]
         .into_iter()
-        .any(|kind| dimension(kind) == lowest && !kind.is_multi());
+        .any(|kind| topological_dimension(kind) == lowest && !kind.is_multi());
     let multi = !has_point && (kwargs.allow_splitting || !single_lowest);
     // m is dropped.
     let dim = if a.dim.has_z() || b.dim.has_z() {
@@ -92,7 +92,11 @@ fn intersection_type(a: &DataType, b: &DataType, kwargs: &IntersectionKwargs) ->
     } else {
         GeoDimension::XY
     };
-    Ok(Geo::new(output_kind(parts, multi), dim, a.metadata.clone()))
+    Ok(Geo::new(
+        output_kind(kept_dimension, multi),
+        dim,
+        a.metadata.clone(),
+    ))
 }
 
 /// For [`intersection`]: a geometry (see [`intersection_type`]), named after the first one.
