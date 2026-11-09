@@ -100,7 +100,9 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         set(),
     ),
     "shortest_line_between": (
-        lambda g: geo.shortest_line_between(g, g, ignore_per_row_errors=True),
+        lambda g: geo.shortest_line_between(
+            g, g, ignore_per_row_errors=True, in_crs=None
+        ),
         set(),
     ),
     "rings_overlap": (

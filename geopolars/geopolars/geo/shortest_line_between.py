@@ -9,6 +9,7 @@ from polars.plugins import register_plugin_function
 from geopolars._docs import doc
 from geopolars._utils import LIB
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
+from geopolars.geo.crs import to_crs
 
 if TYPE_CHECKING:
     import polars as pl
@@ -22,6 +23,7 @@ def shortest_line_between(
     a: IntoExprColumn,
     b: IntoExprColumn,
     *,
+    in_crs: str | None = "EPSG:3857",
     ignore_per_row_errors: bool = False,
     early_finite_check: bool = False,
 ) -> pl.Expr:
@@ -33,8 +35,24 @@ def shortest_line_between(
 
     Any kind and dimension can be on either side.
     Computed by GEOS in x and y only, so the line has no z or m.
-    It is measured in the plane of the coordinates,
-    so for a geographic CRS it is not the shortest line on the ellipsoid.
+
+    Distances are measured in the plane of `in_crs`:
+    both geometries are reprojected to it first (see `to_crs`),
+    and the line is given in it.
+    With `in_crs=None`, they are measured in the plane of their own coordinates instead.
+
+    | `in_crs` | `a` and `b` | line in |
+    | - | - | - |
+    | a CRS | both declare a CRS, which may differ | `in_crs` |
+    | `None` | both declare the same CRS, or neither does | the CRS of `a` and `b` |
+
+    No plane gives the shortest line on the ellipsoid everywhere.
+    Longitude/latitude is not a good plane to measure in:
+    away from the equator, a degree east is shorter than a degree north.
+    The default, Web Mercator (`"EPSG:3857"`), keeps those in proportion,
+    but it stretches distances further from the equator,
+    cannot hold latitudes beyond about 85°,
+    and puts geometries on either side of the antimeridian a world apart.
 
     If either geometry is empty, so is the line.
 
@@ -45,7 +63,7 @@ def shortest_line_between(
     Depending on where the vertex is, it raises or might give a line that is not the shortest.
     {early_finite_check}
 
-    {same_crs_pair}
+    With `in_crs=None`, {same_crs_pair}
 
     ```python
     df.with_columns(geo.shortest_line_between("house", "road").alias("driveway"))
@@ -59,7 +77,21 @@ def shortest_line_between(
     def build(
         a: pl.Expr, a_dtype: GeoArrowType, b: pl.Expr, b_dtype: GeoArrowType
     ) -> pl.Expr:
-        ensure_same_crs(a_dtype, b_dtype)
+        if in_crs is None:
+            ensure_same_crs(a_dtype, b_dtype)
+        else:
+            if not (a_dtype._declares_crs() and b_dtype._declares_crs()):
+                msg = (
+                    f"both geometries need a CRS to be reprojected to {in_crs}; "
+                    "pass `in_crs=None` to measure in the plane of their own coordinates"
+                )
+                raise ValueError(msg)
+            # GEOS drops z, so how it is reprojected does not matter.
+            z_flags = {
+                "allow_projection_with_unscaled_z": True,
+                "assume_z_in_target_crs": True,
+            }
+            a, b = to_crs(a, in_crs, **z_flags), to_crs(b, in_crs, **z_flags)
         return register_plugin_function(
             plugin_path=LIB,
             args=[a, b],

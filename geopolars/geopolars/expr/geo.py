@@ -514,6 +514,7 @@ class ExprGeoNameSpace:
         self,
         other: IntoExprColumn,
         *,
+        in_crs: str | None = "EPSG:3857",
         ignore_per_row_errors: bool = False,
         early_finite_check: bool = False,
     ) -> pl.Expr:
@@ -522,6 +523,7 @@ class ExprGeoNameSpace:
         return shortest_line_between(
             self._expr,
             other,
+            in_crs=in_crs,
             ignore_per_row_errors=ignore_per_row_errors,
             early_finite_check=early_finite_check,
         )

@@ -180,6 +180,14 @@ fn reprojected_valid<const Z: bool>(
     Ok([Some(xs), Some(ys), Z.then_some(zs)])
 }
 
+// TODO: hand PROJ whole buffers with `proj_trans_generic`, rather than one `proj_trans` call per coordinate.
+// Reprojecting costs about 35 ns per coordinate in memory,
+// more than GEOS takes for `shortest_line_between` on 32-vertex polygons.
+// Benchmark before switching: PROJ 9.6 loops over `proj_trans` inside `proj_trans_generic` too,
+// so this only saves our per-call overhead (the errno reset and check, and copying into new vectors).
+// PROJ also transforms the buffers in place and does not reset the errno per coordinate.
+// A failed coordinate is only marked as `HUGE_VAL`,
+// so finding the position for `GeoComputeError::Reproject` then needs a scan afterwards.
 /// `[x, y, z]` through PROJ (see the module docs).
 #[inline(always)]
 fn reproject_position(
