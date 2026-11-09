@@ -239,28 +239,51 @@ def test_a_dropped_part_is_not_a_split() -> None:
     _assert_geometries(out, ["POINT (2 0)"])
 
 
-@pytest.mark.parametrize(
-    ("a", "b", "parts"),
-    [
-        ((PolygonXY(), _U), (PolygonXY(), _ACROSS_THE_ARMS), 2),
-        ((LineStringXY(), _ZIGZAG), (PolygonXY(), _BELOW_HALF), 3),
-    ],
-)
-def test_a_split_raises_without_allow_splitting(
-    a: tuple[GeoArrowType, str], b: tuple[GeoArrowType, str], parts: int
-) -> None:
+# Touches `LINESTRING (0 0, 4 0)` at (1, 0) and (3, 0).
+_TOUCHING_TWICE = "LINESTRING (0 1, 1 0, 2 1, 3 0, 4 1)"
+
+# A pair that splits on each dimension, with the number of parts.
+_SPLITS = {
+    "polygons": ((PolygonXY(), _U), (PolygonXY(), _ACROSS_THE_ARMS), None, 2),
+    "lines": ((LineStringXY(), _ZIGZAG), (PolygonXY(), _BELOW_HALF), None, 3),
+    "points": (
+        (LineStringXY(), "LINESTRING (0 0, 4 0)"),
+        (LineStringXY(), _TOUCHING_TWICE),
+        "points",
+        2,
+    ),
+}
+
+
+@pytest.mark.parametrize("dimension", _SPLITS)
+def test_a_split_raises_without_allow_splitting(dimension: str) -> None:
+    a, b, keep, parts = _SPLITS[dimension]
+
     with pytest.raises(ComputeError, match=f"split into {parts} parts"):
-        _intersection((a[0], [a[1]]), (b[0], [b[1]]))
+        _intersection((a[0], [a[1]]), (b[0], [b[1]]), keep=keep)
 
 
-def test_a_split_gives_null_with_ignore_per_row_errors() -> None:
+# A pair on each dimension that does not split, with what it gives.
+_NO_SPLITS = {
+    "polygons": (_SQUARE, _SQUARE, _SQUARE),
+    "lines": ("LINESTRING (0 0, 4 0)", _BELOW_HALF, "LINESTRING (0 0, 4 0)"),
+    "points": ("LINESTRING (0 0, 4 4)", "LINESTRING (0 4, 4 0)", "POINT (2 2)"),
+}
+
+
+@pytest.mark.parametrize("dimension", _SPLITS)
+def test_a_split_gives_null_with_ignore_per_row_errors(dimension: str) -> None:
+    a, b, keep, _ = _SPLITS[dimension]
+    a_whole, b_whole, whole = _NO_SPLITS[dimension]
+
     out = _intersection(
-        (PolygonXY(), [_U, _SQUARE]),
-        (PolygonXY(), [_ACROSS_THE_ARMS, _SQUARE]),
+        (a[0], [a[1], a_whole]),
+        (b[0], [b[1], b_whole]),
+        keep=keep,
         ignore_per_row_errors=True,
     )
 
-    _assert_geometries(out, [None, _SQUARE])
+    _assert_geometries(out, [None, whole])
 
 
 def test_a_split_gives_every_part_with_allow_splitting() -> None:
@@ -307,10 +330,7 @@ def test_a_line_crossing_itself_splits_even_inside_a_polygon() -> None:
 
 def test_crossing_lines_give_their_crossings_when_points_are_kept() -> None:
     a = (LineStringXY(), ["LINESTRING (0 0, 4 4)", "LINESTRING (0 0, 4 0)"])
-    b = (
-        LineStringXY(),
-        ["LINESTRING (0 4, 4 0)", "LINESTRING (0 1, 1 0, 2 1, 3 0, 4 1)"],
-    )
+    b = (LineStringXY(), ["LINESTRING (0 4, 4 0)", _TOUCHING_TWICE])
 
     assert _to_wkt(_intersection(a, b)) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
     out = _intersection(a, b, keep="points", ignore_per_row_errors=True)
@@ -341,12 +361,15 @@ def test_a_point_gives_itself_inside_and_on_the_boundary_and_empty_outside() -> 
 
 def test_a_multipoint_keeps_the_points_inside() -> None:
     out = _intersection(
-        (MultiPointXY(), ["MULTIPOINT ((1 1), (5 5), (0.5 0.5))"]),
-        (PolygonXY(), [_SQUARE]),
+        (
+            MultiPointXY(),
+            ["MULTIPOINT ((1 1), (5 5), (0.5 0.5))", None, "MULTIPOINT ((5 5))"],
+        ),
+        (PolygonXY(), [_SQUARE] * 3),
     )
 
     assert out.dtype == MultiPointXY()
-    _assert_geometries(out, ["MULTIPOINT ((1 1), (0.5 0.5))"])
+    _assert_geometries(out, ["MULTIPOINT ((1 1), (0.5 0.5))", None, "MULTIPOINT EMPTY"])
 
 
 def test_the_exterior_runs_counter_clockwise_with_ccw_outer() -> None:
@@ -364,12 +387,9 @@ def test_ccw_outer_turns_every_part_and_keeps_holes_clockwise() -> None:
     def is_ccw(out: pl.Series) -> bool:
         return pl.select(geo.is_ccw(out)).item()
 
-    split = _intersection(
-        (PolygonXY(), [_U]),
-        (PolygonXY(), [_ACROSS_THE_ARMS]),
-        allow_splitting=True,
-        ccw_outer=True,
-    )
+    a, b = (PolygonXY(), [_U]), (PolygonXY(), [_ACROSS_THE_ARMS])
+    assert not is_ccw(_intersection(a, b, allow_splitting=True))
+    split = _intersection(a, b, allow_splitting=True, ccw_outer=True)
     assert split.dtype == MultiPolygonXY()
     assert is_ccw(split)
     holed = (
@@ -379,6 +399,18 @@ def test_ccw_outer_turns_every_part_and_keeps_holes_clockwise() -> None:
     big = (PolygonXY(), ["POLYGON ((-1 -1, 5 -1, 5 5, -1 5, -1 -1))"])
     assert not is_ccw(_intersection(holed, big))
     assert is_ccw(_intersection(holed, big, ccw_outer=True))
+
+
+@pytest.mark.parametrize("ccw_outer", [False, True])
+def test_a_hole_is_kept(ccw_outer: bool) -> None:
+    holed = "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))"
+    big = "POLYGON ((-1 -1, 5 -1, 5 5, -1 5, -1 -1))"
+
+    out = _intersection(
+        (PolygonXY(), [holed]), (PolygonXY(), [big]), ccw_outer=ccw_outer
+    )
+
+    _assert_geometries(out, [holed])
 
 
 @pytest.mark.parametrize("z_first", [True, False])
@@ -391,6 +423,18 @@ def test_z_from_one_side_is_filled_in(z_first: bool) -> None:
 
     assert out.dtype == PointXYZ()
     assert _to_wkt(out) == ["POINT Z(1 1 20)"]
+
+
+def test_z_from_one_side_is_filled_in_for_a_multipoint() -> None:
+    flat = "POLYGON Z ((0 0 7, 2 0 7, 2 2 7, 0 2 7, 0 0 7))"
+    a = (MultiPointXY(), ["MULTIPOINT ((1 1), (0.5 0.5), (9 9))"])
+
+    out = _intersection(a, (PolygonXYZ(), [flat]))
+
+    assert out.dtype == MultiPointXYZ()
+    got = shapely.from_wkt(_to_wkt(out)[0])
+    assert shapely.equals(got, shapely.from_wkt("MULTIPOINT ((1 1), (0.5 0.5))"))
+    assert shapely.get_coordinates(got, include_z=True)[:, 2].tolist() == [7.0, 7.0]
 
 
 def test_polygons_with_z_give_polygons_with_z() -> None:
@@ -470,10 +514,18 @@ def test_m_is_dropped() -> None:
     a = (PointXYM(), ["POINT M (0.5 0.5 3)"])
     out = _intersection(a, (PolygonXY(), [_SQUARE]))
     assert out.dtype == PointXY()
+    assert _to_wkt(out) == ["POINT(0.5 0.5)"]
 
-    a = (PolygonXYZM(), ["POLYGON ZM ((0 0 1 1, 2 0 1 2, 2 2 1 3, 0 2 1 4, 0 0 1 1))"])
+    # The m differs from the z on every vertex, so neither can pass for the other.
+    a = (
+        PolygonXYZM(),
+        ["POLYGON ZM ((0 0 1 10, 2 0 1 20, 2 2 1 30, 0 2 1 40, 0 0 1 10))"],
+    )
     out = _intersection(a, (LineStringXYM(), ["LINESTRING M (-1 1 5, 3 1 5)"]))
     assert out.dtype == LineStringXYZ()
+    got = shapely.from_wkt(_to_wkt(out)[0])
+    assert shapely.equals(got, shapely.from_wkt("LINESTRING (0 1, 2 1)"))
+    assert shapely.get_coordinates(got, include_z=True)[:, 2].tolist() == [1.0, 1.0]
 
 
 def test_an_empty_geometry_on_either_side_gives_an_empty_one() -> None:
@@ -494,6 +546,27 @@ def test_a_null_geometry_on_either_side_gives_a_null_result() -> None:
     )
 
     assert out.to_list() == [None, None, None]
+
+
+def test_columns_chunked_differently_are_intersected_row_by_row() -> None:
+    line = "LINESTRING (0 0, 1 0, 1 1)"
+    a = _chunked(
+        [
+            _wkt("a", LineStringXY(), [line]),
+            _wkt("a", LineStringXY(), [None, line, line]),
+        ]
+    )
+    far = "LINESTRING (5 5, 6 6)"
+    b = _chunked(
+        [
+            _wkt("b", LineStringXY(), [line, line, far]),
+            _wkt("b", LineStringXY(), [None]),
+        ]
+    )
+
+    out = pl.DataFrame([a, b]).select(geo.intersection("a", "b"))["a"]
+
+    _assert_geometries(out, [line, None, "LINESTRING EMPTY", None])
 
 
 def test_a_single_geometry_is_intersected_with_every_row() -> None:
