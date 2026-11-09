@@ -30,6 +30,8 @@
 //! If `SKIP_NON_FINITE=true`, a coordinate that is not finite (and not empty) is left out of the search.
 //! Otherwise a row holding one fails.
 
+// PERF: There's plenty of opportunity to make stuff a little faster here.
+
 use std::ops::Range;
 
 use geopolars_core::{GeoDimension, GeometryArray, LineStringArray, List, ValidCoords, ValidList};
