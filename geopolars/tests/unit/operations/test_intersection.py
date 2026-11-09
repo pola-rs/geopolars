@@ -87,7 +87,11 @@ def _assert_geometries(
         if want.is_empty:
             assert got_row.is_empty, f"row {row}: {got_row}"
         else:
-            close = shapely.hausdorff_distance(got_row, want) <= tolerance
+            # Densified, so that the distance is also measured along the edges,
+            # and not only from the vertices, which a different shape can share.
+            close = tolerance > 0 and (
+                shapely.hausdorff_distance(got_row, want, densify=0.1) <= tolerance
+            )
             assert shapely.equals(got_row, want) or close, (
                 f"row {row}: {got_row} != {want}"
             )
