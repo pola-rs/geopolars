@@ -66,7 +66,7 @@ pub use has_repeats_in_succession::{
     multi_points_have_repeats_in_succession, multi_polygons_have_repeats_in_succession,
     points_have_repeats_in_succession, polygons_have_repeats_in_succession, Coincidence,
 };
-pub use hausdorff_line::{hausdorff_lines_against_one, hausdorff_lines_pairwise, HausdorffOptions};
+pub use hausdorff_line::{hausdorff_lines_against_one, hausdorff_lines_pairwise};
 pub use is_ccw::{
     line_strings_are_ccw, line_strings_to_ccw, multi_line_strings_are_ccw,
     multi_line_strings_to_ccw, multi_polygons_are_ccw, multi_polygons_to_ccw, polygons_are_ccw,

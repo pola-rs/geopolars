@@ -23,7 +23,7 @@ pub enum GeoComputeError {
     NotClosed { vertices: usize },
     /// A coordinate with a NaN or infinite x or y, which GEOS cannot take.
     GeosNotFinite { position: (f64, f64) },
-    /// A coordinate with a NaN or infinite value that the options do not let the kernel leave out.
+    /// A coordinate with a NaN or infinite value where a native kernel needs a finite one.
     NotFiniteCoordinate {
         x: f64,
         y: f64,

@@ -1,9 +1,7 @@
 //! The line spanning the Hausdorff distance between two geometries
 //! (see [`geopolars_compute::native::hausdorff_lines_pairwise`]).
 
-use geopolars_compute::native::{
-    hausdorff_lines_against_one, hausdorff_lines_pairwise, HausdorffOptions,
-};
+use geopolars_compute::native::{hausdorff_lines_against_one, hausdorff_lines_pairwise, NonFinite};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
@@ -13,22 +11,23 @@ use crate::geoarrow::{
     describe, ensure_same_crs, geometry_array, kind_of, storage_as_single_chunk, Geo, Kind,
 };
 
-/// See python. Its `non_finite` arrives as `skip_empty` and `skip_non_finite`.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+/// See python. Its `non_finite` arrives as `select_non_finite` and `select_empty`,
+/// which select the coordinates that fail their row.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HausdorffLineBetweenKwargs {
-    skip_empty: bool,
-    skip_non_finite: bool,
+    select_non_finite: bool,
+    select_empty: bool,
     ignore_z: bool,
     ignore_m: bool,
     ignore_per_row_errors: bool,
 }
 
 impl HausdorffLineBetweenKwargs {
-    fn options(&self) -> HausdorffOptions {
-        HausdorffOptions {
-            skip_empty: self.skip_empty,
-            skip_non_finite: self.skip_non_finite,
+    fn failing(&self) -> NonFinite {
+        NonFinite {
+            select_non_finite: self.select_non_finite,
+            select_empty: self.select_empty,
             ignore_z: self.ignore_z,
             ignore_m: self.ignore_m,
         }
@@ -72,7 +71,7 @@ fn every_hausdorff_line_against_one(
                 &one,
                 &many,
                 lines_start_on_one,
-                kwargs.options(),
+                kwargs.failing(),
                 kwargs.ignore_per_row_errors,
             )
             .into_polars()?;
@@ -97,7 +96,7 @@ fn hausdorff_line_between(
             let a = geometry_array(storage_as_single_chunk(a)?.as_ref(), kind_of(a)?)?;
             let b = geometry_array(storage_as_single_chunk(b)?.as_ref(), kind_of(b)?)?;
             let lines =
-                hausdorff_lines_pairwise(&a, &b, kwargs.options(), kwargs.ignore_per_row_errors)
+                hausdorff_lines_pairwise(&a, &b, kwargs.failing(), kwargs.ignore_per_row_errors)
                     .into_polars()?;
             vec![lines.into_list_array().boxed()]
         }

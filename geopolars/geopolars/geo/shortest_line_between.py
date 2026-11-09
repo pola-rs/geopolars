@@ -46,13 +46,15 @@ def shortest_line_between(
     | a CRS | both declare a CRS, which may differ | `in_crs` |
     | `None` | both declare the same CRS, or neither does | the CRS of `a` and `b` |
 
+    Any other combination raises at plan time.
+
     No plane gives the shortest line on the ellipsoid everywhere.
     Longitude/latitude is not a good plane to measure in:
     away from the equator, a degree east is shorter than a degree north.
     The default, Web Mercator (`"EPSG:3857"`), keeps those in proportion,
-    but it stretches distances further from the equator,
-    cannot hold latitudes beyond about 85°,
-    and puts geometries on either side of the antimeridian a world apart.
+    but the further from the equator, the more it stretches distances, without bound towards the poles.
+    It also puts geometries on either side of the antimeridian a world apart.
+    A latitude beyond 90° raises.
 
     If either geometry is empty, so is the line.
 
@@ -62,8 +64,6 @@ def shortest_line_between(
     GEOS then gives no meaningful answer.
     Depending on where the vertex is, it raises or might give a line that is not the shortest.
     {early_finite_check}
-
-    With `in_crs=None`, {same_crs_pair}
 
     ```python
     df.with_columns(geo.shortest_line_between("house", "road").alias("driveway"))

@@ -348,14 +348,14 @@ def test_a_vertex_that_is_not_finite_raises_by_default(
 
 
 @pytest.mark.parametrize("vertex", [(math.nan, 1.0), (math.inf, 1.0), (math.nan,) * 2])
-def test_skip_runs_the_line_on_past_a_vertex_that_is_not_finite(
+def test_drop_runs_the_line_on_past_a_vertex_that_is_not_finite(
     vertex: tuple[float, float],
 ) -> None:
-    assert _lines_with_vertex(vertex, non_finite="skip") == ["LINESTRING(5 0,5 4)"]
+    assert _lines_with_vertex(vertex, non_finite="drop") == ["LINESTRING(5 0,5 4)"]
 
 
 @pytest.mark.parametrize("dtype", [MultiLineStringXY(), MultiPolygonXY()])
-def test_skip_measures_a_part_left_with_one_vertex_as_a_point(
+def test_drop_measures_a_part_left_with_one_vertex_as_a_point(
     dtype: GeoArrowType,
 ) -> None:
     gone = [{"x": math.nan, "y": 5.0}, {"x": math.nan, "y": 6.0}]
@@ -365,25 +365,25 @@ def test_skip_measures_a_part_left_with_one_vertex_as_a_point(
     a = _wkt("a", PointXY(), ["POINT (0 0)"])
 
     out = pl.DataFrame([a, b]).select(
-        geo.hausdorff_line_between("a", "b", non_finite="skip")
+        geo.hausdorff_line_between("a", "b", non_finite="drop")
     )
 
     assert _as_wkt(out["a"]) == ["LINESTRING(0 0,3 4)"]
 
 
-def test_skip_empty_skips_an_empty_point() -> None:
-    lines = _lines_with_vertex((math.nan, math.nan), non_finite="skip_empty")
+def test_drop_empty_drops_an_empty_point() -> None:
+    lines = _lines_with_vertex((math.nan, math.nan), non_finite="drop_empty")
 
     assert lines == ["LINESTRING(5 0,5 4)"]
 
 
-def test_skip_empty_raises_on_any_other_vertex_that_is_not_finite() -> None:
+def test_drop_empty_raises_on_any_other_vertex_that_is_not_finite() -> None:
     with pytest.raises(ComputeError, match=r"expects finite coordinates, got \(NaN, 1"):
-        _lines_with_vertex((math.nan, 1.0), non_finite="skip_empty")
+        _lines_with_vertex((math.nan, 1.0), non_finite="drop_empty")
 
 
-@pytest.mark.parametrize("non_finite", ["raise", "skip_empty"])
-def test_an_empty_point_inside_a_multipoint_raises_without_skip(
+@pytest.mark.parametrize("non_finite", ["raise", "drop_empty"])
+def test_an_empty_point_inside_a_multipoint_raises_without_drop(
     non_finite: str,
 ) -> None:
     a = _multi_points("a", [[(0, 0), (math.nan, math.nan)]])
@@ -400,7 +400,7 @@ def test_a_geometry_left_without_vertices_gives_an_empty_line() -> None:
     a = _multi_points("a", [[(math.nan, math.nan), (math.nan, 1.0)]])
     df = pl.DataFrame([a, _wkt("b", PointXY(), ["POINT (0 1)"])])
 
-    out = df.select(geo.hausdorff_line_between("a", "b", non_finite="skip"))
+    out = df.select(geo.hausdorff_line_between("a", "b", non_finite="drop"))
 
     assert _as_wkt(out["a"]) == ["LINESTRING EMPTY"]
 
@@ -420,7 +420,7 @@ def test_a_z_that_is_not_finite_only_counts_without_ignore_z() -> None:
         df.select(geo.hausdorff_line_between("a", "b"))
     out = df.select(geo.hausdorff_line_between("a", "b", ignore_z=True))
     assert _as_wkt(out["a"]) == ["LINESTRING Z(10 0 1,0 1 2)"]
-    out = df.select(geo.hausdorff_line_between("a", "b", non_finite="skip"))
+    out = df.select(geo.hausdorff_line_between("a", "b", non_finite="drop"))
     assert _as_wkt(out["a"]) == ["LINESTRING Z(10 0 1,0 1 2)"]
 
 
@@ -470,7 +470,7 @@ def test_against_a_single_failing_geometry_every_row_is_null_with_ignore_per_row
 
 def test_an_unknown_non_finite_mode_is_refused() -> None:
     with pytest.raises(ValueError, match="`non_finite` must be one of"):
-        geo.hausdorff_line_between("a", "b", non_finite="drop")  # type: ignore[arg-type]
+        geo.hausdorff_line_between("a", "b", non_finite="skip")  # type: ignore[arg-type]
 
 
 def test_the_line_carries_the_crs() -> None:

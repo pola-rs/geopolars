@@ -39,7 +39,7 @@ the comment says when one without a CRS takes a different tier.
 | `close_rings` | - | | A | repeats the first vertex, or `snap_z`/`snap_m` | A | every ring | - | | A | every part | A | every ring |
 | `is_equal` | A | [^8] | A | same coordinates in order | A | same rings | A | | A | same parts | A | same polygons and rings |
 | `is_topologically_equal` | B | GEOS; x/y only [^7] [^8] | B | | B | | B | | B | | B | |
-| `shortest_line_between` | B | GEOS; x/y only, `LineStringXY` [^7] [^8] | B | | B | | B | | B | | B | |
+| `shortest_line_between` | C | [^10] | C | | C | | C | | C | | C | |
 | `intersection` | B | GEOS; z kept, m dropped; `keep` picks the dimension; always gives a point [^7] [^8] | B | `allow_splitting` gives the multi kind | B | `allow_splitting` gives the multi kind | B | | B | | B | |
 | `hausdorff_line_between` | A | discrete [^7] [^8] [^9] | A | | A | measured to the rings | A | | A | | A | |
 | `is_valid_geoarrow` | A | bounds from PROJ (plan-time) | A | | A | | A | EP | A | EP | A | EP |
@@ -110,3 +110,5 @@ In this table:
       or compares a single geometry on either side against every row of the other.
 [^9]: The output only has the axes both sides have:
       a z only if both have a z, and an m only if both have an m.
+[^10]: B with `in_crs=None`, which a geometry without a CRS needs.
+       This has a C-tier wrapper optionally to first project. [^7] [^8]

@@ -554,7 +554,7 @@ class ExprGeoNameSpace:
         self,
         other: IntoExprColumn,
         *,
-        non_finite: Literal["raise", "skip", "skip_empty"] = "raise",
+        non_finite: Literal["raise", "drop", "drop_empty"] = "raise",
         ignore_z: bool = False,
         ignore_m: bool = False,
         ignore_per_row_errors: bool = False,

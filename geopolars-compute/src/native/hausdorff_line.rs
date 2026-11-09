@@ -22,13 +22,11 @@
 //!
 //! ## `SKIP`
 //!
-//! The search is generic over `SKIP`, which is set when [HausdorffOptions] lets it leave out
-//! the empty point, other coordinates that are not finite, or both.
-//! If `SKIP=true`, it leaves out every coordinate that is not finite in the axes that count,
-//! without telling those apart.
-//! The options are only told apart by [Side::ensure_row_passes],
-//! which fails a row holding a coordinate they do not let the search leave out,
-//! before the search sees that row.
+//! The kernels take a [NonFinite] that selects the coordinates that fail their row.
+//! Any other coordinate that is not finite has to be left out of the search, which sets `SKIP=true`.
+//! The search then leaves out every coordinate that is not finite in x, y, or a z or m that is not ignored.
+//! It does not tell the selected ones apart,
+//! as [Side::ensure_row_passes] fails a row holding one before the search sees that row.
 
 // PERF: There's plenty of opportunity to make stuff a little faster here.
 
@@ -44,21 +42,8 @@ use super::{selected_coords, CoordinateSelection, NonFinite};
 use crate::passing::rows_passing;
 use crate::{GeoComputeError, GeoComputeResult};
 
-/// Which coordinates the search leaves out.
-/// Where neither `skip_empty` nor `skip_non_finite` lets it leave a coordinate out, its row fails.
-/// `ignore_z` and `ignore_m` are as in [NonFinite].
-#[derive(Debug, Clone, Copy, Default)]
-pub struct HausdorffOptions {
-    pub skip_empty: bool,
-    pub skip_non_finite: bool,
-    pub ignore_z: bool,
-    pub ignore_m: bool,
-}
-
-impl HausdorffOptions {
-    fn skip(self) -> bool {
-        self.skip_empty || self.skip_non_finite
-    }
+fn search_leaves_out_non_finite(failing: NonFinite) -> bool {
+    !(failing.select_non_finite && failing.select_empty)
 }
 
 /// How the rows of a geometry split into parts, level by level.
@@ -144,7 +129,7 @@ struct Side<'a> {
 }
 
 impl<'a> Side<'a> {
-    fn new(array: &'a GeometryArray, options: HausdorffOptions) -> Self {
+    fn new(array: &'a GeometryArray, failing: NonFinite) -> Self {
         let (coords, levels) = match array {
             GeometryArray::Point(array) => (array.coords.ignoring_validity(), Levels::Points),
             GeometryArray::MultiPoint(array) => (
@@ -185,27 +170,25 @@ impl<'a> Side<'a> {
         let mut side = Self {
             coords,
             levels,
-            counted_z: coords.z().filter(|_| !options.ignore_z),
-            counted_m: coords.m().filter(|_| !options.ignore_m),
+            counted_z: coords.z().filter(|_| !failing.ignore_z),
+            counted_m: coords.m().filter(|_| !failing.ignore_m),
             failing: None,
         };
-        side.failing = side.failing_coords(options);
+        side.failing = side.failing_coords(failing);
         side
     }
 
-    fn failing_coords(&self, options: HausdorffOptions) -> Option<(Bitmap, Option<Bitmap>)> {
-        let non_finite = NonFinite {
-            select_non_finite: !options.skip_non_finite,
+    fn failing_coords(&self, failing: NonFinite) -> Option<(Bitmap, Option<Bitmap>)> {
+        let failing = NonFinite {
             // An empty point row is an empty geometry, rather than one holding an empty point.
-            select_empty: !options.skip_empty && !matches!(self.levels, Levels::Points),
-            ignore_z: options.ignore_z,
-            ignore_m: options.ignore_m,
+            select_empty: failing.select_empty && !matches!(self.levels, Levels::Points),
+            ..failing
         };
-        if !non_finite.select_non_finite && !non_finite.select_empty {
+        if !failing.select_non_finite && !failing.select_empty {
             return None;
         }
         let selection = CoordinateSelection {
-            non_finite: Some(non_finite),
+            non_finite: Some(failing),
             bounds: None,
         };
         let failing = selected_coords(self.coords, &selection)?;
@@ -318,7 +301,9 @@ fn keep_nearer(nearest: &mut Option<(f64, OnPart)>, candidate: (f64, OnPart)) {
 }
 
 /// Finds the point on row `row` of `side` nearest to `point`, and its squared distance.
-/// It stops at the first point at most `bound` (squared) away, as the caller has no use for a nearer one.
+/// Once a point at most `bound` (squared) away turns up, it returns the nearest so far instead,
+/// as the caller has no use for a nearer one.
+/// It gives `None` if the row has no vertex to search.
 #[inline(always)]
 fn nearest_on_row<const SKIP: bool>(
     side: &Side,
@@ -356,7 +341,7 @@ fn nearest_on_row<const SKIP: bool>(
 
 /// Finds the vertex of row `from_row` of `from` that lies furthest from `to_row` of `to`,
 /// with its nearest point on `to`.
-/// Only a vertex further than `floor` (squared) is returned.
+/// It gives `None` if no vertex lies further than `floor` (squared), or if `to_row` has no vertex to search.
 /// A vertex that can no longer win stops being measured early, but the nearest point returned is exact.
 fn furthest<const SKIP: bool>(
     from: &Side,
@@ -394,8 +379,8 @@ fn furthest<const SKIP: bool>(
     furthest
 }
 
-/// Builder for lines
-/// no coordinates for an empty or null row, two for any other.
+/// Builds the output linestrings, with two vertices per row.
+/// A row that is empty, null, or failed gets none.
 struct Lines {
     x: Vec<f64>,
     y: Vec<f64>,
@@ -524,23 +509,25 @@ fn lines_between<const SKIP: bool>(
     Ok(lines.into_array(output_validity))
 }
 
-/// Finds the line spanning the Hausdorff distance from `a` to `b`, row by row.
+/// Finds, row by row, the line from `a` to `b` that spans their Hausdorff distance.
 /// Implements the Python `hausdorff_line_between`, which documents its behaviour.
+/// A row holding a coordinate that `failing` selects fails.
+/// The search leaves out every other coordinate that is not finite.
 /// The lines have the axes both `a` and `b` have.
 ///
 /// `a` and `b` must have the same length.
 pub fn hausdorff_lines_pairwise(
     a: &GeometryArray,
     b: &GeometryArray,
-    options: HausdorffOptions,
+    failing: NonFinite,
     ignore_per_row_errors: bool,
 ) -> GeoComputeResult<LineStringArray> {
     debug_assert_eq!(a.len(), b.len(), "`a` and `b` must have the same length");
     let rows = (0..a.len()).map(|i| (i, i));
     let validity = combine_validities_and(a.validity(), b.validity());
-    let (a, b) = (Side::new(a, options), Side::new(b, options));
+    let (a, b) = (Side::new(a, failing), Side::new(b, failing));
     with_const_flags!(
-        SKIP = options.skip();
+        SKIP = search_leaves_out_non_finite(failing);
         lines_between::<SKIP>(&a, &b, rows, validity, ignore_per_row_errors)
     )
 }
@@ -553,7 +540,7 @@ pub fn hausdorff_lines_against_one(
     one: &GeometryArray,
     many: &GeometryArray,
     lines_start_on_one: bool,
-    options: HausdorffOptions,
+    failing: NonFinite,
     ignore_per_row_errors: bool,
 ) -> GeoComputeResult<LineStringArray> {
     assert_eq!(one.len(), 1, "`one` must be a single row");
@@ -562,7 +549,7 @@ pub fn hausdorff_lines_against_one(
         true => many.validity().cloned(),
         false => Some(Bitmap::new_zeroed(len)),
     };
-    let (one, many) = (Side::new(one, options), Side::new(many, options));
+    let (one, many) = (Side::new(one, failing), Side::new(many, failing));
     let (a, b) = match lines_start_on_one {
         true => (&one, &many),
         false => (&many, &one),
@@ -572,7 +559,7 @@ pub fn hausdorff_lines_against_one(
         false => (i, 0),
     });
     with_const_flags!(
-        SKIP = options.skip();
+        SKIP = search_leaves_out_non_finite(failing);
         lines_between::<SKIP>(a, b, rows, validity, ignore_per_row_errors)
     )
 }

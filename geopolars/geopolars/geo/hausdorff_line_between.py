@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
-HausdorffNonFinite = Literal["raise", "skip", "skip_empty"]
+HausdorffNonFinite = Literal["raise", "drop", "drop_empty"]
 
 
 @doc()
@@ -53,19 +53,19 @@ def hausdorff_line_between(
     For a geographic CRS, the geodesic length of the line is therefore close to the Hausdorff distance on the ellipsoid,
     but not the same.
 
-    If either geometry is empty, the line is empty too(even if the other geometry would raise).
+    If either geometry is empty, the line is empty too, even if the other geometry would raise.
 
     A vertex is not finite if it is the empty point, or has a NaN or infinite value.
     {empty_point}
     `non_finite` sets what happens to such a vertex.
 
     - `"raise"`: a geometry with such a vertex raises.
-    - `"skip"`: such a vertex is left out.
+    - `"drop"`: such a vertex is left out.
       A line or ring then runs straight from the vertex before it to the vertex after it.
       A ring that loses its first vertex also loses its last one, and is no longer closed.
       It is then measured as a line up to the last vertex it keeps.
       A geometry left without vertices counts as empty.
-    - `"skip_empty"`: the empty point is left out, as with `"skip"`.
+    - `"drop_empty"`: the empty point is left out, as with `"drop"`.
       Any other vertex that is not finite raises.
 
     Whether a vertex is finite depends on its x, y, z, and m.
@@ -83,8 +83,8 @@ def hausdorff_line_between(
     """
     validate_one_of("non_finite", non_finite, HausdorffNonFinite)
     kwargs = {
-        "skip_empty": non_finite != "raise",
-        "skip_non_finite": non_finite == "skip",
+        "select_non_finite": non_finite != "drop",
+        "select_empty": non_finite == "raise",
         "ignore_z": ignore_z,
         "ignore_m": ignore_m,
         "ignore_per_row_errors": ignore_per_row_errors,
