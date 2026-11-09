@@ -345,6 +345,7 @@ fn nearest_on_row<const SKIP: bool>(
 /// `None` if no vertex is, or if either row has no vertex to search.
 ///
 /// A vertex stops being measured once it lies at most as far as the furthest so far, as it can then no longer win.
+/// It is first measured to where the previous vertex's nearest point lay, which often settles that at once.
 /// The vertex that wins is therefore always measured in full.
 fn furthest<const SKIP: bool>(
     from: &Side,
@@ -354,13 +355,20 @@ fn furthest<const SKIP: bool>(
     floor: f64,
 ) -> Option<Furthest> {
     let mut furthest: Option<Furthest> = None;
+    let mut previous_nearest: Option<OnPart> = None;
     for vertex in from.parts(row).flatten() {
         if !from.is_searched::<SKIP>(vertex) {
             continue;
         }
         let bound = furthest.map_or(floor, |furthest| furthest.distance_squared);
-        let (distance_squared, nearest) =
-            nearest_on_row::<SKIP>(to, to_row, from.xy(vertex), bound)?;
+        let point = from.xy(vertex);
+        if previous_nearest
+            .is_some_and(|on| nearest_on_segment(to, on.start, on.end, point).0 <= bound)
+        {
+            continue;
+        }
+        let (distance_squared, nearest) = nearest_on_row::<SKIP>(to, to_row, point, bound)?;
+        previous_nearest = Some(nearest);
         // Strictly further, so that a tie goes to the first, as in GEOS.
         if distance_squared > bound {
             furthest = Some(Furthest {
