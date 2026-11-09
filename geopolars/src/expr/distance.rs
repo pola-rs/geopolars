@@ -3,8 +3,6 @@
 //! Wraps functions from [geopolars_compute::native::distance]
 //!
 
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::rc::Rc;
 
@@ -19,41 +17,20 @@ use proj::Proj;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
+use crate::cache::ThreadCache;
 use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs_unless_bare, GeometryPairs, Kind};
 use crate::proj::GeodeticCrs;
 
-/// How many CRSes to keep in cache.
-/// If more are used, it will start over.
-const CACHED_CRSS: usize = 16;
-
 thread_local! {
-    // TODO: use pl hashmap, is faster.
-    // TODO: make a second 'cache' which literally stores the pointer of the string,
-    // so that it can re-use very quickly for the last used CRS (same loc in memory from header)
-    /// A cache of CRSes.
-    /// call to PROJ by parsing costs more than measuring a small morsel, so cached.
     /// Per thread, because a [`Proj`] can't be shared between threads.
-    /// With this, CRS can be re-used over multiple morsels.
-    static METRICS: RefCell<HashMap<String, Rc<GeodesicMetric>>> = RefCell::new(HashMap::new());
+    static METRICS: ThreadCache<String, GeodesicMetric> = ThreadCache::default();
 }
 
 /// Populates or gets the metric for `crs` from the cache.
 ///
 /// `crs` is anything PROJ accepts, as [`ExtensionMetadata::crs`](crate::geoarrow::crs::ExtensionMetadata::crs) gives it.
 pub fn geodesic_metric(crs: &str) -> PolarsResult<Rc<GeodesicMetric>> {
-    // A CRS that fails to build is not cached, and fails again the next time.
-    if let Some(metric) = METRICS.with_borrow(|metrics| metrics.get(crs).cloned()) {
-        return Ok(metric);
-    }
-    // Built outside the borrow, so nothing is held while PROJ runs.
-    let metric = Rc::new(build(crs)?);
-    METRICS.with_borrow_mut(|metrics| {
-        if metrics.len() >= CACHED_CRSS {
-            metrics.clear();
-        }
-        metrics.insert(crs.to_owned(), Rc::clone(&metric));
-    });
-    Ok(metric)
+    METRICS.with(|metrics| metrics.get_or_build(crs, || build(crs)))
 }
 
 fn build(crs: &str) -> PolarsResult<GeodesicMetric> {
@@ -225,6 +202,7 @@ mod tests {
     //! What the Python suite cannot see: whether a metric was built again.
 
     use super::*;
+    use crate::cache::CACHE_CAPACITY;
 
     #[test]
     fn a_thread_builds_the_metric_for_a_crs_once() {
@@ -242,10 +220,10 @@ mod tests {
 
     #[test]
     fn the_cache_starts_over_rather_than_growing() {
-        for zone in 1..=CACHED_CRSS + 1 {
+        for zone in 1..=CACHE_CAPACITY + 1 {
             geodesic_metric(&format!("EPSG:{}", 32600 + zone)).unwrap();
         }
 
-        assert!(METRICS.with_borrow(|metrics| metrics.len()) <= CACHED_CRSS);
+        assert!(METRICS.with(ThreadCache::len) <= CACHE_CAPACITY);
     }
 }

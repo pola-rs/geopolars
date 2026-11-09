@@ -1,6 +1,6 @@
 //! Moving a geometry from one coordinate reference system to another.
 
-use std::cell::{OnceCell, RefCell};
+use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
@@ -16,6 +16,7 @@ use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
+use crate::cache::{ThreadCache, CACHE_CAPACITY};
 use crate::geoarrow::{describe, Geo, Kind};
 use crate::proj::specifies_z;
 
@@ -46,10 +47,6 @@ fn kernel_output_type_to_crs(input_fields: &[Field], kwargs: ToCrsKwargs) -> Pol
     Ok(Field::new(field.name().clone(), geo.dtype()))
 }
 
-/// How many transformations the process, and each thread, keeps.
-/// If more are used, it starts over.
-const CACHED_TRANSFORMATIONS: usize = 16;
-
 /// One transformation per pair of CRSs for the whole process, which every thread clones.
 /// Creating one costs milliseconds, more than reprojecting a streaming batch,
 /// and threads creating them queue for the one connection PROJ shares to its database.
@@ -60,8 +57,8 @@ static TEMPLATES: LazyLock<Mutex<HashMap<(String, String), Transformation>>> =
 thread_local! {
     /// This thread's clones of [`TEMPLATES`],
     /// as a [`Transformation`] can't be shared between threads.
-    static TRANSFORMATIONS: RefCell<HashMap<(String, String), Rc<CachedTransformation>>> =
-        RefCell::new(HashMap::new());
+    static TRANSFORMATIONS: ThreadCache<(String, String), CachedTransformation> =
+        ThreadCache::default();
 }
 
 /// A transformation, with whether its CRSs specify z, once a geometry with a z needed to know.
@@ -84,23 +81,17 @@ impl CachedTransformation {
     }
 }
 
-/// The PROJ transformation from the CRS of `dtype` to `to`, cloned once per thread.
+/// The PROJ transformation from the CRS of `dtype` to `to`, cached per thread (see [`TRANSFORMATIONS`]).
 fn transformation(dtype: &DataType, to: &str) -> PolarsResult<Rc<CachedTransformation>> {
     let key = (describe(dtype)?.metadata.crs()?.to_owned(), to.to_owned());
-    if let Some(cached) = TRANSFORMATIONS.with_borrow(|cache| cache.get(&key).cloned()) {
-        return Ok(cached);
-    }
-    let transformation = Rc::new(CachedTransformation {
-        transformation: transformation_from_template(&key)?,
-        specify_z: OnceCell::new(),
-    });
-    TRANSFORMATIONS.with_borrow_mut(|cache| {
-        if cache.len() >= CACHED_TRANSFORMATIONS {
-            cache.clear();
-        }
-        cache.insert(key, Rc::clone(&transformation));
-    });
-    Ok(transformation)
+    TRANSFORMATIONS.with(|cache| {
+        cache.get_or_build(&key, || {
+            Ok(CachedTransformation {
+                transformation: transformation_from_template(&key)?,
+                specify_z: OnceCell::new(),
+            })
+        })
+    })
 }
 
 fn transformation_from_template(key: &(String, String)) -> PolarsResult<Transformation> {
@@ -111,7 +102,7 @@ fn transformation_from_template(key: &(String, String)) -> PolarsResult<Transfor
     if !templates.contains_key(key) {
         // One that fails to build is not cached, and fails again the next time.
         let template = Transformation::new(&key.0, &key.1).map_err(err)?;
-        if templates.len() >= CACHED_TRANSFORMATIONS {
+        if templates.len() >= CACHE_CAPACITY {
             templates.clear();
         }
         templates.insert(key.clone(), template);
