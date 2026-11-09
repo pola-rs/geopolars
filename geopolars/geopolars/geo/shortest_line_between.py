@@ -91,7 +91,15 @@ def shortest_line_between(
                 "allow_projection_with_unscaled_z": True,
                 "assume_z_in_target_crs": True,
             }
-            a, b = to_crs(a, in_crs, **z_flags), to_crs(b, in_crs, **z_flags)
+
+            # The CRSs are compared as written, so a CRS written differently
+            # (e.g. as PROJJSON) is still reprojected, which only costs time.
+            def in_plane(side: pl.Expr, dtype: GeoArrowType) -> pl.Expr:
+                if dtype._crs() == in_crs:
+                    return side
+                return to_crs(side, in_crs, **z_flags)
+
+            a, b = in_plane(a, a_dtype), in_plane(b, b_dtype)
         return register_plugin_function(
             plugin_path=LIB,
             args=[a, b],

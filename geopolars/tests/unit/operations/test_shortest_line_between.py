@@ -412,6 +412,22 @@ def test_different_crss_are_accepted_with_in_crs() -> None:
     assert _as_wkt(out["a"]) == ["LINESTRING(0 0,1000 0)"]
 
 
+@pytest.mark.parametrize(("b_crs", "reprojected"), [("EPSG:3857", 0), ("EPSG:4326", 1)])
+def test_a_geometry_already_in_in_crs_is_not_reprojected(
+    b_crs: str, reprojected: int
+) -> None:
+    lf = pl.LazyFrame(
+        [
+            _with_crs("a", PointXY(), "POINT (0 0)", "EPSG:3857"),
+            _with_crs("b", PointXY(), "POINT (1 0)", b_crs),
+        ]
+    )
+
+    plan = lf.select(geo.shortest_line_between("a", "b")).explain()
+
+    assert plan.count(":to_crs(") == reprojected
+
+
 @pytest.mark.parametrize("side", ["a", "b"])
 def test_a_geometry_without_a_crs_is_refused_with_in_crs(side: str) -> None:
     df = pl.DataFrame(
