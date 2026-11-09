@@ -514,7 +514,7 @@ class ExprGeoNameSpace:
         self,
         other: IntoExprColumn,
         *,
-        in_crs: str | None = "EPSG:3857",
+        in_crs: str | None = None,
         ignore_per_row_errors: bool = False,
         early_finite_check: bool = False,
     ) -> pl.Expr:

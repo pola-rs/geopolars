@@ -23,7 +23,7 @@ def shortest_line_between(
     a: IntoExprColumn,
     b: IntoExprColumn,
     *,
-    in_crs: str | None = "EPSG:3857",
+    in_crs: str | None = None,
     ignore_per_row_errors: bool = False,
     early_finite_check: bool = False,
 ) -> pl.Expr:
@@ -36,22 +36,22 @@ def shortest_line_between(
     Any kind and dimension can be on either side.
     Computed by GEOS in x and y only, so the line has no z or m.
 
-    Distances are measured in the plane of `in_crs`:
+    Distances are measured in the plane of the coordinates.
+    With `in_crs`, they are measured in the plane of `in_crs` instead:
     both geometries are reprojected to it first (see `to_crs`),
     and the line is given in it.
-    With `in_crs=None`, they are measured in the plane of their own coordinates instead.
 
     | `in_crs` | `a` and `b` | line in |
     | - | - | - |
-    | a CRS | both declare a CRS, which may differ | `in_crs` |
     | `None` | both declare the same CRS, or neither does | the CRS of `a` and `b` |
+    | a CRS | both declare a CRS, which may differ | `in_crs` |
 
     Any other combination raises at plan time.
 
     No plane gives the shortest line on the ellipsoid everywhere.
     Longitude/latitude is not a good plane to measure in:
     away from the equator, a degree east is shorter than a degree north.
-    The default, Web Mercator (`"EPSG:3857"`), keeps those in proportion,
+    Web Mercator (`in_crs="EPSG:3857"`) keeps those in proportion,
     but the further from the equator, the more it stretches distances, without bound towards the poles.
     It also puts geometries on either side of the antimeridian a world apart.
     A latitude beyond 90° raises.

@@ -48,9 +48,7 @@ def _shortest_lines(
     **kwargs: bool,
 ) -> list[str | None]:
     df = pl.DataFrame([_wkt("a", *a), _wkt("b", *b)])
-    return _as_wkt(
-        df.select(geo.shortest_line_between("a", "b", **kwargs, in_crs=None))["a"]
-    )
+    return _as_wkt(df.select(geo.shortest_line_between("a", "b", **kwargs))["a"])
 
 
 _SQUARE = "POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))"
@@ -79,7 +77,7 @@ def test_z_and_m_are_dropped() -> None:
         ["MULTIPOLYGON ZM (((0 0 1 2, 1 0 1 2, 1 1 1 2, 0 1 1 2, 0 0 1 2)))"],
     )
 
-    out = pl.DataFrame([a, b]).select(geo.shortest_line_between("a", "b", in_crs=None))
+    out = pl.DataFrame([a, b]).select(geo.shortest_line_between("a", "b"))
 
     assert out.schema["a"] == LineStringXY()
     assert _as_wkt(out["a"]) == ["LINESTRING(3 0.5,1 0.5)"]
@@ -111,14 +109,14 @@ def test_a_single_geometry_is_measured_against_every_row() -> None:
     one = _wkt("one", PolygonXY(), [_SQUARE])
     df = pl.DataFrame(many)
 
-    out = df.select(geo.shortest_line_between(one, "many", in_crs=None))
+    out = df.select(geo.shortest_line_between(one, "many"))
     assert _as_wkt(out.to_series()) == [
         "LINESTRING(1 0,3 0)",
         None,
         "LINESTRING(0 1,0 3)",
         "LINESTRING EMPTY",
     ]
-    out = df.select(geo.shortest_line_between("many", one, in_crs=None))
+    out = df.select(geo.shortest_line_between("many", one))
     assert _as_wkt(out["many"]) == [
         "LINESTRING(3 0,1 0)",
         None,
@@ -137,9 +135,9 @@ def test_a_single_geometry_is_measured_against_every_row() -> None:
 def test_a_single_empty_geometry_gives_empty_lines(one: pl.Series) -> None:
     df = pl.DataFrame(_wkt("many", PointXY(), ["POINT (3 0)", None]))
 
-    out = df.select(geo.shortest_line_between(one, "many", in_crs=None))
+    out = df.select(geo.shortest_line_between(one, "many"))
     assert _as_wkt(out.to_series()) == ["LINESTRING EMPTY", None]
-    out = df.select(geo.shortest_line_between("many", one, in_crs=None))
+    out = df.select(geo.shortest_line_between("many", one))
     assert _as_wkt(out["many"]) == ["LINESTRING EMPTY", None]
 
 
@@ -147,7 +145,7 @@ def test_columns_chunked_differently_are_paired_row_by_row() -> None:
     a = _chunked([_wkt("a", PointXY(), ["POINT (3 0)"]), _wkt("a", PointXY(), [None])])
     b = _wkt("b", PolygonXY(), [_SQUARE, _SQUARE])
 
-    out = pl.DataFrame([a, b]).select(geo.shortest_line_between("a", "b", in_crs=None))
+    out = pl.DataFrame([a, b]).select(geo.shortest_line_between("a", "b"))
 
     assert _as_wkt(out["a"]) == ["LINESTRING(3 0,1 0)", None]
 
@@ -176,10 +174,10 @@ def test_against_a_single_null_geometry_no_row_reaches_geos(
     df = pl.DataFrame(_line_strings("many", _FAILING_LINES))
     kwargs = {"early_finite_check": early_finite_check}
 
-    out = df.select(geo.shortest_line_between("many", one, **kwargs, in_crs=None))
+    out = df.select(geo.shortest_line_between("many", one, **kwargs))
     assert out["many"].to_list() == [None, None]
     assert out.schema["many"] == LineStringXY()
-    out = df.select(geo.shortest_line_between(one, "many", **kwargs, in_crs=None))
+    out = df.select(geo.shortest_line_between(one, "many", **kwargs))
     assert out.to_series().to_list() == [None, None]
 
 
@@ -187,8 +185,8 @@ def test_a_single_null_geometry_against_no_rows_gives_no_lines() -> None:
     df = pl.DataFrame(_wkt("many", PointXY(), []))
     one = _wkt("one", PolygonXY(), [None])
 
-    assert df.select(geo.shortest_line_between("many", one, in_crs=None)).height == 0
-    assert df.select(geo.shortest_line_between(one, "many", in_crs=None)).height == 0
+    assert df.select(geo.shortest_line_between("many", one)).height == 0
+    assert df.select(geo.shortest_line_between(one, "many")).height == 0
 
 
 def test_against_the_first_of_no_rows_gives_no_lines() -> None:
@@ -198,7 +196,7 @@ def test_against_the_first_of_no_rows_gives_no_lines() -> None:
 
     out = df.filter(False).select(
         "a",
-        geo.shortest_line_between("a", pl.col("b").first(), in_crs=None).alias("line"),
+        geo.shortest_line_between("a", pl.col("b").first()).alias("line"),
     )
 
     assert out.height == 0
@@ -214,9 +212,7 @@ def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -
     )
 
     out = df.select(
-        geo.shortest_line_between(
-            "a", "b", early_finite_check=early_finite_check, in_crs=None
-        )
+        geo.shortest_line_between("a", "b", early_finite_check=early_finite_check)
     )
 
     assert _as_wkt(out["a"]) == [None, None, "LINESTRING(3 0,1 0)"]
@@ -236,9 +232,9 @@ def test_against_a_single_empty_geometry_no_row_reaches_geos(
     df = pl.DataFrame(_line_strings("many", _FAILING_LINES))
     kwargs = {"early_finite_check": early_finite_check}
 
-    out = df.select(geo.shortest_line_between("many", one, **kwargs, in_crs=None))
+    out = df.select(geo.shortest_line_between("many", one, **kwargs))
     assert _as_wkt(out["many"]) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
-    out = df.select(geo.shortest_line_between(one, "many", **kwargs, in_crs=None))
+    out = df.select(geo.shortest_line_between(one, "many", **kwargs))
     assert _as_wkt(out.to_series()) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
 
 
@@ -254,9 +250,7 @@ def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
     )
 
     out = df.select(
-        geo.shortest_line_between(
-            "a", "b", early_finite_check=early_finite_check, in_crs=None
-        )
+        geo.shortest_line_between("a", "b", early_finite_check=early_finite_check)
     )
 
     assert _as_wkt(out["a"]) == [
@@ -276,9 +270,7 @@ def test_an_empty_geometry_against_a_failing_one_is_empty_with_ignore_per_row_er
         ]
     )
 
-    out = df.select(
-        geo.shortest_line_between("a", "b", ignore_per_row_errors=True, in_crs=None)
-    )
+    out = df.select(geo.shortest_line_between("a", "b", ignore_per_row_errors=True))
 
     assert _as_wkt(out["a"]) == ["LINESTRING EMPTY"]
 
@@ -287,7 +279,7 @@ def test_geos_raises_on_a_geometry_that_is_not_finite() -> None:
     b = _wkt("b", PolygonXY(), [_SQUARE])
 
     with pytest.raises(ComputeError, match="GEOSNearestPoints_r failed"):
-        pl.select(geo.shortest_line_between(_NOT_FINITE_POINT, b, in_crs=None))
+        pl.select(geo.shortest_line_between(_NOT_FINITE_POINT, b))
 
 
 def test_the_early_finite_check_raises_before_geos() -> None:
@@ -295,9 +287,7 @@ def test_the_early_finite_check_raises_before_geos() -> None:
 
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         pl.select(
-            geo.shortest_line_between(
-                _NOT_FINITE_POINT, b, early_finite_check=True, in_crs=None
-            )
+            geo.shortest_line_between(_NOT_FINITE_POINT, b, early_finite_check=True)
         )
 
 
@@ -313,7 +303,6 @@ def test_a_failing_row_gives_null_with_ignore_per_row_errors(
             "b",
             ignore_per_row_errors=True,
             early_finite_check=early_finite_check,
-            in_crs=None,
         )
     )
 
@@ -329,9 +318,9 @@ def test_against_a_single_geometry_a_failing_row_gives_null_with_ignore_per_row_
     one = _wkt("one", PolygonXY(), [_SQUARE])
     kwargs = {"ignore_per_row_errors": True, "early_finite_check": early_finite_check}
 
-    out = df.select(geo.shortest_line_between(one, "many", **kwargs, in_crs=None))
+    out = df.select(geo.shortest_line_between(one, "many", **kwargs))
     assert _as_wkt(out.to_series()) == [None, "LINESTRING(1 0,3 0)"]
-    out = df.select(geo.shortest_line_between("many", one, **kwargs, in_crs=None))
+    out = df.select(geo.shortest_line_between("many", one, **kwargs))
     assert _as_wkt(out["many"]) == [None, "LINESTRING(3 0,1 0)"]
 
 
@@ -340,7 +329,7 @@ def test_the_line_carries_the_crs() -> None:
         [_wkt("a", PolygonXY(), [_SQUARE]), _wkt("b", PointXY(), ["POINT (3 0)"])]
     ).with_columns(geo.set_crs("a", "EPSG:28992"), geo.set_crs("b", "EPSG:28992"))
 
-    out = df.select(geo.shortest_line_between("a", "b", in_crs=None))
+    out = df.select(geo.shortest_line_between("a", "b"))
 
     assert out.schema["a"] == LineStringXY(crs="EPSG:28992")
 
@@ -351,7 +340,7 @@ def test_different_crss_are_refused() -> None:
     ).with_columns(geo.set_crs("a", "EPSG:4326"), geo.set_crs("b", "EPSG:3857"))
 
     with pytest.raises(ValueError, match="different CRSs"):
-        df.select(geo.shortest_line_between("a", "b", in_crs=None))
+        df.select(geo.shortest_line_between("a", "b"))
 
 
 def test_a_crs_on_only_one_side_is_refused() -> None:
@@ -360,7 +349,7 @@ def test_a_crs_on_only_one_side_is_refused() -> None:
     ).with_columns(geo.set_crs("a", "EPSG:4326"))
 
     with pytest.raises(ValueError, match="only one of the geometries"):
-        df.select(geo.shortest_line_between("a", "b", in_crs=None))
+        df.select(geo.shortest_line_between("a", "b"))
 
 
 def _with_crs(name: str, dtype: GeoArrowType, wkt: str, crs: str) -> pl.Series:
@@ -377,8 +366,8 @@ _AT_60_NORTH = pl.DataFrame(
 )
 
 
-def test_by_default_the_line_is_found_and_given_in_web_mercator() -> None:
-    out = _AT_60_NORTH.select(geo.shortest_line_between("a", "b"))
+def test_the_line_is_found_and_given_in_in_crs() -> None:
+    out = _AT_60_NORTH.select(geo.shortest_line_between("a", "b", in_crs="EPSG:3857"))
 
     expected = _with_crs("a", LineStringXY(), "LINESTRING (0 60, 1.5 60)", "EPSG:4326")
     expected = pl.select(geo.to_crs(expected, "EPSG:3857")).to_series()
@@ -386,14 +375,14 @@ def test_by_default_the_line_is_found_and_given_in_web_mercator() -> None:
     assert_series_equal(out["a"], expected)
 
 
-def test_without_in_crs_the_line_is_found_in_the_coordinates() -> None:
-    out = _AT_60_NORTH.select(geo.shortest_line_between("a", "b", in_crs=None))
+def test_by_default_the_line_is_found_in_the_coordinates() -> None:
+    out = _AT_60_NORTH.select(geo.shortest_line_between("a", "b"))
 
     assert out.schema["a"] == LineStringXY(crs="EPSG:4326")
     assert _as_wkt(out["a"]) == ["LINESTRING(0 60,0 61)"]
 
 
-def test_the_line_is_given_in_in_crs() -> None:
+def test_the_line_is_given_in_any_in_crs() -> None:
     out = _AT_60_NORTH.select(geo.shortest_line_between("a", "b", in_crs="EPSG:28992"))
 
     assert out.schema["a"] == LineStringXY(crs="EPSG:28992")
@@ -407,7 +396,7 @@ def test_different_crss_are_accepted_with_in_crs() -> None:
         ]
     )
 
-    out = df.select(geo.shortest_line_between("a", "b"))
+    out = df.select(geo.shortest_line_between("a", "b", in_crs="EPSG:3857"))
 
     assert _as_wkt(out["a"]) == ["LINESTRING(0 0,1000 0)"]
 
@@ -423,7 +412,7 @@ def test_a_geometry_already_in_in_crs_is_not_reprojected(
         ]
     )
 
-    plan = lf.select(geo.shortest_line_between("a", "b")).explain()
+    plan = lf.select(geo.shortest_line_between("a", "b", in_crs="EPSG:3857")).explain()
 
     assert plan.count(":to_crs(") == reprojected
 
@@ -439,7 +428,7 @@ def test_a_geometry_without_a_crs_is_refused_with_in_crs(side: str) -> None:
     a, b = ("a", "b") if side == "a" else ("b", "a")
 
     with pytest.raises(ValueError, match="both geometries need a CRS"):
-        df.select(geo.shortest_line_between(a, b))
+        df.select(geo.shortest_line_between(a, b, in_crs="EPSG:3857"))
 
 
 def test_z_does_not_need_a_flag_to_be_reprojected() -> None:
@@ -450,7 +439,7 @@ def test_z_does_not_need_a_flag_to_be_reprojected() -> None:
         ]
     )
 
-    out = df.select(geo.shortest_line_between("a", "b"))
+    out = df.select(geo.shortest_line_between("a", "b", in_crs="EPSG:3857"))
 
     assert out.schema["a"] == LineStringXY(crs="EPSG:3857")
 
@@ -468,7 +457,7 @@ def test_z_does_not_need_a_flag_to_be_reprojected_to_a_crs_with_z() -> None:
     assert out.schema["a"] == LineStringXY(crs="EPSG:4979")
 
 
-def test_by_default_nulls_and_empty_geometries_survive_the_reprojection() -> None:
+def test_nulls_and_empty_geometries_survive_the_reprojection() -> None:
     many = _wkt("many", PointXY(), ["POINT (3 60)", None, "POINT EMPTY"])
     many = pl.select(geo.set_crs(many, "EPSG:4326")).to_series()
     one = _with_crs(
@@ -476,12 +465,12 @@ def test_by_default_nulls_and_empty_geometries_survive_the_reprojection() -> Non
     )
     df = pl.DataFrame(many)
 
-    out = df.select(geo.shortest_line_between("many", one))
+    out = df.select(geo.shortest_line_between("many", one, in_crs="EPSG:3857"))
     assert out.schema["many"] == LineStringXY(crs="EPSG:3857")
     lines = _as_wkt(out["many"])
     assert lines[0] is not None
     assert lines[1:] == [None, "LINESTRING EMPTY"]
-    out = df.select(geo.shortest_line_between(one, "many"))
+    out = df.select(geo.shortest_line_between(one, "many", in_crs="EPSG:3857"))
     assert _as_wkt(out.to_series())[1:] == [None, "LINESTRING EMPTY"]
 
 
@@ -490,7 +479,7 @@ def test_unequal_lengths_are_refused() -> None:
     b = _wkt("b", PolygonXY(), [_SQUARE, _SQUARE, _SQUARE])
 
     with pytest.raises(ComputeError, match="cannot pair 2 geometries with 3"):
-        pl.select(geo.shortest_line_between(a, b, in_crs=None))
+        pl.select(geo.shortest_line_between(a, b))
 
 
 _ORACLE_DTYPES = {
@@ -549,9 +538,7 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
         ]
     )
 
-    out = shapely.from_wkt(
-        _as_wkt(df.select(geo.shortest_line_between("a", "b", in_crs=None))["a"])
-    )
+    out = shapely.from_wkt(_as_wkt(df.select(geo.shortest_line_between("a", "b"))["a"]))
 
     expected = shapely.shortest_line(a, b)
     expected = [shapely.LineString() if e is None else e for e in expected]
