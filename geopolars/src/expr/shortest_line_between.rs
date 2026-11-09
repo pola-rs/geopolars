@@ -9,7 +9,10 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, ensure_same_crs, pair_geometries, Geo, Kind};
+use crate::geoarrow::{
+    describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, Geo,
+    GeometryPairs, Kind,
+};
 
 /// See python
 #[derive(Debug, Default, Deserialize)]
@@ -45,17 +48,39 @@ fn shortest_line_between(
     let (a, b) = (&inputs[0], &inputs[1]);
     let dtype = shortest_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
+    let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
     let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
-    let chunks = pair_geometries(
-        a,
-        b,
-        |a, b| lines_chunk(shortest_lines_pairwise(a, b, ignore, early)),
-        |one, many, one_is_a| {
-            lines_chunk(shortest_lines_against_one(
-                one, many, one_is_a, ignore, early,
-            ))
-        },
-    )?;
+    let against_one =
+        |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
+            let one = geometry_array(one.as_ref(), one_kind)?;
+            many.iter()
+                .map(|many| {
+                    let many = geometry_array(many.as_ref(), many_kind)?;
+                    lines_chunk(shortest_lines_against_one(
+                        &one, &many, one_is_a, ignore, early,
+                    ))
+                })
+                .collect::<PolarsResult<Vec<_>>>()
+        };
+    let chunks = match single_chunk_masked_pairs(a, b)? {
+        GeometryPairs::Pairwise(pairs) => pairs
+            .iter()
+            .map(|(a, b)| {
+                let a = geometry_array(a.as_ref(), a_kind)?;
+                let b = geometry_array(b.as_ref(), b_kind)?;
+                lines_chunk(shortest_lines_pairwise(a, b, ignore, early))
+            })
+            .collect::<PolarsResult<Vec<_>>>()?,
+        GeometryPairs::OneAgainstMany { a: one, b: many } => {
+            against_one(one, a_kind, many, b_kind, true)?
+        }
+        GeometryPairs::ManyAgainstOne { a: many, b: one } => {
+            against_one(one, b_kind, many, a_kind, false)?
+        }
+        GeometryPairs::AllNull(lengths) => {
+            return Ok(Series::full_null(name, lengths.iter().sum(), &dtype));
+        }
+    };
     // SAFETY: the shortest lines are XY linestrings, as `dtype` says.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &dtype) })
 }

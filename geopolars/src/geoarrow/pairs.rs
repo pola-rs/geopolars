@@ -43,9 +43,8 @@ pub fn aligned_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
 
 /// Lines up `a` and `b`, rechunking columns of the same length into a single chunk each,
 /// so they can be of any two kinds.
-/// A row that is null on one side is made null on the other too.
-/// This is for a kernel that converts every row to GEOS up front,
-/// where a row paired with a null could otherwise still fail.
+/// A row that is null on one side is made null on the other too,
+/// so a kernel that converts every row up front (e.g. to GEOS) cannot fail on a row paired with a null.
 pub fn single_chunk_masked_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
     if a.len() != b.len() {
         return against_one_pairs(a, b);
