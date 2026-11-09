@@ -11,6 +11,7 @@ use serde::Deserialize;
 use super::IntoPolarsResult;
 use crate::geoarrow::{
     describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, GeometryPairs,
+    Kind,
 };
 
 /// See python
@@ -52,23 +53,11 @@ fn is_topologically_equal(
                 topologically_equal_pairwise(&a, &b, ignore, early).into_polars()
             })
             .collect::<PolarsResult<Vec<_>>>()?,
-        GeometryPairs::AgainstOne {
-            one,
-            many,
-            one_is_a,
-        } => {
-            let (one_kind, many_kind) = if one_is_a {
-                (a_kind, b_kind)
-            } else {
-                (b_kind, a_kind)
-            };
-            let one = geometry_array(one.as_ref(), one_kind)?;
-            many.iter()
-                .map(|many| {
-                    let many = geometry_array(many.as_ref(), many_kind)?;
-                    topologically_equal_against_one(&one, &many, ignore, early).into_polars()
-                })
-                .collect::<PolarsResult<Vec<_>>>()?
+        GeometryPairs::OneAgainstMany { a, b } => {
+            is_topologically_equal_against_one(&a, a_kind, &b, b_kind, ignore, early)?
+        }
+        GeometryPairs::ManyAgainstOne { a, b } => {
+            is_topologically_equal_against_one(&b, b_kind, &a, a_kind, ignore, early)?
         }
         GeometryPairs::AllNull(lengths) => lengths
             .iter()
@@ -76,4 +65,22 @@ fn is_topologically_equal(
             .collect(),
     };
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
+}
+
+fn is_topologically_equal_against_one(
+    one: &ArrayRef,
+    one_kind: Kind,
+    many: &[ArrayRef],
+    many_kind: Kind,
+    ignore_per_row_errors: bool,
+    early_finite_check: bool,
+) -> PolarsResult<Vec<BooleanArray>> {
+    let one = geometry_array(one.as_ref(), one_kind)?;
+    many.iter()
+        .map(|many| {
+            let many = geometry_array(many.as_ref(), many_kind)?;
+            topologically_equal_against_one(&one, &many, ignore_per_row_errors, early_finite_check)
+                .into_polars()
+        })
+        .collect()
 }

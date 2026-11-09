@@ -146,20 +146,8 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
         GeometryPairs::Pairwise(pairs) => pairs,
         // `IntersectionPairs` pairs a single row with every row itself,
         // so the single geometry stays on its own side.
-        GeometryPairs::AgainstOne {
-            one,
-            many,
-            one_is_a,
-        } => many
-            .into_iter()
-            .map(|many| {
-                if one_is_a {
-                    (one.clone(), many)
-                } else {
-                    (many, one.clone())
-                }
-            })
-            .collect(),
+        GeometryPairs::OneAgainstMany { a, b } => b.into_iter().map(|b| (a.clone(), b)).collect(),
+        GeometryPairs::ManyAgainstOne { a, b } => a.into_iter().map(|a| (a, b.clone())).collect(),
         GeometryPairs::AllNull(lengths) => {
             let rows = lengths.iter().sum();
             return Ok(Series::full_null(a.name().clone(), rows, &geo.dtype()));

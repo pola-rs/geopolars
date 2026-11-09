@@ -177,7 +177,8 @@ fn measure_chunks<const Z: bool>(
             .map(|(a, b)| pairwise::<Z>(metric, &points(a)?, &points(b)?))
             .collect::<PolarsResult<Vec<_>>>()?,
         // Distance goes both ways, so it does not matter which side `one` came from.
-        GeometryPairs::AgainstOne { one, many, .. } => {
+        GeometryPairs::OneAgainstMany { a: one, b: many }
+        | GeometryPairs::ManyAgainstOne { a: many, b: one } => {
             let one = points(&one)?
                 .get(0)
                 .position::<false, Z>()

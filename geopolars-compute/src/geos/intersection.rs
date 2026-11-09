@@ -55,9 +55,10 @@ pub struct IntersectionPairs {
     ignore_per_row_errors: bool,
 }
 
-// TODO: `IntersectionPairs` pairs its GEOS rows
-// the same way as `topologically_equal_pairwise` and `topologically_equal_against_one`.
-// Turn that into a shared helper once a third GEOS operation on two geometries
+// TODO: `IntersectionPairs` and `topologically_equal_pairwise`/`_against_one`
+// both convert both sides with `to_geos_rows`, and pair a single row with every row of the other.
+// Only `IntersectionPairs` keeps the sides apart, which an asymmetric operation needs.
+// Share this around [`broadcast`] once a third GEOS operation on two geometries
 // (such as `union` or `difference`) needs it.
 
 impl IntersectionPairs {

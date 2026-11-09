@@ -11,12 +11,10 @@ use super::storage_as_single_chunk;
 pub enum GeometryPairs {
     /// Chunks of the same length, to pair row by row.
     Pairwise(Vec<(ArrayRef, ArrayRef)>),
-    /// A single geometry, which is not null, against every chunk of the other column.
-    AgainstOne {
-        one: ArrayRef,
-        many: Vec<ArrayRef>,
-        one_is_a: bool,
-    },
+    /// A single geometry `a`, which is not null, against every chunk of `b`.
+    OneAgainstMany { a: ArrayRef, b: Vec<ArrayRef> },
+    /// Every chunk of `a` against a single geometry `b`, which is not null.
+    ManyAgainstOne { a: Vec<ArrayRef>, b: ArrayRef },
     /// A null single geometry: the length of each all-null output chunk.
     AllNull(Vec<usize>),
 }
@@ -74,9 +72,10 @@ fn against_one_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
             many.iter().map(|many| many.len()).collect(),
         ));
     }
-    Ok(GeometryPairs::AgainstOne {
-        one,
-        many: many.clone(),
-        one_is_a,
+    let many = many.clone();
+    Ok(if one_is_a {
+        GeometryPairs::OneAgainstMany { a: one, b: many }
+    } else {
+        GeometryPairs::ManyAgainstOne { a: many, b: one }
     })
 }

@@ -120,7 +120,8 @@ fn is_equal(inputs: &[Series], kwargs: IsEqualKwargs) -> PolarsResult<Series> {
             .map(|(a, b)| chunk_is_equal(a.as_ref(), b.as_ref(), kind, &kwargs))
             .collect::<PolarsResult<Vec<_>>>()?,
         // Equality goes both ways, so it does not matter which side `one` came from.
-        GeometryPairs::AgainstOne { one, many, .. } => many
+        GeometryPairs::OneAgainstMany { a: one, b: many }
+        | GeometryPairs::ManyAgainstOne { a: many, b: one } => many
             .iter()
             .map(|many| chunk_is_equal(many.as_ref(), one.as_ref(), kind, &kwargs))
             .collect::<PolarsResult<Vec<_>>>()?,
