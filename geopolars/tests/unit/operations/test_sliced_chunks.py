@@ -117,6 +117,12 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         lambda g: geo.hausdorff_line_between(g, g, ignore_per_row_errors=True),
         set(),
     ),
+    "hausdorff_line_between against one": (
+        lambda g: geo.hausdorff_line_between(
+            g, pl.col(g).last(), ignore_per_row_errors=True
+        ),
+        set(),
+    ),
     "exterior": (
         lambda g: geo.exterior(g),
         {LineStringXY, MultiPointXY, MultiLineStringXY},

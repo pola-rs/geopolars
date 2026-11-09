@@ -32,7 +32,7 @@ def hausdorff_line_between(
     """The line spanning the Hausdorff distance between two geometries, row by row.
     Every vertex of `a` is measured to the nearest point on `b`, and every vertex of `b` to the nearest point on `a`.
     The line joins the pair that lies furthest apart, running from the point on `a` to the point on `b`.
-    On a tie, the first pair from `a` to `b` wins.
+    On a tie, a vertex of `a` wins over one of `b`, and an earlier vertex over a later one.
     Its length in x and y is the (discrete) Hausdorff distance between the two geometries,
     as GEOS and shapely give it.
     A single geometry on either side is measured against every row of the other.
@@ -55,15 +55,20 @@ def hausdorff_line_between(
     If either geometry is empty, so is the line.
 
     `non_finite` sets what happens with a vertex that is not finite:
-    an empty point (NaN on every axis) or one with a NaN or infinite value.
+    the empty point, or one with a NaN or infinite value.
+    {empty_point}
 
     - `"raise"`: a geometry with such a vertex raises.
     - `"skip"`: such a vertex is left out.
-      A line or ring runs on to its next vertex.
+      A line or ring runs on from the vertex before it to the vertex after it.
+      A ring that loses its first (and so last) vertex is no longer closed:
+      it is measured as a line up to the last vertex it keeps.
       A geometry left without vertices counts as empty.
-    - `"skip_empty"`: an empty point is left out as with `"skip"`, any other such vertex raises.
+    - `"skip_empty"`: the empty point is left out as with `"skip"`, any other such vertex raises.
 
-    x and y always count. z and m count unless `ignore_z` or `ignore_m` is set.
+    A vertex is finite when x, y, z and m are.
+    `ignore_z=True` leaves z out of that, and `ignore_m=True` leaves m out.
+    They do not change which vertex is the empty point.
     An empty point row is an empty geometry rather than an empty vertex, so it never raises.
     With `ignore_per_row_errors=True`, a geometry that would raise gives a null line instead.
 
