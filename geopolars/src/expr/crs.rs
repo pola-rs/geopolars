@@ -1,5 +1,8 @@
 //! Moving a geometry from one coordinate reference system to another.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use geopolars_compute::proj::{reproject_coords, reproject_valid_coords, Transformation};
@@ -43,10 +46,34 @@ fn kernel_output_type_to_crs(input_fields: &[Field], kwargs: ToCrsKwargs) -> Pol
     Ok(Field::new(field.name().clone(), geo.dtype()))
 }
 
-/// The PROJ transformation from the CRS of `dtype` to `to`.
-fn transformation(dtype: &DataType, to: &str) -> PolarsResult<Transformation> {
-    let from = describe(dtype)?.metadata.crs()?;
-    Transformation::new(from, to).map_err(|e| polars_err!(ComputeError: "{e}"))
+/// How many transformations each thread keeps.
+/// If more are used, it starts over.
+const CACHED_TRANSFORMATIONS: usize = 16;
+
+thread_local! {
+    /// Creating a transformation costs milliseconds, more than reprojecting a streaming batch.
+    /// Threads creating them also queue for the one connection PROJ shares to its database.
+    /// Per thread, because a [`Transformation`] can't be shared between threads.
+    static TRANSFORMATIONS: RefCell<HashMap<(String, String), Rc<Transformation>>> =
+        RefCell::new(HashMap::new());
+}
+
+/// The PROJ transformation from the CRS of `dtype` to `to`, created once per thread.
+fn transformation(dtype: &DataType, to: &str) -> PolarsResult<Rc<Transformation>> {
+    let key = (describe(dtype)?.metadata.crs()?.to_owned(), to.to_owned());
+    if let Some(cached) = TRANSFORMATIONS.with_borrow(|cache| cache.get(&key).cloned()) {
+        return Ok(cached);
+    }
+    // One that fails to build is not cached, and fails again the next time.
+    let transformation =
+        Rc::new(Transformation::new(&key.0, &key.1).map_err(|e| polars_err!(ComputeError: "{e}"))?);
+    TRANSFORMATIONS.with_borrow_mut(|cache| {
+        if cache.len() >= CACHED_TRANSFORMATIONS {
+            cache.clear();
+        }
+        cache.insert(key, Rc::clone(&transformation));
+    });
+    Ok(transformation)
 }
 
 /// Whether the `z` of `dtype` goes through PROJ, as in the table of `to_crs` in `geo/crs.py`.
