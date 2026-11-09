@@ -1,5 +1,5 @@
-//! The intersection of two geometries, forwarded to GEOS.
-//! See `intersection` in Python for the rules.
+//! The overlays of two geometries (their intersection or difference), forwarded to GEOS.
+//! See `intersection` and `difference` in Python for the rules.
 
 use geopolars_core::output::SizeHint;
 use geopolars_core::{
@@ -7,12 +7,13 @@ use geopolars_core::{
     MultiPolygonArray, PointArray, PolygonArray,
 };
 use geos::{Geom, Geometry, GeometryTypes};
+use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 
 use super::pairs::GeosPairs;
 use super::{GeosGeometries, GeosRow};
 use crate::{row_or_null, GeoComputeError, GeoComputeResult};
 
-/// The topological dimension of the parts an intersection keeps.
+/// The topological dimension of the parts an overlay keeps.
 #[derive(Debug, Clone, Copy)]
 enum TopologicalDimension {
     Points,
@@ -38,19 +39,35 @@ impl TopologicalDimension {
     }
 }
 
-/// Two arrays of geometries converted to GEOS, with their rows paired up to intersect.
+/// Which overlay [`OverlayPairs`] computes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Overlay {
+    /// What `a` and `b` have in common.
+    Intersection,
+    /// What is left of `a` once `b` is taken away.
+    Difference,
+}
+
+/// Two arrays of geometries converted to GEOS, with their rows paired up to overlay.
 /// A single row on either side is paired with every row of the other.
-/// Each of those narrows every intersection down to its parts of that dimension,
+/// Each of those narrows every overlay down to its parts of that dimension,
 /// and copies them into our array of that kind.
 /// m is always dropped.
-pub struct IntersectionPairs {
+pub struct OverlayPairs {
     pairs: GeosPairs,
+    overlay: Overlay,
     ignore_per_row_errors: bool,
 }
 
-impl IntersectionPairs {
-    /// Implements the Python `intersection`, which documents its behaviour.
-    /// Each side is converted to GEOS in full, except for the rows paired with an empty geometry.
+struct Overlaid {
+    geometries: GeosGeometries,
+    /// The rows that are a copy of `a`, or `None` if there are none.
+    kept_as_is: Option<Bitmap>,
+}
+
+impl OverlayPairs {
+    /// Implements the Python `intersection` and `difference`, which document their behaviour.
+    /// Each side is converted to GEOS in full, except for the rows left empty by an empty partner.
     /// A row paired with a null can therefore still fail.
     /// A row that fails here or in the `into_*` method is null if `ignore_per_row_errors=true`.
     ///
@@ -58,19 +75,26 @@ impl IntersectionPairs {
     pub fn new(
         a: &GeometryArray,
         b: &GeometryArray,
+        overlay: Overlay,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
+        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+        let pairs = match overlay {
+            Overlay::Intersection => {
+                GeosPairs::new_skipping_partners_of_empty(a, b, ignore, early)?
+            }
+            Overlay::Difference => {
+                GeosPairs::new_skipping_partners_of_empty_a(a, b, ignore, early)?
+            }
+        };
         Ok(Self {
-            pairs: GeosPairs::new_skipping_partners_of_empty(
-                a,
-                b,
-                ignore_per_row_errors,
-                early_finite_check,
-            )?,
+            pairs,
+            overlay,
             ignore_per_row_errors,
         })
     }
+
     /// Several points fail with [`GeoComputeError::Split`].
     pub fn into_points(self, z: bool) -> GeoComputeResult<PointArray> {
         let dim = if z {
@@ -78,58 +102,93 @@ impl IntersectionPairs {
         } else {
             GeoDimension::XY
         };
-        self.intersected(TopologicalDimension::Points, false)?
+        self.overlaid(TopologicalDimension::Points, false)?
+            .geometries
             .into_point_array(dim)
     }
 
     pub fn into_multi_points(self, z: bool) -> GeoComputeResult<MultiPointArray> {
-        let intersections = self.intersected(TopologicalDimension::Points, true)?;
-        with_const_flags!(Z = z; intersections.into_multi_point_array::<Z>(self.ignore_per_row_errors))
+        let overlaid = self.overlaid(TopologicalDimension::Points, true)?;
+        with_const_flags!(Z = z; overlaid.geometries.into_multi_point_array::<Z>(self.ignore_per_row_errors))
     }
 
     /// Several linestrings fail with [`GeoComputeError::Split`].
     pub fn into_line_strings(self, z: bool) -> GeoComputeResult<LineStringArray> {
-        let intersections = self.intersected(TopologicalDimension::Lines, false)?;
-        with_const_flags!(Z = z; intersections.into_line_string_array::<Z>(self.ignore_per_row_errors))
+        let overlaid = self.overlaid(TopologicalDimension::Lines, false)?;
+        with_const_flags!(Z = z; overlaid.geometries.into_line_string_array::<Z>(self.ignore_per_row_errors))
     }
 
     pub fn into_multi_line_strings(self, z: bool) -> GeoComputeResult<MultiLineStringArray> {
-        let intersections = self.intersected(TopologicalDimension::Lines, true)?;
-        with_const_flags!(Z = z; intersections.into_multi_line_string_array::<Z>(self.ignore_per_row_errors))
+        let overlaid = self.overlaid(TopologicalDimension::Lines, true)?;
+        with_const_flags!(Z = z; overlaid.geometries.into_multi_line_string_array::<Z>(self.ignore_per_row_errors))
     }
 
     /// Several polygons fail with [`GeoComputeError::Split`].
     /// GEOS gives a clockwise exterior, so `ccw_outer=true` reverses every ring.
+    /// A row of a difference with an empty `b` is a copy of `a`, so its rings are kept as they are.
     pub fn into_polygons(self, z: bool, ccw_outer: bool) -> GeoComputeResult<PolygonArray> {
-        self.intersected(TopologicalDimension::Polygons, false)?
-            .into_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
+        let overlaid = self.overlaid(TopologicalDimension::Polygons, false)?;
+        overlaid.geometries.into_polygon_array(
+            z,
+            self.ignore_per_row_errors,
+            ccw_outer,
+            overlaid.kept_as_is.as_ref(),
+        )
     }
 
-    /// See [`IntersectionPairs::into_polygons`] for `ccw_outer`.
+    /// See [`OverlayPairs::into_polygons`] for `ccw_outer`.
     pub fn into_multi_polygons(
         self,
         z: bool,
         ccw_outer: bool,
     ) -> GeoComputeResult<MultiPolygonArray> {
-        self.intersected(TopologicalDimension::Polygons, true)?
-            .into_multi_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
+        let overlaid = self.overlaid(TopologicalDimension::Polygons, true)?;
+        overlaid.geometries.into_multi_polygon_array(
+            z,
+            self.ignore_per_row_errors,
+            ccw_outer,
+            overlaid.kept_as_is.as_ref(),
+        )
     }
 
-    /// Intersects every pair, and narrows each intersection down with [`kept_parts`].
-    fn intersected(
+    /// Overlays every pair, and narrows each overlay down with [`kept_parts`].
+    fn overlaid(
         &self,
         kept_dimension: TopologicalDimension,
         multi: bool,
-    ) -> GeoComputeResult<GeosGeometries> {
+    ) -> GeoComputeResult<Overlaid> {
         let ignore = self.ignore_per_row_errors;
-        let geometries = self
-            .pairs
-            .iter()
-            .map(|(a, b)| intersect_rows(a, b, kept_dimension, multi, ignore))
-            .collect::<GeoComputeResult<Vec<_>>>()?;
-        Ok(GeosGeometries {
-            geometries,
-            size_hint: summed_size_hint(self.pairs.size_hints()),
+        let (geometries, kept_as_is) = match self.overlay {
+            Overlay::Intersection => {
+                let geometries = self
+                    .pairs
+                    .iter()
+                    .map(|(a, b)| intersect_rows(a, b, kept_dimension, multi, ignore))
+                    .collect::<GeoComputeResult<Vec<_>>>()?;
+                (geometries, None)
+            }
+            Overlay::Difference => {
+                let mut kept_as_is = MutableBitmap::new();
+                let geometries = self
+                    .pairs
+                    .iter()
+                    .map(|(a, b)| {
+                        let row = difference_rows(a, b, kept_dimension, multi, ignore)?;
+                        kept_as_is.push(row.is_copy_of_a);
+                        Ok(row.geometry)
+                    })
+                    .collect::<GeoComputeResult<Vec<_>>>()?;
+                let kept_as_is: Bitmap = kept_as_is.into();
+                let any = kept_as_is.set_bits() > 0;
+                (geometries, any.then_some(kept_as_is))
+            }
+        };
+        Ok(Overlaid {
+            geometries: GeosGeometries {
+                geometries,
+                size_hint: summed_size_hint(self.pairs.size_hints()),
+            },
+            kept_as_is,
         })
     }
 }
@@ -165,22 +224,65 @@ fn intersect_rows(
     Ok(row_or_null(intersection.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
 
-/// Narrows an intersection down to its parts of `kept_dimension`,
+struct DifferenceRow {
+    geometry: GeosRow,
+    is_copy_of_a: bool,
+}
+
+#[inline(always)]
+fn difference_rows(
+    a: &GeosRow,
+    b: &GeosRow,
+    kept_dimension: TopologicalDimension,
+    multi: bool,
+    ignore_per_row_errors: bool,
+) -> GeoComputeResult<DifferenceRow> {
+    let (difference, is_copy_of_a) = match (a, b) {
+        (GeosRow::Null, _) | (_, GeosRow::Null) => (Ok(GeosRow::Null), false),
+        // `b` is not converted when `a` is empty (see `GeosPairs::new_skipping_partners_of_empty_a`).
+        (GeosRow::Empty, _) => (Ok(GeosRow::Empty), false),
+        // Nothing is taken away, so `a` is stored as it is, without computing a difference.
+        // Its own kind fits the output, as the `into_multi_*` copies take a single geometry as one part.
+        // It is cloned, as a single `a` is shared by every row.
+        (GeosRow::Geometry(a), GeosRow::Empty) => (
+            Geom::clone(a)
+                .map(GeosRow::Geometry)
+                .map_err(GeoComputeError::from),
+            true,
+        ),
+        // TODO: Also give `a` as it is when `b` does not touch it, as for an empty `b`.
+        // GEOS now re-orients and nodes `a` even then, so it can differ from a copy, and even split.
+        (GeosRow::Geometry(a), GeosRow::Geometry(b)) => (
+            a.difference(b)
+                .map_err(GeoComputeError::from)
+                .and_then(|difference| kept_parts(difference, kept_dimension, multi)),
+            false,
+        ),
+    };
+    let geometry =
+        row_or_null(difference.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null);
+    Ok(DifferenceRow {
+        geometry,
+        is_copy_of_a,
+    })
+}
+
+/// Narrows an overlay down to its parts of `kept_dimension`,
 /// in a single geometry for the `into_*_array` of that kind.
 /// With `multi=true`, several parts become a multi geometry instead of failing with [`GeoComputeError::Split`].
 fn kept_parts(
-    intersection: Geometry,
+    overlay: Geometry,
     kept_dimension: TopologicalDimension,
     multi: bool,
 ) -> GeoComputeResult<GeosRow> {
-    if intersection.is_empty()? {
+    if overlay.is_empty()? {
         return Ok(GeosRow::Empty);
     }
     let (single_type, multi_type) = kept_dimension.single_and_multi_types();
-    let found = intersection.geometry_type()?;
+    let found = overlay.geometry_type()?;
     // The common cases: GEOS gave the kept dimension only, so nothing is copied.
     if found == single_type || (found == multi_type && multi) {
-        return Ok(GeosRow::Geometry(intersection));
+        return Ok(GeosRow::Geometry(overlay));
     }
     if found != multi_type && found != GeometryTypes::GeometryCollection {
         return Ok(GeosRow::Empty);
@@ -189,8 +291,8 @@ fn kept_parts(
     // A multi geometry has to be unpacked into a single one, or refused if it has several parts.
     // Only these copy their kept parts.
     let mut kept = Vec::new();
-    for n in 0..intersection.get_num_geometries()? {
-        let part = intersection.get_geometry_n(n)?;
+    for n in 0..overlay.get_num_geometries()? {
+        let part = overlay.get_geometry_n(n)?;
         if part.geometry_type()? == single_type && !part.is_empty()? {
             kept.push(Geom::clone(&part)?);
         }

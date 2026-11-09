@@ -61,8 +61,7 @@ def intersection(
 
     The result is a single kind if the lower-dimensional input is one
     (or if either input is one, when they share a dimension).
-    A row whose result has several parts then raises.
-    With `allow_splitting=True`, the result is the multi kind instead, which holds every part.
+    {overlay_splitting}
     A point cannot split, so a point input always gives a point.
     The table below gives the output kind as "without `allow_splitting` / with it" where the two differ.
     It is symmetric, so only its upper half is filled.
@@ -95,12 +94,7 @@ def intersection(
     so it splits even if it lies entirely inside a polygon.
 
     {computed_by_geos_keeping_z}
-    The output has z as soon as either input has it.
-    Where only one input has z, GEOS fills it in for the other.
-    Where a line crosses or runs along an edge with z, its z is interpolated along that edge.
-    Any other vertex, and any point, only gets a rough estimate:
-    the average z of the vertices with z in the same cell of a 3 by 3 grid over both inputs.
-    A point on a line with z can therefore be far off from the z interpolated there.
+    {overlay_z}
     {empty_and_null}
     Two geometries that do not meet, or only meet in parts that are dropped,
     give an empty {output} too.
@@ -115,8 +109,7 @@ def intersection(
     {ccw_outer}
     It only affects a Polygon or MultiPolygon result.
 
-    `a` and `b` have to declare the same CRS, or neither one.
-    The result has the CRS of `a`.
+    {overlay_crs}
     A CRS that does not match, or a `keep` that cannot be kept, raises at plan time.
 
     ```python

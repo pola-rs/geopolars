@@ -117,6 +117,12 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         ),
         set(),
     ),
+    "difference": (
+        lambda g: geo.difference(
+            g, g, allow_splitting=True, ignore_per_row_errors=True
+        ),
+        set(),
+    ),
     "hausdorff_line_between": (
         lambda g: geo.hausdorff_line_between(g, g, ignore_per_row_errors=True),
         set(),

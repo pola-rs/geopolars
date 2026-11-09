@@ -45,12 +45,39 @@ impl GeosPairs {
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
         let (a_empty, b_empty) = (rows_without_parts(a), rows_without_parts(b));
-        let rows = pair_count(a_empty.len(), b_empty.len());
-        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
         let a_as_empty = paired_with_empty(&b_empty, a_empty.len());
-        let a = a.to_geos_rows_taking_as_empty(Some(&a_as_empty), ignore, early)?;
         let b_as_empty = paired_with_empty(&a_empty, b_empty.len());
-        let b = b.to_geos_rows_taking_as_empty(Some(&b_as_empty), ignore, early)?;
+        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+        Self::new_taking_as_empty(a, b, &a_as_empty, &b_as_empty, ignore, early)
+    }
+
+    /// See [`GeosPairs::new`], for an operation whose result is empty when `a` is, but not when `b` is.
+    /// A row of `b` paired with an empty row of `a` is therefore not converted, and is `Empty` too.
+    /// An empty row on either side is `Empty`, including an empty point.
+    pub(super) fn new_skipping_partners_of_empty_a(
+        a: &GeometryArray,
+        b: &GeometryArray,
+        ignore_per_row_errors: bool,
+        early_finite_check: bool,
+    ) -> GeoComputeResult<Self> {
+        let (a_empty, b_empty) = (rows_without_parts(a), rows_without_parts(b));
+        let b_as_empty = &b_empty | &paired_with_empty(&a_empty, b_empty.len());
+        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+        Self::new_taking_as_empty(a, b, &a_empty, &b_as_empty, ignore, early)
+    }
+
+    fn new_taking_as_empty(
+        a: &GeometryArray,
+        b: &GeometryArray,
+        a_as_empty: &Bitmap,
+        b_as_empty: &Bitmap,
+        ignore_per_row_errors: bool,
+        early_finite_check: bool,
+    ) -> GeoComputeResult<Self> {
+        let rows = pair_count(a_as_empty.len(), b_as_empty.len());
+        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+        let a = a.to_geos_rows_taking_as_empty(Some(a_as_empty), ignore, early)?;
+        let b = b.to_geos_rows_taking_as_empty(Some(b_as_empty), ignore, early)?;
         Ok(Self { a, b, rows })
     }
 

@@ -69,7 +69,7 @@ pub fn buffer_into_polygons(
         ignore_per_row_errors,
         false,
     )?
-    .into_polygon_array(false, ignore_per_row_errors, ccw_outer)
+    .into_polygon_array(false, ignore_per_row_errors, ccw_outer, None)
 }
 
 /// Like [`buffer_into_polygons`], as a multipolygon, for any kind.
@@ -90,7 +90,7 @@ pub fn buffer_into_multi_polygons(
         ignore_per_row_errors,
         true,
     )?
-    .into_multi_polygon_array(false, ignore_per_row_errors, ccw_outer)
+    .into_multi_polygon_array(false, ignore_per_row_errors, ccw_outer, None)
 }
 
 fn buffer_params(style: &BufferStyle) -> GeoComputeResult<BufferParams> {

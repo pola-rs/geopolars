@@ -36,11 +36,11 @@
 mod buffer;
 mod convex_hull;
 mod interpolate;
-mod intersection;
 mod is_simple;
 mod is_topologically_equal;
 mod linestrings;
 mod offset_curve;
+mod overlay;
 mod pairs;
 mod points;
 mod polygons;
@@ -59,7 +59,6 @@ pub use convex_hull::{
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
 pub use interpolate::{interpolate_line_strings, interpolate_multi_line_strings, InterpolateMode};
-pub use intersection::IntersectionPairs;
 pub use is_simple::{
     line_strings_are_simple, multi_line_strings_are_simple, multi_polygons_are_simple,
     polygons_are_simple,
@@ -68,6 +67,7 @@ pub use is_topologically_equal::topologically_equal;
 pub use offset_curve::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, OffsetCurveStyle,
 };
+pub use overlay::{Overlay, OverlayPairs};
 pub use relate::{De9im, RelatePairs};
 pub use rings_overlap::{rings_overlap_against_one, rings_overlap_pairwise};
 pub use shortest_line::{shortest_lines_against_one, shortest_lines_pairwise};
