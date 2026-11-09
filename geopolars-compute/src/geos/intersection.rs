@@ -13,7 +13,8 @@ use geopolars_core::{
 };
 use geos::{Geom, Geometry, GeometryTypes};
 
-use super::{GeosGeometries, GeosRow, ToGeosRows};
+use super::pairs::GeosPairs;
+use super::{GeosGeometries, GeosRow};
 use crate::{row_or_null, GeoComputeError, GeoComputeResult};
 
 /// The dimension of the parts an intersection keeps.
@@ -48,18 +49,9 @@ impl IntersectionParts {
 /// and copies them into our array of it.
 /// m is always dropped, whatever the inputs have.
 pub struct IntersectionPairs {
-    a: Vec<GeosRow>,
-    b: Vec<GeosRow>,
-    rows: usize,
-    size_hint: SizeHint<2>,
+    pairs: GeosPairs,
     ignore_per_row_errors: bool,
 }
-
-// TODO: `IntersectionPairs` and `topologically_equal_pairwise`/`_against_one`
-// both convert both sides with `to_geos_rows`, and pair a single row with every row of the other.
-// Only `IntersectionPairs` keeps the sides apart, which an asymmetric operation needs.
-// Share this around [`broadcast`] once a third GEOS operation on two geometries
-// (such as `union` or `difference`) needs it.
 
 impl IntersectionPairs {
     /// Implements the Python `intersection`, which documents its behaviour.
@@ -73,19 +65,8 @@ impl IntersectionPairs {
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
-        let a = a.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-        let b = b.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-        let (a_rows, b_rows) = (a.geometries.len(), b.geometries.len());
-        let rows = if a_rows == 1 { b_rows } else { a_rows };
-        assert!(
-            b_rows == rows || b_rows == 1,
-            "cannot pair {a_rows} geometries with {b_rows}"
-        );
         Ok(Self {
-            a: a.geometries,
-            b: b.geometries,
-            rows,
-            size_hint: summed_size_hint(a.size_hint, b.size_hint),
+            pairs: GeosPairs::new(a, b, ignore_per_row_errors, early_finite_check)?,
             ignore_per_row_errors,
         })
     }
@@ -143,23 +124,19 @@ impl IntersectionPairs {
         multi: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let ignore = self.ignore_per_row_errors;
-        let geometries = broadcast(&self.a, self.rows)
-            .zip(broadcast(&self.b, self.rows))
+        let geometries = self
+            .pairs
+            .iter()
             .map(|(a, b)| intersect_rows(a, b, parts, multi, ignore))
             .collect::<GeoComputeResult<Vec<_>>>()?;
         Ok(GeosGeometries {
             geometries,
-            size_hint: self.size_hint,
+            size_hint: summed_size_hint(self.pairs.size_hints()),
         })
     }
 }
 
-/// `len` rows out of `rows`, which holds that many or a single one to repeat.
-fn broadcast(rows: &[GeosRow], len: usize) -> impl Iterator<Item = &GeosRow> {
-    rows.iter().cycle().take(len)
-}
-
-fn summed_size_hint(a: SizeHint<2>, b: SizeHint<2>) -> SizeHint<2> {
+fn summed_size_hint((a, b): (SizeHint<2>, SizeHint<2>)) -> SizeHint<2> {
     // Overlay adds a vertex wherever the two cross,
     // so the result can have more vertices than both inputs together.
     SizeHint {

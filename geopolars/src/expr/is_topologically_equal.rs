@@ -1,7 +1,7 @@
 //! Whether two geometries are topologically equal
-//! (see [`geopolars_compute::geos::topologically_equal_pairwise`]).
+//! (see [`geopolars_compute::geos::topologically_equal`]).
 
-use geopolars_compute::geos::{topologically_equal_against_one, topologically_equal_pairwise};
+use geopolars_compute::geos::topologically_equal;
 use polars::prelude::*;
 use polars_arrow::array::BooleanArray;
 use polars_arrow::datatypes::ArrowDataType;
@@ -11,7 +11,6 @@ use serde::Deserialize;
 use super::IntoPolarsResult;
 use crate::geoarrow::{
     describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, GeometryPairs,
-    Kind,
 };
 
 /// See python
@@ -41,46 +40,27 @@ fn is_topologically_equal(
 ) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
-    let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let chunks = match single_chunk_masked_pairs(a, b)? {
-        GeometryPairs::Pairwise(pairs) => pairs
-            .iter()
-            .map(|(a, b)| {
-                let (a, b) = (
-                    geometry_array(a.as_ref(), a_kind)?,
-                    geometry_array(b.as_ref(), b_kind)?,
-                );
-                topologically_equal_pairwise(&a, &b, ignore, early).into_polars()
-            })
-            .collect::<PolarsResult<Vec<_>>>()?,
-        GeometryPairs::OneAgainstMany { a, b } => {
-            is_topologically_equal_against_one(&a, a_kind, &b, b_kind, ignore, early)?
+    let chunk_pairs = match single_chunk_masked_pairs(a, b)? {
+        GeometryPairs::Pairwise(pairs) => pairs,
+        GeometryPairs::OneAgainstMany { a, b } => b.into_iter().map(|b| (a.clone(), b)).collect(),
+        GeometryPairs::ManyAgainstOne { a, b } => a.into_iter().map(|a| (a, b.clone())).collect(),
+        GeometryPairs::AllNull(lengths) => {
+            let chunks = lengths
+                .iter()
+                .map(|&rows| BooleanArray::new_null(ArrowDataType::Boolean, rows));
+            return Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series());
         }
-        GeometryPairs::ManyAgainstOne { a, b } => {
-            is_topologically_equal_against_one(&b, b_kind, &a, a_kind, ignore, early)?
-        }
-        GeometryPairs::AllNull(lengths) => lengths
-            .iter()
-            .map(|&rows| BooleanArray::new_null(ArrowDataType::Boolean, rows))
-            .collect(),
     };
-    Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
-}
-
-fn is_topologically_equal_against_one(
-    one: &ArrayRef,
-    one_kind: Kind,
-    many: &[ArrayRef],
-    many_kind: Kind,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
-) -> PolarsResult<Vec<BooleanArray>> {
-    let one = geometry_array(one.as_ref(), one_kind)?;
-    many.iter()
-        .map(|many| {
-            let many = geometry_array(many.as_ref(), many_kind)?;
-            topologically_equal_against_one(&one, &many, ignore_per_row_errors, early_finite_check)
-                .into_polars()
+    let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
+    let chunks = chunk_pairs
+        .iter()
+        .map(|(a, b)| {
+            let (a, b) = (
+                geometry_array(a.as_ref(), a_kind)?,
+                geometry_array(b.as_ref(), b_kind)?,
+            );
+            topologically_equal(&a, &b, ignore, early).into_polars()
         })
-        .collect()
+        .collect::<PolarsResult<Vec<_>>>()?;
+    Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
 }
