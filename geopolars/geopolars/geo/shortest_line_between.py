@@ -40,6 +40,8 @@ def shortest_line_between(
     With `in_crs`, they are measured in the plane of `in_crs` instead:
     both geometries are reprojected to it first (see `to_crs`),
     and the line is given in it.
+    `in_crs` is experimental, and may change or go away.
+    Reprojecting both geometries with `to_crs` first gives the same line.
 
     | `in_crs` | `a` and `b` | line in |
     | - | - | - |
@@ -80,6 +82,8 @@ def shortest_line_between(
         if in_crs is None:
             ensure_same_crs(a_dtype, b_dtype)
         else:
+            # NOTE: `in_crs` is experimental, to try out how reprojecting inside an expression works in the API.
+            # Other expressions (e.g. `distance`, `hausdorff_line_between`) leave composing `to_crs` to the user.
             if not (a_dtype._declares_crs() and b_dtype._declares_crs()):
                 msg = (
                     f"both geometries need a CRS to be reprojected to {in_crs}; "
