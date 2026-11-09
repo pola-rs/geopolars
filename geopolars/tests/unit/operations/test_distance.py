@@ -183,6 +183,25 @@ def test_a_single_point_is_measured_against_every_row(crs: str | None) -> None:
     assert_series_equal(swapped, expected)
 
 
+@pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
+def test_against_a_single_null_point_everything_is_null(crs: str | None) -> None:
+    df = _pairs([(0.0, 0.0), (3.0, 4.0)], [None, None], crs=crs)
+    one = df["b"].head(1)
+
+    assert df.select(geo.distance("a", one)).to_series().to_list() == [None, None]
+    assert df.select(geo.distance(one, "a")).to_series().to_list() == [None, None]
+
+
+def test_columns_chunked_differently_are_measured_row_by_row() -> None:
+    df = _pairs(
+        [(0.0, 0.0), (0.0, 0.0), (1.0, 1.0)], [(3.0, 4.0), (0.0, 1.0), (1.0, 1.0)]
+    )
+    a = pl.concat([df["a"].head(1), df["a"].tail(2)], rechunk=False)
+    b = pl.concat([df["b"].head(2), df["b"].tail(1)], rechunk=False)
+
+    assert _distances(pl.DataFrame({"a": a, "b": b})) == [5.0, 1.0, 0.0]
+
+
 def test_with_a_crs_it_is_the_geodesic_in_meters() -> None:
     """On WGS 84, for EPSG:4326."""
     df = _pairs([NEW_YORK], [LONDON], crs=WGS84)

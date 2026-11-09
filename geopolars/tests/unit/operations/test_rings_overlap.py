@@ -198,6 +198,47 @@ def test_sliced_columns_read_only_their_own_rows() -> None:
     assert df.select(geo.rings_overlap("a", "b"))["a"].to_list() == [False, True]
 
 
+def _chunked(series: list[pl.Series]) -> pl.Series:
+    out = pl.concat(series, rechunk=False)
+    assert out.n_chunks() == len(series)
+    return out
+
+
+def test_columns_chunked_differently_are_compared_row_by_row() -> None:
+    a = _chunked([_rings("a", [_square(0, 0)]), _rings("a", [_square(5, 5), None])])
+    b = _chunked(
+        [_rings("b", [_square(0, 0), _square(9, 9)]), _rings("b", [_square(0, 0)])]
+    )
+
+    out = pl.DataFrame([a, b]).select(geo.rings_overlap("a", "b"))
+
+    assert out["a"].to_list() == [True, False, None]
+
+
+def test_a_chunked_column_is_compared_against_a_single_ring() -> None:
+    many = _chunked(
+        [
+            _rings("many", [_square(0, 0), _square(5, 5)]),
+            _rings("many", [None, _square(0, 0)]),
+        ]
+    )
+    hole = _rings("hole", [_square(0.5, 0.5, 0.25)])
+    df = pl.DataFrame(many)
+    expected = [True, False, None, True]
+
+    assert df.select(geo.rings_overlap("many", hole))["many"].to_list() == expected
+    assert df.select(geo.rings_overlap(hole, "many")).to_series().to_list() == expected
+
+
+@pytest.mark.parametrize("single_first", [True, False])
+def test_against_a_single_null_ring_everything_is_null(single_first: bool) -> None:
+    df = pl.DataFrame(_rings("many", [_square(0, 0), _square(5, 5)]))
+    one = _rings("one", [None])
+    a, b = (one, "many") if single_first else ("many", one)
+
+    assert df.select(geo.rings_overlap(a, b)).to_series().to_list() == [None, None]
+
+
 def test_rings_in_different_crss_are_refused_at_plan_time() -> None:
     df = pl.DataFrame([_rings("a", [_square(0, 0)]), _rings("b", [_square(0, 0)])])
     lf = df.lazy().select(

@@ -60,6 +60,8 @@ fn rings_overlap_chunks<const TOUCHING: bool>(
                     .map_err(compute_err)
             })
             .collect::<PolarsResult<Vec<_>>>()?,
+        // Overlapping goes both ways,
+        // so it does not matter which side `one` came from.
         GeometryPairs::AgainstOne { one, many, .. } => {
             let one = rings(&one)?;
             many.iter()

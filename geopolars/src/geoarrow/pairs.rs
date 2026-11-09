@@ -21,7 +21,8 @@ pub enum GeometryPairs {
     AllNull(Vec<usize>),
 }
 
-/// Lines up `a` and `b`, splitting columns of the same length at the same rows without copying.
+/// Lines up `a` and `b`, splitting columns of the same length at the same rows.
+/// This only copies when both have several chunks that do not line up.
 /// Both must be stored alike: both points, or both lists.
 pub fn aligned_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
     if a.len() != b.len() {
@@ -45,7 +46,8 @@ pub fn aligned_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
 /// Lines up `a` and `b`, rechunking columns of the same length into a single chunk each,
 /// so they can be of any two kinds.
 /// A row that is null on one side is made null on the other too.
-/// This is for a kernel that converts every row to GEOS up front, where a null row could still fail.
+/// This is for a kernel that converts every row to GEOS up front,
+/// where a row paired with a null could otherwise still fail.
 pub fn single_chunk_masked_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
     if a.len() != b.len() {
         return against_one_pairs(a, b);

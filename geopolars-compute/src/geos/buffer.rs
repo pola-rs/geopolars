@@ -56,8 +56,9 @@ pub struct BufferStyle {
 /// This is for a point, linestring or polygon.
 /// A distance of at most 0 gives an empty polygon for a point or linestring.
 /// A negative distance shrinks a polygon.
-/// A row that GEOS buffers into several polygons fails with [`GeoComputeError::Split`].
-/// For a single kind, that only happens with a negative distance.
+/// A row that GEOS buffers into several polygons fails with [`GeoComputeError::Split`],
+/// which counts as a GEOS error.
+/// For a single kind, that only happens with a distance of at most 0.
 /// If `ignore_per_row_errors=true`, a row GEOS fails on is null;
 /// otherwise its error is returned.
 /// If `ccw_outer=true`, every ring is reversed, so the exterior runs counter-clockwise.

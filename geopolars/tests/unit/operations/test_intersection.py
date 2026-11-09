@@ -19,6 +19,7 @@ from geopolars.datatypes import (
     LineStringXYZ,
     MultiLineStringXY,
     MultiPointXY,
+    MultiPointXYZ,
     MultiPolygonXY,
     PointXY,
     PointXYM,
@@ -270,6 +271,18 @@ def test_a_split_gives_every_part_with_allow_splitting() -> None:
     _assert_geometries(out, [arms, f"MULTIPOLYGON ({_SQUARE[8:]})"])
 
 
+def test_polygons_touching_along_two_edges_split_their_lines() -> None:
+    # Sits in the notch of `_U`, touching both arms but not the bottom.
+    a = (PolygonXY(), [_U])
+    b = (PolygonXY(), ["POLYGON ((1 2, 2 2, 2 3, 1 3, 1 2))"])
+
+    with pytest.raises(ComputeError, match="split into 2 parts"):
+        _intersection(a, b, keep="lines")
+    out = _intersection(a, b, keep="lines", allow_splitting=True)
+    assert out.dtype == MultiLineStringXY()
+    _assert_geometries(out, ["MULTILINESTRING ((1 2, 1 3), (2 2, 2 3))"])
+
+
 def test_a_line_is_clipped_into_its_pieces_inside_a_polygon() -> None:
     out = _intersection(
         (LineStringXY(), [_ZIGZAG]), (PolygonXY(), [_BELOW_HALF]), allow_splitting=True
@@ -343,6 +356,27 @@ def test_the_exterior_runs_counter_clockwise_with_ccw_outer() -> None:
     assert is_ccw(_intersection(a, b, ccw_outer=True))
 
 
+def test_ccw_outer_turns_every_part_and_keeps_holes_clockwise() -> None:
+    def is_ccw(out: pl.Series) -> bool:
+        return pl.select(geo.is_ccw(out)).item()
+
+    split = _intersection(
+        (PolygonXY(), [_U]),
+        (PolygonXY(), [_ACROSS_THE_ARMS]),
+        allow_splitting=True,
+        ccw_outer=True,
+    )
+    assert split.dtype == MultiPolygonXY()
+    assert is_ccw(split)
+    holed = (
+        PolygonXY(),
+        ["POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))"],
+    )
+    big = (PolygonXY(), ["POLYGON ((-1 -1, 5 -1, 5 5, -1 5, -1 -1))"])
+    assert not is_ccw(_intersection(holed, big))
+    assert is_ccw(_intersection(holed, big, ccw_outer=True))
+
+
 @pytest.mark.parametrize("z_first", [True, False])
 def test_z_from_one_side_is_filled_in(z_first: bool) -> None:
     with_z = (LineStringXYZ(), ["LINESTRING Z (0 0 10, 2 2 30)"])
@@ -372,6 +406,60 @@ def test_polygons_with_z_give_polygons_with_z() -> None:
         ].tolist()
         == [1.0] * 5
     )
+
+
+_ZIGZAG_Z = "LINESTRING Z (0 0 7, 1 1 7, 2 0 7, 3 1 7, 4 0 7)"
+_U_Z = "POLYGON Z ((0 0 7, 3 0 7, 3 3 7, 2 3 7, 2 1 7, 1 1 7, 1 3 7, 0 3 7, 0 0 7))"
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "allow_splitting", "expected"),
+    [
+        (
+            (MultiPointXYZ(), ["MULTIPOINT Z ((1 1 7), (9 9 7))"]),
+            (PolygonXY(), [_SQUARE]),
+            False,
+            "MULTIPOINT Z ((1 1 7))",
+        ),
+        (
+            (LineStringXYZ(), ["LINESTRING Z (-1 1 7, 3 1 7)"]),
+            (PolygonXY(), [_SQUARE]),
+            False,
+            "LINESTRING Z (0 1 7, 2 1 7)",
+        ),
+        (
+            (LineStringXYZ(), [_ZIGZAG_Z]),
+            (PolygonXY(), [_BELOW_HALF]),
+            True,
+            (
+                "MULTILINESTRING Z ((0 0 7, 0.5 0.5 7), (1.5 0.5 7, 2 0 7, 2.5 0.5 7),"
+                " (3.5 0.5 7, 4 0 7))"
+            ),
+        ),
+        (
+            (PolygonXYZ(), [_U_Z]),
+            (PolygonXY(), [_ACROSS_THE_ARMS]),
+            True,
+            (
+                "MULTIPOLYGON Z (((0 2 7, 1 2 7, 1 3 7, 0 3 7, 0 2 7)),"
+                " ((2 2 7, 3 2 7, 3 3 7, 2 3 7, 2 2 7)))"
+            ),
+        ),
+    ],
+    ids=["multipoint", "linestring", "multilinestring", "multipolygon"],
+)
+def test_z_is_kept_for_every_list_kind(
+    a: tuple[GeoArrowType, list[str | None]],
+    b: tuple[GeoArrowType, list[str | None]],
+    allow_splitting: bool,
+    expected: str,
+) -> None:
+    out = _intersection(a, b, allow_splitting=allow_splitting)
+
+    assert type(out.dtype).__name__.endswith("XYZ")
+    got = shapely.from_wkt(_to_wkt(out)[0])
+    assert shapely.equals(got, shapely.from_wkt(expected))
+    assert set(shapely.get_coordinates(got, include_z=True)[:, 2].tolist()) == {7.0}
 
 
 def test_m_is_dropped() -> None:
@@ -502,6 +590,24 @@ def test_the_early_finite_check_raises_before_geos() -> None:
     _assert_geometries(out, [None, "LINESTRING (0 0, 1 0, 1 1)"])
 
 
+@pytest.mark.parametrize("single_first", [True, False])
+def test_ignore_per_row_errors_with_a_single_geometry(single_first: bool) -> None:
+    def run(one: pl.Series, many: pl.Series, **kwargs: bool) -> pl.Series:
+        a, b = (one, "many") if single_first else ("many", one)
+        return pl.DataFrame(many).select(geo.intersection(a, b, **kwargs)).to_series()
+
+    big = _wkt("one", PolygonXY(), ["POLYGON ((-1 -1, 3 -1, 3 3, -1 3, -1 -1))"])
+    lines = _series("many", LineStringXY(), [_NOT_FINITE_LINE, _FINITE_LINE])
+    out = run(big, lines, ignore_per_row_errors=True)
+    _assert_geometries(out, [None, "LINESTRING (0 0, 1 0, 1 1)"])
+
+    bad = _series("one", LineStringXY(), [_NOT_FINITE_LINE])
+    squares = _wkt("many", PolygonXY(), [_SQUARE, _SQUARE])
+    with pytest.raises(ComputeError, match="NaN/Inf"):
+        run(bad, squares)
+    assert run(bad, squares, ignore_per_row_errors=True).to_list() == [None, None]
+
+
 def test_the_namespace_method_passes_its_options_on() -> None:
     df = pl.DataFrame(
         [_wkt("a", PolygonXY(), [_U]), _wkt("b", PolygonXY(), [_ACROSS_THE_ARMS])]
@@ -607,9 +713,14 @@ def _kept_parts(intersection: Any, dimension: int) -> list[Any]:
     ]
 
 
+@pytest.mark.parametrize("keep", [None, *_KEEP])
 @pytest.mark.parametrize("b_kind", _ORACLE_DTYPES)
 @pytest.mark.parametrize("a_kind", _ORACLE_DTYPES)
-def test_matches_shapely(a_kind: str, b_kind: str) -> None:
+def test_matches_shapely(a_kind: str, b_kind: str, keep: str | None) -> None:
+    lowest = min(_dimension(a_kind), _dimension(b_kind))
+    dimension = lowest if keep is None else _KEEP.index(keep)
+    if dimension > lowest:
+        pytest.skip(f"{a_kind} and {b_kind} cannot keep {keep}")
     rng = random.Random(f"{a_kind} {b_kind}")
     a = [_random_shape(rng, a_kind) for _ in range(200)]
     b = [_random_shape(rng, b_kind) for _ in range(200)]
@@ -619,12 +730,11 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
             _wkt("b", _ORACLE_DTYPES[b_kind], list(shapely.to_wkt(b))),
         ]
     )
-    dimension = min(_dimension(a_kind), _dimension(b_kind))
     kept = [_kept_parts(shapely.intersection(x, y), dimension) for x, y in zip(a, b)]
 
     def intersections(**kwargs: bool) -> pl.Series:
         out = df.select(
-            geo.intersection("a", "b", ignore_per_row_errors=True, **kwargs)
+            geo.intersection("a", "b", keep=keep, ignore_per_row_errors=True, **kwargs)
         )
         return out["a"]
 
@@ -638,8 +748,20 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
         list(shapely.to_wkt(expected, rounding_precision=-1)),
         tolerance=1e-9,
     )
-    if _expected_kind(a_kind, b_kind, None, splits=False).startswith("Multi"):
+    # Parts that are apart cannot be merged by any GEOS, so their number has to agree.
+    for row, (wkt, parts) in enumerate(zip(_to_wkt(every_part), kept, strict=True)):
+        apart = not any(
+            p.intersects(q) for i, p in enumerate(parts) for q in parts[i + 1 :]
+        )
+        if wkt is not None and apart:
+            got = shapely.from_wkt(wkt)
+            count = 0 if got.is_empty else shapely.get_num_geometries(got)
+            assert count == len(parts), f"row {row}"
+    if _expected_kind(a_kind, b_kind, keep, splits=False).startswith("Multi"):
         return
+    # The shapes are made to split in the dimension of the inputs, and a point cannot split.
+    if keep is None and "Point" not in (a_kind, b_kind):
+        assert any(len(parts) > 1 for parts in kept), "some rows should split"
     expected = [
         None if shapely.get_num_geometries(shapely.from_wkt(wkt)) > 1 else wkt
         for wkt in _to_wkt(every_part)

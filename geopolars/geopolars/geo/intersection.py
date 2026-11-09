@@ -83,7 +83,7 @@ def intersection(
 
     | `keep` | allowed when | single / multi kind | what is dropped |
     | - | - | - | - |
-    | `None` | always | as the table above | parts of a lower dimension than the inputs |
+    | `None` | always | as the table above | parts of a lower dimension than the lower-dimensional input |
     | `"points"` | always | Point / MultiPoint | every line and polygon part |
     | `"lines"` | neither is a point or multipoint | LineString / MultiLineString | every point and polygon part |
     | `"polygons"` | both are polygons or multipolygons | Polygon / MultiPolygon | every point and line part |
@@ -100,7 +100,8 @@ def intersection(
     This is not always an exact interpolation:
     a point on a line can get the z of a nearby vertex.
     {empty_and_null}
-    Two geometries that do not meet give an empty {output} too.
+    Two geometries that do not meet, or only meet in parts that are dropped,
+    give an empty {output} too.
     A Point result is then the empty point (NaN on every axis).
 
     {geos_errors}

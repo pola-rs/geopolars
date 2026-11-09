@@ -32,7 +32,8 @@ pub struct OffsetCurveStyle {
 /// The curve keeps the direction of the line.
 /// A NaN or infinite distance fails like a GEOS error.
 /// A line without length gives an empty linestring.
-/// A row that GEOS splits into several linestrings fails with [`crate::GeoComputeError::Split`].
+/// A row that GEOS splits into several linestrings fails with [`crate::GeoComputeError::Split`],
+/// like a GEOS error.
 pub fn offset_curves_into_line_strings(
     array: &LineStringArray,
     distance: BufferDistance,

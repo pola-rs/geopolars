@@ -103,6 +103,10 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         lambda g: geo.shortest_line_between(g, g, ignore_per_row_errors=True),
         set(),
     ),
+    "rings_overlap": (
+        lambda g: geo.rings_overlap(g, g),
+        {MultiPointXY, PolygonXY, MultiLineStringXY, MultiPolygonXY},
+    ),
     "intersection": (
         lambda g: geo.intersection(
             g, g, allow_splitting=True, ignore_per_row_errors=True
