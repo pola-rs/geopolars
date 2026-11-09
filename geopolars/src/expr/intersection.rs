@@ -166,6 +166,15 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
             intersected_storage(pairs, &geo, kwargs.ccw_outer)
         })
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: `intersected_storage` picks the conversion from `geo`'s kind and dimension.
+    #[cfg(debug_assertions)]
+    {
+        let storage = geo.dim().storage(geo.kind().nesting());
+        let storage = storage.to_arrow(CompatLevel::newest());
+        for chunk in &chunks {
+            debug_assert_eq!(chunk.dtype(), &storage, "the kernel gave another storage");
+        }
+    }
+    // SAFETY: every chunk is the storage of `geo`'s kind, with z exactly when `geo` has it.
+    // `intersection_type` never gives m, so z alone fixes the dimension.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(a.name().clone(), chunks, &geo.dtype()) })
 }
