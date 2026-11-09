@@ -447,7 +447,7 @@ def test_drop_empty_a_geometry_of_only_empty_and_failing_points_raises() -> None
 
 
 @pytest.mark.parametrize("non_finite", ["raise", "drop_empty"])
-def test_an_empty_point_inside_a_multipoint_raises_without_drop(
+def test_an_empty_point_inside_a_multipoint_raises_only_with_raise(
     non_finite: str,
 ) -> None:
     a = _multi_points("a", [[(0, 0), (math.nan, math.nan)]])
@@ -719,9 +719,21 @@ def _random_shape(rng: random.Random, kind: str) -> Any:
             return shapely.MultiPolygon([polygon(), far])
 
 
+def _measured_part(geometries: np.ndarray) -> np.ndarray:
+    # A point inside a polygon is 0 away from it, but the line ends on its rings.
+    polygonal = np.isin(
+        shapely.get_type_id(geometries),
+        [shapely.GeometryType.POLYGON, shapely.GeometryType.MULTIPOLYGON],
+    )
+    return np.where(polygonal, shapely.boundary(geometries), geometries)
+
+
+# "drop" runs the search that leaves out vertices that are not finite,
+# which must give the same lines on finite data.
+@pytest.mark.parametrize("non_finite", ["raise", "drop"])
 @pytest.mark.parametrize("b_kind", _ORACLE_DTYPES)
 @pytest.mark.parametrize("a_kind", _ORACLE_DTYPES)
-def test_matches_shapely(a_kind: str, b_kind: str) -> None:
+def test_matches_shapely(a_kind: str, b_kind: str, non_finite: str) -> None:
     rng = random.Random(f"{a_kind} {b_kind}")
     a = [_random_shape(rng, a_kind) for _ in range(100)]
     b = [_random_shape(rng, b_kind) for _ in range(100)]
@@ -741,7 +753,9 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
     )
 
     out = shapely.from_wkt(
-        _as_wkt(df.select(geo.hausdorff_line_between("a", "b"))["a"])
+        _as_wkt(
+            df.select(geo.hausdorff_line_between("a", "b", non_finite=non_finite))["a"]
+        )
     )
 
     either_empty = shapely.is_empty(a) | shapely.is_empty(b)
@@ -752,5 +766,5 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
     ends = shapely.get_point(out, 1)
     expected = shapely.hausdorff_distance(a, b)
     assert np.allclose(shapely.length(out), expected, rtol=0, atol=1e-12)
-    assert np.all(shapely.distance(starts, a) < 1e-12)
-    assert np.all(shapely.distance(ends, b) < 1e-12)
+    assert np.all(shapely.distance(starts, _measured_part(a)) < 1e-12)
+    assert np.all(shapely.distance(ends, _measured_part(b)) < 1e-12)
