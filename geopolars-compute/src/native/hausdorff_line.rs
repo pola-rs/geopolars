@@ -3,7 +3,8 @@
 //!
 //! Every vertex of each geometry is measured to the nearest point on the parts of the other, in x and y.
 //! The furthest of these over both directions gives the line, as in the discrete Hausdorff distance of GEOS.
-//! It is a brute-force search: every vertex against every segment of the other geometry.
+//! It is a brute-force search: every vertex against every segment of the other geometry,
+//! except that a vertex stops being measured once it can no longer be the furthest.
 //!
 //! # Why not GEOS
 //!
@@ -12,7 +13,8 @@
 //! Its points come in the order of whichever direction gave the larger distance,
 //! not of its inputs, so the line would not reliably run from `a` to `b`.
 //! It also drops z and m, and every row would first be copied into a GEOS geometry.
-//! GEOS searches by brute force too, so there is no tested algorithm here that we would have to re-implement.
+//! GEOS searches by brute force too (without stopping early),
+//! so there is no tested algorithm here that we would have to re-implement.
 //!
 //! # Const generic flags
 //!
@@ -294,20 +296,26 @@ fn nearest_on_segment(
     (ex * ex + ey * ey, OnPart { start, end, t })
 }
 
+/// Keeps `candidate` if it is nearer than `nearest`, and tells whether it lies at most `bound` away.
+#[inline(always)]
+fn keep_nearer(nearest: &mut Option<(f64, OnPart)>, candidate: (f64, OnPart), bound: f64) -> bool {
+    if nearest.is_none_or(|(distance_squared, _)| candidate.0 < distance_squared) {
+        *nearest = Some(candidate);
+    }
+    candidate.0 <= bound
+}
+
 /// The point on row `row` of `side` nearest to `point`, and its squared distance.
 /// `None` if the row has no vertex to search.
+/// It stops at the first point at most `bound` (squared) away, as the caller has no use for a nearer one.
 #[inline(always)]
 fn nearest_on_row<const SKIP: bool>(
     side: &Side,
     row: usize,
     point: (f64, f64),
+    bound: f64,
 ) -> Option<(f64, OnPart)> {
-    let mut nearest: Option<(f64, OnPart)> = None;
-    let mut consider = |candidate: (f64, OnPart)| {
-        if nearest.is_none_or(|(distance_squared, _)| candidate.0 < distance_squared) {
-            nearest = Some(candidate);
-        }
-    };
+    let mut nearest = None;
     for part in side.parts(row) {
         let mut vertices = part.filter(|&i| side.is_searched::<SKIP>(i));
         let Some(first) = vertices.next() else {
@@ -315,34 +323,46 @@ fn nearest_on_row<const SKIP: bool>(
         };
         let mut previous = first;
         for vertex in vertices {
-            consider(nearest_on_segment(side, previous, vertex, point));
+            let candidate = nearest_on_segment(side, previous, vertex, point);
+            if keep_nearer(&mut nearest, candidate, bound) {
+                return nearest;
+            }
             previous = vertex;
         }
         if previous == first {
             let (x, y) = side.xy(first);
             let (ex, ey) = (point.0 - x, point.1 - y);
-            consider((ex * ex + ey * ey, OnPart::vertex(first)));
+            let candidate = (ex * ex + ey * ey, OnPart::vertex(first));
+            if keep_nearer(&mut nearest, candidate, bound) {
+                return nearest;
+            }
         }
     }
     nearest
 }
 
-/// The vertex of row `row` of `from` furthest from row `to_row` of `to`.
-/// `None` if either row has no vertex to search.
+/// The vertex of row `row` of `from` furthest from row `to_row` of `to`, if it is further than `floor` (squared).
+/// `None` if no vertex is, or if either row has no vertex to search.
+///
+/// A vertex stops being measured once it lies at most as far as the furthest so far, as it can then no longer win.
+/// The vertex that wins is therefore always measured in full.
 fn furthest<const SKIP: bool>(
     from: &Side,
     row: usize,
     to: &Side,
     to_row: usize,
+    floor: f64,
 ) -> Option<Furthest> {
     let mut furthest: Option<Furthest> = None;
     for vertex in from.parts(row).flatten() {
         if !from.is_searched::<SKIP>(vertex) {
             continue;
         }
-        let (distance_squared, nearest) = nearest_on_row::<SKIP>(to, to_row, from.xy(vertex))?;
+        let bound = furthest.map_or(floor, |furthest| furthest.distance_squared);
+        let (distance_squared, nearest) =
+            nearest_on_row::<SKIP>(to, to_row, from.xy(vertex), bound)?;
         // Strictly further, so that a tie goes to the first, as in GEOS.
-        if furthest.is_none_or(|furthest| distance_squared > furthest.distance_squared) {
+        if distance_squared > bound {
             furthest = Some(Furthest {
                 distance_squared,
                 vertex,
@@ -435,18 +455,20 @@ fn push_line<const SKIP: bool>(
 ) -> GeoComputeResult<()> {
     a.ensure_row_passes(i)?;
     b.ensure_row_passes(j)?;
-    let (a_to_b, b_to_a) = (furthest::<SKIP>(a, i, b, j), furthest::<SKIP>(b, j, a, i));
-    match (a_to_b, b_to_a) {
-        (Some(a_to_b), Some(b_to_a)) if b_to_a.distance_squared > a_to_b.distance_squared => {
+    // A side without a vertex to search: the line is empty.
+    let Some(a_to_b) = furthest::<SKIP>(a, i, b, j, f64::NEG_INFINITY) else {
+        return Ok(());
+    };
+    // `b` to `a` only wins if it is strictly further, so that a tie goes to `a` to `b`.
+    match furthest::<SKIP>(b, j, a, i, a_to_b.distance_squared) {
+        Some(b_to_a) => {
             lines.push(a, b_to_a.nearest);
             lines.push(b, OnPart::vertex(b_to_a.vertex));
         }
-        (Some(a_to_b), Some(_)) => {
+        None => {
             lines.push(a, OnPart::vertex(a_to_b.vertex));
             lines.push(b, a_to_b.nearest);
         }
-        // A side without a vertex to search: the line is empty.
-        _ => {}
     }
     Ok(())
 }
