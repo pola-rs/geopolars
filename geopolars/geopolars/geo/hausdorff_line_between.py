@@ -52,7 +52,7 @@ def hausdorff_line_between(
     For a geographic CRS, the geodesic length of the line is therefore close to,
     but not the same as, the Hausdorff distance on the ellipsoid.
 
-    If either geometry is empty, so is the line.
+    If either geometry is empty, so is the line, even where the other would raise.
 
     `non_finite` sets what happens with a vertex that is not finite:
     the empty point, or one with a NaN or infinite value.

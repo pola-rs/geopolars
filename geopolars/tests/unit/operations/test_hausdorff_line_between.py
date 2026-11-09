@@ -447,6 +447,16 @@ def test_a_failing_row_gives_null_with_ignore_per_row_errors() -> None:
     assert _as_wkt(out["a"]) == [None, "LINESTRING(5 0,5 4)"]
 
 
+def test_an_empty_geometry_against_a_failing_one_gives_an_empty_line() -> None:
+    a = _wkt("a", PolygonXY(), ["POLYGON EMPTY", "POLYGON (EMPTY)"])
+    failing = [[(0, 0), (math.nan, 1)]] * 2
+    df = pl.DataFrame([a, _line_strings("b", failing)])
+    expected = ["LINESTRING EMPTY"] * 2
+
+    assert _as_wkt(df.select(geo.hausdorff_line_between("a", "b"))["a"]) == expected
+    assert _as_wkt(df.select(geo.hausdorff_line_between("b", "a"))["b"]) == expected
+
+
 def test_against_a_single_failing_geometry_every_row_is_null_with_ignore_per_row_errors() -> (
     None
 ):

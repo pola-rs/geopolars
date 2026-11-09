@@ -243,6 +243,11 @@ impl<'a> Side<'a> {
         }
     }
 
+    #[inline(always)]
+    fn has_no_vertices(&self, row: usize) -> bool {
+        self.parts(row).flatten().next().is_none()
+    }
+
     /// Fails if `row` holds a coordinate the search cannot leave out.
     fn ensure_row_passes(&self, row: usize) -> GeoComputeResult<()> {
         let Some((failing, rows)) = &self.failing else {
@@ -467,10 +472,13 @@ fn push_line<const SKIP: bool>(
     b: &Side,
     j: usize,
 ) -> GeoComputeResult<()> {
+    if a.has_no_vertices(i) || b.has_no_vertices(j) {
+        return Ok(());
+    }
     // Before the search, as `SKIP` leaves out every coordinate that is not finite.
     a.ensure_row_passes(i)?;
     b.ensure_row_passes(j)?;
-    // A side without a vertex to search: the line is empty.
+    // A side left without a vertex to search: the line is empty.
     let Some(a_to_b) = furthest::<SKIP>(a, i, b, j, f64::NEG_INFINITY) else {
         return Ok(());
     };
