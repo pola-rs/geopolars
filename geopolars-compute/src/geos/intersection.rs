@@ -198,10 +198,15 @@ fn kept_parts(
         0 => Ok(GeosRow::Empty),
         _ if multi => Ok(GeosRow::Geometry(parts.create_multi(kept)?)),
         1 => Ok(GeosRow::Geometry(kept.pop().expect("one part"))),
-        // WARNING: Only since GEOS 3.15 (pinned through the `v3_15_0` feature) are line pieces
-        // that join end to end merged into one linestring.
+        // WARNING: Only since GEOS 3.15 are line pieces that join end to end
+        // merged into one linestring.
+        // We get 3.15 from the `static` feature, which builds the GEOS bundled with `geos-src`
+        // (its version is locked in Cargo.lock).
+        // The `v3_15_0` feature only selects the bindings, and does not check the version.
         // Before, a line that runs through a node (such as a vertex of the other boundary)
         // came back in pieces, so `LINESTRING (0 0, 2 0, 4 0)` with itself would split in two.
+        // Pieces that meet where three or more lines do, such as where a line crosses itself,
+        // are still apart.
         // This counts the parts as GEOS gives them.
         parts => Err(GeoComputeError::Split { parts }),
     }

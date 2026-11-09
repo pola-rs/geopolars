@@ -96,9 +96,11 @@ def intersection(
 
     {computed_by_geos_keeping_z}
     The output has z as soon as either input has it.
-    Where only one input has z, GEOS estimates it from the z of that input nearby.
-    This is not always an exact interpolation:
-    a point on a line can get the z of a nearby vertex.
+    Where only one input has z, GEOS fills it in for the other.
+    Where a line crosses or runs along an edge with z, its z is interpolated along that edge.
+    Any other vertex, and any point, only gets a rough estimate:
+    the average z of the vertices with z in the same cell of a 3 by 3 grid over both inputs.
+    A point on a line with z can therefore be far off from the z interpolated there.
     {empty_and_null}
     Two geometries that do not meet, or only meet in parts that are dropped,
     give an empty {output} too.
