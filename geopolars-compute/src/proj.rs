@@ -1,6 +1,6 @@
 //! Interfacing with PROJ, to move coordinates from one CRS to another.
 //!
-//! PROJ takes one coordinate at a time, as four floats: `x`, `y`, `z` and the time `t`.
+//! PROJ takes a coordinate as four floats: `x`, `y`, `z` and the time `t`.
 //! It does so even for a 2D transformation.
 //! `x` and `y` always go through it.
 //! `z` only goes through it if `Z=true` (see below).
@@ -19,23 +19,24 @@
 //!
 //! ## `NULLS`
 //!
-//!
 //! The reprojection of a column of points is generic over `NULLS`.
 //! If `NULLS=false`, every point is assumed to be there.
 
 // TODO: Add support for CRSes that have a time/epoch
 
 use std::ffi::{CStr, CString};
+use std::ops::Range;
 use std::os::raw::c_int;
 use std::ptr;
 
 use geopolars_core::{Coords, ValidCoords};
+use polars_arrow::bitmap::utils::SlicesIterator;
 use proj::ProjError;
 use proj_sys::{
     proj_context_create, proj_context_destroy, proj_context_errno, proj_context_errno_string,
-    proj_create_crs_to_crs, proj_destroy, proj_errno, proj_errno_reset,
-    proj_normalize_for_visualization, proj_trans, PJ, PJ_CONTEXT, PJ_COORD, PJ_DIRECTION_PJ_FWD,
-    PJ_XYZT,
+    proj_create_crs_to_crs, proj_destroy, proj_errno, proj_errno_reset, proj_log_level,
+    proj_normalize_for_visualization, proj_trans, proj_trans_generic, PJ, PJ_CONTEXT, PJ_COORD,
+    PJ_DIRECTION_PJ_FWD, PJ_LOG_LEVEL_PJ_LOG_NONE, PJ_XYZT,
 };
 
 use crate::{GeoComputeError, GeoComputeResult};
@@ -102,7 +103,7 @@ impl Drop for Transformation {
 }
 
 /// For a column of points.
-/// A null point is never handed to PROJ, and keeps its coordinates.
+/// A null point keeps its coordinates, and never fails.
 pub fn reproject_coords(
     transformation: &Transformation,
     coords: &Coords,
@@ -140,23 +141,25 @@ fn reprojected_points<const NULLS: bool, const Z: bool>(
     coords: &Coords,
 ) -> GeoComputeResult<[Option<Vec<f64>>; 3]> {
     let values = coords.ignoring_validity();
-    let len = coords.len();
-    let mut xs = Vec::with_capacity(len);
-    let mut ys = Vec::with_capacity(len);
-    let mut zs = Vec::with_capacity(if Z { len } else { 0 });
-    for i in 0..len {
-        let position = values.position::<Z>(i);
-        let [x, y, z] = if !NULLS || coords.is_valid(i) {
-            reproject_position(transformation, position)?
-        } else {
-            position
-        };
-        xs.push(x);
-        ys.push(y);
-        if Z {
-            zs.push(z);
+    let mut positions = copied_positions::<Z>(values);
+    match coords.validity().filter(|_| NULLS) {
+        // Only the runs of points that are there go to PROJ,
+        // so a null point keeps the coordinates it was copied with.
+        Some(validity) => {
+            for (start, len) in SlicesIterator::new(validity) {
+                reproject_positions_in_place::<Z>(
+                    transformation,
+                    &mut positions,
+                    start..start + len,
+                );
+            }
         }
+        None => reproject_positions_in_place::<Z>(transformation, &mut positions, 0..coords.len()),
     }
+    retry_failed_positions::<Z>(transformation, values, &mut positions, |i| {
+        NULLS && !coords.is_valid(i)
+    })?;
+    let [xs, ys, zs] = positions;
     Ok([Some(xs), Some(ys), Z.then_some(zs)])
 }
 
@@ -165,31 +168,93 @@ fn reprojected_valid<const Z: bool>(
     transformation: &Transformation,
     coords: &ValidCoords,
 ) -> GeoComputeResult<[Option<Vec<f64>>; 3]> {
-    let len = coords.len();
-    let mut xs = Vec::with_capacity(len);
-    let mut ys = Vec::with_capacity(len);
-    let mut zs = Vec::with_capacity(if Z { len } else { 0 });
-    for i in 0..len {
-        let [x, y, z] = reproject_position(transformation, coords.position::<Z>(i))?;
-        xs.push(x);
-        ys.push(y);
-        if Z {
-            zs.push(z);
-        }
-    }
+    let mut positions = copied_positions::<Z>(coords);
+    reproject_positions_in_place::<Z>(transformation, &mut positions, 0..coords.len());
+    retry_failed_positions::<Z>(transformation, coords, &mut positions, |_| false)?;
+    let [xs, ys, zs] = positions;
     Ok([Some(xs), Some(ys), Z.then_some(zs)])
 }
 
-// TODO: hand PROJ whole buffers with `proj_trans_generic`, rather than one `proj_trans` call per coordinate.
-// Reprojecting costs about 35 ns per coordinate in memory,
-// more than GEOS takes for `shortest_line_between` on 32-vertex polygons.
-// Benchmark before switching: PROJ 9.6 loops over `proj_trans` inside `proj_trans_generic` too,
-// so this only saves our per-call overhead (the errno reset and check, and copying into new vectors).
-// PROJ also transforms the buffers in place and does not reset the errno per coordinate.
-// A failed coordinate is only marked as `HUGE_VAL`,
-// so finding the position for `GeoComputeError::Reproject` then needs a scan afterwards.
+fn copied_positions<const Z: bool>(coords: &ValidCoords) -> [Vec<f64>; 3] {
+    let zs = if Z {
+        coords.z().unwrap().to_vec()
+    } else {
+        Vec::new()
+    };
+    [coords.x().to_vec(), coords.y().to_vec(), zs]
+}
+
+fn set_position<const Z: bool>([xs, ys, zs]: &mut [Vec<f64>; 3], i: usize, [x, y, z]: [f64; 3]) {
+    xs[i] = x;
+    ys[i] = y;
+    if Z {
+        zs[i] = z;
+    }
+}
+
+/// Moves the positions in `range` through PROJ in a single call.
+/// A coordinate PROJ fails on gets an `x` of `f64::INFINITY` rather than an error,
+/// so [retry_failed_positions] has to follow.
+fn reproject_positions_in_place<const Z: bool>(
+    transformation: &Transformation,
+    [xs, ys, zs]: &mut [Vec<f64>; 3],
+    range: Range<usize>,
+) {
+    let len = range.len();
+    let stride = size_of::<f64>();
+    let (z, z_len) = if Z {
+        (zs[range.clone()].as_mut_ptr(), len)
+    } else {
+        (ptr::null_mut(), 0)
+    };
+    let (xs, ys) = (&mut xs[range.clone()], &mut ys[range]);
+    // SAFETY: `pj` and its context are alive while `transformation` is.
+    // PROJ reads and writes `len` values of each buffer it gets, which all hold that many.
+    // A null buffer it reads as `0.0` for `z` and as "no time given" for `t`.
+    unsafe {
+        // PROJ logs every coordinate it fails on to stderr.
+        // Only the one `retry_failed_positions` reports should be, as before batching.
+        let log_level = proj_log_level(transformation.ctx, PJ_LOG_LEVEL_PJ_LOG_NONE);
+        proj_trans_generic(
+            transformation.pj,
+            PJ_DIRECTION_PJ_FWD,
+            xs.as_mut_ptr(),
+            stride,
+            len,
+            ys.as_mut_ptr(),
+            stride,
+            len,
+            z,
+            stride,
+            z_len,
+            ptr::null_mut(),
+            0,
+            0,
+        );
+        proj_log_level(transformation.ctx, log_level);
+    }
+}
+
+/// Reprojects every coordinate that [reproject_positions_in_place] failed on once more, on its own,
+/// to get the error back. A coordinate for which `is_skipped` holds is left as it is.
+fn retry_failed_positions<const Z: bool>(
+    transformation: &Transformation,
+    original: &ValidCoords,
+    positions: &mut [Vec<f64>; 3],
+    is_skipped: impl Fn(usize) -> bool,
+) -> GeoComputeResult<()> {
+    for i in 0..original.len() {
+        // A coordinate can also come out infinite without failing, e.g. one that went in infinite.
+        // On its own, it then comes out the same again.
+        if positions[0][i] == f64::INFINITY && !is_skipped(i) {
+            let position = reproject_position(transformation, original.position::<Z>(i))?;
+            set_position::<Z>(positions, i, position);
+        }
+    }
+    Ok(())
+}
+
 /// `[x, y, z]` through PROJ (see the module docs).
-#[inline(always)]
 fn reproject_position(
     transformation: &Transformation,
     [x, y, z]: [f64; 3],
