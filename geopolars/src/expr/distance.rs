@@ -15,12 +15,11 @@ use geopolars_core::{Coords, PointArray};
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
-use polars_core::utils::align_chunks_binary;
 use proj::Proj;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Kind};
+use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs_unless_bare, GeometryPairs, Kind};
 use crate::proj::GeodeticCrs;
 
 /// How many CRSes to keep in cache.
@@ -163,33 +162,36 @@ fn against_one<const Z: bool>(
         .map_err(|e| polars_err!(ComputeError: "{e}"))
 }
 
-/// [`against_one`] for every chunk of `many`. Distance goes both ways,
-/// so this serves a single point on either side.
-fn every_against_one<const Z: bool>(
+fn points(chunk: &ArrayRef) -> PolarsResult<PointArray> {
+    Ok(PointArray::new(Coords::new(chunk.as_ref())?))
+}
+
+fn measure_chunks<const Z: bool>(
     metric: &impl DistanceMetric<Error: Display>,
-    one: &StructChunked,
-    many: &StructChunked,
+    a: &Series,
+    b: &Series,
 ) -> PolarsResult<Vec<PrimitiveArray<f64>>> {
-    let one = one.rechunk();
-    let one = one
-        .downcast_iter()
-        .next()
-        .expect("a single point is one chunk");
-    let Some(one) = PointArray::new(Coords::new(one)?)
-        .get(0)
-        .position::<true, Z>()
-    else {
-        return Ok(many
-            .downcast_iter()
-            .map(|many| PrimitiveArray::new_null(ArrowDataType::Float64, many.len()))
-            .collect());
-    };
-    many.downcast_iter()
-        .map(|many| {
-            let many = PointArray::new(Coords::new(many)?);
-            against_one::<Z>(metric, one, &many)
-        })
-        .collect()
+    Ok(match aligned_pairs(a, b)? {
+        GeometryPairs::Pairwise(pairs) => pairs
+            .iter()
+            .map(|(a, b)| pairwise::<Z>(metric, &points(a)?, &points(b)?))
+            .collect::<PolarsResult<Vec<_>>>()?,
+        // Distance goes both ways, so it does not matter which side `one` came from.
+        GeometryPairs::OneAgainstMany { a: one, b: many }
+        | GeometryPairs::ManyAgainstOne { a: many, b: one } => {
+            let one = points(&one)?
+                .get(0)
+                .position::<false, Z>()
+                .expect("`NULLS=false` always gives one");
+            many.iter()
+                .map(|many| against_one::<Z>(metric, one, &points(many)?))
+                .collect::<PolarsResult<Vec<_>>>()?
+        }
+        GeometryPairs::AllNull(lengths) => lengths
+            .iter()
+            .map(|&rows| PrimitiveArray::new_null(ArrowDataType::Float64, rows))
+            .collect(),
+    })
 }
 
 /// The distance between the points of `inputs[0]` and `inputs[1]`, measured with `metric`.
@@ -198,25 +200,7 @@ fn measure(
     inputs: &[Series],
 ) -> PolarsResult<Series> {
     let z = describe(inputs[0].dtype())?.dim.has_z() && describe(inputs[1].dtype())?.dim.has_z();
-
-    let a = inputs[0].ext()?.storage().struct_()?;
-    let b = inputs[1].ext()?.storage().struct_()?;
-    let chunks = match (a.len(), b.len()) {
-        (n, m) if n == m => {
-            let (a, b) = align_chunks_binary(a, b);
-            a.downcast_iter()
-                .zip(b.downcast_iter())
-                .map(|(a, b)| {
-                    let a = PointArray::new(Coords::new(a)?);
-                    let b = PointArray::new(Coords::new(b)?);
-                    with_const_flags!(Z = z; pairwise::<Z>(metric, &a, &b))
-                })
-                .collect::<PolarsResult<Vec<_>>>()?
-        }
-        (1, _) => with_const_flags!(Z = z; every_against_one::<Z>(metric, a, b))?,
-        (_, 1) => with_const_flags!(Z = z; every_against_one::<Z>(metric, b, a))?,
-        (n, m) => polars_bail!(ShapeMismatch: "cannot measure {n} points against {m}"),
-    };
+    let chunks = with_const_flags!(Z = z; measure_chunks::<Z>(metric, &inputs[0], &inputs[1]))?;
     Ok(Float64Chunked::from_chunk_iter(inputs[0].name().clone(), chunks).into_series())
 }
 

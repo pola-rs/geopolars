@@ -89,7 +89,7 @@ Classic binary predicates:
 
 creating new geometries
 
-- [ ] intersection
+- [x] intersection: `intersection`
 - [ ] union
 - [ ] difference
 

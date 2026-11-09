@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         OutOfBounds,
         OutOfBoundsAction,
     )
+    from geopolars.geo.intersection import Keep
     from geopolars.geo.snap_to_grid import RoundMode
 
 
@@ -521,6 +522,28 @@ class ExprGeoNameSpace:
         return shortest_line_between(
             self._expr,
             other,
+            ignore_per_row_errors=ignore_per_row_errors,
+            early_finite_check=early_finite_check,
+        )
+
+    def intersection(
+        self,
+        other: IntoExprColumn,
+        *,
+        keep: Keep | None = None,
+        allow_splitting: bool = False,
+        ccw_outer: bool = False,
+        ignore_per_row_errors: bool = False,
+        early_finite_check: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.intersection import intersection
+
+        return intersection(
+            self._expr,
+            other,
+            keep=keep,
+            allow_splitting=allow_splitting,
+            ccw_outer=ccw_outer,
             ignore_per_row_errors=ignore_per_row_errors,
             early_finite_check=early_finite_check,
         )

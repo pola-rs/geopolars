@@ -55,6 +55,7 @@ from geopolars.geo.fix_out_of_bounds import OutOfBounds, fix_out_of_bounds
 from geopolars.geo.force_dimension import force_2d, force_3d, force_m, without_m
 from geopolars.geo.has_repeats_in_succession import has_repeats_in_succession
 from geopolars.geo.interior import interior
+from geopolars.geo.intersection import intersection
 from geopolars.geo.is_ccw import is_ccw
 from geopolars.geo.is_empty import is_empty
 from geopolars.geo.is_equal import is_equal
@@ -115,6 +116,7 @@ __all__ = [
     "from_wkt",
     "has_repeats_in_succession",
     "interior",
+    "intersection",
     "is_ccw",
     "is_empty",
     "is_equal",

@@ -167,9 +167,10 @@ def test_against_a_single_null_geometry_everything_is_null() -> None:
     many = _series("many", PointXY(), [_LINE[0], _LINE[1]])
     one = _series("one", PointXY(), [None])
 
-    out = pl.DataFrame(many).select(geo.is_equal("many", one))
+    df = pl.DataFrame(many)
 
-    assert out["many"].to_list() == [None, None]
+    assert df.select(geo.is_equal("many", one))["many"].to_list() == [None, None]
+    assert df.select(geo.is_equal(one, "many")).to_series().to_list() == [None, None]
 
 
 def test_a_different_number_of_vertices_is_not_close() -> None:
@@ -365,6 +366,17 @@ def test_a_chunked_column_is_compared_against_a_single_geometry() -> None:
 
     assert df.select(geo.is_equal("many", one))["many"].to_list() == expected
     assert df.select(geo.is_equal(one, "many")).to_series().to_list() == expected
+
+
+@pytest.mark.parametrize("kind", _KINDS)
+def test_columns_chunked_differently_are_compared_row_by_row(kind: str) -> None:
+    dtype, same, _, moved = _KINDS[kind]
+    a = _chunked([_series("a", dtype, [same]), _series("a", dtype, [moved, None])])
+    b = _chunked([_series("b", dtype, [same, same]), _series("b", dtype, [same])])
+
+    out = pl.DataFrame([a, b]).select(geo.is_equal("a", "b"))
+
+    assert out["a"].to_list() == [True, False, None]
 
 
 @pytest.mark.parametrize(

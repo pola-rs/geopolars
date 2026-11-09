@@ -11,10 +11,12 @@ pub mod decode;
 pub mod encoded;
 mod geo;
 mod kind;
+mod pairs;
 
 pub use geo::Geo;
 pub use geopolars_core::GeoDimension;
 pub use kind::Kind;
+pub use pairs::{aligned_pairs, single_chunk_masked_pairs, GeometryPairs};
 
 use std::any::Any;
 use std::sync::Arc;

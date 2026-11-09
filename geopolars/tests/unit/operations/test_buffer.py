@@ -179,7 +179,7 @@ def test_a_negative_distance_shrinks_a_polygon() -> None:
 def test_a_polygon_split_in_two_raises() -> None:
     df = _column(PolygonXY, [_DUMBBELL], [_SQUARE])
 
-    with pytest.raises(ComputeError, match="MultiPolygon"):
+    with pytest.raises(ComputeError, match="split into 2 parts"):
         _buffered(df, -0.5)
 
 

@@ -10,10 +10,10 @@
 //! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_core::{LineStringArray, MultiLineStringArray};
-use geos::{Geom, JoinStyle};
+use geos::{Geom, GeometryTypes, JoinStyle};
 
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
-use super::{GeosGeometries, ToGeosRows};
+use super::{unless_split, GeosGeometries, ToGeosRows};
 use crate::GeoComputeResult;
 
 /// The parameters GEOS's offset curve takes, besides the distance.
@@ -26,13 +26,10 @@ pub struct OffsetCurveStyle {
     pub mitre_limit: f64,
 }
 
-/// The offset curve of every row at `distance`, forwarded to GEOS, as a linestring.
-/// A positive distance offsets to the left, relative to the direction of the line.
-/// A negative one offsets to the right.
-/// The curve keeps the direction of the line.
-/// A NaN or infinite distance fails like a GEOS error.
-/// A line without length gives an empty linestring.
-/// A row that GEOS splits into several linestrings fails like a GEOS error.
+/// Offsets every linestring into a linestring through GEOS.
+/// Implements the Python `offset_curve` with `allow_splitting=false`, which documents its behaviour.
+/// A row that GEOS splits into several linestrings therefore fails with [`crate::GeoComputeError::Split`].
+/// [`offset_curves_into_multi_line_strings`] keeps them instead.
 pub fn offset_curves_into_line_strings(
     array: &LineStringArray,
     distance: BufferDistance,
@@ -45,6 +42,7 @@ pub fn offset_curves_into_line_strings(
         distance,
         style,
         ignore_per_row_errors,
+        false,
     )?
     .into_line_string_array::<false>(ignore_per_row_errors)
 }
@@ -64,6 +62,7 @@ pub fn offset_curves_into_multi_line_strings(
         distance,
         style,
         ignore_per_row_errors,
+        true,
     )?
     .into_multi_line_string_array::<false>(ignore_per_row_errors)
 }
@@ -74,6 +73,7 @@ fn offset_curves_via_geos(
     distance: BufferDistance,
     style: &OffsetCurveStyle,
     ignore_per_row_errors: bool,
+    allow_splitting: bool,
 ) -> GeoComputeResult<GeosGeometries> {
     let OffsetCurveStyle {
         quadrant_segments,
@@ -85,6 +85,12 @@ fn offset_curves_via_geos(
         distance,
         ignore_per_row_errors,
         finite_distance,
-        |input, distance| input.offset_curve(distance, quadrant_segments, join_style, mitre_limit),
+        |input, distance| {
+            let curve = input.offset_curve(distance, quadrant_segments, join_style, mitre_limit)?;
+            if allow_splitting {
+                return Ok(curve);
+            }
+            unless_split(curve, GeometryTypes::MultiLineString)
+        },
     )
 }

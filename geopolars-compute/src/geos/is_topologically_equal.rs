@@ -5,7 +5,8 @@ use geopolars_core::GeometryArray;
 use geos::Geom;
 use polars_arrow::array::BooleanArray;
 
-use super::{GeosRow, ToGeosRows};
+use super::pairs::GeosPairs;
+use super::GeosRow;
 use crate::per_row::optional_bool_array;
 use crate::{row_or_null, GeoComputeResult};
 
@@ -24,56 +25,23 @@ fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Op
 
 /// Tests whether two arrays of geometries are topologically equal, row by row.
 /// Implements the Python `is_topologically_equal`, which documents its behaviour.
-/// Each side is converted to GEOS in full, so a row that is null on only one side can still fail.
+/// A single row on either side is compared against every row of the other.
+/// Each side is converted to GEOS in full, so a row paired with a null can still fail.
 ///
-/// `a` and `b` must have the same length.
-pub fn topologically_equal_pairwise(
+/// `a` and `b` must have the same length, or one of them a single row.
+pub fn topologically_equal(
     a: &GeometryArray,
     b: &GeometryArray,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 ) -> GeoComputeResult<BooleanArray> {
-    let a = a.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    let b = b.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    debug_assert_eq!(
-        a.geometries.len(),
-        b.geometries.len(),
-        "`a` and `b` must have the same length"
-    );
-    let tested = a
-        .geometries
+    // TODO: Skip the partner of an empty row, as `intersection` does.
+    // That needs emptiness by coordinate count rather than by parts:
+    // `MULTIPOLYGON (EMPTY)` has a part, and GEOS finds it equal to `POLYGON EMPTY`.
+    let pairs = GeosPairs::new(a, b, ignore_per_row_errors, early_finite_check)?;
+    let tested = pairs
         .iter()
-        .zip(&b.geometries)
         .map(|(a, b)| row_or_null(rows_are_topologically_equal(a, b), ignore_per_row_errors))
-        .collect::<GeoComputeResult<Vec<_>>>()?;
-    Ok(optional_bool_array(&tested))
-}
-
-/// Tests whether a single geometry is topologically equal to every row of `many`.
-/// Equality goes both ways, so this serves a single geometry on either side.
-/// As in [topologically_equal_pairwise], `many` is converted to GEOS in full, even if `one` is null.
-///
-/// `one` must hold a single row.
-pub fn topologically_equal_against_one(
-    one: &GeometryArray,
-    many: &GeometryArray,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
-) -> GeoComputeResult<BooleanArray> {
-    let one = one.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    let [one] = one.geometries.as_slice() else {
-        panic!("`one` must be a single row, got {}", one.geometries.len());
-    };
-    let many = many.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    let tested = many
-        .geometries
-        .iter()
-        .map(|row| {
-            row_or_null(
-                rows_are_topologically_equal(one, row),
-                ignore_per_row_errors,
-            )
-        })
         .collect::<GeoComputeResult<Vec<_>>>()?;
     Ok(optional_bool_array(&tested))
 }

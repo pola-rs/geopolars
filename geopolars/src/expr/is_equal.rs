@@ -11,11 +11,11 @@ use geopolars_core::{
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, BooleanArray, ListArray};
-use polars_core::utils::align_chunks_binary;
+use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, ensure_same_crs, Kind};
+use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs, Kind};
 
 /// See python
 #[derive(Debug, Deserialize)]
@@ -109,54 +109,26 @@ fn chunk_is_equal(
     })
 }
 
-/// The chunks of the storages of `a` and `b`, which are the same length, split at the same rows.
-fn aligned_chunks(a: &Series, b: &Series) -> PolarsResult<Vec<(ArrayRef, ArrayRef)>> {
-    let (a, b) = (a.ext()?.storage(), b.ext()?.storage());
-    let zipped =
-        |a: &[ArrayRef], b: &[ArrayRef]| a.iter().cloned().zip(b.iter().cloned()).collect();
-    Ok(match a.dtype() {
-        DataType::Struct(_) => {
-            let (a, b) = align_chunks_binary(a.struct_()?, b.struct_()?);
-            zipped(a.chunks(), b.chunks())
-        }
-        _ => {
-            let (a, b) = align_chunks_binary(a.list()?, b.list()?);
-            zipped(a.chunks(), b.chunks())
-        }
-    })
-}
-
-/// Runs [chunk_is_equal] on every chunk of `many`, against the single row of `one`.
-/// Equality goes both ways, so this serves a single geometry on either side.
-fn every_against_one(
-    one: &Series,
-    many: &Series,
-    kind: Kind,
-    kwargs: &IsEqualKwargs,
-) -> PolarsResult<Vec<BooleanArray>> {
-    let one = one.ext()?.storage().rechunk();
-    let one = one.chunks()[0].as_ref();
-    many.ext()?
-        .storage()
-        .chunks()
-        .iter()
-        .map(|many| chunk_is_equal(many.as_ref(), one, kind, kwargs))
-        .collect()
-}
-
 /// See `is_equal`.
 #[polars_expr(output_type_func=kernel_output_type_is_equal)]
 fn is_equal(inputs: &[Series], kwargs: IsEqualKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let kind = describe(a.dtype())?.kind;
-    let chunks = match (a.len(), b.len()) {
-        (n, m) if n == m => aligned_chunks(a, b)?
+    let chunks = match aligned_pairs(a, b)? {
+        GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| chunk_is_equal(a.as_ref(), b.as_ref(), kind, &kwargs))
             .collect::<PolarsResult<Vec<_>>>()?,
-        (1, _) => every_against_one(a, b, kind, &kwargs)?,
-        (_, 1) => every_against_one(b, a, kind, &kwargs)?,
-        (n, m) => polars_bail!(ShapeMismatch: "cannot compare {n} geometries against {m}"),
+        // Equality goes both ways, so it does not matter which side `one` came from.
+        GeometryPairs::OneAgainstMany { a: one, b: many }
+        | GeometryPairs::ManyAgainstOne { a: many, b: one } => many
+            .iter()
+            .map(|many| chunk_is_equal(many.as_ref(), one.as_ref(), kind, &kwargs))
+            .collect::<PolarsResult<Vec<_>>>()?,
+        GeometryPairs::AllNull(lengths) => lengths
+            .iter()
+            .map(|&rows| BooleanArray::new_null(ArrowDataType::Boolean, rows))
+            .collect(),
     };
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
 }

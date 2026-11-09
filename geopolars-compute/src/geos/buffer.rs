@@ -10,11 +10,11 @@
 //! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_core::{GeometryArray, MultiPolygonArray, PolygonArray};
-use geos::{BufferParams, Geom, Geometry};
+use geos::{BufferParams, Geom, Geometry, GeometryTypes};
 pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
-use super::{GeosGeometries, GeosRow, ToGeosRows};
+use super::{unless_split, GeosGeometries, GeosRow, ToGeosRows};
 use crate::{GeoComputeError, GeoComputeResult};
 
 /// How far away is the buffer?
@@ -50,18 +50,10 @@ pub struct BufferStyle {
     pub side: Side,
 }
 
-/// Every row buffered by `distance`, forwarded to GEOS, as a polygon.
-/// A NaN or infinite distance fails like a GEOS error,
-/// as does a negative one with a single `side`.
-/// This is for a point, linestring or polygon.
-/// A distance of at most 0 gives an empty polygon for a point or linestring.
-/// A negative distance shrinks a polygon.
-/// A row that GEOS buffers into several polygons fails like a GEOS error.
-/// For a single kind, that only happens with a negative distance.
-/// If `ignore_per_row_errors=true`, a row GEOS fails on is null;
-/// otherwise its error is returned.
-/// If `ccw_outer=true`, every ring is reversed, so the exterior runs counter-clockwise.
-/// Otherwise it runs clockwise, as GEOS gives it.
+/// Buffers every point, linestring, or polygon into a polygon through GEOS.
+/// Implements the Python `buffer` where it gives a polygon, which documents its behaviour.
+/// A row that GEOS splits into several polygons therefore fails with [`GeoComputeError::Split`].
+/// [`buffer_into_multi_polygons`] keeps them instead.
 pub fn buffer_into_polygons(
     array: &GeometryArray,
     distance: BufferDistance,
@@ -75,6 +67,7 @@ pub fn buffer_into_polygons(
         distance,
         style,
         ignore_per_row_errors,
+        false,
     )?
     .into_polygon_array(false, ignore_per_row_errors, ccw_outer)
 }
@@ -95,6 +88,7 @@ pub fn buffer_into_multi_polygons(
         distance,
         style,
         ignore_per_row_errors,
+        true,
     )?
     .into_multi_polygon_array(false, ignore_per_row_errors, ccw_outer)
 }
@@ -116,6 +110,7 @@ fn buffer_via_geos(
     distance: BufferDistance,
     style: &BufferStyle,
     ignore_per_row_errors: bool,
+    allow_splitting: bool,
 ) -> GeoComputeResult<GeosGeometries> {
     let params = buffer_params(style)?;
     by_distance_via_geos(
@@ -123,7 +118,13 @@ fn buffer_via_geos(
         distance,
         ignore_per_row_errors,
         |distance| geos_distance(distance, style.side),
-        |input, distance| input.buffer_with_params(distance, &params),
+        |input, distance| {
+            let buffer = input.buffer_with_params(distance, &params)?;
+            if allow_splitting {
+                return Ok(buffer);
+            }
+            unless_split(buffer, GeometryTypes::MultiPolygon)
+        },
     )
 }
 
@@ -139,12 +140,12 @@ pub(super) fn by_distance_via_geos(
     distance: BufferDistance,
     ignore_per_row_errors: bool,
     geos_distance: impl Fn(f64) -> GeoComputeResult<f64>,
-    op: impl Fn(&Geometry, f64) -> Result<Geometry, geos::Error>,
+    op: impl Fn(&Geometry, f64) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<GeosGeometries> {
     let apply = |input: &Geometry, geos_distance: f64| -> GeoComputeResult<GeosRow> {
         match op(input, geos_distance) {
             Ok(output) => Ok(GeosRow::Geometry(output)),
-            Err(e) if !ignore_per_row_errors => Err(e.into()),
+            Err(e) if !ignore_per_row_errors => Err(e),
             Err(_) => Ok(GeosRow::Null),
         }
     };
