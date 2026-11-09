@@ -861,7 +861,7 @@ def test_matches_shapely(a_kind: str, b_kind: str, keep: str | None) -> None:
     assert any(len(parts) > 0 for parts in kept), "the cases should not all be empty"
     expected = [shapely.GeometryCollection(parts) for parts in kept]
     # Shapely may bring another GEOS, which can compute a crossing a bit differently,
-    # and merge other parts. So a split is checked against our own parts.
+    # and merge other parts. A split is therefore checked against our own parts.
     _assert_geometries(
         every_part,
         list(shapely.to_wkt(expected, rounding_precision=-1)),

@@ -1,10 +1,5 @@
 //! The intersection of two geometries, forwarded to GEOS.
 //! See `intersection` in Python for the rules.
-//!
-//! GEOS gives a result of any kind per row, mixed ones as a `GeometryCollection`.
-//! The caller picks the output kind, through one of the `into_*` methods of [`IntersectionPairs`].
-//! Each of those narrows every result down to the parts of its dimension,
-//! so that every row fits that kind.
 
 use geopolars_core::output::SizeHint;
 use geopolars_core::{
@@ -45,9 +40,9 @@ impl TopologicalDimension {
 
 /// Two arrays of geometries converted to GEOS, with their rows paired up to intersect.
 /// A single row on either side is paired with every row of the other.
-/// Each `into_*` method intersects them, narrows every intersection down to its own kind,
-/// and copies them into our array of it.
-/// m is always dropped, whatever the inputs have.
+/// Each of those narrows every intersection down to its parts of that dimension,
+/// and copies them into our array of that kind.
+/// m is always dropped.
 pub struct IntersectionPairs {
     pairs: GeosPairs,
     ignore_per_row_errors: bool,
@@ -55,9 +50,9 @@ pub struct IntersectionPairs {
 
 impl IntersectionPairs {
     /// Implements the Python `intersection`, which documents its behaviour.
-    /// Each side is converted to GEOS in full, so a row paired with a null can still fail.
-    /// A row paired with an empty geometry is not converted.
-    /// If `ignore_per_row_errors=true`, a row that fails here or in the `into_*` method is null.
+    /// Each side is converted to GEOS in full, except for the rows paired with an empty geometry.
+    /// A row paired with a null can therefore still fail.
+    /// A row that fails here or in the `into_*` method is null if `ignore_per_row_errors=true`.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
     pub fn new(
@@ -76,7 +71,6 @@ impl IntersectionPairs {
             ignore_per_row_errors,
         })
     }
-    /// As points, the empty point where there are none.
     /// Several points fail with [`GeoComputeError::Split`].
     pub fn into_points(self, z: bool) -> GeoComputeResult<PointArray> {
         let dim = if z {
@@ -121,9 +115,7 @@ impl IntersectionPairs {
             .into_multi_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
     }
 
-    /// Every pair intersected, and narrowed down to its parts of `kept_dimension`,
-    /// which the `into_*_array` of that kind takes:
-    /// a single geometry, or with `multi=true` a single or a multi one.
+    /// Intersects every pair, and narrows each intersection down with [`kept_parts`].
     fn intersected(
         &self,
         kept_dimension: TopologicalDimension,
@@ -161,8 +153,9 @@ fn intersect_rows(
 ) -> GeoComputeResult<GeosRow> {
     let intersection = match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(GeosRow::Null),
-        // An empty row never went to GEOS, nor did its partner.
-        // Their intersection is empty.
+        // A row is also `Empty` when its partner is
+        // (see `GeosPairs::new_skipping_partners_of_empty`).
+        // Either way, their intersection is empty.
         (GeosRow::Empty, _) | (_, GeosRow::Empty) => return Ok(GeosRow::Empty),
         (GeosRow::Geometry(a), GeosRow::Geometry(b)) => a
             .intersection(b)
@@ -173,8 +166,8 @@ fn intersect_rows(
 }
 
 /// Narrows an intersection down to its parts of `kept_dimension`,
-/// as one geometry if `multi=false` (or [`GeoComputeError::Split`] if it has several).
-/// With `multi=true`, a single part can stay a single geometry.
+/// in a single geometry for the `into_*_array` of that kind.
+/// With `multi=true`, several parts become a multi geometry instead of failing with [`GeoComputeError::Split`].
 fn kept_parts(
     intersection: Geometry,
     kept_dimension: TopologicalDimension,
@@ -192,7 +185,8 @@ fn kept_parts(
     if found != multi_type && found != GeometryTypes::GeometryCollection {
         return Ok(GeosRow::Empty);
     }
-    // A collection can mix dimensions, and a multi geometry of a single part has to be unpacked.
+    // A collection can mix dimensions.
+    // A multi geometry has to be unpacked into a single one, or refused if it has several parts.
     // Only these copy their kept parts.
     let mut kept = Vec::new();
     for n in 0..intersection.get_num_geometries()? {
@@ -205,16 +199,16 @@ fn kept_parts(
         0 => Ok(GeosRow::Empty),
         _ if multi => Ok(GeosRow::Geometry(kept_dimension.create_multi(kept)?)),
         1 => Ok(GeosRow::Geometry(kept.pop().expect("one part"))),
+        // This counts the parts as GEOS gives them.
         // WARNING: Only since GEOS 3.15 are line pieces that join end to end
         // merged into one linestring.
+        // Before, a line that runs through a node (such as a vertex of the other boundary)
+        // came back in pieces, so `LINESTRING (0 0, 2 0, 4 0)` with itself would split in two.
+        // Even now, pieces that meet where three or more lines do
+        // (such as where a line crosses itself) stay apart.
         // We get 3.15 from the `static` feature, which builds the GEOS bundled with `geos-src`
         // (its version is locked in Cargo.lock).
         // The `v3_15_0` feature only selects the bindings, and does not check the version.
-        // Before, a line that runs through a node (such as a vertex of the other boundary)
-        // came back in pieces, so `LINESTRING (0 0, 2 0, 4 0)` with itself would split in two.
-        // Pieces that meet where three or more lines do, such as where a line crosses itself,
-        // are still apart.
-        // This counts the parts as GEOS gives them.
         count => Err(GeoComputeError::Split { parts: count }),
     }
 }

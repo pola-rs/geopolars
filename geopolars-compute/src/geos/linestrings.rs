@@ -75,8 +75,8 @@ impl ToGeosRows for MultiLineStringArray {
     }
 }
 
-/// Like [`ToGeosRows::to_geos_rows_taking_as_empty`].
-/// If `drop_empty_parts=true`, a part without vertices is left out.
+/// See [`ToGeosRows::to_geos_rows_taking_as_empty`].
+/// A part without vertices is left out if `drop_empty_parts=true`.
 pub(super) fn multi_line_strings_to_geos_rows(
     array: &MultiLineStringArray,
     drop_empty_parts: bool,

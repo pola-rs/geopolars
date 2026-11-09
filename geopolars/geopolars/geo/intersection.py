@@ -53,7 +53,7 @@ def intersection(
     but the intersection of one row can have parts of several dimensions.
     Two polygons can overlap in an area, but also touch along an edge or at a point,
     and two lines can overlap along a stretch, but also cross at a point.
-    So only the parts of one dimension are kept, and the others are dropped.
+    Only the parts of one dimension are therefore kept, and the others are dropped.
     By default, that is the dimension of the lower-dimensional input.
     Set `keep` to `"points"`, `"lines"` or `"polygons"` to keep another,
     such as `keep="points"` for where two lines cross.

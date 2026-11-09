@@ -1,5 +1,4 @@
-//! Lining up the storage chunks of two geometry columns for a kernel,
-//! row by row or with a single geometry on either side against every row of the other.
+//! Lining up two geometry columns for a kernel (see [`GeometryPairs`]).
 
 use polars::prelude::*;
 use polars_arrow::compute::utils::combine_validities_and;
@@ -15,13 +14,14 @@ pub enum GeometryPairs {
     OneAgainstMany { a: ArrayRef, b: Vec<ArrayRef> },
     /// Every chunk of `a` against a single geometry `b`, which is not null.
     ManyAgainstOne { a: Vec<ArrayRef>, b: ArrayRef },
-    /// A null single geometry: the length of each all-null output chunk.
+    /// The single geometry is null, so the output is too.
+    /// Holds the length of each output chunk.
     AllNull(Vec<usize>),
 }
 
 /// Lines up `a` and `b`, splitting columns of the same length at the same rows.
+/// `a` and `b` must both be points (or something stored as a list).
 /// This only copies when both have several chunks that do not line up.
-/// Both must be stored alike: both points, or both lists.
 pub fn aligned_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
     if a.len() != b.len() {
         return against_one_pairs(a, b);
@@ -58,7 +58,6 @@ pub fn single_chunk_masked_pairs(a: &Series, b: &Series) -> PolarsResult<Geometr
     )]))
 }
 
-/// For two columns of different lengths, one of which must be a single geometry.
 fn against_one_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
     let (one, many, one_is_a) = match (a.len(), b.len()) {
         (1, _) => (a, b, true),

@@ -72,7 +72,7 @@ fn pair_count(a_rows: usize, b_rows: usize) -> usize {
     rows
 }
 
-/// Which valid rows have no parts.
+/// Marks the valid rows that have no parts.
 /// A point has none when it is GeoArrow's empty point (NaN x and y).
 fn rows_without_parts(array: &GeometryArray) -> Bitmap {
     let rows = match array {
@@ -91,7 +91,7 @@ fn rows_without_parts(array: &GeometryArray) -> Bitmap {
     Bitmap::from_iter((0..rows.len()).map(|i| rows.is_valid(i) && rows.range(i).is_empty()))
 }
 
-/// Which of `len` rows are paired with an empty row of `partner_empty`, broadcast as in [`GeosPairs::iter`].
+/// Marks which of `len` rows are paired with an empty row of `partner_empty`, broadcast as in [`GeosPairs::iter`].
 fn paired_with_empty(partner_empty: &Bitmap, len: usize) -> Bitmap {
     if partner_empty.len() == len {
         partner_empty.clone()
@@ -103,7 +103,9 @@ fn paired_with_empty(partner_empty: &Bitmap, len: usize) -> Bitmap {
     }
 }
 
-/// `len` rows out of `rows`, which holds that many or a single one to repeat.
+/// Gives `len` rows, repeating `rows` if it holds a single one.
+///
+/// `rows` must hold `len` rows, or a single one.
 fn broadcast(rows: &[GeosRow], len: usize) -> impl Iterator<Item = &GeosRow> {
     rows.iter().cycle().take(len)
 }

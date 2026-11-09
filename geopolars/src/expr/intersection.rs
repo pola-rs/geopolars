@@ -12,7 +12,7 @@ use crate::geoarrow::{
     GeoDimension, GeometryPairs, Kind,
 };
 
-/// A topological dimension: of an input, or of the parts an intersection keeps.
+/// The topological dimension of an input, or of the parts an intersection keeps.
 /// Ordered from points up to polygons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -111,7 +111,7 @@ fn kernel_output_type_intersection(
     Ok(Field::new(a.name().clone(), geo.dtype()))
 }
 
-/// The intersections of `pairs`, as the storage of `geo`'s kind and dimension.
+/// Intersects `pairs` into the storage of `geo`'s kind and dimension.
 fn intersected_storage(
     pairs: IntersectionPairs,
     geo: &Geo,

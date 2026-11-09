@@ -50,19 +50,10 @@ pub struct BufferStyle {
     pub side: Side,
 }
 
-/// Every row buffered by `distance`, forwarded to GEOS, as a polygon.
-/// A NaN or infinite distance fails like a GEOS error,
-/// as does a negative one with a single `side`.
-/// This is for a point, linestring or polygon.
-/// A distance of at most 0 gives an empty polygon for a point or linestring.
-/// A negative distance shrinks a polygon.
-/// A row that GEOS buffers into several polygons fails with [`GeoComputeError::Split`],
-/// which counts as a GEOS error.
-/// For a single kind, that only happens with a distance of at most 0.
-/// If `ignore_per_row_errors=true`, a row GEOS fails on is null;
-/// otherwise its error is returned.
-/// If `ccw_outer=true`, every ring is reversed, so the exterior runs counter-clockwise.
-/// Otherwise it runs clockwise, as GEOS gives it.
+/// Buffers every point, linestring, or polygon into a polygon through GEOS.
+/// Implements the Python `buffer` where it gives a polygon, which documents its behaviour.
+/// A row that GEOS splits into several polygons therefore fails with [`GeoComputeError::Split`].
+/// [`buffer_into_multi_polygons`] keeps them instead.
 pub fn buffer_into_polygons(
     array: &GeometryArray,
     distance: BufferDistance,

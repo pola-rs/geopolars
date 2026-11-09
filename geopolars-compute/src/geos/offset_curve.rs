@@ -26,14 +26,10 @@ pub struct OffsetCurveStyle {
     pub mitre_limit: f64,
 }
 
-/// The offset curve of every row at `distance`, forwarded to GEOS, as a linestring.
-/// A positive distance offsets to the left, relative to the direction of the line.
-/// A negative one offsets to the right.
-/// The curve keeps the direction of the line.
-/// A NaN or infinite distance fails like a GEOS error.
-/// A line without length gives an empty linestring.
-/// A row that GEOS splits into several linestrings fails with [`crate::GeoComputeError::Split`],
-/// like a GEOS error.
+/// Offsets every linestring into a linestring through GEOS.
+/// Implements the Python `offset_curve` with `allow_splitting=false`, which documents its behaviour.
+/// A row that GEOS splits into several linestrings therefore fails with [`crate::GeoComputeError::Split`].
+/// [`offset_curves_into_multi_line_strings`] keeps them instead.
 pub fn offset_curves_into_line_strings(
     array: &LineStringArray,
     distance: BufferDistance,

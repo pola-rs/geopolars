@@ -311,7 +311,7 @@ fn point_to_geos<const EARLY_FINITE_CHECK: bool>(
     Ok(Some(Geometry::create_point(seq)?))
 }
 
-/// The rows of [`ToGeosRows`] for a list array.
+/// Converts every row of a list array to GEOS, for [`ToGeosRows::to_geos_rows_taking_as_empty`].
 /// `to_geos` builds one geometry from the range of a row's parts.
 /// `span` gives where the coordinates of those parts sit in `axes`.
 fn rows_to_geos(
@@ -456,9 +456,9 @@ fn wrong_kind(
     Err(geos::Error::ConversionError(format!("expected a {expected}, got a {found:?}")).into())
 }
 
-/// `geometry`, unless it is a `multi` of several parts, which the single kind cannot hold.
-fn unless_split(geometry: Geometry, multi: GeometryTypes) -> GeoComputeResult<Geometry> {
-    if geometry.geometry_type()? == multi {
+/// Refuses a geometry of `multi_type` with several parts, as its single kind cannot hold them.
+fn unless_split(geometry: Geometry, multi_type: GeometryTypes) -> GeoComputeResult<Geometry> {
+    if geometry.geometry_type()? == multi_type {
         let parts = geometry.get_num_geometries()?;
         if parts > 1 {
             return Err(GeoComputeError::Split { parts });
