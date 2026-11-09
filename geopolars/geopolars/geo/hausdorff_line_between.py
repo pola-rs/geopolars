@@ -50,8 +50,10 @@ def hausdorff_line_between(
     An end between two vertices gets z and m interpolated between them.
 
     The furthest vertex is found in x and y only, in the plane of the coordinates.
-    For a geographic CRS, the geodesic length of the line is therefore close to the Hausdorff distance on the ellipsoid,
-    but not the same.
+    Longitude/latitude is not a good plane to measure in:
+    away from the equator, a degree east is shorter than a degree north.
+    For a geographic CRS, the line can therefore run to another vertex than the furthest on the ellipsoid,
+    and its geodesic length can be far from the Hausdorff distance there.
 
     If either geometry is empty, the line is empty too, even if the other geometry would raise.
 
