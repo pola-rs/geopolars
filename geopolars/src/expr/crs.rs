@@ -1,7 +1,6 @@
 //! Moving a geometry from one coordinate reference system to another.
 
 use std::cell::OnceCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
@@ -51,7 +50,7 @@ fn kernel_output_type_to_crs(input_fields: &[Field], kwargs: ToCrsKwargs) -> Pol
 /// Creating one costs milliseconds, more than reprojecting a streaming batch,
 /// and threads creating them queue for the one connection PROJ shares to its database.
 /// A clone costs a few percent of that.
-static TEMPLATES: LazyLock<Mutex<HashMap<(String, String), Transformation>>> =
+static TEMPLATES: LazyLock<Mutex<PlHashMap<(String, String), Transformation>>> =
     LazyLock::new(Default::default);
 
 thread_local! {
