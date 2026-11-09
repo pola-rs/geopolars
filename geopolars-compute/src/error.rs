@@ -24,7 +24,6 @@ pub enum GeoComputeError {
     /// A coordinate with a NaN or infinite x or y, which GEOS cannot take.
     GeosNotFinite { position: (f64, f64) },
     /// A coordinate with a NaN or infinite value that the options do not let the kernel leave out.
-    /// `z` and `m` are `None` where the coordinate does not have them.
     NotFiniteCoordinate {
         x: f64,
         y: f64,

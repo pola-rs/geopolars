@@ -6,13 +6,15 @@
 //! It is a brute-force search: every vertex against every segment of the other geometry,
 //! except that a vertex stops being measured once it can no longer be the furthest.
 //!
-//! # Why not GEOS
+//! # Why don't we use the GEOS impl?
 //!
 //! GEOS has the same search as `GEOSHausdorffDistanceWithPoints`, but we cannot use it here.
-//! The `geos` crate does not wrap it, nor give out the raw pointers to call it ourselves.
-//! Its points come in the order of whichever direction gave the larger distance,
+//! 1. The `geos` crate does not wrap it, nor give out the raw pointers to call it ourselves.
+//! We could make it ourselves, or contribute upstream, but...
+//! 2. Its points come in the order of whichever direction gave the larger distance,
 //! not of its inputs, so the line would not reliably run from `a` to `b`.
-//! It also drops z and m, and every row would first be copied into a GEOS geometry.
+//! 3. It also drops z and m
+//! 4. it's a relatively simple kernel, so re-implementing it here is not so bad.
 //! GEOS searches by brute force too (without stopping early),
 //! so there is no tested algorithm here that we would have to re-implement.
 //!
@@ -85,7 +87,7 @@ enum Levels<'a> {
 enum RowParts<'a> {
     /// Every vertex is a part of its own.
     Vertices(Range<usize>),
-    /// The vertices of each list.
+    /// The vertices of each list in the range.
     Lists(&'a ValidList, Range<usize>),
 }
 
@@ -101,7 +103,8 @@ impl Iterator for RowParts<'_> {
     }
 }
 
-/// Where a point of a line lies on a geometry: `t` of the way from vertex `start` to vertex `end`.
+/// Where a point of a line lies on a geometry
+/// `t` of the way from vertex `start` to vertex `end`.
 #[derive(Clone, Copy)]
 struct OnPart {
     start: usize,
@@ -119,8 +122,8 @@ impl OnPart {
     }
 }
 
-/// The furthest one geometry's vertex gets from the other: a squared distance in x and y,
-/// from `vertex` to the nearest point `nearest` on the other.
+/// The vertex of one geometry that lies furthest from the other, with its nearest point on the other.
+/// The distance is measured in x and y only.
 #[derive(Clone, Copy)]
 struct Furthest {
     distance_squared: f64,
@@ -287,7 +290,7 @@ impl<'a> Side<'a> {
     }
 }
 
-/// The point on segment `start`-`end` nearest to `(px, py)`, and its squared distance.
+/// Finds the point on segment `start`-`end` nearest to `(px, py)`, and its squared distance.
 #[inline(always)]
 fn nearest_on_segment(
     side: &Side,
@@ -314,8 +317,7 @@ fn keep_nearer(nearest: &mut Option<(f64, OnPart)>, candidate: (f64, OnPart)) {
     }
 }
 
-/// The point on row `row` of `side` nearest to `point`, and its squared distance.
-/// `None` if the row has no vertex to search.
+/// Finds the point on row `row` of `side` nearest to `point`, and its squared distance.
 /// It stops at the first point at most `bound` (squared) away, as the caller has no use for a nearer one.
 #[inline(always)]
 fn nearest_on_row<const SKIP: bool>(
@@ -352,28 +354,27 @@ fn nearest_on_row<const SKIP: bool>(
     nearest
 }
 
-/// The vertex of row `row` of `from` furthest from row `to_row` of `to`, if it is further than `floor` (squared).
-/// `None` if no vertex is, or if either row has no vertex to search.
-///
-/// A vertex stops being measured once it lies at most as far as the furthest so far, as it can then no longer win.
-/// It is first measured to the segment (or vertex) that held the previous vertex's nearest point,
-/// which often settles that at once.
-/// The vertex that wins is therefore always measured in full.
+/// Finds the vertex of row `from_row` of `from` that lies furthest from `to_row` of `to`,
+/// with its nearest point on `to`.
+/// Only a vertex further than `floor` (squared) is returned.
+/// A vertex that can no longer win stops being measured early, but the nearest point returned is exact.
 fn furthest<const SKIP: bool>(
     from: &Side,
-    row: usize,
+    from_row: usize,
     to: &Side,
     to_row: usize,
     floor: f64,
 ) -> Option<Furthest> {
     let mut furthest: Option<Furthest> = None;
     let mut previous_nearest: Option<OnPart> = None;
-    for vertex in from.parts(row).flatten() {
+    for vertex in from.parts(from_row).flatten() {
         if !from.is_searched::<SKIP>(vertex) {
             continue;
         }
         let bound = furthest.map_or(floor, |furthest| furthest.distance_squared);
         let point = from.xy(vertex);
+        // The segment (or vertex) that held the previous vertex's nearest point
+        // often settles at once that this vertex can no longer win.
         if previous_nearest
             .is_some_and(|on| nearest_on_segment(to, on.start, on.end, point).0 <= bound)
         {
@@ -393,7 +394,8 @@ fn furthest<const SKIP: bool>(
     furthest
 }
 
-/// The lines being built: no coordinates for an empty or null row, two for any other.
+/// Builder for lines
+/// no coordinates for an empty or null row, two for any other.
 struct Lines {
     x: Vec<f64>,
     y: Vec<f64>,
@@ -403,7 +405,8 @@ struct Lines {
     failed: Vec<usize>,
 }
 
-/// `v0`, `t` of the way to `v1`, without taking a value it does not reach (which may be NaN).
+/// Interpolates `t` of the way from `v0` to `v1`.
+/// At either end, the other value is left out, as it may be NaN.
 #[inline(always)]
 fn interpolated(v0: f64, v1: f64, t: f64) -> f64 {
     if t == 0.0 {
@@ -464,7 +467,6 @@ impl Lines {
     }
 }
 
-/// Adds the line from row `i` of `a` to row `j` of `b`.
 /// Pushes nothing if it fails.
 fn push_line<const SKIP: bool>(
     lines: &mut Lines,
@@ -479,7 +481,7 @@ fn push_line<const SKIP: bool>(
     // Before the search, as `SKIP` leaves out every coordinate that is not finite.
     a.ensure_row_passes(i)?;
     b.ensure_row_passes(j)?;
-    // A side left without a vertex to search: the line is empty.
+    // A side left without a vertex to search gives an empty line.
     let Some(a_to_b) = furthest::<SKIP>(a, i, b, j, f64::NEG_INFINITY) else {
         return Ok(());
     };
@@ -497,19 +499,18 @@ fn push_line<const SKIP: bool>(
     Ok(())
 }
 
-/// The lines from row `i` of `a` to row `j` of `b` for every `(i, j)` of `rows`.
-/// A row that is null in `validity` gets a null line.
+/// Builds the line from row `i` of `a` to row `j` of `b` for every `(i, j)` in `row_pairs`.
 fn lines_between<const SKIP: bool>(
     a: &Side,
     b: &Side,
-    rows: impl ExactSizeIterator<Item = (usize, usize)>,
-    validity: Option<Bitmap>,
+    row_pairs: impl ExactSizeIterator<Item = (usize, usize)>,
+    output_validity: Option<Bitmap>,
     ignore_per_row_errors: bool,
 ) -> GeoComputeResult<LineStringArray> {
     let dim = a.coords.dim().shared_with(b.coords.dim());
-    let mut lines = Lines::new(rows.len(), dim);
-    for (row, (i, j)) in rows.enumerate() {
-        if validity
+    let mut lines = Lines::new(row_pairs.len(), dim);
+    for (row, (i, j)) in row_pairs.enumerate() {
+        if output_validity
             .as_ref()
             .is_none_or(|validity| validity.get_bit(row))
         {
@@ -520,12 +521,12 @@ fn lines_between<const SKIP: bool>(
         }
         lines.end_row();
     }
-    Ok(lines.into_array(validity))
+    Ok(lines.into_array(output_validity))
 }
 
-/// Gets the line spanning the Hausdorff distance from `a` to `b`, row by row.
-/// See Python `hausdorff_line_between`.
-/// Its axes are those both `a` and `b` have.
+/// Finds the line spanning the Hausdorff distance from `a` to `b`, row by row.
+/// Implements the Python `hausdorff_line_between`, which documents its behaviour.
+/// The lines have the axes both `a` and `b` have.
 ///
 /// `a` and `b` must have the same length.
 pub fn hausdorff_lines_pairwise(
@@ -544,9 +545,8 @@ pub fn hausdorff_lines_pairwise(
     )
 }
 
-/// Gets the line spanning the Hausdorff distance between a single geometry and every row of `many`,
-/// as [hausdorff_lines_pairwise] does for a `one` repeated on every row.
-/// With `lines_start_on_one`, every line runs from `one` to `many`, otherwise from `many` to `one`.
+/// Finds the line spanning the Hausdorff distance between a single geometry and every row of `many`.
+/// This matches [hausdorff_lines_pairwise] with `one` repeated on every row.
 ///
 /// `one` must hold a single row.
 pub fn hausdorff_lines_against_one(

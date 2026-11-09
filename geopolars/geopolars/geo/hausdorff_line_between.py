@@ -30,47 +30,50 @@ def hausdorff_line_between(
     ignore_per_row_errors: bool = False,
 ) -> pl.Expr:
     """The line spanning the Hausdorff distance between two geometries, row by row.
+    The Hausdorff distance is the furthest any point of one geometry lies from the other geometry.
+    Here, it is only measured from the vertices (the discrete Hausdorff distance).
+    It always runs from `a` to `b`.
+
     Every vertex of `a` is measured to the nearest point on `b`, and every vertex of `b` to the nearest point on `a`.
-    The line joins the pair that lies furthest apart, running from the point on `a` to the point on `b`.
-    On a tie, a vertex of `a` wins over one of `b`, and an earlier vertex over a later one.
-    Its length in x and y is the (discrete) Hausdorff distance between the two geometries,
-    as GEOS and shapely give it.
+    On a tie, a vertex of `a` wins over one of `b`, and an earlier vertex wins over a later one.
     A single geometry on either side is measured against every row of the other.
 
-    Only the vertices are measured from,
-    so the distance can come out shorter than the Hausdorff distance between the whole geometries.
-    A polygon is measured by its rings,
-    so a point inside a polygon is as far from it as from its nearest ring.
+    As only the vertices are measured from,
+    the line can be shorter than the Hausdorff distance between the whole geometries.
+    A polygon is measured by its rings, not by its area.
+    A point inside a polygon therefore lies as far from it as from its nearest ring.
 
     Any kind and dimension can be on either side.
-    The line has the axes both `a` and `b` have: a z only if both have a z, and an m only if both have an m.
-    The pair is chosen in x and y only.
-    An end on a vertex keeps that vertex's z and m.
+    The line only has the axes both `a` and `b` have.
+    It has a z only if both have a z, and an m only if both have an m.
+    An end of the line on a vertex keeps that vertex's z and m.
     An end between two vertices gets z and m interpolated between them.
 
-    The pair is chosen in the plane of the coordinates.
-    For a geographic CRS, the geodesic length of the line is therefore close to,
-    but not the same as, the Hausdorff distance on the ellipsoid.
+    The furthest vertex is found in x and y only, in the plane of the coordinates.
+    For a geographic CRS, the geodesic length of the line is therefore close to the Hausdorff distance on the ellipsoid,
+    but not the same.
 
-    If either geometry is empty, so is the line, even where the other would raise.
+    If either geometry is empty, the line is empty too(even if the other geometry would raise).
 
-    `non_finite` sets what happens with a vertex that is not finite:
-    the empty point, or one with a NaN or infinite value.
+    A vertex is not finite if it is the empty point, or has a NaN or infinite value.
     {empty_point}
+    `non_finite` sets what happens to such a vertex.
 
     - `"raise"`: a geometry with such a vertex raises.
     - `"skip"`: such a vertex is left out.
-      A line or ring runs on from the vertex before it to the vertex after it.
-      A ring that loses its first (and so last) vertex is no longer closed:
-      it is measured as a line up to the last vertex it keeps.
+      A line or ring then runs straight from the vertex before it to the vertex after it.
+      A ring that loses its first vertex also loses its last one, and is no longer closed.
+      It is then measured as a line up to the last vertex it keeps.
       A geometry left without vertices counts as empty.
-    - `"skip_empty"`: the empty point is left out as with `"skip"`, any other such vertex raises.
+    - `"skip_empty"`: the empty point is left out, as with `"skip"`.
+      Any other vertex that is not finite raises.
 
-    A vertex is finite when x, y, z and m are.
-    `ignore_z=True` leaves z out of that, and `ignore_m=True` leaves m out.
-    They do not change which vertex is the empty point.
-    An empty point row is an empty geometry rather than an empty vertex, so it never raises.
-    With `ignore_per_row_errors=True`, a geometry that would raise gives a null line instead.
+    Whether a vertex is finite depends on its x, y, z, and m.
+    `ignore_z=True` leaves z out of that check, and `ignore_m=True` leaves out m.
+    Neither changes which vertex is the empty point.
+    A point row that is the empty point is an empty geometry, not a geometry with an empty vertex.
+    It therefore never raises.
+    A geometry that would raise gives a null line instead if `ignore_per_row_errors=True`.
 
     {same_crs_pair}
 

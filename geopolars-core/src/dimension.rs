@@ -73,7 +73,8 @@ impl GeoDimension {
         matches!(self, GeoDimension::XYM | GeoDimension::XYZM)
     }
 
-    /// The dimension with only the axes both `self` and `other` have.
+    /// Finds the dimensions that both have in common.
+    /// For example, a PointXYZ and a PointXYM only have XY in common.
     pub const fn shared_with(self, other: GeoDimension) -> GeoDimension {
         match (self.has_z() && other.has_z(), self.has_m() && other.has_m()) {
             (false, false) => GeoDimension::XY,

@@ -32,16 +32,16 @@ the comment says when one without a CRS takes a different tier.
 | `simplify` | C | RIG | B | GEOS; z kept, m dropped [^6] | B | split by `buffer(0)` is a per-row error | C | RIG | B | | B | |
 | `is_ring` | - | | A | ≥ 4 vertices, ends = x/y/z | - | | - | | A | parts chained into one ring | - | |
 | `is_simple` | A | always `True` | B | GEOS; x/y only | B | every ring as a line; GEOS | A | no two points equal in x/y | B | GEOS, as a whole | B | every ring as a line; GEOS |
-| `rings_overlap` | - | | B | hacked as polygon; GEOS | - | | - | | - | | - | |
+| `rings_overlap` | - | | B | hacked as polygon; GEOS [^8] | - | | - | | - | | - | |
 | `is_ccw` | - | | A | CCW | A | | - | | A | every part combined | A | every part combined |
 | `to_ccw` | - | | A | | A | `holes_cw` | - | | A | every part | A | every part |
 | `to_cw` | - | | C | `to_ccw` + `reverse` | C | | - | | C | | C | |
 | `close_rings` | - | | A | repeats the first vertex, or `snap_z`/`snap_m` | A | every ring | - | | A | every part | A | every ring |
-| `is_equal` | A | pairwise or against one | A | same coordinates in order | A | same rings | A | | A | same parts | A | same polygons and rings |
-| `is_topologically_equal` | B | GEOS; x/y only; any two kinds; pairwise or against one | B | | B | | B | | B | | B | |
-| `shortest_line_between` | B | GEOS; x/y only, `LineStringXY`; any two kinds; pairwise or against one | B | | B | | B | | B | | B | |
-| `intersection` | B | GEOS; z kept, m dropped; any two kinds; pairwise or against one; `keep` picks the dimension; always gives a point | B | `allow_splitting` gives the multi kind | B | `allow_splitting` gives the multi kind | B | | B | | B | |
-| `hausdorff_line_between` | A | discrete; any two kinds; pairwise or against one; axes both sides have | A | | A | measured to the rings | A | | A | | A | |
+| `is_equal` | A | [^8] | A | same coordinates in order | A | same rings | A | | A | same parts | A | same polygons and rings |
+| `is_topologically_equal` | B | GEOS; x/y only [^7] [^8] | B | | B | | B | | B | | B | |
+| `shortest_line_between` | B | GEOS; x/y only, `LineStringXY` [^7] [^8] | B | | B | | B | | B | | B | |
+| `intersection` | B | GEOS; z kept, m dropped; `keep` picks the dimension; always gives a point [^7] [^8] | B | `allow_splitting` gives the multi kind | B | `allow_splitting` gives the multi kind | B | | B | | B | |
+| `hausdorff_line_between` | A | discrete [^7] [^8] [^9] | A | | A | measured to the rings | A | | A | | A | |
 | `is_valid_geoarrow` | A | bounds from PROJ (plan-time) | A | | A | | A | EP | A | EP | A | EP |
 | `null_out_invalid_geoarrow` | A | nulls what `is_valid_geoarrow` rejects | A | | A | | A | | A | | A | |
 | `is_valid_ogc` | A | bounds from PROJ (plan-time) | A | | A/B | topology through GEOS | A | EP | A | EP | A/B | EP and GEOS |
@@ -50,7 +50,7 @@ the comment says when one without a CRS takes a different tier.
 | `remove_repeats_in_succession` | A | returns the input | A | | A | | A | | A | | A | |
 | `filter_coordinates` | A | | A | | A | | A | | A | | A | |
 | `fix_out_of_bounds` | A | bounds from PROJ (plan-time) | A | | A | | A | | A | | A | |
-| `distance` | A/B | [^2] | - | | - | | - | | - | | - | |
+| `distance` | A/B | [^2] [^8] | - | | - | | - | | - | | - | |
 | `mean_coordinate` | C | RIG | C | | C | SCC | C | | C | | C | SCC |
 | `translate` | A | impl differs for const or col | A | | A | | A | | A | | A | |
 | `rotate` | A | | A | | A | | A | | A | | A | |
@@ -105,3 +105,8 @@ In this table:
 [^5]: Also takes a `list[LineString]`.
 [^6]: GEOS keeps z, but drops m for topology-preserving simplification (`preserve_topology=True`).
       For Douglas-Peucker (the default), GEOS keeps m, but it does not reach the output yet.
+[^7]: Takes any two kinds, which need not be the same.
+[^8]: Pairs the rows of both sides,
+      or compares a single geometry on either side against every row of the other.
+[^9]: The output only has the axes both sides have:
+      a z only if both have a z, and an m only if both have an m.
