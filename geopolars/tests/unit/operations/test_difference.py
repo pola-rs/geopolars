@@ -562,6 +562,33 @@ def test_the_early_finite_check_raises_before_geos() -> None:
     _assert_geometries(out, [None, "LINESTRING EMPTY"])
 
 
+_OUTER = _xy((0, 0), (4, 0), (4, 4), (0, 4), (0, 0))
+_NOT_FINITE_HOLE = _xy((1, 1), (1, 2), (math.nan, 2), (2, 1), (1, 1))
+
+
+@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize(
+    "a",
+    [
+        _series("a", LineStringXY(), [_FINITE_LINE, _NOT_FINITE_LINE]),
+        _series("a", MultiPolygonXY(), [[[_OUTER]], [[_OUTER, _NOT_FINITE_HOLE]]]),
+    ],
+    ids=["line", "hole_of_a_multipolygon"],
+)
+def test_an_empty_b_still_fails_on_an_a_that_is_not_finite(
+    a: pl.Series, early_finite_check: bool
+) -> None:
+    df = pl.DataFrame([a, _wkt("b", PolygonXY(), ["POLYGON EMPTY"] * 2)])
+
+    def run(**kwargs: bool) -> pl.Series:
+        expr = geo.difference("a", "b", early_finite_check=early_finite_check, **kwargs)
+        return df.select(expr)["a"]
+
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
+        run()
+    assert _storage(run(ignore_per_row_errors=True)) == [_storage(a)[0], None]
+
+
 @pytest.mark.parametrize("single_first", [True, False])
 def test_ignore_per_row_errors_with_a_single_geometry(single_first: bool) -> None:
     def run(one: pl.Series, many: pl.Series, **kwargs: bool) -> pl.Series:

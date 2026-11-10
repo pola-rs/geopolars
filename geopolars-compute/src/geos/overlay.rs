@@ -6,7 +6,7 @@ use geopolars_core::{
     GeoDimension, GeometryArray, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };
-use geos::{Geom, Geometry, GeometryTypes};
+use geos::{CoordType, Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 
 use super::pairs::GeosPairs;
@@ -57,6 +57,7 @@ pub struct OverlayPairs {
     pairs: GeosPairs,
     overlay: Overlay,
     ignore_per_row_errors: bool,
+    early_finite_check: bool,
 }
 
 struct Overlaid {
@@ -92,6 +93,7 @@ impl OverlayPairs {
             pairs,
             overlay,
             ignore_per_row_errors,
+            early_finite_check,
         })
     }
 
@@ -168,12 +170,13 @@ impl OverlayPairs {
                 (geometries, None)
             }
             Overlay::Difference => {
+                let early = self.early_finite_check;
                 let mut kept_as_is = MutableBitmap::new();
                 let geometries = self
                     .pairs
                     .iter()
                     .map(|(a, b)| {
-                        let row = difference_rows(a, b, kept_dimension, multi, ignore)?;
+                        let row = difference_rows(a, b, kept_dimension, multi, ignore, early)?;
                         kept_as_is.push(row.is_copy_of_a);
                         Ok(row.geometry)
                     })
@@ -236,6 +239,7 @@ fn difference_rows(
     kept_dimension: TopologicalDimension,
     multi: bool,
     ignore_per_row_errors: bool,
+    early_finite_check: bool,
 ) -> GeoComputeResult<DifferenceRow> {
     let (difference, is_copy_of_a) = match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => (Ok(GeosRow::Null), false),
@@ -244,12 +248,17 @@ fn difference_rows(
         // Nothing is taken away, so `a` is stored as it is, without computing a difference.
         // Its own kind fits the output, as the `into_multi_*` copies take a single geometry as one part.
         // It is cloned, as a single `a` is shared by every row.
-        (GeosRow::Geometry(a), GeosRow::Empty) => (
-            Geom::clone(a)
-                .map(GeosRow::Geometry)
-                .map_err(GeoComputeError::from),
-            true,
-        ),
+        // A difference GEOS computes fails on a non-finite x or y, so the copy has to fail too.
+        // Otherwise `early_finite_check=true`, whose conversion of `a` already refused it, would change the result.
+        (GeosRow::Geometry(a), GeosRow::Empty) => {
+            let finite = if early_finite_check {
+                Ok(())
+            } else {
+                difference_rows_xy_is_finite_or_error(a)
+            };
+            let copy = finite.and_then(|()| Ok(GeosRow::Geometry(Geom::clone(a)?)));
+            (copy, true)
+        }
         // TODO: Also give `a` as it is when `b` does not touch it, as for an empty `b`.
         // GEOS now re-orients and nodes `a` even then, so it can differ from a copy, and even split.
         (GeosRow::Geometry(a), GeosRow::Geometry(b)) => (
@@ -265,6 +274,39 @@ fn difference_rows(
         geometry,
         is_copy_of_a,
     })
+}
+
+fn difference_rows_xy_is_finite_or_error(geometry: &impl Geom) -> GeoComputeResult<()> {
+    if geometry.is_empty()? {
+        return Ok(());
+    }
+    match geometry.geometry_type()? {
+        GeometryTypes::Point | GeometryTypes::LineString | GeometryTypes::LinearRing => {
+            let xy = geometry.get_coord_seq()?.as_buffer(Some(CoordType::XY))?;
+            let not_finite = xy
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .find(|[x, y]| !(x.is_finite() && y.is_finite()));
+            match not_finite {
+                Some(&[x, y]) => Err(GeoComputeError::GeosNotFinite { position: (x, y) }),
+                None => Ok(()),
+            }
+        }
+        GeometryTypes::Polygon => {
+            difference_rows_xy_is_finite_or_error(&geometry.get_exterior_ring()?)?;
+            for n in 0..geometry.get_num_interior_rings()? {
+                difference_rows_xy_is_finite_or_error(&geometry.get_interior_ring_n(n)?)?;
+            }
+            Ok(())
+        }
+        _ => {
+            for n in 0..geometry.get_num_geometries()? {
+                difference_rows_xy_is_finite_or_error(&geometry.get_geometry_n(n)?)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 /// Narrows an overlay down to its parts of `kept_dimension`,

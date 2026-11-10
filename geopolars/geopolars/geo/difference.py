@@ -68,6 +68,8 @@ def difference(
 
     {geos_non_finite}
     {early_finite_check}
+    A row where `b` is empty fails on such a vertex in `a` too,
+    although it is not computed by GEOS.
 
     {ccw_outer}
     It only affects a Polygon or MultiPolygon result,
