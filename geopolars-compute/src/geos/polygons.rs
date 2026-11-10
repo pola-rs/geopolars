@@ -153,17 +153,15 @@ impl GeosGeometries {
     /// Every GEOS geometry is freed once it is copied.
     /// A geometry that is not a polygon is an error.
     /// If `ignore_per_row_errors=true`, its row is null instead.
-    /// `reversed=true` reverses every ring, except in the rows set in `kept_as_is`.
     pub fn into_polygon_array(
         self,
         z: bool,
         ignore_per_row_errors: bool,
         reversed: bool,
-        kept_as_is: Option<&Bitmap>,
     ) -> GeoComputeResult<PolygonArray> {
         with_const_flags!(
             Z = z, REVERSED = reversed;
-            into_polygon_array_with::<Z, REVERSED>(self, ignore_per_row_errors, kept_as_is)
+            into_polygon_array_with::<Z, REVERSED>(self, ignore_per_row_errors)
         )
     }
 
@@ -176,11 +174,10 @@ impl GeosGeometries {
         z: bool,
         ignore_per_row_errors: bool,
         reversed: bool,
-        kept_as_is: Option<&Bitmap>,
     ) -> GeoComputeResult<MultiPolygonArray> {
         with_const_flags!(
             Z = z, REVERSED = reversed;
-            into_multi_polygon_array_with::<Z, REVERSED>(self, ignore_per_row_errors, kept_as_is)
+            into_multi_polygon_array_with::<Z, REVERSED>(self, ignore_per_row_errors)
         )
     }
 }
@@ -189,38 +186,29 @@ impl GeosGeometries {
 fn into_multi_polygon_array_with<const Z: bool, const REVERSED: bool>(
     geometries: GeosGeometries,
     ignore_per_row_errors: bool,
-    kept_as_is: Option<&Bitmap>,
 ) -> GeoComputeResult<MultiPolygonArray> {
     let mut validity = ValidityBuilder::with_capacity(geometries.geometries.len());
     let mut coords = CoordsBuilder::with_capacity(Z, geometries.size_hint.coords);
     let mut rings = OffsetsBuilder::with_capacity(geometries.size_hint.parts[0]);
     let mut polygons = OffsetsBuilder::with_capacity(geometries.size_hint.parts[1]);
     let mut rows = OffsetsBuilder::with_capacity(geometries.geometries.len());
-    for (row, geometry) in geometries.geometries.into_iter().enumerate() {
+    for geometry in geometries.geometries {
         let is_valid = match geometry {
             GeosRow::Null => false,
             GeosRow::Empty => true,
             GeosRow::Geometry(geometry) => match geometry.geometry_type()? {
                 GeometryTypes::Polygon if geometry.is_empty()? => true,
                 GeometryTypes::Polygon => {
-                    push_rings_of_row::<Z, REVERSED>(
-                        &mut coords,
-                        &mut rings,
-                        &geometry,
-                        kept_as_is,
-                        row,
-                    )?;
+                    push_rings::<Z, REVERSED>(&mut coords, &mut rings, &geometry)?;
                     polygons.push(rings.len());
                     true
                 }
                 GeometryTypes::MultiPolygon => {
                     for n in 0..geometry.get_num_geometries()? {
-                        push_rings_of_row::<Z, REVERSED>(
+                        push_rings::<Z, REVERSED>(
                             &mut coords,
                             &mut rings,
                             &geometry.get_geometry_n(n)?,
-                            kept_as_is,
-                            row,
                         )?;
                         polygons.push(rings.len());
                     }
@@ -244,25 +232,18 @@ fn into_multi_polygon_array_with<const Z: bool, const REVERSED: bool>(
 fn into_polygon_array_with<const Z: bool, const REVERSED: bool>(
     geometries: GeosGeometries,
     ignore_per_row_errors: bool,
-    kept_as_is: Option<&Bitmap>,
 ) -> GeoComputeResult<PolygonArray> {
     let mut validity = ValidityBuilder::with_capacity(geometries.geometries.len());
     let mut coords = CoordsBuilder::with_capacity(Z, geometries.size_hint.coords);
     let mut rings = OffsetsBuilder::with_capacity(geometries.size_hint.parts[0]);
     let mut rows = OffsetsBuilder::with_capacity(geometries.geometries.len());
-    for (row, geometry) in geometries.geometries.into_iter().enumerate() {
+    for geometry in geometries.geometries {
         let is_valid = match geometry {
             GeosRow::Null => false,
             GeosRow::Empty => true,
             GeosRow::Geometry(polygon) => match polygon.geometry_type()? {
                 GeometryTypes::Polygon => {
-                    push_rings_of_row::<Z, REVERSED>(
-                        &mut coords,
-                        &mut rings,
-                        &polygon,
-                        kept_as_is,
-                        row,
-                    )?;
+                    push_rings::<Z, REVERSED>(&mut coords, &mut rings, &polygon)?;
                     true
                 }
                 other => wrong_kind("polygon", other, ignore_per_row_errors)?,
@@ -276,22 +257,6 @@ fn into_polygon_array_with<const Z: bool, const REVERSED: bool>(
         ValidList::from_offsets(rings.finish()),
         coords.finish(),
     ))
-}
-
-/// [`push_rings`], except that `row` is never reversed if it is set in `kept_as_is`.
-#[inline(always)]
-fn push_rings_of_row<const Z: bool, const REVERSED: bool>(
-    coords: &mut CoordsBuilder,
-    rings: &mut OffsetsBuilder,
-    polygon: &impl Geom,
-    kept_as_is: Option<&Bitmap>,
-    row: usize,
-) -> GeoComputeResult<()> {
-    if REVERSED && !kept_as_is.is_some_and(|kept| kept.get_bit(row)) {
-        push_rings::<Z, true>(coords, rings, polygon)
-    } else {
-        push_rings::<Z, false>(coords, rings, polygon)
-    }
 }
 
 /// Appends the rings of `polygon`, each ended in `rings`.

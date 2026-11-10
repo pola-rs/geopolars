@@ -193,7 +193,7 @@ fn hulls(
         )
     )?;
     // GEOS gives the exterior as running clockwise.
-    hulls.into_polygon_array(has_z, ignore_per_row_errors, ccw_outer, None)
+    hulls.into_polygon_array(has_z, ignore_per_row_errors, ccw_outer)
 }
 
 /// [`hulls`] as GEOS polygons.

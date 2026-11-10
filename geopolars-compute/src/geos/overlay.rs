@@ -7,7 +7,6 @@ use geopolars_core::{
     MultiPolygonArray, PointArray, PolygonArray,
 };
 use geos::{CoordType, Geom, Geometry, GeometryTypes};
-use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 
 use super::pairs::GeosPairs;
 use super::{GeosGeometries, GeosRow};
@@ -62,29 +61,6 @@ impl Overlay {
             Self::Difference => GeosPairs::new_skipping_partners_of_empty_a(a, b, ignore, early),
         }
     }
-
-    /// Overlays one pair of rows from [`Overlay::pairs`], which decides the rows it sees as `Empty`.
-    #[inline(always)]
-    fn row(
-        self,
-        a: &GeosRow,
-        b: &GeosRow,
-        kept_dimension: TopologicalDimension,
-        multi: bool,
-        ignore_per_row_errors: bool,
-        early_finite_check: bool,
-    ) -> GeoComputeResult<OverlaidRow> {
-        let ignore = ignore_per_row_errors;
-        match self {
-            Self::Intersection => Ok(OverlaidRow {
-                geometry: intersect_rows(a, b, kept_dimension, multi, ignore)?,
-                is_copy_of_a: false,
-            }),
-            Self::Difference => {
-                difference_rows(a, b, kept_dimension, multi, ignore, early_finite_check)
-            }
-        }
-    }
 }
 
 /// Two arrays of geometries converted to GEOS, with their rows paired up to overlay.
@@ -97,12 +73,6 @@ pub struct OverlayPairs {
     overlay: Overlay,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
-}
-
-struct Overlaid {
-    geometries: GeosGeometries,
-    /// The rows that are a copy of `a`, or `None` if there are none.
-    kept_as_is: Option<Bitmap>,
 }
 
 impl OverlayPairs {
@@ -136,38 +106,32 @@ impl OverlayPairs {
         } else {
             GeoDimension::XY
         };
-        self.overlaid(TopologicalDimension::Points, false)?
-            .geometries
+        self.overlaid(TopologicalDimension::Points, false, false)?
             .into_point_array(dim)
     }
 
     pub fn into_multi_points(self, z: bool) -> GeoComputeResult<MultiPointArray> {
-        let overlaid = self.overlaid(TopologicalDimension::Points, true)?;
-        with_const_flags!(Z = z; overlaid.geometries.into_multi_point_array::<Z>(self.ignore_per_row_errors))
+        let overlaid = self.overlaid(TopologicalDimension::Points, true, false)?;
+        with_const_flags!(Z = z; overlaid.into_multi_point_array::<Z>(self.ignore_per_row_errors))
     }
 
     /// Several linestrings fail with [`GeoComputeError::Split`].
     pub fn into_line_strings(self, z: bool) -> GeoComputeResult<LineStringArray> {
-        let overlaid = self.overlaid(TopologicalDimension::Lines, false)?;
-        with_const_flags!(Z = z; overlaid.geometries.into_line_string_array::<Z>(self.ignore_per_row_errors))
+        let overlaid = self.overlaid(TopologicalDimension::Lines, false, false)?;
+        with_const_flags!(Z = z; overlaid.into_line_string_array::<Z>(self.ignore_per_row_errors))
     }
 
     pub fn into_multi_line_strings(self, z: bool) -> GeoComputeResult<MultiLineStringArray> {
-        let overlaid = self.overlaid(TopologicalDimension::Lines, true)?;
-        with_const_flags!(Z = z; overlaid.geometries.into_multi_line_string_array::<Z>(self.ignore_per_row_errors))
+        let overlaid = self.overlaid(TopologicalDimension::Lines, true, false)?;
+        with_const_flags!(Z = z; overlaid.into_multi_line_string_array::<Z>(self.ignore_per_row_errors))
     }
 
     /// Several polygons fail with [`GeoComputeError::Split`].
     /// GEOS gives a clockwise exterior, so `ccw_outer=true` reverses every ring.
     /// A row of a difference with an empty `b` is a copy of `a`, so its rings are kept as they are.
     pub fn into_polygons(self, z: bool, ccw_outer: bool) -> GeoComputeResult<PolygonArray> {
-        let overlaid = self.overlaid(TopologicalDimension::Polygons, false)?;
-        overlaid.geometries.into_polygon_array(
-            z,
-            self.ignore_per_row_errors,
-            ccw_outer,
-            overlaid.kept_as_is.as_ref(),
-        )
+        self.overlaid(TopologicalDimension::Polygons, false, ccw_outer)?
+            .into_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
     }
 
     /// See [`OverlayPairs::into_polygons`] for `ccw_outer`.
@@ -176,43 +140,48 @@ impl OverlayPairs {
         z: bool,
         ccw_outer: bool,
     ) -> GeoComputeResult<MultiPolygonArray> {
-        let overlaid = self.overlaid(TopologicalDimension::Polygons, true)?;
-        overlaid.geometries.into_multi_polygon_array(
-            z,
-            self.ignore_per_row_errors,
-            ccw_outer,
-            overlaid.kept_as_is.as_ref(),
-        )
+        self.overlaid(TopologicalDimension::Polygons, true, ccw_outer)?
+            .into_multi_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
     }
 
     /// Overlays every pair, and narrows each overlay down with [`kept_parts`].
+    /// A row that is a copy of `a` is stored reversed if `reverse_copies_of_a=true`.
     fn overlaid(
         &self,
         kept_dimension: TopologicalDimension,
         multi: bool,
-    ) -> GeoComputeResult<Overlaid> {
-        let (ignore, early) = (self.ignore_per_row_errors, self.early_finite_check);
-        let mut kept_as_is = MutableBitmap::new();
+        reverse_copies_of_a: bool,
+    ) -> GeoComputeResult<GeosGeometries> {
+        let reverse = reverse_copies_of_a;
         let geometries = self
             .pairs
             .iter()
-            .map(|(a, b)| {
-                let row = self
-                    .overlay
-                    .row(a, b, kept_dimension, multi, ignore, early)?;
-                kept_as_is.push(row.is_copy_of_a);
-                Ok(row.geometry)
-            })
+            .map(|(a, b)| self.row(a, b, kept_dimension, multi, reverse))
             .collect::<GeoComputeResult<Vec<_>>>()?;
-        let kept_as_is: Bitmap = kept_as_is.into();
-        let kept_as_is = (kept_as_is.set_bits() > 0).then_some(kept_as_is);
-        Ok(Overlaid {
-            geometries: GeosGeometries {
-                geometries,
-                size_hint: summed_size_hint(self.pairs.size_hints()),
-            },
-            kept_as_is,
+        Ok(GeosGeometries {
+            geometries,
+            size_hint: summed_size_hint(self.pairs.size_hints()),
         })
+    }
+
+    /// Overlays one pair of rows from [`Overlay::pairs`], which decides the rows it sees as `Empty`.
+    #[inline(always)]
+    fn row(
+        &self,
+        a: &GeosRow,
+        b: &GeosRow,
+        kept_dimension: TopologicalDimension,
+        multi: bool,
+        reverse_copies_of_a: bool,
+    ) -> GeoComputeResult<GeosRow> {
+        let (ignore, early) = (self.ignore_per_row_errors, self.early_finite_check);
+        match self.overlay {
+            Overlay::Intersection => intersect_rows(a, b, kept_dimension, multi, ignore),
+            Overlay::Difference => {
+                let reverse = reverse_copies_of_a;
+                difference_rows(a, b, kept_dimension, multi, reverse, ignore, early)
+            }
+        }
     }
 }
 
@@ -247,23 +216,19 @@ fn intersect_rows(
     Ok(row_or_null(intersection.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
 
-struct OverlaidRow {
-    geometry: GeosRow,
-    is_copy_of_a: bool,
-}
-
 #[inline(always)]
 fn difference_rows(
     a: &GeosRow,
     b: &GeosRow,
     kept_dimension: TopologicalDimension,
     multi: bool,
+    reverse_copies_of_a: bool,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
-) -> GeoComputeResult<OverlaidRow> {
-    let (difference, is_copy_of_a) = match (a, b) {
-        (GeosRow::Null, _) | (_, GeosRow::Null) => (Ok(GeosRow::Null), false),
-        (GeosRow::Empty, _) => (Ok(GeosRow::Empty), false),
+) -> GeoComputeResult<GeosRow> {
+    let difference = match (a, b) {
+        (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(GeosRow::Null),
+        (GeosRow::Empty, _) => return Ok(GeosRow::Empty),
         // Here `b` is empty itself, as the only other reason it is taken as empty is an empty `a`,
         // which the arm above handles (see `GeosPairs::new_skipping_partners_of_empty_a`).
         // Nothing is taken away, so `a` is stored as it is, without computing a difference.
@@ -280,24 +245,22 @@ fn difference_rows(
             } else {
                 difference_rows_xy_is_finite_or_error(a)
             };
-            let copy = finite.and_then(|()| Ok(GeosRow::Geometry(Geom::clone(a)?)));
-            (copy, true)
+            // With `ccw_outer=true`, the polygon builder reverses every ring,
+            // so a reversed copy comes out as `a` was.
+            let copy = || match reverse_copies_of_a {
+                true => a.reverse(),
+                false => Geom::clone(a),
+            };
+            finite.and_then(|()| Ok(GeosRow::Geometry(copy()?)))
         }
         // TODO: Also give `a` as it is when `b` does not touch it, as for an empty `b`.
         // GEOS now re-orients and nodes `a` even then, so it can differ from a copy, and even split.
-        (GeosRow::Geometry(a), GeosRow::Geometry(b)) => (
-            a.difference(b)
-                .map_err(GeoComputeError::from)
-                .and_then(|difference| kept_parts(difference, kept_dimension, multi)),
-            false,
-        ),
+        (GeosRow::Geometry(a), GeosRow::Geometry(b)) => a
+            .difference(b)
+            .map_err(GeoComputeError::from)
+            .and_then(|difference| kept_parts(difference, kept_dimension, multi)),
     };
-    let geometry =
-        row_or_null(difference.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null);
-    Ok(OverlaidRow {
-        geometry,
-        is_copy_of_a,
-    })
+    Ok(row_or_null(difference.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
 
 fn difference_rows_xy_is_finite_or_error(geometry: &impl Geom) -> GeoComputeResult<()> {
