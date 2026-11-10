@@ -36,11 +36,11 @@
 mod buffer;
 mod convex_hull;
 mod interpolate;
-mod intersection;
 mod is_simple;
 mod is_topologically_equal;
 mod linestrings;
 mod offset_curve;
+mod overlay;
 mod pairs;
 mod points;
 mod polygons;
@@ -59,7 +59,6 @@ pub use convex_hull::{
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
 pub use interpolate::{interpolate_line_strings, interpolate_multi_line_strings, InterpolateMode};
-pub use intersection::IntersectionPairs;
 pub use is_simple::{
     line_strings_are_simple, multi_line_strings_are_simple, multi_polygons_are_simple,
     polygons_are_simple,
@@ -68,6 +67,7 @@ pub use is_topologically_equal::topologically_equal;
 pub use offset_curve::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, OffsetCurveStyle,
 };
+pub use overlay::{Overlay, OverlayPairs};
 pub use relate::{De9im, RelatePairs};
 pub use rings_overlap::{rings_overlap_against_one, rings_overlap_pairwise};
 pub use shortest_line::{shortest_lines_against_one, shortest_lines_pairwise};
@@ -263,28 +263,50 @@ fn is_geoarrow_empty_point(x: f64, y: f64) -> bool {
     x.is_nan() && y.is_nan()
 }
 
-/// Marks every [empty point](is_empty_point) and every row without parts in `array`.
-/// A row whose parts are all empty, such as a polygon whose only ring has no vertices, is not marked.
-/// The bit of a null row is arbitrary.
-fn empty_rows(array: &GeometryArray) -> Bitmap {
-    let without_parts =
-        |rows: &List| Bitmap::from_iter((0..rows.len()).map(|i| rows.range(i).is_empty()));
+/// Marks the (valid) rows that don't have any vertices.
+/// Apart from points, these are the rows `is_empty` (without `check_nested`) calls empty,
+/// such as a polygon whose rings have no vertices.
+/// A point has none when its x and y are NaN, as for the conversion to GEOS,
+/// even where a z or m that is not NaN makes `is_empty` call it non-empty.
+fn rows_without_vertices(array: &GeometryArray) -> Bitmap {
     match array {
         GeometryArray::Point(array) => {
-            let coords = array.coords.ignoring_validity();
-            let (x, y) = (coords.x(), coords.y());
-            Bitmap::from_iter(
-                x.iter()
-                    .zip(y)
-                    .map(|(&x, &y)| is_geoarrow_empty_point(x, y)),
-            )
+            let coords = &array.coords;
+            let is_empty = |i| {
+                coords
+                    .xy(i)
+                    .is_some_and(|(x, y)| is_geoarrow_empty_point(x, y))
+            };
+            Bitmap::from_iter((0..coords.len()).map(is_empty))
         }
-        GeometryArray::LineString(array) => without_parts(&array.rows),
-        GeometryArray::Polygon(array) => without_parts(&array.rows),
-        GeometryArray::MultiPoint(array) => without_parts(&array.rows),
-        GeometryArray::MultiLineString(array) => without_parts(&array.rows),
-        GeometryArray::MultiPolygon(array) => without_parts(&array.rows),
+        GeometryArray::LineString(array) => {
+            valid_rows_without_vertices(&array.rows, |vertices| vertices)
+        }
+        GeometryArray::MultiPoint(array) => {
+            valid_rows_without_vertices(&array.rows, |points| points)
+        }
+        GeometryArray::Polygon(array) => {
+            valid_rows_without_vertices(&array.rows, |rings| array.rings.span(rings))
+        }
+        GeometryArray::MultiLineString(array) => {
+            valid_rows_without_vertices(&array.rows, |lines| array.lines.span(lines))
+        }
+        GeometryArray::MultiPolygon(array) => {
+            valid_rows_without_vertices(&array.rows, |polygons| {
+                array.rings.span(array.polygons.span(polygons))
+            })
+        }
     }
+}
+
+fn valid_rows_without_vertices(
+    rows: &List,
+    vertices: impl Fn(Range<usize>) -> Range<usize>,
+) -> Bitmap {
+    // A null row's offsets point anywhere, so its validity is checked first.
+    Bitmap::from_iter(
+        (0..rows.len()).map(|i| rows.is_valid(i) && vertices(rows.range(i)).is_empty()),
+    )
 }
 
 /// Point `i` of `coords`, which carry `len` axes of `coord_type`.

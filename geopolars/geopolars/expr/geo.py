@@ -566,6 +566,26 @@ class ExprGeoNameSpace:
             early_finite_check=early_finite_check,
         )
 
+    def difference(
+        self,
+        other: IntoExprColumn,
+        *,
+        allow_splitting: bool = False,
+        ccw_outer: bool = False,
+        ignore_per_row_errors: bool = False,
+        early_finite_check: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.difference import difference
+
+        return difference(
+            self._expr,
+            other,
+            allow_splitting=allow_splitting,
+            ccw_outer=ccw_outer,
+            ignore_per_row_errors=ignore_per_row_errors,
+            early_finite_check=early_finite_check,
+        )
+
     def hausdorff_line_between(
         self,
         other: IntoExprColumn,

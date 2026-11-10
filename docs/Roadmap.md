@@ -93,7 +93,7 @@ creating new geometries
 
 - [x] intersection: `intersection`
 - [ ] union
-- [ ] difference
+- [x] difference: `difference`
 
 ## Spatial hashing
 

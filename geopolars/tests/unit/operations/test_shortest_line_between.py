@@ -260,6 +260,36 @@ def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
     ]
 
 
+def _without_vertices(name: str, dtype: GeoArrowType, row: list[Any]) -> pl.Series:
+    """Two rows of `row`, whose parts have no vertices, as `dtype`."""
+    storage: pl.DataType = pl.Struct({"x": pl.Float64, "y": pl.Float64})
+    for _ in range(dtype._nesting):
+        storage = pl.List(storage)
+    return pl.Series(name, [row, row], dtype=storage).ext.to(dtype)
+
+
+@pytest.mark.parametrize(
+    "a",
+    [
+        _without_vertices("a", PolygonXY(), [[]]),
+        _without_vertices("a", MultiLineStringXY(), [[]]),
+        _without_vertices("a", MultiPolygonXY(), [[]]),
+        _without_vertices("a", MultiPolygonXY(), [[[]]]),
+    ],
+    ids=["polygon", "multilinestring", "multipolygon", "multipolygon_with_a_ring"],
+)
+@pytest.mark.parametrize("early_finite_check", [False, True])
+def test_a_row_paired_with_parts_without_vertices_never_reaches_geos(
+    a: pl.Series, early_finite_check: bool
+) -> None:
+    df = pl.DataFrame([a, _line_strings("b", _FAILING_LINES)])
+    kwargs = {"early_finite_check": early_finite_check}
+
+    out = df.select(geo.shortest_line_between("a", "b", **kwargs))
+
+    assert _as_wkt(out["a"]) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
+
+
 def test_an_empty_geometry_against_a_failing_one_is_empty_with_ignore_per_row_errors() -> (
     None
 ):

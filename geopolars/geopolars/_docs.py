@@ -96,6 +96,9 @@ The result keeps the input's dimension and CRS.""",
     "paired_rows": """\
 `{geometry}` and `{parts}` have the same number of rows.
 Either can also have a single row, which then goes with every row of the other.""",
+    "null_on_either_side": """\
+A null geometry on either side gives a null {output}, whatever the other side is.
+Such a row does not go to GEOS, so it never raises.""",
     "broadcast_single_geometry": """\
 If you pass a single geometry on either side, it is {paired_with} every row of the other.""",
     "same_crs": """\
@@ -141,6 +144,22 @@ It pays off when you expect many non-finite coordinates in your data.""",
     "ccw_outer": """\
 The exterior runs as GEOS gives it, clockwise.
 With `ccw_outer=True`, it runs counter-clockwise instead at a minimal performance cost.""",
+    "ccw_outer_skipping_geos": """\
+The orientation is only set for the rows that go through GEOS.
+A row whose result is trivial skips GEOS, and keeps the orientation of its input,
+whatever `ccw_outer` is.""",
+    "overlay_splitting": """\
+A row whose result has several parts then raises.
+With `allow_splitting=True`, the result is the multi kind instead, which holds every part.""",
+    "overlay_z": """\
+The output has z as soon as either input has it.
+Where only one input has z, GEOS fills it in for the other.
+Where a line crosses or runs along an edge with z, its z is interpolated along that edge.
+Any other vertex, and any point, only gets a rough estimate:
+the average z of the vertices with z in the same cell of a 3 by 3 grid over both inputs.
+A point on a line with z can therefore be far off from the z interpolated there.""",
+    "overlay_crs": """\
+The result has the CRS of `a`.""",
     "origin_per_column_or_row": """\
 - one point for the whole column, as `(x, y)` or `(x, y, z)`, or
 - a `geoarrow.point` column (or a single point) with a point for every geometry,
