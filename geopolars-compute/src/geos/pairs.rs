@@ -1,7 +1,9 @@
 //! Pairing up the rows of two arrays of geometries, for a GEOS operation on two geometries.
 
+use std::ops::Range;
+
 use geopolars_core::output::SizeHint;
-use geopolars_core::GeometryArray;
+use geopolars_core::{GeometryArray, List};
 use polars_arrow::bitmap::Bitmap;
 
 use super::{GeosGeometries, GeosRow, ToGeosRows};
@@ -35,7 +37,7 @@ impl GeosPairs {
     }
 
     /// See [`GeosPairs::new`], for an operation whose result is empty when either row is.
-    /// A row paired with an empty one (without parts) is therefore not converted,
+    /// A row paired with an empty one (see [`rows_without_vertices`]) is therefore not converted,
     /// and is taken as empty too.
     /// A single row is only taken as empty when every row it is paired with is.
     pub(super) fn new_skipping_partners_of_empty(
@@ -44,7 +46,7 @@ impl GeosPairs {
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
-        let (a_empty, b_empty) = (rows_without_parts(a), rows_without_parts(b));
+        let (a_empty, b_empty) = (rows_without_vertices(a), rows_without_vertices(b));
         let a_as_empty = paired_with_empty(&b_empty, a_empty.len());
         let b_as_empty = paired_with_empty(&a_empty, b_empty.len());
         let (ignore, early) = (ignore_per_row_errors, early_finite_check);
@@ -53,14 +55,14 @@ impl GeosPairs {
 
     /// See [`GeosPairs::new`], for an operation whose result is empty when `a` is, but not when `b` is.
     /// A row of `b` paired with an empty row of `a` is therefore not converted, and is `Empty` too.
-    /// An empty row on either side is `Empty`, including an empty point.
+    /// An empty row on either side (see [`rows_without_vertices`]) is `Empty`.
     pub(super) fn new_skipping_partners_of_empty_a(
         a: &GeometryArray,
         b: &GeometryArray,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
-        let (a_empty, b_empty) = (rows_without_parts(a), rows_without_parts(b));
+        let (a_empty, b_empty) = (rows_without_vertices(a), rows_without_vertices(b));
         let b_as_empty = &b_empty | &paired_with_empty(&a_empty, b_empty.len());
         let (ignore, early) = (ignore_per_row_errors, early_finite_check);
         Self::new_taking_as_empty(a, b, &a_empty, &b_as_empty, ignore, early)
@@ -103,23 +105,44 @@ fn pair_count(a_rows: usize, b_rows: usize) -> usize {
     rows
 }
 
-/// Marks the valid rows that have no parts.
+/// Marks the valid rows that have no vertices, which `is_empty` (without `check_nested`) calls empty.
+/// A polygon with only rings without vertices is one of them.
 /// A point has none when it is GeoArrow's empty point (NaN x and y).
-fn rows_without_parts(array: &GeometryArray) -> Bitmap {
-    let rows = match array {
+fn rows_without_vertices(array: &GeometryArray) -> Bitmap {
+    match array {
         GeometryArray::Point(array) => {
             let coords = &array.coords;
             let is_empty = |i| coords.xy(i).is_some_and(|(x, y)| x.is_nan() && y.is_nan());
-            return Bitmap::from_iter((0..coords.len()).map(is_empty));
+            Bitmap::from_iter((0..coords.len()).map(is_empty))
         }
-        GeometryArray::LineString(array) => &array.rows,
-        GeometryArray::Polygon(array) => &array.rows,
-        GeometryArray::MultiPoint(array) => &array.rows,
-        GeometryArray::MultiLineString(array) => &array.rows,
-        GeometryArray::MultiPolygon(array) => &array.rows,
-    };
+        GeometryArray::LineString(array) => {
+            valid_rows_without_vertices(&array.rows, |vertices| vertices)
+        }
+        GeometryArray::MultiPoint(array) => {
+            valid_rows_without_vertices(&array.rows, |points| points)
+        }
+        GeometryArray::Polygon(array) => {
+            valid_rows_without_vertices(&array.rows, |rings| array.rings.span(rings))
+        }
+        GeometryArray::MultiLineString(array) => {
+            valid_rows_without_vertices(&array.rows, |lines| array.lines.span(lines))
+        }
+        GeometryArray::MultiPolygon(array) => {
+            valid_rows_without_vertices(&array.rows, |polygons| {
+                array.rings.span(array.polygons.span(polygons))
+            })
+        }
+    }
+}
+
+fn valid_rows_without_vertices(
+    rows: &List,
+    vertices: impl Fn(Range<usize>) -> Range<usize>,
+) -> Bitmap {
     // A null row's offsets point anywhere, so its validity is checked first.
-    Bitmap::from_iter((0..rows.len()).map(|i| rows.is_valid(i) && rows.range(i).is_empty()))
+    Bitmap::from_iter(
+        (0..rows.len()).map(|i| rows.is_valid(i) && vertices(rows.range(i)).is_empty()),
+    )
 }
 
 /// Marks which of `len` rows are paired with an empty row of `partner_empty`, broadcast as in [`GeosPairs::iter`].

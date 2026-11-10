@@ -646,12 +646,24 @@ def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
     df = pl.DataFrame(
         [
             _series(
-                "a", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE, _FINITE_LINE]
+                "a",
+                LineStringXY(),
+                [_ONE_VERTEX_LINE, _NOT_FINITE_LINE, _ONE_VERTEX_LINE, _FINITE_LINE],
             ),
-            _wkt("b", PolygonXY(), ["POLYGON EMPTY", "POLYGON EMPTY", around]),
+            # `POLYGON (EMPTY)` has a ring, but no vertices.
+            _wkt(
+                "b",
+                PolygonXY(),
+                ["POLYGON EMPTY", "POLYGON EMPTY", "POLYGON (EMPTY)", around],
+            ),
         ]
     )
-    expected = ["LINESTRING EMPTY", "LINESTRING EMPTY", "LINESTRING (0 0, 1 0, 1 1)"]
+    expected = [
+        "LINESTRING EMPTY",
+        "LINESTRING EMPTY",
+        "LINESTRING EMPTY",
+        "LINESTRING (0 0, 1 0, 1 1)",
+    ]
     kwargs = {"early_finite_check": early_finite_check}
 
     _assert_geometries(df.select(geo.intersection("a", "b", **kwargs))["a"], expected)

@@ -347,6 +347,26 @@ def test_an_empty_point_takes_nothing_away() -> None:
     assert _storage(out) == _storage(a)
 
 
+@pytest.mark.parametrize(
+    "b",
+    [
+        _series("b", PolygonXY(), [[[]]]),
+        _series("b", MultiLineStringXY(), [[[]]]),
+        _series("b", MultiPolygonXY(), [[[]]]),
+        _series("b", MultiPolygonXY(), [[[[]]]]),
+    ],
+    ids=["polygon", "multilinestring", "multipolygon", "multipolygon_with_a_ring"],
+)
+def test_a_b_whose_parts_have_no_vertices_takes_nothing_away(b: pl.Series) -> None:
+    assert pl.select(geo.is_empty(b)).to_series().to_list() == [True]
+    loop = _wkt("a", LineStringXY(), [_LOOP])
+    square = _wkt("a", PolygonXY(), [_SQUARE])
+
+    for a in (loop, square):
+        out = pl.DataFrame([a, b]).select(geo.difference("a", "b"))["a"]
+        assert _storage(out) == _storage(a)
+
+
 def test_an_empty_b_with_z_gives_a_with_nan_z() -> None:
     out = _difference(
         (LineStringXY(), ["LINESTRING (0 0, 1 1)"]), (PolygonXYZ(), ["POLYGON Z EMPTY"])
@@ -499,16 +519,24 @@ def test_a_row_paired_with_an_empty_a_never_reaches_geos(
 ) -> None:
     df = pl.DataFrame(
         [
-            _wkt("a", PolygonXY(), ["POLYGON EMPTY", "POLYGON EMPTY", _AROUND]),
+            # `POLYGON (EMPTY)` has a ring, but no vertices.
+            _wkt(
+                "a",
+                PolygonXY(),
+                ["POLYGON EMPTY", "POLYGON EMPTY", "POLYGON (EMPTY)", _AROUND],
+            ),
             _series(
-                "b", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE, _FINITE_LINE]
+                "b",
+                LineStringXY(),
+                [_ONE_VERTEX_LINE, _NOT_FINITE_LINE, _ONE_VERTEX_LINE, _FINITE_LINE],
             ),
         ]
     )
 
     out = df.select(geo.difference("a", "b", early_finite_check=early_finite_check))
 
-    _assert_geometries(out["a"], ["POLYGON EMPTY", "POLYGON EMPTY", _AROUND])
+    expected = ["POLYGON EMPTY", "POLYGON EMPTY", "POLYGON EMPTY", _AROUND]
+    _assert_geometries(out["a"], expected)
 
 
 @pytest.mark.parametrize("early_finite_check", [False, True])
