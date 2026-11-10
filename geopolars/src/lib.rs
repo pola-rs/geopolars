@@ -5,6 +5,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_polars::{PolarsAllocator, PyDataFrame};
 
+mod cache;
 mod expr;
 mod geoarrow;
 mod geoparquet;
