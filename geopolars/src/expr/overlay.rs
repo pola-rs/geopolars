@@ -136,7 +136,6 @@ fn kernel_output_type_intersection(
     Ok(Field::new(a.name().clone(), geo.dtype()))
 }
 
-/// For [`difference`]: a geometry (see [`difference_type`]), named after the first one.
 fn kernel_output_type_difference(
     input_fields: &[Field],
     kwargs: DifferenceKwargs,

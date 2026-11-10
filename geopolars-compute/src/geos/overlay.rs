@@ -131,7 +131,7 @@ impl OverlayPairs {
             .into_polygon_array(z, self.ignore_per_row_errors, ccw_outer)
     }
 
-    /// See [`OverlayPairs::into_polygons`] for `ccw_outer`.
+    /// `ccw_outer`: see [`OverlayPairs::into_polygons`]
     pub fn into_multi_polygons(
         self,
         z: bool,
@@ -213,10 +213,6 @@ fn intersect_rows(
     };
     Ok(row_or_null(intersection.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
-
-// TODO: If we get rid of the intermittent GEOS collecting, we can make 'skipping empty/null' easier.
-// Right now we still have to pay a conversion to GEOS and back.
-// If it's all local per row, we don't have to do that any more.
 
 #[inline(always)]
 fn difference_rows(

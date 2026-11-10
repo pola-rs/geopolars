@@ -263,7 +263,7 @@ fn is_geoarrow_empty_point(x: f64, y: f64) -> bool {
     x.is_nan() && y.is_nan()
 }
 
-/// Marks the valid rows without vertices.
+/// Marks the (valid) rows that don't have any vertices.
 /// Apart from points, these are the rows `is_empty` (without `check_nested`) calls empty,
 /// such as a polygon whose rings have no vertices.
 /// A point has none when its x and y are NaN, as for the conversion to GEOS,
