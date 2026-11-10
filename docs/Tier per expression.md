@@ -40,9 +40,9 @@ the comment says when one without a CRS takes a different tier.
 | `is_equal` | A | [^8] | A | same coordinates in order | A | same rings | A | | A | same parts | A | same polygons and rings |
 | `is_topologically_equal` | B | GEOS; x/y only [^7] [^8] | B | | B | | B | | B | | B | |
 | `shortest_line_between` | B | GEOS; x/y only, `LineStringXY` [^7] [^8] [^10] | B | | B | | B | | B | | B | |
-| `intersection` | B | GEOS; z kept, m dropped; `keep` picks the dimension; always gives a point [^7] [^8] | B | `allow_splitting` gives the multi kind | B | `allow_splitting` gives the multi kind | B | | B | | B | |
+| `intersection` | B | GEOS; z kept; `keep` picks the dimension; always gives a point [^1] [^7] [^8] | B | `allow_splitting` gives the multi kind | B | `allow_splitting` gives the multi kind | B | | B | | B | |
 | `relate` | B | GEOS; x/y only, the DE-9IM matrix as a `String` [^7] [^8] | B | | B | | B | | B | | B | |
-| `difference` | B | GEOS; z kept, m dropped; empty `b` gives a copy of `a`, without a GEOS difference [^7] [^8] | B | `allow_splitting` gives the multi kind | B | `allow_splitting` gives the multi kind | B | | B | | B | |
+| `difference` | B | GEOS; z kept; empty `b` gives a copy of `a`, without a GEOS difference [^1] [^7] [^8] | B | `allow_splitting` gives the multi kind | B | `allow_splitting` gives the multi kind | B | | B | | B | |
 | `hausdorff_line_between` | A | discrete [^7] [^8] [^9] | A | | A | measured to the rings | A | | A | | A | |
 | `is_valid_geoarrow` | A | bounds from PROJ (plan-time) | A | | A | | A | EP | A | EP | A | EP |
 | `null_out_invalid_geoarrow` | A | nulls what `is_valid_geoarrow` rejects | A | | A | | A | | A | | A | |

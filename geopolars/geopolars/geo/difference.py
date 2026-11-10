@@ -27,12 +27,10 @@ def difference(
     ignore_per_row_errors: bool = False,
     early_finite_check: bool = False,
 ) -> pl.Expr:
-    """What is left of `a` once `b` is taken away, row by row.
-    {broadcast_single_geometry}
+    """The geometry you get when you subtract `b` from `a`.
 
-    The result always has the topological dimension of `a` (a point, a line, or an area),
-    whatever `b` is.
-    Only an area can take something away from a polygon:
+    Taking the difference is only really meaningful if the two geometries have the same
+    *dimensionality* (as in a line is 1d, a polygon 2d, not whether or not it has z/m).
     a polygon minus a line or a point covers the same area as before,
     although GEOS may add a vertex where the line crosses its boundary.
     Likewise, a line minus a point covers the same length as before.
@@ -50,21 +48,28 @@ def difference(
     | Polygon | Polygon, or MultiPolygon with `allow_splitting` |
     | MultiPolygon | MultiPolygon |
 
+    {broadcast_single_geometry}
+
     A line minus a line that crosses it only gains a vertex where they cross.
     A line that crosses itself, or a MultiLineString whose parts cross, is cut there, though.
     A LineString that crosses itself therefore splits,
     even against a non-empty `b` that does not touch it.
 
+     TODO: rewrite this paragraph to read better ^
+
     {computed_by_geos_keeping_z}
     {overlay_z}
 
     A null geometry on either side gives a null {output}.
-    An empty `a` gives an empty {output}, as does a `b` that takes everything away.
-    For a Point, that empty {output} is the empty point (NaN on every axis).
-    An empty `b` takes nothing away, so its row gives `a` as it is, without computing a difference.
-    That row keeps the vertices and ring orientation of `a`, and never splits.
-    If only `b` has z, the z of that row is NaN.
+    TODO: can be shared snippet with more detail ^
+
+    If `a` is empty, then the intersection will always contain nothing. This short-circuits, and does not be checked through GEOS.
+    Conversely, an empty `b` takes nothing away. This also bypasses the GEOS check, and gives `a` back untouched.
+    If `b` fully covers `a`, it will take everything away, and the output will be an empty geometry.
+
+
     A polygon part of `a` whose rings have no vertices is stored without rings, as every empty polygon is.
+    TODO: ^ reword
 
     {geos_errors}
     The same goes for a result in several parts without `allow_splitting`.
