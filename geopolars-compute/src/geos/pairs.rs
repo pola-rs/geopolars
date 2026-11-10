@@ -1,12 +1,10 @@
 //! Pairing up the rows of two arrays of geometries, for a GEOS operation on two geometries.
 
-use std::ops::Range;
-
 use geopolars_core::output::SizeHint;
-use geopolars_core::{GeometryArray, List};
+use geopolars_core::GeometryArray;
 use polars_arrow::bitmap::Bitmap;
 
-use super::{GeosGeometries, GeosRow, ToGeosRows};
+use super::{rows_without_vertices, GeosGeometries, GeosRow, ToGeosRows};
 use crate::GeoComputeResult;
 
 /// Two arrays of geometries converted to GEOS, with their rows paired up.
@@ -103,46 +101,6 @@ fn pair_count(a_rows: usize, b_rows: usize) -> usize {
         "cannot pair {a_rows} geometries with {b_rows}"
     );
     rows
-}
-
-/// Marks the valid rows that have no vertices, which `is_empty` (without `check_nested`) calls empty.
-/// A polygon with only rings without vertices is one of them.
-/// A point has none when it is GeoArrow's empty point (NaN x and y).
-fn rows_without_vertices(array: &GeometryArray) -> Bitmap {
-    match array {
-        GeometryArray::Point(array) => {
-            let coords = &array.coords;
-            let is_empty = |i| coords.xy(i).is_some_and(|(x, y)| x.is_nan() && y.is_nan());
-            Bitmap::from_iter((0..coords.len()).map(is_empty))
-        }
-        GeometryArray::LineString(array) => {
-            valid_rows_without_vertices(&array.rows, |vertices| vertices)
-        }
-        GeometryArray::MultiPoint(array) => {
-            valid_rows_without_vertices(&array.rows, |points| points)
-        }
-        GeometryArray::Polygon(array) => {
-            valid_rows_without_vertices(&array.rows, |rings| array.rings.span(rings))
-        }
-        GeometryArray::MultiLineString(array) => {
-            valid_rows_without_vertices(&array.rows, |lines| array.lines.span(lines))
-        }
-        GeometryArray::MultiPolygon(array) => {
-            valid_rows_without_vertices(&array.rows, |polygons| {
-                array.rings.span(array.polygons.span(polygons))
-            })
-        }
-    }
-}
-
-fn valid_rows_without_vertices(
-    rows: &List,
-    vertices: impl Fn(Range<usize>) -> Range<usize>,
-) -> Bitmap {
-    // A null row's offsets point anywhere, so its validity is checked first.
-    Bitmap::from_iter(
-        (0..rows.len()).map(|i| rows.is_valid(i) && vertices(rows.range(i)).is_empty()),
-    )
 }
 
 /// Marks which of `len` rows are paired with an empty row of `partner_empty`, broadcast as in [`GeosPairs::iter`].

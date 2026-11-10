@@ -8,7 +8,7 @@ use geos::{Geom, Geometry};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::{combine_validities_and, combine_validities_and_not};
 
-use super::{empty_rows, GeosGeometries, GeosRow, ToGeosRows};
+use super::{rows_without_vertices, GeosGeometries, GeosRow, ToGeosRows};
 use crate::GeoComputeResult;
 
 #[inline(always)]
@@ -73,7 +73,7 @@ pub fn shortest_lines_pairwise(
 ) -> GeoComputeResult<LineStringArray> {
     debug_assert_eq!(a.len(), b.len(), "`a` and `b` must have the same length");
     let valid = combine_validities_and(a.validity(), b.validity());
-    let empty = &empty_rows(&a) | &empty_rows(&b);
+    let empty = &rows_without_vertices(&a) | &rows_without_vertices(&b);
     let sent_to_geos = combine_validities_and_not(valid.as_ref(), Some(&empty));
     let (ignore, early) = (ignore_per_row_errors, early_finite_check);
     let a = a
