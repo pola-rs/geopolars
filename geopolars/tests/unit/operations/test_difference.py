@@ -439,6 +439,16 @@ def test_a_b_whose_parts_have_no_vertices_takes_nothing_away(b: pl.Series) -> No
         assert _storage(out) == _storage(a)
 
 
+def test_an_empty_b_stores_a_part_without_vertices_without_rings() -> None:
+    outer = _xy((0, 0), (4, 0), (4, 4), (0, 4), (0, 0))
+    a = _series("a", MultiPolygonXY(), [[[outer], [[]]]])
+    b = _wkt("b", PolygonXY(), ["POLYGON EMPTY"])
+
+    out = pl.DataFrame([a, b]).select(geo.difference("a", "b"))["a"]
+
+    assert _storage(out) == [[[outer], []]]
+
+
 @pytest.mark.parametrize("ccw_outer", [False, True])
 def test_a_single_empty_b_gives_every_row_as_it_is(ccw_outer: bool) -> None:
     # Both orientations, as one of them equals what GEOS gives, turned or not.
