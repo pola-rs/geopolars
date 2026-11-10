@@ -32,8 +32,8 @@ def relate(
     and a column for each of those of `b`.
     Each cell is the highest dimension of where they intersect:
     `0` for points, `1` for lines, `2` for an area, and `F` where they do not intersect.
-    Its 9 cells are written one matrix row after another,
-    so a polygon `a` that lies inside a polygon `b`, without touching its boundary,
+    Its 9 cells are written one matrix row after another.
+    For example, a polygon `a` that lies inside a polygon `b`, without touching its boundary,
     gives `"2FF1FF212"`.
     Swapping `a` and `b` transposes the matrix.
     `a` and `b` can be of any two kinds, and only x and y are compared.

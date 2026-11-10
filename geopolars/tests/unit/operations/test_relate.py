@@ -258,8 +258,8 @@ _ORACLE_DTYPES = {
 
 
 def _random_shape(rng: random.Random, kind: str) -> Any:
-    """A shape of `kind` on a small grid, so that shapes often touch or share vertices,
-    or an empty one.
+    """A shape of `kind` on a small grid, or sometimes an empty one.
+    The grid is small so that shapes often touch or share vertices.
     """
     if rng.random() < 0.1:
         return shapely.from_wkt(f"{kind.upper()} EMPTY")

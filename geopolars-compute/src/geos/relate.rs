@@ -10,9 +10,7 @@ use super::GeosRow;
 use crate::{row_or_null, GeoComputeResult};
 
 /// A DE-9IM matrix, as GEOS writes it.
-/// Its rows are the interior, boundary, and exterior of the first geometry,
-/// and its columns those of the second.
-/// Each cell is the highest dimension of where they intersect (`0`, `1`, or `2`), or `F` where they do not.
+/// The Python `relate` documents its rows, columns, and cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct De9im([u8; 9]);
 
@@ -61,8 +59,7 @@ impl RelatePairs {
         })
     }
 
-    /// The matrix of every pair, in order, computed as it is taken.
-    /// A pair is `None` where either row is null.
+    /// Relates every pair lazily, as the iterator advances.
     pub fn matrices(&self) -> impl Iterator<Item = GeoComputeResult<Option<De9im>>> + '_ {
         self.pairs
             .iter()
