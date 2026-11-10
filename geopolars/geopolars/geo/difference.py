@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 
-@doc(output="geometry")
+@doc(output="geometry", paired_with="paired with")
 def difference(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -28,7 +28,7 @@ def difference(
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """What is left of `a` once `b` is taken away, row by row.
-    A single geometry on either side is paired with every row of the other.
+    {broadcast_single_geometry}
 
     The result always has the topological dimension of `a` (a point, a line, or an area),
     whatever `b` is.
