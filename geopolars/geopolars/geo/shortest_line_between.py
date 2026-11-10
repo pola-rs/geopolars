@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 
-@doc(output="line")
+@doc(output="line", paired_with="measured against")
 def shortest_line_between(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -31,7 +31,7 @@ def shortest_line_between(
     It runs from the point on `a` closest to `b`, to the point on `b` closest to `a`.
     If the geometries intersect, both vertices are the same point.
     The length of the line is the planar distance between the two geometries, in x and y.
-    A single geometry on either side is measured against every row of the other.
+    {broadcast_single_geometry}
 
     Any kind and dimension can be on either side.
     Computed by GEOS in x and y only, so the line has no z or m.

@@ -58,6 +58,10 @@ impl GeosPairs {
         broadcast(&self.a.geometries, self.rows).zip(broadcast(&self.b.geometries, self.rows))
     }
 
+    pub(super) fn len(&self) -> usize {
+        self.rows
+    }
+
     pub(super) fn size_hints(&self) -> (SizeHint<2>, SizeHint<2>) {
         (self.a.size_hint, self.b.size_hint)
     }

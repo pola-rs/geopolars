@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 HausdorffNonFinite = Literal["raise", "drop", "drop_empty"]
 
 
-@doc()
+@doc(paired_with="measured against")
 def hausdorff_line_between(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -36,7 +36,7 @@ def hausdorff_line_between(
 
     Every vertex of `a` is measured to the nearest point on `b`, and every vertex of `b` to the nearest point on `a`.
     On a tie, a vertex of `a` wins over one of `b`, and an earlier vertex wins over a later one.
-    A single geometry on either side is measured against every row of the other.
+    {broadcast_single_geometry}
 
     As only the vertices are measured from,
     the line can be shorter than the Hausdorff distance between the whole geometries.

@@ -44,6 +44,7 @@ mod offset_curve;
 mod pairs;
 mod points;
 mod polygons;
+mod relate;
 mod rings_overlap;
 mod shortest_line;
 mod simplify;
@@ -67,6 +68,7 @@ pub use is_topologically_equal::topologically_equal;
 pub use offset_curve::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, OffsetCurveStyle,
 };
+pub use relate::{De9im, RelatePairs};
 pub use rings_overlap::{rings_overlap_against_one, rings_overlap_pairwise};
 pub use shortest_line::{shortest_lines_against_one, shortest_lines_pairwise};
 pub use simplify::{

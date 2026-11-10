@@ -96,6 +96,8 @@ The result keeps the input's dimension and CRS.""",
     "paired_rows": """\
 `{geometry}` and `{parts}` have the same number of rows.
 Either can also have a single row, which then goes with every row of the other.""",
+    "broadcast_single_geometry": """\
+If you pass a single geometry on either side, it is {paired_with} every row of the other.""",
     "same_crs": """\
 `{parts}` have to declare the same CRS as `{geometry}`, or neither may declare one.
 Bare coordinates and an untyped null (`pl.lit(None)`) cannot declare a CRS,

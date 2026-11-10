@@ -510,6 +510,22 @@ class ExprGeoNameSpace:
             early_finite_check=early_finite_check,
         )
 
+    def relate(
+        self,
+        other: IntoExprColumn,
+        *,
+        ignore_per_row_errors: bool = False,
+        early_finite_check: bool = False,
+    ) -> pl.Expr:
+        from geopolars.geo.relate import relate
+
+        return relate(
+            self._expr,
+            other,
+            ignore_per_row_errors=ignore_per_row_errors,
+            early_finite_check=early_finite_check,
+        )
+
     def shortest_line_between(
         self,
         other: IntoExprColumn,

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 
-@doc()
+@doc(paired_with="compared against")
 def is_equal(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -33,7 +33,7 @@ def is_equal(
     unique_m: bool = False,
 ) -> pl.Expr:
     """Whether two geometries are equal, row by row, as a `bool`.
-    A single geometry on either side is compared against every row of the other.
+    {broadcast_single_geometry}
 
     Every coordinate has to equal the one at the same position in the other,
     so a ring that starts at another vertex, or runs the other way, is not equal.

@@ -75,6 +75,7 @@ from geopolars.geo.line_interpolate_point import line_interpolate_point
 from geopolars.geo.mean_coordinate import mean_coordinate
 from geopolars.geo.offset_curve import offset_curve
 from geopolars.geo.parts import parts
+from geopolars.geo.relate import relate
 from geopolars.geo.remove_repeats_in_succession import remove_repeats_in_succession
 from geopolars.geo.reverse import reverse
 from geopolars.geo.rings_overlap import rings_overlap
@@ -154,6 +155,7 @@ __all__ = [
     "polygons_from_nested_coordinates",
     "polygons_from_rings_in_separate_columns",
     "polygons_from_rings_in_single_column",
+    "relate",
     "remove_repeats_in_succession",
     "reverse",
     "rings_overlap",
