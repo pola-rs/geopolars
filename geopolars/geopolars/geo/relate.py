@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 
-@doc(output="matrix")
+@doc(output="result")
 def relate(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -28,14 +28,15 @@ def relate(
     """How two geometries intersect, row by row, as the text of their DE-9IM matrix.
     A single geometry on either side is related to every row of the other.
 
-    The matrix compares the interior, boundary, and exterior of `a` (its rows)
-    against those of `b` (its columns).
-    Each cell is the dimension of where they intersect:
+    The matrix has a row for the interior, boundary, and exterior of `a`,
+    and a column for each of those of `b`.
+    Each cell is the highest dimension of where they intersect:
     `0` for points, `1` for lines, `2` for an area, and `F` where they do not intersect.
-    Its 9 cells are written row after row,
-    so a polygon `a` that lies inside a larger polygon `b` gives `"2FF1FF212"`.
+    Its 9 cells are written one matrix row after another,
+    so a polygon `a` that lies inside a polygon `b`, without touching its boundary,
+    gives `"2FF1FF212"`.
     Swapping `a` and `b` transposes the matrix.
-    The kinds and dimensions do not have to match, and only x and y are compared.
+    `a` and `b` can be of any two kinds, and only x and y are compared.
     A geometry without parts relates as an empty point,
     such as `"FFFFFF212"` for an empty `a` against a polygon `b`.
 

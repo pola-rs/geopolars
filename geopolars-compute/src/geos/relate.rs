@@ -12,7 +12,7 @@ use crate::{row_or_null, GeoComputeResult};
 /// A DE-9IM matrix, as GEOS writes it.
 /// Its rows are the interior, boundary, and exterior of the first geometry,
 /// and its columns those of the second.
-/// Each cell is the dimension of where they intersect (`0`, `1`, or `2`), or `F` where they do not.
+/// Each cell is the highest dimension of where they intersect (`0`, `1`, or `2`), or `F` where they do not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct De9im([u8; 9]);
 
