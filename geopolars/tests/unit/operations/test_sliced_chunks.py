@@ -117,6 +117,14 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         ),
         set(),
     ),
+    "intersects": (
+        lambda g: geo.intersects(g, g, ignore_per_row_errors=True),
+        set(),
+    ),
+    "intersects against one": (
+        lambda g: geo.intersects(g, pl.col(g).last(), ignore_per_row_errors=True),
+        set(),
+    ),
     "hausdorff_line_between": (
         lambda g: geo.hausdorff_line_between(g, g, ignore_per_row_errors=True),
         set(),

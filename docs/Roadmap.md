@@ -78,7 +78,7 @@ repair:
 Classic binary predicates:
 
 - [x] DE-9IM matrix: `relate`
-- [ ] intersect
+- [x] intersect: `intersects`
 - [ ] contains
 - [ ] within
 - [ ] covers

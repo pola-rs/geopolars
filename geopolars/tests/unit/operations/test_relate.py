@@ -92,9 +92,7 @@ def test_z_and_m_are_not_compared() -> None:
     line = "LINESTRING M (0 0 1, 1 1 2)"
 
     assert _relate((PolygonXYZ(), [a]), (PolygonXY(), [_SQUARE])) == ["2FFF1FFF2"]
-    assert _relate((LineStringXYM(), [line]), (PolygonXY(), [_SQUARE])) == [
-        "1FFF0F212"
-    ]
+    assert _relate((LineStringXYM(), [line]), (PolygonXY(), [_SQUARE])) == ["1FFF0F212"]
 
 
 @pytest.mark.parametrize(
