@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 
-@doc(output="result")
+@doc(output="result", paired_with="compared against")
 def is_topologically_equal(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -26,7 +26,7 @@ def is_topologically_equal(
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """Whether two geometries cover the same points in x and y, row by row, as a `bool`.
-    A single geometry on either side is compared against every row of the other.
+    {broadcast_single_geometry}
 
     Unlike `is_equal`, it does not matter how the coordinates are stored.
     A ring that starts at another vertex or runs the other way is equal.

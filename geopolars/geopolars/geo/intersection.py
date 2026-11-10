@@ -35,7 +35,7 @@ def _topological_dimension(dtype: GeoArrowType) -> int:
     return 0
 
 
-@doc(output="geometry")
+@doc(output="geometry", paired_with="intersected with")
 def intersection(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -47,7 +47,7 @@ def intersection(
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """The part two geometries have in common, row by row.
-    A single geometry on either side is intersected with every row of the other.
+    {broadcast_single_geometry}
 
     The result has one kind for the whole column,
     but the intersection of one row can have parts of several dimensions.
