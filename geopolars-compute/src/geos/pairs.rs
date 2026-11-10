@@ -53,12 +53,12 @@ impl GeosPairs {
         Self::new_taking_as_empty(a, b, &a_as_empty, &b_as_empty, ignore, early)
     }
 
-    /// See [`GeosPairs::new`], for an operation whose result is empty when `a` is, but not when `b` is,
-    /// and null when either row is.
-    /// A row of `b` paired with an empty row of `a` or a null is therefore not converted, and is `Empty`.
-    /// So is a row of `a` paired with a null.
-    /// An empty row on either side (see [`rows_without_vertices`]) is `Empty`.
-    /// A single row is only taken as empty when every row it is paired with is.
+    /// See [`GeosPairs::new`], for an operation whose result is null when either row is null,
+    /// and empty when `a` is empty, but not when `b` is.
+    /// A row paired with a null is therefore not converted, and is taken as empty.
+    /// The same holds for a row of `b` paired with an empty `a`.
+    /// Every row without vertices (see [`rows_without_vertices`]) is `Empty` as well.
+    /// A single row is only taken as empty when this holds for every row it is paired with.
     pub(super) fn new_skipping_partners_of_empty_a(
         a: &GeometryArray,
         b: &GeometryArray,

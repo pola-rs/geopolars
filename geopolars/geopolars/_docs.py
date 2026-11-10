@@ -96,6 +96,9 @@ The result keeps the input's dimension and CRS.""",
     "paired_rows": """\
 `{geometry}` and `{parts}` have the same number of rows.
 Either can also have a single row, which then goes with every row of the other.""",
+    "null_on_either_side": """\
+A null geometry on either side gives a null {output}, whatever the other side is.
+Such a row does not go to GEOS, so it never raises.""",
     "broadcast_single_geometry": """\
 If you pass a single geometry on either side, it is {paired_with} every row of the other.""",
     "same_crs": """\
