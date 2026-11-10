@@ -34,8 +34,8 @@ impl GeosPairs {
         Ok(Self { a, b, rows })
     }
 
-    /// See [`GeosPairs::new`], for an operation whose result is empty when either row is,
-    /// and null when either row is.
+    /// See [`GeosPairs::new`], for an operation whose result is empty when either row is empty,
+    /// and null when either row is null.
     /// A row paired with an empty one (see [`rows_without_vertices`]) or a null is therefore not converted,
     /// and is taken as empty.
     /// A single row is only taken as empty when every row it is paired with is empty or null.

@@ -62,9 +62,9 @@ def difference(
     An empty `a` gives an empty {output}, as does a `b` that takes everything away.
     For a Point, that empty {output} is the empty point (NaN on every axis).
     An empty `b` takes nothing away, so its row gives `a` as it is, without computing a difference.
-    It keeps its vertices and ring orientation, and never splits.
-    A polygon part whose rings have no vertices is stored without rings, as every empty polygon is.
-    If only `b` has z, the z of such a row is NaN.
+    That row keeps the vertices and ring orientation of `a`, and never splits.
+    If only `b` has z, the z of that row is NaN.
+    A polygon part of `a` whose rings have no vertices is stored without rings, as every empty polygon is.
 
     {geos_errors}
     The same goes for a result in several parts without `allow_splitting`.

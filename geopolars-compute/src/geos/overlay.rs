@@ -144,7 +144,8 @@ impl OverlayPairs {
     }
 
     /// Overlays every pair, and narrows each overlay down with [`kept_parts`].
-    /// A row that is a copy of `a` is stored reversed if `reverse_copies_of_a=true`.
+    /// A row that is a copy of `a` is reversed if `reverse_copies_of_a=true`,
+    /// so that a builder that reverses every ring gives it back as it was.
     fn overlaid(
         &self,
         kept_dimension: TopologicalDimension,
@@ -214,6 +215,10 @@ fn intersect_rows(
     };
     Ok(row_or_null(intersection.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
+
+// TODO: If we get rid of the intermittent GEOS collecting, we can make 'skipping empty/null' easier.
+// Right now we still have to pay a conversion to GEOS and back.
+// If it's all local per row, we don't have to do that any more.
 
 #[inline(always)]
 fn difference_rows(

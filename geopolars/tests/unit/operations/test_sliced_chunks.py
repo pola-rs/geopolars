@@ -118,8 +118,12 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         set(),
     ),
     "difference": (
+        # Shifted, as a geometry minus itself is empty whichever row is read.
         lambda g: geo.difference(
-            g, g, allow_splitting=True, ignore_per_row_errors=True
+            g,
+            geo.translate(g, (0.5, 0.0)),
+            allow_splitting=True,
+            ignore_per_row_errors=True,
         ),
         set(),
     ),
