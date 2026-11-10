@@ -30,7 +30,8 @@ def difference(
     """What is left of `a` once `b` is taken away, row by row.
     A single geometry on either side is paired with every row of the other.
 
-    The result is always of the dimension of `a`, whatever `b` is.
+    The result always has the topological dimension of `a` (a point, a line, or an area),
+    whatever `b` is.
     Only an area can take something away from a polygon:
     a polygon minus a line or a point covers the same area as before,
     although GEOS may add a vertex where the line crosses its boundary.
@@ -51,14 +52,15 @@ def difference(
 
     A line minus a line that crosses it only gains a vertex where they cross.
     A line that crosses itself, or a MultiLineString whose parts cross, is cut there, though.
-    A LineString therefore splits even if a non-empty `b` does not touch it.
+    A LineString that crosses itself therefore splits,
+    even against a non-empty `b` that does not touch it.
 
     {computed_by_geos_keeping_z}
     {overlay_z}
 
-    A null geometry on either side gives a null {output}, and an empty `a` an empty {output}.
-    So does taking everything away.
-    A Point result is then the empty point (NaN on every axis).
+    A null geometry on either side gives a null {output}.
+    An empty `a` gives an empty {output}, as does a `b` that takes everything away.
+    For a Point, that empty {output} is the empty point (NaN on every axis).
     An empty `b` takes nothing away, so its row gives `a` as it is, without computing a difference.
     It keeps its vertices and ring orientation, and never splits.
     If only `b` has z, the z of such a row is NaN.
@@ -68,12 +70,16 @@ def difference(
 
     {geos_non_finite}
     {early_finite_check}
-    A row where `b` is empty fails on such a vertex in `a` too,
-    although it is not computed by GEOS.
+    A row where `b` is empty does not go to GEOS,
+    but raises on such a vertex in `a` whatever `early_finite_check` is
+    (or gives a null {output} with `ignore_per_row_errors=True`).
+    GEOS itself does not raise on every such vertex,
+    so this row can be stricter than one that GEOS computes.
 
     {ccw_outer}
-    It only affects a Polygon or MultiPolygon result,
-    and not the rows where `b` is empty.
+    It only affects a Polygon or MultiPolygon result.
+    {ccw_outer_skipping_geos}
+    Here, those are the rows where `b` is empty.
 
     {same_crs_pair}
     {overlay_crs}

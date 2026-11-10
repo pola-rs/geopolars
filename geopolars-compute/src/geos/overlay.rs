@@ -264,13 +264,16 @@ fn difference_rows(
     let (difference, is_copy_of_a) = match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => (Ok(GeosRow::Null), false),
         (GeosRow::Empty, _) => (Ok(GeosRow::Empty), false),
-        // Here `b` is empty itself, as the only other reason it is taken as empty is an empty `a`
-        // (see `GeosPairs::new_skipping_partners_of_empty_a`).
+        // Here `b` is empty itself, as the only other reason it is taken as empty is an empty `a`,
+        // which the arm above handles (see `GeosPairs::new_skipping_partners_of_empty_a`).
         // Nothing is taken away, so `a` is stored as it is, without computing a difference.
         // Its own kind fits the output, as the `into_multi_*` methods take a single geometry as one part.
         // It is cloned, as the pairs only lend their rows, and a single `a` is shared by every row.
-        // A difference GEOS computes fails on a non-finite x or y, so the copy has to fail too.
-        // Otherwise `early_finite_check=true`, whose conversion of `a` already refused it, would change the result.
+        // With `early_finite_check=true`, converting `a` has already refused a non-finite x or y.
+        // The copy refuses it with `early_finite_check=false` too, so that the option never changes a copied row.
+        // GEOS itself does not fail on every such vertex
+        // (a line minus a polygon it does not touch keeps a NaN),
+        // so a copied row can be stricter than one GEOS computes.
         (GeosRow::Geometry(a), GeosRow::Empty) => {
             let finite = if early_finite_check {
                 Ok(())

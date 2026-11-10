@@ -141,6 +141,10 @@ It pays off when you expect many non-finite coordinates in your data.""",
     "ccw_outer": """\
 The exterior runs as GEOS gives it, clockwise.
 With `ccw_outer=True`, it runs counter-clockwise instead at a minimal performance cost.""",
+    "ccw_outer_skipping_geos": """\
+The orientation is only set for the rows that go through GEOS.
+A row whose result is trivial skips GEOS, and keeps the orientation of its input,
+whatever `ccw_outer` is.""",
     "overlay_splitting": """\
 A row whose result has several parts then raises.
 With `allow_splitting=True`, the result is the multi kind instead, which holds every part.""",
