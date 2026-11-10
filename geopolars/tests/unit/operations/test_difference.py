@@ -825,6 +825,50 @@ def test_against_a_single_empty_a_no_row_reaches_geos(
     assert _to_wkt(out) == [empty, empty]
 
 
+@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize(
+    ("a", "expected"),
+    [
+        ([None, "POLYGON EMPTY"], [None, "POLYGON EMPTY"]),
+        ([None, None], [None, None]),
+    ],
+    ids=["null_and_empty", "null"],
+)
+def test_against_only_null_and_empty_a_a_single_b_never_reaches_geos(
+    a: list[str | None], expected: list[str | None], early_finite_check: bool
+) -> None:
+    df = pl.DataFrame(_wkt("a", PolygonXY(), a))
+    one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
+
+    out = df.select(geo.difference("a", one, early_finite_check=early_finite_check))
+
+    assert _to_wkt(out["a"]) == expected
+
+
+@pytest.mark.parametrize("early_finite_check", [False, True])
+def test_against_only_null_b_a_single_a_never_reaches_geos(
+    early_finite_check: bool,
+) -> None:
+    df = pl.DataFrame(_wkt("b", PolygonXY(), [None, None]))
+    one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
+
+    out = df.select(
+        geo.difference(one, "b", early_finite_check=early_finite_check)
+    ).to_series()
+
+    assert out.to_list() == [None, None]
+    assert out.dtype == LineStringXY()
+
+
+def test_against_a_null_and_an_empty_b_a_single_a_still_fails() -> None:
+    # The empty `b` takes nothing away, so its row is a copy of the single `a`.
+    df = pl.DataFrame(_wkt("b", PolygonXY(), [None, "POLYGON EMPTY"]))
+    one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
+
+    with pytest.raises(ComputeError, match="point array must contain 0 or >1"):
+        df.select(geo.difference(one, "b"))
+
+
 def _not_finite_lines(**kwargs: bool) -> pl.Series:
     """A line that is not finite, then one that is, each minus a square around both."""
     df = pl.DataFrame(

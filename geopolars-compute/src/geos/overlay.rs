@@ -78,9 +78,8 @@ pub struct OverlayPairs {
 impl OverlayPairs {
     /// Implements the Python `intersection` and `difference`, which document their behaviour.
     /// Each side is converted to GEOS in full,
-    /// except for the rows whose overlay an empty partner already makes empty.
-    /// For a difference, those are only the rows of `b` paired with an empty `a`.
-    /// So a row paired with a null can still fail, as can a row of `a` paired with an empty `b`.
+    /// except for the rows whose overlay a null or empty partner already decides.
+    /// For a difference, an empty `b` decides nothing, so a row of `a` paired with one can still fail.
     /// A row that fails here or in the `into_*` method is null if `ignore_per_row_errors=true`.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
@@ -229,8 +228,8 @@ fn difference_rows(
     let difference = match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(GeosRow::Null),
         (GeosRow::Empty, _) => return Ok(GeosRow::Empty),
-        // Here `b` is empty itself, as the only other reason it is taken as empty is an empty `a`,
-        // which the arm above handles (see `GeosPairs::new_skipping_partners_of_empty_a`).
+        // Here `b` is empty itself, as the only other reasons it is taken as empty are a null or empty `a`,
+        // which the arms above handle (see `GeosPairs::new_skipping_partners_of_empty_a`).
         // Nothing is taken away, so `a` is stored as it is, without computing a difference.
         // Its own kind fits the output, as the `into_multi_*` methods take a single geometry as one part.
         // It is cloned, as the pairs only lend their rows, and a single `a` is shared by every row.

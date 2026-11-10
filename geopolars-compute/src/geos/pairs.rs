@@ -34,26 +34,31 @@ impl GeosPairs {
         Ok(Self { a, b, rows })
     }
 
-    /// See [`GeosPairs::new`], for an operation whose result is empty when either row is.
-    /// A row paired with an empty one (see [`rows_without_vertices`]) is therefore not converted,
-    /// and is taken as empty too.
-    /// A single row is only taken as empty when every row it is paired with is.
+    /// See [`GeosPairs::new`], for an operation whose result is empty when either row is,
+    /// and null when either row is.
+    /// A row paired with an empty one (see [`rows_without_vertices`]) or a null is therefore not converted,
+    /// and is taken as empty.
+    /// A single row is only taken as empty when every row it is paired with is empty or null.
     pub(super) fn new_skipping_partners_of_empty(
         a: &GeometryArray,
         b: &GeometryArray,
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
-        let (a_empty, b_empty) = (rows_without_vertices(a), rows_without_vertices(b));
-        let a_as_empty = paired_with_empty(&b_empty, a_empty.len());
-        let b_as_empty = paired_with_empty(&a_empty, b_empty.len());
+        let a_decides = &rows_without_vertices(a) | &null_rows(a);
+        let b_decides = &rows_without_vertices(b) | &null_rows(b);
+        let a_as_empty = paired_with(&b_decides, a.len());
+        let b_as_empty = paired_with(&a_decides, b.len());
         let (ignore, early) = (ignore_per_row_errors, early_finite_check);
         Self::new_taking_as_empty(a, b, &a_as_empty, &b_as_empty, ignore, early)
     }
 
-    /// See [`GeosPairs::new`], for an operation whose result is empty when `a` is, but not when `b` is.
-    /// A row of `b` paired with an empty row of `a` is therefore not converted, and is `Empty` too.
+    /// See [`GeosPairs::new`], for an operation whose result is empty when `a` is, but not when `b` is,
+    /// and null when either row is.
+    /// A row of `b` paired with an empty row of `a` or a null is therefore not converted, and is `Empty`.
+    /// So is a row of `a` paired with a null.
     /// An empty row on either side (see [`rows_without_vertices`]) is `Empty`.
+    /// A single row is only taken as empty when every row it is paired with is.
     pub(super) fn new_skipping_partners_of_empty_a(
         a: &GeometryArray,
         b: &GeometryArray,
@@ -61,9 +66,11 @@ impl GeosPairs {
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
         let (a_empty, b_empty) = (rows_without_vertices(a), rows_without_vertices(b));
-        let b_as_empty = &b_empty | &paired_with_empty(&a_empty, b_empty.len());
+        let a_as_empty = &a_empty | &paired_with(&null_rows(b), a.len());
+        let a_decides = &a_empty | &null_rows(a);
+        let b_as_empty = &b_empty | &paired_with(&a_decides, b.len());
         let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-        Self::new_taking_as_empty(a, b, &a_empty, &b_as_empty, ignore, early)
+        Self::new_taking_as_empty(a, b, &a_as_empty, &b_as_empty, ignore, early)
     }
 
     fn new_taking_as_empty(
@@ -103,15 +110,23 @@ fn pair_count(a_rows: usize, b_rows: usize) -> usize {
     rows
 }
 
-/// Marks which of `len` rows are paired with an empty row of `partner_empty`, broadcast as in [`GeosPairs::iter`].
-fn paired_with_empty(partner_empty: &Bitmap, len: usize) -> Bitmap {
-    if partner_empty.len() == len {
-        partner_empty.clone()
-    } else if partner_empty.len() == 1 {
-        Bitmap::new_with_value(partner_empty.get_bit(0), len)
+fn null_rows(array: &GeometryArray) -> Bitmap {
+    match array.validity() {
+        Some(validity) => !validity,
+        None => Bitmap::new_zeroed(array.len()),
+    }
+}
+
+/// Marks which of `len` rows are paired with a marked row of `partner_marked`, broadcast as in [`GeosPairs::iter`].
+/// A single row is only marked when every row of the partner is.
+fn paired_with(partner_marked: &Bitmap, len: usize) -> Bitmap {
+    if partner_marked.len() == len {
+        partner_marked.clone()
+    } else if partner_marked.len() == 1 {
+        Bitmap::new_with_value(partner_marked.get_bit(0), len)
     } else {
         // A single row, paired with every row of the partner.
-        Bitmap::new_with_value(partner_empty.unset_bits() == 0, len)
+        Bitmap::new_with_value(partner_marked.unset_bits() == 0, len)
     }
 }
 
