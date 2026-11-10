@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pyarrow as pa
@@ -32,6 +33,9 @@ from geopolars.datatypes import (
     PolygonXYZ,
 )
 
+if TYPE_CHECKING:
+    from polars._typing import EngineType
+
 WGS84 = "EPSG:4326"
 WGS84_3D = "EPSG:4979"
 GEOCENTRIC = "EPSG:4978"
@@ -41,6 +45,7 @@ NY_FEET = "EPSG:2263+6360"
 # NAD83 longitude/latitude, with NAVD88 heights in metres.
 NAD83_METRES = "EPSG:4269+5703"
 WORLD_MERCATOR = "EPSG:3395"
+NAD27 = "EPSG:4267"
 INF = float("inf")
 # The WGS 84 ellipsoid. Web Mercator projects onto a sphere of its semi-major axis.
 SEMI_MAJOR_AXIS = 6378137.0
@@ -397,6 +402,27 @@ def test_columns_in_different_crss_each_use_their_own_transformation() -> None:
     assert _xy(out, "lonlat") == [pytest.approx(mercator, abs=TOLERANCE)]
     assert _xy(out, "mercator") == [pytest.approx(mercator, abs=TOLERANCE)]
     assert _xy(out, "back") == [pytest.approx((5.0, 52.0), abs=1e-9)]
+
+
+# Washington DC and Anchorage, which NAD27 to WGS 84 moves with a different operation each:
+# (4), for the contiguous US, and (7), for Alaska.
+NAD27_POINTS = [(-77.0, 38.9), (-149.9, 61.2)]
+# From pyproj, a separate PROJ build that does not clone the transformation.
+NAD27_IN_WGS84 = [
+    (-76.99967495141718, 38.90003265825345),
+    (-149.90221884870994, 61.19943604622722),
+]
+
+
+@pytest.mark.parametrize("engine", ["in-memory", "streaming"])
+def test_a_transformation_with_several_operations_picks_one_per_coordinate(
+    engine: EngineType,
+) -> None:
+    lf = _points_at(NAD27_POINTS, crs=NAD27).lazy().select(geo.to_crs("point", WGS84))
+
+    out = lf.collect(engine=engine)
+
+    assert _xy(out) == [pytest.approx(p, abs=1e-9) for p in NAD27_IN_WGS84]
 
 
 # More target CRSs than the 16 transformations kept per process, and per thread.
