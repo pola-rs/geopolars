@@ -109,8 +109,9 @@ def intersection(
     {ccw_outer}
     It only affects a Polygon or MultiPolygon result.
 
+    {same_crs_pair}
     {overlay_crs}
-    A CRS that does not match, or a `keep` that cannot be kept, raises at plan time.
+    A `keep` that cannot be kept also raises at plan time.
 
     ```python
     df.select(geo.intersection("parcel", "flood_zone"))

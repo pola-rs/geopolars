@@ -34,7 +34,7 @@ def difference(
     Only an area can take something away from a polygon:
     a polygon minus a line or a point covers the same area as before,
     although GEOS may add a vertex where the line crosses its boundary.
-    Likewise, a line minus a point is the line itself.
+    Likewise, a line minus a point covers the same length as before.
 
     The result is the kind of `a`, and of `a` alone.
     For a LineString or Polygon, the result can split.
@@ -50,8 +50,8 @@ def difference(
     | MultiPolygon | MultiPolygon |
 
     A line minus a line that crosses it only gains a vertex where they cross.
-    A line that crosses itself is cut there, though,
-    so it splits even if `b` does not touch it.
+    A line that crosses itself, or a MultiLineString whose parts cross, is cut there, though.
+    A LineString therefore splits even if a non-empty `b` does not touch it.
 
     {computed_by_geos_keeping_z}
     {overlay_z}
@@ -75,8 +75,8 @@ def difference(
     It only affects a Polygon or MultiPolygon result,
     and not the rows where `b` is empty.
 
+    {same_crs_pair}
     {overlay_crs}
-    A CRS that does not match raises at plan time.
 
     ```python
     df.select(geo.difference("parcel", "road_reserve"))

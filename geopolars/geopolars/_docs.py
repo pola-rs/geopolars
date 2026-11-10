@@ -152,7 +152,6 @@ Any other vertex, and any point, only gets a rough estimate:
 the average z of the vertices with z in the same cell of a 3 by 3 grid over both inputs.
 A point on a line with z can therefore be far off from the z interpolated there.""",
     "overlay_crs": """\
-`a` and `b` have to declare the same CRS, or neither one.
 The result has the CRS of `a`.""",
     "origin_per_column_or_row": """\
 - one point for the whole column, as `(x, y)` or `(x, y, z)`, or

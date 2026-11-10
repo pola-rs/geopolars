@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
 import shapely
 from polars.exceptions import ComputeError, ShapeError
+from polars.testing import assert_frame_equal
 
 from geopolars import geo
 from geopolars.datatypes import (
@@ -22,10 +23,15 @@ from geopolars.datatypes import (
     MultiPolygonXY,
     PointXY,
     PointXYM,
+    PointXYZ,
     PolygonXY,
+    PolygonXYM,
     PolygonXYZ,
     PolygonXYZM,
 )
+
+if TYPE_CHECKING:
+    from polars._typing import EngineType
 
 _XY = pl.Struct({"x": pl.Float64, "y": pl.Float64})
 
@@ -105,6 +111,8 @@ def _assert_geometries(
 
 # Counter-clockwise, so that a copy can be told apart from what GEOS gives (clockwise).
 _SQUARE = "POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))"
+# `_SQUARE`, running clockwise.
+_CW = "POLYGON ((0 0, 0 2, 2 2, 2 0, 0 0))"
 _OVERLAPPING = "POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))"
 # What is left of `_SQUARE` once `_OVERLAPPING` is taken away.
 _L = "POLYGON ((0 0, 2 0, 2 1, 1 1, 1 2, 0 2, 0 0))"
@@ -306,8 +314,7 @@ def test_an_empty_a_gives_an_empty_geometry() -> None:
 
 @pytest.mark.parametrize("ccw_outer", [False, True])
 def test_an_empty_b_gives_a_as_it_is(ccw_outer: bool) -> None:
-    cw = "POLYGON ((0 0, 0 2, 2 2, 2 0, 0 0))"
-    a = _wkt("a", PolygonXY(), [_SQUARE, cw, _SQUARE])
+    a = _wkt("a", PolygonXY(), [_SQUARE, _CW, _SQUARE])
     b = _wkt("b", PolygonXY(), ["POLYGON EMPTY", "POLYGON EMPTY", _OVERLAPPING])
 
     out = pl.DataFrame([a, b]).select(geo.difference("a", "b", ccw_outer=ccw_outer))
@@ -317,17 +324,76 @@ def test_an_empty_b_gives_a_as_it_is(ccw_outer: bool) -> None:
     assert _is_ccw(out["a"])[2] == ccw_outer
 
 
+def _coords(row: Any) -> list[Coord]:
+    if row is None:
+        return []
+    if isinstance(row, dict):
+        return [row]
+    return [coord for part in row for coord in _coords(part)]
+
+
+def _xy_only(row: Any) -> Any:
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return {"x": row["x"], "y": row["y"]}
+    return [_xy_only(part) for part in row]
+
+
+# Each of these would come back otherwise from GEOS:
+# re-oriented, without its duplicate point, noded or split.
+_AS_IS = {
+    "Point": (PointXY(), ["POINT (1 2)"]),
+    "MultiPoint": (MultiPointXY(), ["MULTIPOINT ((3 3), (1 1), (1 1))"]),
+    "LineString": (LineStringXY(), [_LOOP]),
+    "MultiLineString": (
+        MultiLineStringXY(),
+        ["MULTILINESTRING ((4 0, 0 0), (2 -1, 2 1))"],
+    ),
+    "Polygon": (
+        PolygonXY(),
+        [_SQUARE, "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 3 1, 3 3, 1 3, 1 1))"],
+    ),
+    "MultiPolygon": (
+        MultiPolygonXY(),
+        ["MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((5 5, 5 6, 6 6, 6 5, 5 5)))"],
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ("b_dtype", "empty"),
+    [(PolygonXY(), "POLYGON EMPTY"), (PolygonXYZ(), "POLYGON Z EMPTY")],
+    ids=["b_xy", "z_only_on_b"],
+)
 @pytest.mark.parametrize("ccw_outer", [False, True])
-def test_an_empty_b_gives_a_as_the_only_part_of_a_multi_kind(ccw_outer: bool) -> None:
-    a = _wkt("a", PolygonXY(), [_SQUARE])
-    b = _wkt("b", PolygonXY(), ["POLYGON EMPTY"])
+@pytest.mark.parametrize("allow_splitting", [False, True])
+@pytest.mark.parametrize("kind", _AS_IS)
+def test_an_empty_b_gives_a_as_it_is_for_every_kind(
+    kind: str,
+    allow_splitting: bool,
+    ccw_outer: bool,
+    b_dtype: GeoArrowType,
+    empty: str,
+) -> None:
+    dtype, wkts = _AS_IS[kind]
+    a = _wkt("a", dtype, wkts)
+    b = _wkt("b", b_dtype, [empty] * len(wkts))
 
     out = pl.DataFrame([a, b]).select(
-        geo.difference("a", "b", allow_splitting=True, ccw_outer=ccw_outer)
-    )
+        geo.difference("a", "b", allow_splitting=allow_splitting, ccw_outer=ccw_outer)
+    )["a"]
 
-    assert out["a"].dtype == MultiPolygonXY()
-    assert _storage(out["a"]) == [_storage(a)]
+    out_kind = _expected_kind(kind, allow_splitting)
+    has_z = b_dtype == PolygonXYZ()
+    assert type(out.dtype).__name__ == out_kind + ("XYZ" if has_z else "XY")
+    # A copy into a multi kind is its only part.
+    expected = [[row] if out_kind != kind else row for row in _storage(a)]
+    got = _storage(out)
+    if has_z:
+        assert all(math.isnan(c["z"]) for row in got for c in _coords(row))
+        got = [_xy_only(row) for row in got]
+    assert got == expected
 
 
 def test_an_empty_b_never_splits_a() -> None:
@@ -367,24 +433,192 @@ def test_a_b_whose_parts_have_no_vertices_takes_nothing_away(b: pl.Series) -> No
         assert _storage(out) == _storage(a)
 
 
-def test_an_empty_b_with_z_gives_a_with_nan_z() -> None:
-    out = _difference(
-        (LineStringXY(), ["LINESTRING (0 0, 1 1)"]), (PolygonXYZ(), ["POLYGON Z EMPTY"])
-    )
-
-    assert out.dtype == LineStringXYZ()
-    [line] = _storage(out)
-    assert [(c["x"], c["y"]) for c in line] == [(0.0, 0.0), (1.0, 1.0)]
-    assert all(math.isnan(c["z"]) for c in line)
-
-
-def test_a_single_empty_b_gives_every_row_as_it_is() -> None:
-    many = _wkt("many", PolygonXY(), [_SQUARE, None, _WIDE])
+@pytest.mark.parametrize("ccw_outer", [False, True])
+def test_a_single_empty_b_gives_every_row_as_it_is(ccw_outer: bool) -> None:
+    # Both orientations, as one of them equals what GEOS gives, turned or not.
+    many = _wkt("many", PolygonXY(), [_SQUARE, None, _CW, _WIDE])
     one = _wkt("one", PolygonXY(), ["POLYGON EMPTY"])
 
-    out = pl.DataFrame(many).select(geo.difference("many", one, ccw_outer=True))
+    out = pl.DataFrame(many).select(geo.difference("many", one, ccw_outer=ccw_outer))
 
     assert _storage(out["many"]) == _storage(many)
+
+
+@pytest.mark.parametrize(
+    ("a_dtype", "allow_splitting"),
+    [(PolygonXY(), False), (PolygonXY(), True), (MultiPolygonXY(), False)],
+    ids=["polygon", "polygon_split", "multipolygon"],
+)
+def test_copied_rows_line_up_with_computed_rows_in_one_chunk(
+    a_dtype: GeoArrowType, allow_splitting: bool
+) -> None:
+    # The copies are rows 2, 4 and 6, between rows without polygons and rows from GEOS,
+    # so that a copy indexed by anything but its row is turned.
+    a_rows = [
+        None,
+        "POLYGON EMPTY",
+        _SQUARE,
+        _SQUARE,
+        _CW,
+        _SQUARE,
+        _CW,
+        _SQUARE,
+        _SQUARE,
+    ]
+    b_rows = [
+        _SQUARE,
+        _OVERLAPPING,
+        "POLYGON EMPTY",
+        _OVERLAPPING,
+        "POLYGON EMPTY",
+        _FAR,
+        "POLYGON EMPTY",
+        None,
+        _SQUARE,
+    ]
+    a = _wkt("a", a_dtype, a_rows)
+    b = _wkt("b", PolygonXY(), b_rows)
+
+    out = pl.DataFrame([a, b]).select(
+        geo.difference("a", "b", allow_splitting=allow_splitting, ccw_outer=True)
+    )["a"]
+
+    wrapped = allow_splitting and a_dtype == PolygonXY()
+    got, given = _storage(out), _storage(a)
+    for row in (2, 4, 6):
+        assert got[row] == ([given[row]] if wrapped else given[row]), f"row {row}"
+    ccw = _is_ccw(out)
+    assert ccw[3] is True
+    assert ccw[5] is True
+    assert got[0] is None
+    assert got[7] is None
+    assert got[1] == []
+    assert got[8] == []
+
+
+@pytest.mark.parametrize("ccw_outer", [False, True])
+def test_a_single_a_is_copied_into_every_row_with_an_empty_b(ccw_outer: bool) -> None:
+    one = _wkt("one", PolygonXY(), [_SQUARE])
+    many = _chunked(
+        [
+            _wkt("many", PolygonXY(), ["POLYGON EMPTY", _OVERLAPPING]),
+            _wkt("many", PolygonXY(), [None, "POLYGON EMPTY"]),
+        ]
+    )
+
+    out = pl.DataFrame(many).select(geo.difference(one, "many", ccw_outer=ccw_outer))
+
+    [square] = _storage(one)
+    got = _storage(out.to_series())
+    assert got[0] == square
+    assert got[2] is None
+    assert got[3] == square
+    assert _is_ccw(out.to_series())[1] is ccw_outer
+
+
+def test_a_sliced_chunk_copies_its_own_rows() -> None:
+    def frame(a: list[str], b: list[str]) -> pl.DataFrame:
+        return pl.DataFrame([_wkt("a", PolygonXY(), a), _wkt("b", PolygonXY(), b)])
+
+    # The padding is empty where the slice is not, and the other way round.
+    pad_a = ["POLYGON ((9 9, 9 10, 10 10, 10 9, 9 9))"] * 2
+    pad_b = [_OVERLAPPING, "POLYGON EMPTY"]
+    rows_a = [_SQUARE, _CW, _SQUARE]
+    rows_b = ["POLYGON EMPTY", _OVERLAPPING, "POLYGON EMPTY"]
+    whole = frame(pad_a + rows_a + pad_a, pad_b + rows_b + pad_b)
+    sliced = whole.slice(len(pad_a), len(rows_a))
+    expr = geo.difference("a", "b", ccw_outer=True)
+
+    out = sliced.select(expr)
+
+    assert_frame_equal(out, frame(rows_a, rows_b).select(expr))
+    assert _storage(out["a"])[0] == _storage(sliced["a"])[0]
+
+
+@pytest.mark.parametrize("engine", ["in-memory", "streaming"])
+def test_the_engines_agree_on_copied_rows(engine: EngineType) -> None:
+    part = pl.DataFrame(
+        [
+            _wkt("a", PolygonXY(), [None, _SQUARE, _CW, _SQUARE, _SQUARE]),
+            _wkt(
+                "b",
+                PolygonXY(),
+                [_SQUARE, "POLYGON EMPTY", "POLYGON EMPTY", _OVERLAPPING, None],
+            ),
+        ]
+    )
+    df = pl.concat([part] * 3, rechunk=False)
+    one = _wkt("one", PolygonXY(), [_SQUARE])
+
+    for expr in (
+        geo.difference("a", "b", ccw_outer=True),
+        geo.difference(one, "b", ccw_outer=True).alias("one_against_b"),
+    ):
+        out = df.lazy().select(expr).collect(engine=engine)
+        assert_frame_equal(out, df.select(expr))
+
+
+_SQUARE_M = "POLYGON M ((0 0 10, 2 0 20, 2 2 30, 0 2 40, 0 0 10))"
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "out_dtype", "z"),
+    [
+        ((PolygonXYM(), _SQUARE_M), (PolygonXY(), "POLYGON EMPTY"), PolygonXY(), None),
+        (
+            (PolygonXYM(), _SQUARE_M),
+            (PolygonXYZ(), "POLYGON Z EMPTY"),
+            PolygonXYZ(),
+            math.nan,
+        ),
+        (
+            (
+                PolygonXYZM(),
+                "POLYGON ZM ((0 0 1 10, 2 0 1 20, 2 2 1 30, 0 2 1 40, 0 0 1 10))",
+            ),
+            (PolygonXYM(), "POLYGON M EMPTY"),
+            PolygonXYZ(),
+            1.0,
+        ),
+        (
+            (PolygonXYZ(), "POLYGON Z ((0 0 1, 2 0 1, 2 2 1, 0 2 1, 0 0 1))"),
+            (PolygonXY(), "POLYGON EMPTY"),
+            PolygonXYZ(),
+            1.0,
+        ),
+        (
+            (PointXYM(), "POINT M (0 0 10)"),
+            (PolygonXYZ(), "POLYGON Z EMPTY"),
+            PointXYZ(),
+            math.nan,
+        ),
+    ],
+    ids=["m_on_a", "m_on_a_z_on_b", "zm_on_a_m_on_b", "z_on_a", "point_m_on_a_z_on_b"],
+)
+def test_an_empty_b_drops_m_and_fills_z(
+    a: tuple[GeoArrowType, str],
+    b: tuple[GeoArrowType, str],
+    out_dtype: GeoArrowType,
+    z: float | None,
+) -> None:
+    a_series = _wkt("a", a[0], [a[1]])
+
+    out = pl.DataFrame([a_series, _wkt("b", b[0], [b[1]])]).select(
+        geo.difference("a", "b")
+    )["a"]
+
+    assert out.dtype == out_dtype
+    [row] = _storage(out)
+    assert _xy_only(row) == _xy_only(_storage(a_series)[0])
+    coords = _coords(row)
+    assert all("m" not in c for c in coords)
+    if z is None:
+        return
+    zs = [c["z"] for c in coords]
+    if math.isnan(z):
+        assert all(math.isnan(v) for v in zs)
+    else:
+        assert zs == [z] * len(zs)
 
 
 @pytest.mark.parametrize("z_first", [True, False])
@@ -449,6 +683,20 @@ def test_a_null_geometry_on_either_side_gives_a_null_result() -> None:
     )
 
     assert out.to_list() == [None, None, None]
+
+
+def test_against_a_single_null_every_row_is_null_of_the_kind_of_a() -> None:
+    many = _wkt("many", LineStringXY(), ["LINESTRING (0 0, 1 1)", None])
+    one = _wkt("one", PolygonXY(), [None])
+    df = pl.DataFrame(many)
+
+    out = df.select(geo.difference("many", one))["many"]
+    assert out.to_list() == [None, None]
+    assert out.dtype == LineStringXY()
+
+    out = df.select(geo.difference(one, "many", allow_splitting=True)).to_series()
+    assert out.to_list() == [None, None]
+    assert out.dtype == MultiPolygonXY()
 
 
 def test_columns_chunked_differently_are_paired_row_by_row() -> None:

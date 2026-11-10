@@ -50,7 +50,7 @@ pub enum Overlay {
 
 /// Two arrays of geometries converted to GEOS, with their rows paired up to overlay.
 /// A single row on either side is paired with every row of the other.
-/// Each of those narrows every overlay down to its parts of that dimension,
+/// Each `into_*` method narrows every overlay down to its parts of one dimension,
 /// and copies them into our array of that kind.
 /// m is always dropped.
 pub struct OverlayPairs {
@@ -68,8 +68,10 @@ struct Overlaid {
 
 impl OverlayPairs {
     /// Implements the Python `intersection` and `difference`, which document their behaviour.
-    /// Each side is converted to GEOS in full, except for the rows left empty by an empty partner.
-    /// A row paired with a null can therefore still fail.
+    /// Each side is converted to GEOS in full,
+    /// except for the rows whose overlay an empty partner already makes empty.
+    /// For a difference, those are only the rows of `b` paired with an empty `a`.
+    /// So a row paired with a null can still fail, as can a row of `a` paired with an empty `b`.
     /// A row that fails here or in the `into_*` method is null if `ignore_per_row_errors=true`.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
@@ -243,11 +245,12 @@ fn difference_rows(
 ) -> GeoComputeResult<DifferenceRow> {
     let (difference, is_copy_of_a) = match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => (Ok(GeosRow::Null), false),
-        // `b` is not converted when `a` is empty (see `GeosPairs::new_skipping_partners_of_empty_a`).
         (GeosRow::Empty, _) => (Ok(GeosRow::Empty), false),
+        // Here `b` is empty itself, as the only other reason it is taken as empty is an empty `a`
+        // (see `GeosPairs::new_skipping_partners_of_empty_a`).
         // Nothing is taken away, so `a` is stored as it is, without computing a difference.
-        // Its own kind fits the output, as the `into_multi_*` copies take a single geometry as one part.
-        // It is cloned, as a single `a` is shared by every row.
+        // Its own kind fits the output, as the `into_multi_*` methods take a single geometry as one part.
+        // It is cloned, as the pairs only lend their rows, and a single `a` is shared by every row.
         // A difference GEOS computes fails on a non-finite x or y, so the copy has to fail too.
         // Otherwise `early_finite_check=true`, whose conversion of `a` already refused it, would change the result.
         (GeosRow::Geometry(a), GeosRow::Empty) => {
