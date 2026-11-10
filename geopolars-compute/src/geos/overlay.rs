@@ -48,6 +48,45 @@ pub enum Overlay {
     Difference,
 }
 
+impl Overlay {
+    fn pairs(
+        self,
+        a: &GeometryArray,
+        b: &GeometryArray,
+        ignore_per_row_errors: bool,
+        early_finite_check: bool,
+    ) -> GeoComputeResult<GeosPairs> {
+        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+        match self {
+            Self::Intersection => GeosPairs::new_skipping_partners_of_empty(a, b, ignore, early),
+            Self::Difference => GeosPairs::new_skipping_partners_of_empty_a(a, b, ignore, early),
+        }
+    }
+
+    /// Overlays one pair of rows from [`Overlay::pairs`], which decides the rows it sees as `Empty`.
+    #[inline(always)]
+    fn row(
+        self,
+        a: &GeosRow,
+        b: &GeosRow,
+        kept_dimension: TopologicalDimension,
+        multi: bool,
+        ignore_per_row_errors: bool,
+        early_finite_check: bool,
+    ) -> GeoComputeResult<OverlaidRow> {
+        let ignore = ignore_per_row_errors;
+        match self {
+            Self::Intersection => Ok(OverlaidRow {
+                geometry: intersect_rows(a, b, kept_dimension, multi, ignore)?,
+                is_copy_of_a: false,
+            }),
+            Self::Difference => {
+                difference_rows(a, b, kept_dimension, multi, ignore, early_finite_check)
+            }
+        }
+    }
+}
+
 /// Two arrays of geometries converted to GEOS, with their rows paired up to overlay.
 /// A single row on either side is paired with every row of the other.
 /// Each `into_*` method narrows every overlay down to its parts of one dimension,
@@ -82,17 +121,8 @@ impl OverlayPairs {
         ignore_per_row_errors: bool,
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
-        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-        let pairs = match overlay {
-            Overlay::Intersection => {
-                GeosPairs::new_skipping_partners_of_empty(a, b, ignore, early)?
-            }
-            Overlay::Difference => {
-                GeosPairs::new_skipping_partners_of_empty_a(a, b, ignore, early)?
-            }
-        };
         Ok(Self {
-            pairs,
+            pairs: overlay.pairs(a, b, ignore_per_row_errors, early_finite_check)?,
             overlay,
             ignore_per_row_errors,
             early_finite_check,
@@ -161,33 +191,21 @@ impl OverlayPairs {
         kept_dimension: TopologicalDimension,
         multi: bool,
     ) -> GeoComputeResult<Overlaid> {
-        let ignore = self.ignore_per_row_errors;
-        let (geometries, kept_as_is) = match self.overlay {
-            Overlay::Intersection => {
-                let geometries = self
-                    .pairs
-                    .iter()
-                    .map(|(a, b)| intersect_rows(a, b, kept_dimension, multi, ignore))
-                    .collect::<GeoComputeResult<Vec<_>>>()?;
-                (geometries, None)
-            }
-            Overlay::Difference => {
-                let early = self.early_finite_check;
-                let mut kept_as_is = MutableBitmap::new();
-                let geometries = self
-                    .pairs
-                    .iter()
-                    .map(|(a, b)| {
-                        let row = difference_rows(a, b, kept_dimension, multi, ignore, early)?;
-                        kept_as_is.push(row.is_copy_of_a);
-                        Ok(row.geometry)
-                    })
-                    .collect::<GeoComputeResult<Vec<_>>>()?;
-                let kept_as_is: Bitmap = kept_as_is.into();
-                let any = kept_as_is.set_bits() > 0;
-                (geometries, any.then_some(kept_as_is))
-            }
-        };
+        let (ignore, early) = (self.ignore_per_row_errors, self.early_finite_check);
+        let mut kept_as_is = MutableBitmap::new();
+        let geometries = self
+            .pairs
+            .iter()
+            .map(|(a, b)| {
+                let row = self
+                    .overlay
+                    .row(a, b, kept_dimension, multi, ignore, early)?;
+                kept_as_is.push(row.is_copy_of_a);
+                Ok(row.geometry)
+            })
+            .collect::<GeoComputeResult<Vec<_>>>()?;
+        let kept_as_is: Bitmap = kept_as_is.into();
+        let kept_as_is = (kept_as_is.set_bits() > 0).then_some(kept_as_is);
         Ok(Overlaid {
             geometries: GeosGeometries {
                 geometries,
@@ -229,7 +247,7 @@ fn intersect_rows(
     Ok(row_or_null(intersection.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null))
 }
 
-struct DifferenceRow {
+struct OverlaidRow {
     geometry: GeosRow,
     is_copy_of_a: bool,
 }
@@ -242,7 +260,7 @@ fn difference_rows(
     multi: bool,
     ignore_per_row_errors: bool,
     early_finite_check: bool,
-) -> GeoComputeResult<DifferenceRow> {
+) -> GeoComputeResult<OverlaidRow> {
     let (difference, is_copy_of_a) = match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => (Ok(GeosRow::Null), false),
         (GeosRow::Empty, _) => (Ok(GeosRow::Empty), false),
@@ -273,7 +291,7 @@ fn difference_rows(
     };
     let geometry =
         row_or_null(difference.map(Some), ignore_per_row_errors)?.unwrap_or(GeosRow::Null);
-    Ok(DifferenceRow {
+    Ok(OverlaidRow {
         geometry,
         is_copy_of_a,
     })
