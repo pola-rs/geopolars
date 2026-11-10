@@ -62,6 +62,10 @@ impl GeosPairs {
         self.rows
     }
 
+    pub(super) fn sides(&self) -> (&[GeosRow], &[GeosRow]) {
+        (&self.a.geometries, &self.b.geometries)
+    }
+
     pub(super) fn size_hints(&self) -> (SizeHint<2>, SizeHint<2>) {
         (self.a.size_hint, self.b.size_hint)
     }

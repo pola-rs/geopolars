@@ -57,6 +57,7 @@ from geopolars.geo.has_repeats_in_succession import has_repeats_in_succession
 from geopolars.geo.hausdorff_line_between import hausdorff_line_between
 from geopolars.geo.interior import interior
 from geopolars.geo.intersection import intersection
+from geopolars.geo.intersects import intersects
 from geopolars.geo.is_ccw import is_ccw
 from geopolars.geo.is_empty import is_empty
 from geopolars.geo.is_equal import is_equal
@@ -120,6 +121,7 @@ __all__ = [
     "hausdorff_line_between",
     "interior",
     "intersection",
+    "intersects",
     "is_ccw",
     "is_empty",
     "is_equal",
