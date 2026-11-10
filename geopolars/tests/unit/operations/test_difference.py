@@ -101,8 +101,14 @@ def _assert_geometries(
         else:
             # Densified, so that the distance is also measured along the edges,
             # and not only from the vertices, which a different shape can share.
+            # The distance only compares the rings, so it cannot tell a hole from a part.
+            # The area does, and moving every vertex by `tolerance`
+            # changes it by at most about `tolerance` times the perimeter.
+            perimeter = shapely.length(got_row) + shapely.length(want)
             close = tolerance > 0 and (
                 shapely.hausdorff_distance(got_row, want, densify=0.1) <= tolerance
+                and abs(shapely.area(got_row) - shapely.area(want))
+                <= tolerance * perimeter
             )
             assert shapely.equals(got_row, want) or close, (
                 f"row {row}: {got_row} != {want}"
