@@ -2,7 +2,7 @@
 
 use std::cell::OnceCell;
 use std::rc::Rc;
-use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::sync::Arc;
 
 use geopolars_compute::proj::{reproject_coords, reproject_valid_coords, Transformation};
 use geopolars_compute::GeoComputeError;
@@ -15,7 +15,7 @@ use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::cache::{ThreadCache, CACHE_CAPACITY};
+use crate::cache::{SharedCache, ThreadCache};
 use crate::geoarrow::{describe, Geo, Kind};
 use crate::proj::specifies_z;
 
@@ -50,8 +50,8 @@ fn kernel_output_type_to_crs(input_fields: &[Field], kwargs: ToCrsKwargs) -> Pol
 /// Creating one costs milliseconds, more than reprojecting a streaming batch,
 /// and threads creating them queue for the one connection PROJ shares to its database.
 /// A clone costs a few percent of that.
-static TEMPLATES: LazyLock<Mutex<PlHashMap<(String, String), Transformation>>> =
-    LazyLock::new(Default::default);
+/// It is cloned under the cache's lock, as only one thread at a time may use a template's PROJ objects.
+static TEMPLATES: SharedCache<(String, String), Transformation> = SharedCache::new();
 
 thread_local! {
     /// This thread's clones of [`TEMPLATES`],
@@ -95,18 +95,11 @@ fn transformation(dtype: &DataType, to: &str) -> PolarsResult<Rc<CachedTransform
 
 fn transformation_from_template(key: &(String, String)) -> PolarsResult<Transformation> {
     let err = |e: GeoComputeError| polars_err!(ComputeError: "{e}");
-    // Held while creating, so the other threads wait for this one rather than each creating their own.
-    // Held while cloning too, as that reads the template.
-    let mut templates = TEMPLATES.lock().unwrap_or_else(PoisonError::into_inner);
-    if !templates.contains_key(key) {
-        // One that fails to build is not cached, and fails again the next time.
-        let template = Transformation::new(&key.0, &key.1).map_err(err)?;
-        if templates.len() >= CACHE_CAPACITY {
-            templates.clear();
-        }
-        templates.insert(key.clone(), template);
-    }
-    templates[key].try_clone().map_err(err)
+    TEMPLATES.with_or_build(
+        key,
+        || Transformation::new(&key.0, &key.1).map_err(err),
+        |template| template.try_clone().map_err(err),
+    )
 }
 
 /// Whether the `z` of `dtype` goes through PROJ, as in the table of `to_crs` in `geo/crs.py`.
