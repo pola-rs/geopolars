@@ -50,7 +50,8 @@ INF = float("inf")
 # The WGS 84 ellipsoid. Web Mercator projects onto a sphere of its semi-major axis.
 SEMI_MAJOR_AXIS = 6378137.0
 ECCENTRICITY_SQUARED = (2 - 1 / 298.257223563) / 298.257223563
-# In metres, far below what either worked-out projection can be off by.
+# In metres. Both worked-out projections are exact, so this only absorbs rounding,
+# far below what a wrong transformation would be off by.
 TOLERANCE = 1e-6
 
 LonLat = tuple[float, float]

@@ -75,8 +75,11 @@ Before implementing one, read the [geopolars-compute README](../geopolars-comput
 
 Examples are:
 
-- [PROJ](https://proj.org/) (through the `proj` crate), to reproject coordinates.
-  Each coordinate is passed to it as a tuple, one by one.
+- [PROJ](https://proj.org/), to reproject coordinates.
+  `to_crs` hands it each run of valid coordinates in a single call through the `proj-sys` C API,
+  and only retries the coordinates PROJ failed on one at a time, to get their error
+  (see `geopolars-compute/src/proj.rs`).
+  Prefer this over one call per coordinate.
 - [geographiclib](https://geographiclib.sourceforge.io/), to measure along an ellipsoid.
 - The [geo ecosystem](https://georust.org/)
   (which we refer to as *rsgeo* in this crate to avoid confusion with our own `geo`),
