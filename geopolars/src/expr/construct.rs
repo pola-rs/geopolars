@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
-use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, GeoDimension, Kind};
+use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, GeoDimension};
 use geopolars_compute::inner_nulls::{
     multi_line_strings_with_null_parts_marked, multi_points_with_null_parts_marked,
     multi_polygons_with_null_parts_marked, propagate_inner_nulls_of_line_strings,
@@ -23,8 +23,8 @@ use geopolars_compute::native::{
 };
 use geopolars_compute::with_const_flags;
 use geopolars_core::{
-    LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
-    PolygonArray, UncheckedStorage, ValidCoords, ValidList,
+    Kind, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PointArray, PolygonArray, UncheckedStorage, ValidCoords, ValidList,
 };
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;

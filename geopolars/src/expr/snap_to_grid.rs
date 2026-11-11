@@ -7,8 +7,8 @@ use geopolars_compute::native::{
     RoundMode,
 };
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
+    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
@@ -16,7 +16,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 #[derive(Deserialize)]
 #[serde(remote = "RoundMode", rename_all = "snake_case")]

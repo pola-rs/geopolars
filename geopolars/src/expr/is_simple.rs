@@ -8,15 +8,15 @@ use geopolars_compute::geos::{
 };
 use geopolars_compute::native::{multi_points_are_simple, points_are_simple};
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
+    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, BooleanArray, ListArray};
 use pyo3_polars::derive::polars_expr;
 
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 /// [`is_simple`] for one chunk of the storage of a `kind`.
 fn chunk_is_simple(chunk: &dyn Array, kind: Kind) -> PolarsResult<BooleanArray> {

@@ -2,6 +2,7 @@
 //! (see [`geopolars_compute::geos::RelatePairs`]).
 
 use geopolars_compute::geos::RelatePairs;
+use geopolars_core::GeometryArray;
 use polars::prelude::*;
 use polars_arrow::array::Utf8ViewArray;
 use polars_arrow::datatypes::ArrowDataType;
@@ -10,7 +11,7 @@ use serde::Deserialize;
 
 use super::IntoPolarsResult;
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, GeometryPairs,
+    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, GeometryPairs,
 };
 
 /// See python
@@ -55,8 +56,8 @@ fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
         .iter()
         .map(|(a, b)| {
             let (a, b) = (
-                geometry_array(a.as_ref(), a_kind)?,
-                geometry_array(b.as_ref(), b_kind)?,
+                GeometryArray::new(a.as_ref(), a_kind)?,
+                GeometryArray::new(b.as_ref(), b_kind)?,
             );
             RelatePairs::new(&a, &b, ignore, early)
                 .and_then(|pairs| pairs.to_strings())

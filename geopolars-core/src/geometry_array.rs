@@ -1,8 +1,10 @@
+use polars_arrow::array::{Array, ListArray};
 use polars_arrow::bitmap::Bitmap;
+use polars_core::prelude::PolarsResult;
 
 use crate::{
-    LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
-    PolygonArray,
+    downcast, Coords, Geometry, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
 };
 
 /// An array of any one kind of geometry, for kernels that take every kind.
@@ -16,6 +18,23 @@ pub enum GeometryArray {
 }
 
 impl GeometryArray {
+    /// Wraps a chunk of a `kind` column's storage.
+    pub fn new(chunk: &dyn Array, kind: Kind) -> PolarsResult<Self> {
+        let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
+        Ok(match kind {
+            Kind::Point => GeometryArray::Point(PointArray::new(Coords::new(chunk)?)),
+            Kind::MultiPoint => GeometryArray::MultiPoint(MultiPointArray::new(rows(chunk)?)?),
+            Kind::LineString => GeometryArray::LineString(LineStringArray::new(rows(chunk)?)?),
+            Kind::MultiLineString => {
+                GeometryArray::MultiLineString(MultiLineStringArray::new(rows(chunk)?)?)
+            }
+            Kind::Polygon => GeometryArray::Polygon(PolygonArray::new(rows(chunk)?)?),
+            Kind::MultiPolygon => {
+                GeometryArray::MultiPolygon(MultiPolygonArray::new(rows(chunk)?)?)
+            }
+        })
+    }
+
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         match self {
@@ -67,4 +86,42 @@ impl GeometryArray {
             }
         }
     }
+
+    /// Calls `f` with every row: the geometry, or `None` for a null.
+    /// For the `wkb` and `wkt` writers, which take geometries through geo-traits.
+    pub fn for_each_geometry<'a>(
+        &'a self,
+        mut f: impl FnMut(Option<Geometry<'a>>) -> PolarsResult<()>,
+    ) -> PolarsResult<()> {
+        match self {
+            GeometryArray::Point(array) => {
+                for_each_row(self, &mut f, |i| Geometry::Point(array.get(i)))
+            }
+            GeometryArray::LineString(array) => {
+                for_each_row(self, &mut f, |i| Geometry::LineString(array.get(i)))
+            }
+            GeometryArray::Polygon(array) => {
+                for_each_row(self, &mut f, |i| Geometry::Polygon(array.get(i)))
+            }
+            GeometryArray::MultiPoint(array) => {
+                for_each_row(self, &mut f, |i| Geometry::MultiPoint(array.get(i)))
+            }
+            GeometryArray::MultiLineString(array) => {
+                for_each_row(self, &mut f, |i| Geometry::MultiLineString(array.get(i)))
+            }
+            GeometryArray::MultiPolygon(array) => {
+                for_each_row(self, &mut f, |i| Geometry::MultiPolygon(array.get(i)))
+            }
+        }
+    }
+}
+
+/// Calls `f` with `row(i)` for every row `i` of `array`, or `None` where it is null.
+fn for_each_row<'a>(
+    array: &GeometryArray,
+    f: &mut impl FnMut(Option<Geometry<'a>>) -> PolarsResult<()>,
+    row: impl Fn(usize) -> Geometry<'a>,
+) -> PolarsResult<()> {
+    let validity = array.validity();
+    (0..array.len()).try_for_each(|i| f(validity.is_none_or(|v| v.get_bit(i)).then(|| row(i))))
 }

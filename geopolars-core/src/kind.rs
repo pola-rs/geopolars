@@ -1,8 +1,7 @@
 //! GeoArrow geometries are not implemented as concrete rust types,
 //! but as enums ([Kind]) so that dispatching follows the way Polars does it.
 
-/// A GeoArrow native geometry.
-/// Every variant represents a [`Geo`](super::Geo) with some [`Dimension`](super::Dimension).
+/// A GeoArrow native geometry, which takes some [`GeoDimension`](crate::GeoDimension).
 /// Used for dispatching.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -77,7 +76,7 @@ impl Kind {
     /// Warning: This does not uniquely identify a geometry kind:
     /// E.g. geoarrow.linestring and geoarrow.multipoint both have a nesting of 1.
     /// The extension name is what tells them apart,
-    /// which is why [`describe`](super::describe) reads the name and derives the nesting,
+    /// which is why a column's kind is read from its name and the nesting derived from it,
     /// rather than the other way round.
     pub const fn nesting(self) -> u8 {
         match self {

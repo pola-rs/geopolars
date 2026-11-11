@@ -2,14 +2,15 @@
 //! (see [`geopolars_compute::geos::OverlayPairs`]).
 
 use geopolars_compute::geos::{Overlay, OverlayPairs};
+use geopolars_core::{GeometryArray, Kind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::IntoPolarsResult;
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, Geo, GeoColumn,
-    GeoDimension, GeometryPairs, Kind,
+    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, Geo, GeoColumn, GeoDimension,
+    GeometryPairs,
 };
 
 /// The topological dimension of an input, or of the parts an intersection keeps.
@@ -204,8 +205,8 @@ fn overlaid(
         .iter()
         .map(|(a, b)| {
             let (a, b) = (
-                geometry_array(a.as_ref(), a_kind)?,
-                geometry_array(b.as_ref(), b_kind)?,
+                GeometryArray::new(a.as_ref(), a_kind)?,
+                GeometryArray::new(b.as_ref(), b_kind)?,
             );
             let pairs = OverlayPairs::new(&a, &b, overlay, ignore, early).into_polars()?;
             overlaid_storage(pairs, &geo, options.ccw_outer)

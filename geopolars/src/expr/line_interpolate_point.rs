@@ -1,7 +1,7 @@
 use geopolars_compute::geos::{
     interpolate_line_strings, interpolate_multi_line_strings, BufferDistance, InterpolateMode,
 };
-use geopolars_core::{downcast, LineStringArray, MultiLineStringArray, PointArray};
+use geopolars_core::{downcast, Kind, LineStringArray, MultiLineStringArray, PointArray};
 use polars::prelude::*;
 use polars_arrow::array::{Array, StructArray};
 use pyo3_polars::derive::polars_expr;
@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use super::buffer::chunks_by_distance;
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 
 /// A point with the input's dimension and metadata.
 /// Also the kind of the input.

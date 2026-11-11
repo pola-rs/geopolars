@@ -6,7 +6,7 @@ use geopolars_compute::native::{
     multi_polygons_sorted, polygons_with_holes_sorted, SortOptions,
 };
 use geopolars_core::{
-    downcast, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    downcast, Kind, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PolygonArray,
 };
 use polars::prelude::*;
@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 /// `rings` of `sort_parts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

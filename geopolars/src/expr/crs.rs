@@ -7,8 +7,8 @@ use std::sync::Arc;
 use geopolars_compute::proj::{reproject_coords, reproject_valid_coords, Transformation};
 use geopolars_compute::GeoComputeError;
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
+    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::Array;
@@ -16,7 +16,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::cache::{SharedCache, ThreadCache};
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 use crate::proj::specifies_z;
 
 #[derive(Deserialize)]

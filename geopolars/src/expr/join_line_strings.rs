@@ -8,14 +8,14 @@ use geopolars_compute::inner_nulls::propagate_inner_nulls_of_multi_line_strings;
 use geopolars_compute::native::{
     multi_line_strings_joined, multi_line_strings_split_at_gaps, Coincidence, Gaps,
 };
-use geopolars_core::UncheckedStorage;
+use geopolars_core::{Kind, UncheckedStorage};
 use polars::prelude::*;
 use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::construct::storage_of;
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 
 /// `gaps` of `join_line_strings`.
 #[derive(Debug, Clone, Copy, Deserialize)]

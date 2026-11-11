@@ -9,7 +9,7 @@ use std::rc::Rc;
 use geopolars_compute::native::DistanceMetric;
 use geopolars_compute::with_const_flags;
 use geopolars_compute::{GeodesicMetric, Planar};
-use geopolars_core::{Coords, PointArray};
+use geopolars_core::{Coords, Kind, PointArray};
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
@@ -18,7 +18,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::cache::ThreadCache;
-use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs_unless_bare, GeometryPairs, Kind};
+use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs_unless_bare, GeometryPairs};
 use crate::proj::GeodeticCrs;
 
 thread_local! {

@@ -3,14 +3,14 @@
 
 use geopolars_compute::geos::{rings_overlap_against_one, rings_overlap_pairwise};
 use geopolars_compute::with_const_flags;
-use geopolars_core::{downcast, LineStringArray};
+use geopolars_core::{downcast, Kind, LineStringArray};
 use polars::prelude::*;
 use polars_arrow::array::BooleanArray;
 use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs, Kind};
+use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs};
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]

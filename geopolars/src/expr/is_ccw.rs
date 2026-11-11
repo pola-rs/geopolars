@@ -5,12 +5,14 @@ use geopolars_compute::native::{
     line_strings_are_ccw, multi_line_strings_are_ccw, multi_polygons_are_ccw, polygons_are_ccw,
 };
 use geopolars_compute::with_const_flags;
-use geopolars_core::{LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray};
+use geopolars_core::{
+    Kind, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
+};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 /// See python
 #[derive(Debug, Deserialize)]

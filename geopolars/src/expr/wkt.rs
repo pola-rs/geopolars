@@ -4,14 +4,14 @@
 
 use ::wkt::to_wkt::write_geometry;
 use ::wkt::Wkt;
+use geopolars_core::{GeometryArray, GeometryBuilder};
 use polars::prelude::*;
 use polars_arrow::array::MutableBinaryViewArray;
 use pyo3_polars::derive::polars_expr;
 
-use crate::geoarrow::decode::{target, Builder, DecodeKwargs};
+use crate::geoarrow::decode::{target, DecodeKwargs};
 use crate::geoarrow::describe;
 use crate::geoarrow::encoded::{describe_encoded, Encoded, Encoding};
-use crate::geoarrow::for_each_geometry;
 
 /// For [`to_wkt`]: WKT carrying the geometry's metadata.
 fn kernel_output_type_to_wkt(input_fields: &[Field]) -> PolarsResult<Field> {
@@ -30,7 +30,7 @@ fn to_wkt(inputs: &[Series]) -> PolarsResult<Series> {
     let mut out = MutableBinaryViewArray::<str>::with_capacity(storage.len());
     let mut buf = String::new();
     for chunk in storage.chunks() {
-        for_each_geometry(chunk.as_ref(), geo.kind, |geometry| {
+        GeometryArray::new(chunk.as_ref(), geo.kind)?.for_each_geometry(|geometry| {
             let Some(geometry) = geometry else {
                 out.push_null();
                 return Ok(());
@@ -66,7 +66,8 @@ fn from_wkt(inputs: &[Series], kwargs: DecodeKwargs) -> PolarsResult<Series> {
         _ => inputs[0].clone(),
     };
 
-    let mut builder = Builder::new(&geo, Encoding::Wkt.label(), text.len());
+    let mut builder =
+        GeometryBuilder::new(geo.kind(), geo.dim(), Encoding::Wkt.label(), text.len());
     for value in text.str()?.iter() {
         match value {
             None => builder.null(),
@@ -79,7 +80,6 @@ fn from_wkt(inputs: &[Series], kwargs: DecodeKwargs) -> PolarsResult<Series> {
         }
     }
 
-    Ok(builder
-        .finish(inputs[0].name().clone())?
-        .into_extension(geo.instance()))
+    let storage = Series::from_arrow(inputs[0].name().clone(), builder.finish()?)?;
+    Ok(storage.into_extension(geo.instance()))
 }

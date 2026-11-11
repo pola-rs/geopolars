@@ -6,7 +6,7 @@ use geopolars_compute::native::{
 };
 use geopolars_compute::with_const_flags;
 use geopolars_core::{
-    downcast, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
+    downcast, Kind, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::Array;
@@ -14,7 +14,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 /// See python
 #[derive(Debug, Deserialize)]

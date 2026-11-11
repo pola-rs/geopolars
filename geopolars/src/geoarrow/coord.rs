@@ -62,8 +62,8 @@ pub fn under_lists(mut dtype: &DataType) -> (&DataType, u8) {
 mod tests {
     //! Only what the Python suite cannot reach.
 
-    use super::super::Kind;
     use super::*;
+    use geopolars_core::Kind;
     use polars_core::prelude::Field;
 
     fn struct_of(names: &[&str]) -> DataType {

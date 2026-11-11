@@ -4,11 +4,11 @@
 
 use geopolars_compute::native::{line_strings_are_rings, multi_line_strings_are_rings};
 use geopolars_compute::with_const_flags;
-use geopolars_core::{LineStringArray, MultiLineStringArray};
+use geopolars_core::{Kind, LineStringArray, MultiLineStringArray};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 fn line_kind(field: &Field) -> PolarsResult<Kind> {
     match describe(field.dtype())?.kind {

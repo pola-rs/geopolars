@@ -4,7 +4,7 @@ use geopolars_compute::geos::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, BufferDistance,
     JoinStyle, OffsetCurveStyle,
 };
-use geopolars_core::{downcast, GeoDimension, LineStringArray, MultiLineStringArray};
+use geopolars_core::{downcast, GeoDimension, Kind, LineStringArray, MultiLineStringArray};
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
 use pyo3_polars::derive::polars_expr;
@@ -12,7 +12,7 @@ use serde::Deserialize;
 
 use super::buffer::{chunks_by_distance, JoinStyleDef};
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 
 /// Python refuses any other kind, so it never gets here.
 fn not_a_line(dtype: &DataType) -> PolarsError {

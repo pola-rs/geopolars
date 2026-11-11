@@ -6,8 +6,8 @@ use geopolars_compute::native::{
     multi_polygons_are_equal, points_are_equal, polygons_are_equal, Coincidence,
 };
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
+    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, BooleanArray, ListArray};
@@ -15,7 +15,7 @@ use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs, Kind};
+use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs};
 
 /// See python
 #[derive(Debug, Deserialize)]

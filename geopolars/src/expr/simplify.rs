@@ -4,7 +4,7 @@ use geopolars_compute::geos::{
     simplify_line_strings, simplify_multi_line_strings, simplify_multi_polygons, simplify_polygons,
 };
 use geopolars_core::{
-    GeoDimension, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
+    GeoDimension, Kind, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::ListArray;
@@ -12,7 +12,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 
 /// Python returns a point or multipoint as it is, so it never gets here.
 fn already_simple(dtype: &DataType) -> PolarsError {

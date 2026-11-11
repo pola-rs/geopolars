@@ -7,8 +7,8 @@ use geopolars_compute::native::{
     affine_multi_polygons, affine_points, affine_polygons, RowShift,
 };
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
+    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::Array;
@@ -16,7 +16,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 // TODO: (Blocked until z-centroid is implemented): allow rotation around x/y for polygon
 // TODO: (Blocked until z-centroid is implemented): allow scaling around z for polygon(?)

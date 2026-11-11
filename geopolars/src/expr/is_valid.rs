@@ -19,8 +19,8 @@ use geopolars_compute::ogc_validity::{
     MultiPolygonTopologyChecks, PolygonTopologyChecks,
 };
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray, UncheckedStorage,
+    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray, UncheckedStorage,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, BooleanArray, ListArray};
@@ -28,7 +28,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 /// See python
 #[derive(Debug, Deserialize)]

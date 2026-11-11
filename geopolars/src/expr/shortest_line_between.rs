@@ -3,15 +3,14 @@
 
 use geopolars_compute::geos::{shortest_lines_against_one, shortest_lines_pairwise};
 use geopolars_compute::GeoComputeResult;
-use geopolars_core::{GeoDimension, LineStringArray};
+use geopolars_core::{GeoDimension, GeometryArray, Kind, LineStringArray};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::IntoPolarsResult;
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, Geo,
-    GeometryPairs, Kind,
+    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, Geo, GeometryPairs,
 };
 
 /// See python
@@ -52,10 +51,10 @@ fn shortest_line_between(
     let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
-            let one = geometry_array(one.as_ref(), one_kind)?;
+            let one = GeometryArray::new(one.as_ref(), one_kind)?;
             many.iter()
                 .map(|many| {
-                    let many = geometry_array(many.as_ref(), many_kind)?;
+                    let many = GeometryArray::new(many.as_ref(), many_kind)?;
                     lines_chunk(shortest_lines_against_one(
                         &one, &many, one_is_a, ignore, early,
                     ))
@@ -66,8 +65,8 @@ fn shortest_line_between(
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| {
-                let a = geometry_array(a.as_ref(), a_kind)?;
-                let b = geometry_array(b.as_ref(), b_kind)?;
+                let a = GeometryArray::new(a.as_ref(), a_kind)?;
+                let b = GeometryArray::new(b.as_ref(), b_kind)?;
                 lines_chunk(shortest_lines_pairwise(a, b, ignore, early))
             })
             .collect::<PolarsResult<Vec<_>>>()?,

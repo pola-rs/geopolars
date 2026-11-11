@@ -4,11 +4,13 @@ use geopolars_compute::native::{
     line_string_centroids, multi_line_string_centroids, multi_polygon_centroids, polygon_centroids,
 };
 use geopolars_compute::with_const_flags;
-use geopolars_core::{LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray};
+use geopolars_core::{
+    Kind, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
+};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 
 /// The point a `dtype` column's centroids are, and the kind of geometry they are of.
 /// The centroid keeps the geometry's dimension.

@@ -9,7 +9,7 @@ use geopolars_compute::native::{
 };
 use geopolars_compute::with_const_flags;
 use geopolars_core::{
-    downcast, Coords, GeoDimension, LineStringArray, MultiLineStringArray, MultiPointArray,
+    downcast, Coords, GeoDimension, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars::prelude::*;
@@ -19,7 +19,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::geoarrow::bbox::GeoBox;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 /// See python `bounds`.
 /// `turn` is the CRS's longitude turn, asked of PROJ at plan time.

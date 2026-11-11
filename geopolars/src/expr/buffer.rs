@@ -4,14 +4,14 @@ use geopolars_compute::geos::{
     buffer_into_multi_polygons, buffer_into_polygons, BufferDistance, BufferStyle, CapStyle,
     JoinStyle, Side,
 };
-use geopolars_core::{GeoDimension, MultiPolygonArray, PolygonArray};
+use geopolars_core::{GeoDimension, GeometryArray, Kind, MultiPolygonArray, PolygonArray};
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, geometry_array, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 
 /// A multipolygon for a multi-kind, or with `allow_splitting`,
 /// when `distance` is a column or at most 0.
@@ -114,7 +114,7 @@ fn chunk_buffered(
         side,
     };
     let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-    let array = &geometry_array(chunk, kind)?;
+    let array = &GeometryArray::new(chunk, kind)?;
     if into_multi {
         buffer_into_multi_polygons(array, distance, style, ccw_outer, ignore, early)
             .map(MultiPolygonArray::into_list_array)

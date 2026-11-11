@@ -7,14 +7,14 @@ use std::fmt::Display;
 use geopolars_compute::native::LengthMetric;
 use geopolars_compute::with_const_flags;
 use geopolars_compute::Planar;
-use geopolars_core::{LineStringArray, MultiLineStringArray};
+use geopolars_core::{Kind, LineStringArray, MultiLineStringArray};
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::distance::{geodesic_metric, DistanceMethod};
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

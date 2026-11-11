@@ -8,8 +8,8 @@ use geopolars_compute::native::{
     CoordinateSelection, NonFinite, SelectedAction, TooShort,
 };
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
+    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
@@ -18,7 +18,7 @@ use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
 use super::remove_repeats_in_succession::TooShortDef;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 #[derive(Deserialize)]
 #[serde(remote = "SelectedAction", rename_all = "snake_case")]

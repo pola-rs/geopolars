@@ -8,7 +8,7 @@ use geopolars_compute::native::{
     polygons_without_repeats_in_succession, Coincidence, CollapsedLines, LineOptions, TooShort,
 };
 use geopolars_core::{
-    downcast, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    downcast, Kind, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PolygonArray,
 };
 use polars::prelude::*;
@@ -17,7 +17,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 #[derive(Deserialize)]
 #[serde(remote = "CollapsedLines", rename_all = "snake_case")]

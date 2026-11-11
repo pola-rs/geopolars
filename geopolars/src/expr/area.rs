@@ -6,12 +6,12 @@ use std::fmt::Display;
 
 use geopolars_compute::native::AreaMetric;
 use geopolars_compute::Planar;
-use geopolars_core::{MultiPolygonArray, PolygonArray};
+use geopolars_core::{Kind, MultiPolygonArray, PolygonArray};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
 use super::distance::geodesic_metric;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::describe;
 
 /// The CRS of a column to measure an area in. Type operation only.
 fn crs_of(field: &Field) -> PolarsResult<String> {

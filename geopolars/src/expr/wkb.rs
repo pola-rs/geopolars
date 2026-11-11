@@ -4,14 +4,14 @@
 
 use ::wkb::reader::read_wkb;
 use ::wkb::writer::{write_geometry, WriteOptions};
+use geopolars_core::{GeometryArray, GeometryBuilder};
 use polars::prelude::*;
 use polars_arrow::array::MutableBinaryViewArray;
 use pyo3_polars::derive::polars_expr;
 
-use crate::geoarrow::decode::{target, Builder, DecodeKwargs};
+use crate::geoarrow::decode::{target, DecodeKwargs};
 use crate::geoarrow::describe;
 use crate::geoarrow::encoded::{describe_encoded, Encoded, Encoding};
-use crate::geoarrow::for_each_geometry;
 
 /// For [`to_wkb`]: WKB carrying the geometry's metadata.
 fn kernel_output_type_to_wkb(input_fields: &[Field]) -> PolarsResult<Field> {
@@ -31,7 +31,7 @@ fn to_wkb(inputs: &[Series]) -> PolarsResult<Series> {
     let mut out = MutableBinaryViewArray::<[u8]>::with_capacity(storage.len());
     let mut buf = Vec::new();
     for chunk in storage.chunks() {
-        for_each_geometry(chunk.as_ref(), geo.kind, |geometry| {
+        GeometryArray::new(chunk.as_ref(), geo.kind)?.for_each_geometry(|geometry| {
             let Some(geometry) = geometry else {
                 out.push_null();
                 return Ok(());
@@ -67,7 +67,8 @@ fn from_wkb(inputs: &[Series], kwargs: DecodeKwargs) -> PolarsResult<Series> {
         _ => inputs[0].clone(),
     };
 
-    let mut builder = Builder::new(&geo, Encoding::Wkb.label(), binary.len());
+    let mut builder =
+        GeometryBuilder::new(geo.kind(), geo.dim(), Encoding::Wkb.label(), binary.len());
     for value in binary
         .binary()?
         .downcast_iter()
@@ -83,7 +84,6 @@ fn from_wkb(inputs: &[Series], kwargs: DecodeKwargs) -> PolarsResult<Series> {
         }
     }
 
-    Ok(builder
-        .finish(inputs[0].name().clone())?
-        .into_extension(geo.instance()))
+    let storage = Series::from_arrow(inputs[0].name().clone(), builder.finish()?)?;
+    Ok(storage.into_extension(geo.instance()))
 }

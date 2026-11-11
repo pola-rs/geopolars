@@ -68,7 +68,7 @@ impl Encoding {
 /// A `geoarrow.wkb` or `geoarrow.wkt` column's type.
 ///
 /// These are for exchange only (e.g. GeoParquet).
-/// They are deliberately not a [`Kind`](super::Kind): no expression operates on them,
+/// They are deliberately not a [`Kind`](geopolars_core::Kind): no expression operates on them,
 /// other than converting them to and from the native geometries.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Encoded {

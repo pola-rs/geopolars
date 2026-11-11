@@ -4,9 +4,11 @@
 //! See the README.
 
 mod coords;
+mod decode;
 mod dimension;
 mod geometry_array;
 mod geotraits;
+mod kind;
 mod linestrings;
 mod lists;
 pub mod output;
@@ -22,9 +24,11 @@ pub use coords::{
     is_close, is_close_abs, is_ring, same_place, same_place_within, same_place_within_abs,
     same_position, AxisArrays, Coords, Tolerance, ValidCoords, MIN_RING_VERTICES,
 };
+pub use decode::GeometryBuilder;
 pub use dimension::GeoDimension;
 pub use geometry_array::GeometryArray;
 pub use geotraits::{Coord, Geometry};
+pub use kind::Kind;
 pub use linestrings::{
     LineStringArray, MultiLineStringArray, ScalarLineString, ScalarMultiLineString,
 };

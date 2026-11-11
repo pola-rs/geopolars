@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use geoarrow_schema::Edges;
+use geopolars_core::Kind;
 use indexmap::IndexMap;
 use polars::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -17,7 +18,7 @@ use serde_json::{Map, Value};
 use crate::geoarrow::bbox::{self, GeoBox};
 use crate::geoarrow::crs::ExtensionMetadata;
 use crate::geoarrow::encoded::{describe_encoded, Encoded, Encoding};
-use crate::geoarrow::{coord, describe, Geo, GeoDimension, Kind};
+use crate::geoarrow::{coord, describe, Geo, GeoDimension};
 
 /// The GeoParquet version this crate writes.
 const VERSION: &str = "1.1.0";

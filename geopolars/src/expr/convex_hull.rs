@@ -5,7 +5,7 @@ use geopolars_compute::geos::{
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
 use geopolars_core::{
-    LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
+    Kind, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::ListArray;
@@ -15,7 +15,7 @@ use serde::Deserialize;
 use geopolars_core::GeoDimension;
 
 use super::IntoPolarsResult;
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 
 /// A point encloses nothing, so it is refused.
 fn encloses_nothing(dtype: &DataType) -> PolarsError {

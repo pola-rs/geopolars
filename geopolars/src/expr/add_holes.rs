@@ -2,7 +2,7 @@
 //! See `add_holes` in Python for the rules.
 
 use geopolars_compute::native::{have_room_for_holes, polygons_with_added_holes};
-use geopolars_core::PolygonArray;
+use geopolars_core::{Kind, PolygonArray};
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
 use polars_arrow::compute::utils::combine_validities_and;
@@ -14,7 +14,7 @@ use super::construct::{
     fields_of, lines_per_row, listed_parts, paired_rows, parts_storage, rows_validity,
     validated_polygons, NullParts,
 };
-use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo, Kind};
+use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo};
 
 /// The keyword arguments of `add_holes`.
 /// These have to be mirrored on the Python side.

@@ -3,12 +3,12 @@
 use geopolars_compute::native::{
     multi_polygon_exteriors, multi_polygon_interiors, polygon_exteriors, polygon_interiors,
 };
-use geopolars_core::{MultiPolygonArray, PolygonArray, Untrimmed};
+use geopolars_core::{Kind, MultiPolygonArray, PolygonArray, Untrimmed};
 use polars::prelude::*;
 use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, Geo};
 
 /// A `kind` per polygon, or a list of them per multipolygon,
 /// with the input's dimension and metadata.

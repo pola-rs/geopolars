@@ -7,8 +7,8 @@ use geopolars_compute::native::{
     multi_polygons_with_added_parts, WithoutEmptyParts,
 };
 use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
+    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars::prelude::*;
 use polars_arrow::array::Array;
@@ -20,7 +20,7 @@ use super::construct::{
     one_polygon_per_row, paired_rows, part_kinds, parts_storage, points_per_row, polygons_per_row,
     rows_validity, NullParts,
 };
-use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo, Kind};
+use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo};
 
 /// `empty_parts` of `add_parts`.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
