@@ -6,28 +6,9 @@
 //!
 //! See the README.
 
-/// Dispatches runtime `bool` flags into generic implementations,
-/// so that the hot path never branches on them.
-/// `with_const_flags!(A = a, B = b; f::<A, B>(args))` calls `f::<A, B>(args)`,
-/// with each runtime flag turned into a const `bool` of the name it is bound to.
-#[macro_export]
-macro_rules! with_const_flags {
-    (@ $call:expr;) => {
-        $call
-    };
-    (@ $call:expr; $name:ident = $flag:expr $(, $rest_name:ident = $rest_flag:expr)*) => {
-        if $flag {
-            const $name: bool = true;
-            $crate::with_const_flags!(@ $call; $($rest_name = $rest_flag),*)
-        } else {
-            const $name: bool = false;
-            $crate::with_const_flags!(@ $call; $($rest_name = $rest_flag),*)
-        }
-    };
-    ($($name:ident = $flag:expr),+; $call:expr) => {
-        $crate::with_const_flags!(@ $call; $($name = $flag),+)
-    };
-}
+// Declared first, so that its macros are in scope for every other module.
+#[macro_use]
+mod const_generic_dispatch;
 
 mod error;
 #[cfg(feature = "native")]
