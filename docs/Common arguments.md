@@ -9,32 +9,50 @@ The table at the end lists arguments that only a few expressions share, as they 
 
 ## Errors
 
-### `on_row_error: Literal["null", "drop", "raise"] = "null"`
+### `on_row_error: Literal["null", "raise"] = "raise"`
 
 Some kernels can error depending on the data in a row.
 Something could be out of bounds, or a line might cross itself where an expression requires it not to.
 With the `on_row_error` variable, you can set what to do if that happens.
 
-- `on_row_error="null"` (default) instructs the kernel to simply mark the resulting row as null (invalid).
-  The total rows coming out of the expression then does not change.
-- `on_row_error="drop"` tells it to simply omit that row from the result.
-  The amount of rows in the output can be the same if no errors occurred, or lower if they did.
 - `on_row_error="raise"` stops processing, and returns the error that was raised.
   This is useful if you want to inspect the exact error that was raised.
+  This is the (strict) default to agree with Polars.
+- `on_row_error="null"` instructs the kernel to simply mark the resulting row as null.
+  The total rows coming out of the expression then does not change.
+
+Note that there is no `"drop"` option here.
+The kernels are registered with is_elementwise=True, and dropping rows changes the column length.
+That breaks with_columns, broadcasting a single geometry against a column,
+and pairing with other columns of the same frame.
 
 > [!NOTE]
 > Legacy: this replaces `ignore_per_row_errors: bool = False`.
 
-### `early_geos_compat_check: bool = True`
+### `early_coord_check: Literal["finite", "off", "finite_and_empty"] = "finite"`
 
+Most operations will return a non-finite result if the input is also non-finite.
+This argument controls an early check for this in this function.
+Checking this requires an extra pass over the geometry though.
+See this as a safety check you can turn off for extra speed in some cases.
+Turning this off in a mesh with very few NaNs might be faster, but if your data contains a lot of NaNs,
+you might be better off leaving this one as this can skip expensive calculations.
+
+- `early_coord_check="off"` skips this extra pass.
+- `early_coord_check="finite"` means that the kernel will check for such values in the operation.
+  If it does, it will mark it as an error, which can be picked up by `on_row_error`.
+- `early_coord_check="finite_and_empty"` does the same as the above,
+  but also goes to `on_row_error` for an empty point.
+
+This argument serves an important purpose for kernels that forward to GEOS.
 GEOS supports neither empty points inside a geometry nor any other NaN or infinite x or y.
 Operations involving such geometries would therefore always end up as an error.
-By setting `early_geos_compat_check=True`,
-the kernel will check for such values when creating the GEOS representation of a geometry,
-allowing it to bypass other calculations as it is invalid anyway.
-Setting this value to `early_geos_compat_check=False` forces it to be put into GEOS anyway.
+Here the check is embedded into the conversion into a GEOS geometry.
+It will simply mark the `GeosRow` as `null`.
 
-TODO: why would we want to set it to false again?
+Note setting `early_coord_check="off"` can also silently affect the results,
+due GEOS handling invalid states differently (and sometimes inconsistently).
+An example would be GEOS silently returning (4, 0) for a distance of 0.5 on a line with a NaN vertex.
 
 > [!NOTE]
 > Legacy: this replaces `early_finite_check: bool = False`.
@@ -53,13 +71,19 @@ It only labels, and never reprojects (except for the kernel that actually projec
 Related: `shortest_line_between(in_crs=None)` reprojects both sides to `in_crs` before measuring.
 It is marked experimental.
 
-### `allow_degree_distances: bool = False`
+### `distance_method: Literal["auto", "planar", "geodesic"] = "auto"`
 
-This function only really makes sense when used with coordinates that actually map to a distance.
+Passed to functions that do something with distances.
 A CRS that uses degrees would get distances in degrees, which is most of the time not what you want.
-By default with `allow_degree_distances=False`,
-these functions will raise a (plan-time) error when this is the case.
-By setting `allow_degree_distances=True`, you override this behaviour.
+
+- `distance_method="planar"` naively looks at the coordinate data as-is.
+  This makes sense if the CRS already defines its distances in metres,
+  but otherwise you might end up with distances in degrees.
+- `distance_method="geodesic"` gets the distances on the CRS-defined spheroid.
+  This is a much more expensive operation.
+- `distance_method="auto"` (default) looks at the CRS to switch between the other two modes.
+  If the CRS is a geographic one, it uses the `"geodesic"` option,
+  while it uses `"planar"` on anything that has a projected CRS, or no CRS at all.
 
 ## Comparing coordinates
 
@@ -72,16 +96,18 @@ By default (both `None`), they have to be *exactly* equal (`0.0`).
 Values are compared *on every axis*, not as a vector magnitude.
 Neither value can be negative or NaN. This will return an error at plan time.
 
-### `compare_z: bool = True`, `compare_m: bool = False`
+### `include_z: bool = True`, `include_m: bool = False`
 
-These flags control whether a certain axis is included in a comparison (e.g. for equality, or distance).
+These flags control whether a certain axis is included in a comparison
+(e.g. equality, distance).
 The x and y axes are always included, but sometimes it is better to leave the m and z values out.
 
 z is compared by default, m is not (being a measure rather than a position).
 Either flag is ignored for a geometry without that axis.
 
 > [!NOTE]
-> Legacy: this replaces `unique_z: bool = True`, `unique_m: bool = False`.
+> Legacy: this replaces `unique_z: bool = True`, `unique_m: bool = False`,
+> as well as `ignore_z` and `ignore_m`.
 
 ## Building and repairing geometries
 
@@ -93,24 +119,24 @@ With `close=None`, an open ring is not a ring, so its polygon is null.
 
 ### `null_parts: Literal["drop", "null"] = "null"`
 
-This argument is used in constructors,
-and determines what happens when one of the parts or a coordinate is invalid.
+This argument is used in constructors and functions that add to a geometry like `add_parts`.
+It determines what happens when one of the parts or a coordinate is null.
 
 - `null_parts="drop"` simply filters them. The other parts of the row are still added.
-  What happens to linestrings and rings that are now too short is set by `line_too_short`.
+  What happens to linestrings and rings that are now too short is set by `short_lines`.
 - `null_parts="null"` makes the resulting row null.
 
 (TODO: maybe add an 'empty' option here too? not a priority)
 
-### `line_too_short: Literal["null", "keep", "empty"] = "null"`
+### `short_lines: Literal["null", "keep", "empty"] = "null"`
 
 Some operations remove coordinates. This can leave a linestring too short (single vertex),
 or a ring that does not enclose any area (<4 vertices, due to needing to repeat the last vertex).
 This argument says what should happen to such a thing.
 
-- `line_too_short="null"` makes this entire geometry (row) null.
-- `line_too_short="keep"` keeps the line as it is. This can cause invalid GeoArrow.
-- `line_too_short="empty"` turns the line into an empty line.
+- `short_lines="null"` makes this entire geometry (row) null.
+- `short_lines="keep"` keeps the line as it is. This can cause invalid OGC geometries.
+- `short_lines="empty"` turns the line into an empty line.
   For a single linestring, this makes the outer geometry an empty geometry.
   For a polygon, this means the polygon will now have an empty ring.
   If there are still non-empty holes,
@@ -131,15 +157,18 @@ Most of the time this is not a meaningful polygon though.
   This is valid GeoArrow, but not valid for OGC.
   Running a polygon like this through other expressions might give unexpected results.
 
+> [!NOTE]
+> Legacy: this replaces `empty_exterior`.
+
 ## Output geometry
 
-### `reorient_rings: Literal["no", "ccw", "cw"] = "no"`
+### `reorient_rings: Literal["keep", "ccw", "cw"] = "keep"`
 
 Some functions create or modify rings, such as constructors or conversions from GEOS.
 These might be in a different orientation from the rest of your geometry.
 In these cases, you can ask what should be done with the newly added rings:
 
-- `reorient_rings="no"` keeps the rings as-is. This is the cheapest option.
+- `reorient_rings="keep"` keeps the rings as-is. This is the cheapest option.
 - `reorient_rings="ccw"` forces the rings to be oriented counter-clockwise.
 - `reorient_rings="cw"` forces the rings to be oriented clockwise.
 
@@ -153,27 +182,23 @@ so it only affects newly transformed/built/converted rings.
 If `reverse_hole_direction=True`, then holes are made to go the other direction from exterior rings.
 I.e. if `reorient_rings="ccw"`, then the holes are made to go clockwise.
 
-### `output_type: Literal["single", "multi"] = "single"`
+### `promote_to_multi: Literal["single", "multi"] = "single"`
 
 Some operations can result in a shape falling apart into multiple.
-This is mostly a concern when using GEOS kernels.
 For example, taking the difference between two polygons can cause the polygon to be cut into two.
 GeoPolars does not have an 'any geometry' datatype (yet),
 so this argument decides what happens in such a case.
+This is mostly a concern when using GEOS kernels.
 
-- `output_type="single"` expects every output to be a single geometry.
+- `promote_to_multi="single"` expects every output to be a single geometry.
   Anything that results in multiple geometries is considered an error.
   How this error is then handled depends on the setting of the `on_row_error` argument.
-- `output_type="multi"` always outputs a `Multi*` (e.g. a `MultiPolygon` instead of a `Polygon`,
+- `promote_to_multi="multi"` always outputs a `Multi*` (e.g. a `MultiPolygon` instead of a `Polygon`,
   even if the input types are only polygons). This is more flexible,
   but in many cases might make your data harder to work with.
 
 If the input geometry is already a `Multi*` (e.g. `MultiPolygon`), this argument has no effect.
 These will always output a `Multi*`.
-
-TODO: See if we can give this a better name that better reflects its use case?
-Current name could imply that it gives a polygon as output for a multipolygon if `"single"`,
-but that is not a thing.
 
 > [!NOTE]
 > Legacy: this replaces `allow_splitting: bool = False`.

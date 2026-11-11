@@ -24,16 +24,23 @@ In such a case, you have no choice but to do the branching inside of the loop.
 
 Cross-reference this with [the common arguments doc]("../docs/Common arguments.md").
 
-## `on_row_error`
-
-This should be dispatched through a const generic, because a user would most likely use this to speed-up.
-
-> [!NOTE] Legacy
-> this was previously named `ignore_per_row_errors`. These should be migrated over to the new name.
-
 ## `compare_z` and `compare_m`
 
 If the z and/or m values are dropped, you can simply re-interpret the data as a type without those dimensions.
 This is preferable over dispatching this as a const generic bool,
 though in some cases that is a valid approach too.
 Whatever you do though, you should not do a first pass to simply change the type.
+
+## Branching on errors, empties, or invalid states
+
+Some argument say what to do on hitting an empty geometry, running into an error,
+or running into an invalid state.
+These are the exception, not the rule. Hence, they can take the penalty of runtime checking
+(rather than blowing up the binary size).
+These should *not* be dispatched using const generics.
+
+Examples are `on_row_error`, `short_lines`, `empty_polygon_exterior`.
+
+Note that this does not include functions on *checking for errors* in the first place, such as `early_coord_check`.
+`null_parts` should also be dispatched statically.
+If those are gated behind an argument, then that should still be dispatched in a const generic way.
