@@ -446,6 +446,8 @@ fn coord_seq(axes: &Axes, vertices: Range<usize>) -> GeoComputeResult<CoordSeq> 
 /// GEOS geometries of any kind, one per row,
 /// to copy into one of our arrays with an `into_*_array` conversion.
 pub struct GeosGeometries {
+    // FIXME: Use a Polars collection type with a validity mask here,
+    // so that we don't have to have a 'null' variant
     pub geometries: Vec<GeosRow>,
     /// Sized for the deepest kind, a multipolygon:
     /// rings (or lines), then polygons.
@@ -458,6 +460,7 @@ pub enum GeosRow {
     /// Empty, without a GEOS geometry. Valid for every kind.
     Empty,
     Geometry(Geometry),
+    // FIXME: add two arms: 'LeftUnchanged' and 'RightUnchanged'
 }
 
 /// `None` is a null row.

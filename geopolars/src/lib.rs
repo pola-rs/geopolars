@@ -6,6 +6,7 @@ use pyo3::prelude::*;
 use pyo3_polars::{PolarsAllocator, PyDataFrame};
 
 mod cache;
+mod common_arguments;
 mod expr;
 mod geoarrow;
 mod geoparquet;
