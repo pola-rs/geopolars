@@ -40,6 +40,7 @@ How to handle errors depends on where they are raised.
 
 - An error that would invalidate all rows (i.e. raised before looping) should be returned.
   Such errors should try to be caught at plan time already if possible.
+  This includes some common arguments like `allow_degree_distances=false`.
 - An error in a single should follow the rules outlined by `on_row_error`.
 - An accumulator-like function combines many rows into far fewer results.
   Ask the caller how to handle errors here, with an `IGNORE_ERRORS` const `bool`.
