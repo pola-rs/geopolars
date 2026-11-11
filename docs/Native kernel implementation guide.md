@@ -30,5 +30,3 @@ This should be dispatched through a const generic, because a user would most lik
 
 > [!NOTE] Legacy
 > this was previously named `ignore_per_row_errors`. These should be migrated over to the new name.
-
-###

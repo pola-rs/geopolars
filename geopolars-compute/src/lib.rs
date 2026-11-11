@@ -21,6 +21,7 @@ mod metric;
 pub mod native;
 #[cfg(all(feature = "native", feature = "geos"))]
 pub mod ogc_validity;
+mod on_row_error;
 mod passing;
 #[cfg(any(feature = "native", feature = "rsgeo", feature = "geos"))]
 // Some helpers are only for `native`, others only for `geos` and `rsgeo`.
@@ -37,3 +38,4 @@ pub mod rsgeo;
 use error::row_or_null;
 pub use error::{GeoComputeError, GeoComputeResult};
 pub use metric::{BaseMetric, GeodesicMetric, Planar, WithHeight};
+pub use on_row_error::OnRowError;

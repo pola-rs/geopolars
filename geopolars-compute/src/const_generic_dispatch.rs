@@ -92,6 +92,7 @@ macro_rules! const_enum {
             }
         }
 
+        #[allow(unused_macros)]
         macro_rules! const_enum_variants {
             ($d name:ident = $d mode:expr; $d ($d rest:tt)*) => {
                 $crate::with_const_flags!(
