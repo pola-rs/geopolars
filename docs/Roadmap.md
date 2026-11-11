@@ -108,4 +108,4 @@ creating new geometries
 - [ ] Ask claude to make a matrix for what we cover compared to geopandas/GEOS for internal referencing
 - [ ] The doc decorator does not work with popup hints. That's a dealbreaker.
 - [ ] Instead of doc decorator, see if we can make a central page that we reference to (e.g 'how do we handle errors in geos')
-- [ ] Make all GEOS kernels the shape as described in the compute readme (Always store of geos things of things)
+- [ ] Make all GEOS kernels the shape as described in the kernel impl guide (Always store of geos things of things)
