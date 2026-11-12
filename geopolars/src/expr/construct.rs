@@ -10,7 +10,7 @@ use serde::Deserialize;
 use super::close_rings::CloseRingsKwargs;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
 use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, GeoDimension};
-use geopolars_core::{assembled_polygons, validated_storage, NullParts};
+use geopolars_core::{assembled_polygons, validated_storage, NestedKind, NullParts};
 use geopolars_views::Kind;
 use polars_arrow::offset::Offsets;
 
@@ -166,7 +166,11 @@ fn kernel_output_type_multipolygon(
 }
 
 /// [validated_storage] for every chunk of `storage`.
-fn validated(storage: Series, kind: Kind, close: Option<CloseRingsKwargs>) -> PolarsResult<Series> {
+fn validated(
+    storage: Series,
+    kind: NestedKind,
+    close: Option<CloseRingsKwargs>,
+) -> PolarsResult<Series> {
     let close = close.map(Into::into);
     let chunks = storage
         .chunks()
@@ -185,10 +189,10 @@ fn gather(
     parts: &Series,
     kwargs: &MetadataKwargs,
     close: Option<CloseRingsKwargs>,
-    kind: Kind,
+    kind: NestedKind,
     part: Kind,
 ) -> PolarsResult<Series> {
-    let geo = gathered(parts.dtype(), kwargs, kind, part)?;
+    let geo = gathered(parts.dtype(), kwargs, kind.kind(), part)?;
     // This only changes dtype, nothing on the data.
     let storage = parts.list()?.apply_to_inner(&|part| {
         Ok(match part.dtype() {
@@ -212,7 +216,7 @@ fn linestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series>
             .storage()
             .clone()
             .into_extension(geo.instance())),
-        _ => gather(vertices, &kwargs, None, Kind::LineString, Kind::Point),
+        _ => gather(vertices, &kwargs, None, NestedKind::LineString, Kind::Point),
     }
 }
 
@@ -223,7 +227,7 @@ fn polygon(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
         &inputs[0],
         &kwargs.metadata(),
         kwargs.close,
-        Kind::Polygon,
+        NestedKind::Polygon,
         Kind::LineString,
     )
 }
@@ -232,7 +236,13 @@ fn polygon(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipoint)]
 fn multipoint(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     // Note that this is basically the same as linestring, but just a different [Kind].
-    gather(&inputs[0], &kwargs, None, Kind::MultiPoint, Kind::Point)
+    gather(
+        &inputs[0],
+        &kwargs,
+        None,
+        NestedKind::MultiPoint,
+        Kind::Point,
+    )
 }
 
 /// See `multilinestring_from_linestrings`.
@@ -242,7 +252,7 @@ fn multilinestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Se
         &inputs[0],
         &kwargs,
         None,
-        Kind::MultiLineString,
+        NestedKind::MultiLineString,
         Kind::LineString,
     )
 }
@@ -254,7 +264,7 @@ fn multipolygon(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series
         &inputs[0],
         &kwargs.metadata(),
         kwargs.close,
-        Kind::MultiPolygon,
+        NestedKind::MultiPolygon,
         Kind::Polygon,
     )
 }
@@ -415,10 +425,10 @@ fn zip(
     inputs: &[Series],
     kwargs: &MetadataKwargs,
     close: Option<CloseRingsKwargs>,
-    kind: Kind,
+    kind: NestedKind,
 ) -> PolarsResult<Series> {
-    let geo = zipped(&fields_of(inputs), kwargs, kind)?;
-    let storage = interleaved_columns(inputs, kind.nesting())?;
+    let geo = zipped(&fields_of(inputs), kwargs, kind.kind())?;
+    let storage = interleaved_columns(inputs, kind.kind().nesting())?;
     Ok(validated(storage, kind, close)?.into_extension(geo.instance()))
 }
 
@@ -454,7 +464,7 @@ fn interleaved_columns(inputs: &[Series], nesting: u8) -> PolarsResult<Series> {
 /// See `linestring_from_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_linestring_coords)]
 fn linestring_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs, None, Kind::LineString)
+    zip(inputs, &kwargs, None, NestedKind::LineString)
 }
 
 /// See `polygons_from_coordinates`.
@@ -476,19 +486,24 @@ fn polygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Seri
 /// See `polygons_from_nested_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon_nested_coords)]
 fn polygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs.metadata(), kwargs.close, Kind::Polygon)
+    zip(
+        inputs,
+        &kwargs.metadata(),
+        kwargs.close,
+        NestedKind::Polygon,
+    )
 }
 
 /// See `multipoint_from_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipoint_coords)]
 fn multipoint_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs, None, Kind::MultiPoint)
+    zip(inputs, &kwargs, None, NestedKind::MultiPoint)
 }
 
 /// See `multilinestring_from_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multilinestring_coords)]
 fn multilinestring_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs, None, Kind::MultiLineString)
+    zip(inputs, &kwargs, None, NestedKind::MultiLineString)
 }
 
 /// `rows` of rings, as the rows of polygons of one ring each.
@@ -518,7 +533,7 @@ fn multipolygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult
             let multi_polygons = one_ring_per_polygon(chunk);
             validated_storage(
                 &multi_polygons,
-                Kind::MultiPolygon,
+                NestedKind::MultiPolygon,
                 kwargs.close.map(Into::into),
             )
         })
@@ -532,7 +547,12 @@ fn multipolygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult
 /// See `multi_polygons_from_nested_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipolygon_nested_coords)]
 fn multipolygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs.metadata(), kwargs.close, Kind::MultiPolygon)
+    zip(
+        inputs,
+        &kwargs.metadata(),
+        kwargs.close,
+        NestedKind::MultiPolygon,
+    )
 }
 
 /// The single and the multi kind of the family `kind` is in.

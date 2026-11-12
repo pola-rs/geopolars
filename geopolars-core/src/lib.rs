@@ -87,13 +87,7 @@ pub use sort_parts::sort_parts;
 pub use to_ccw::to_ccw;
 
 use geopolars_compute::GeoComputeResult;
-use geopolars_views::Kind;
-use polars_core::prelude::{polars_err, PolarsError, PolarsResult};
-
-/// For a kind the plugin already refused at plan time.
-fn refused(operation: &str, kind: Kind) -> PolarsError {
-    polars_err!(SchemaMismatch: "{operation} does not accept a `{}` column", kind.name())
-}
+use polars_core::prelude::{polars_err, PolarsResult};
 
 /// Turns the result of a `geopolars_compute` kernel into a [`PolarsResult`].
 /// Can't just do Into<> because orphan rule.

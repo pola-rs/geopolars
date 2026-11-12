@@ -5,7 +5,7 @@ use geopolars_compute::inner_nulls::{
 };
 use geopolars_compute::native::{multi_polygons_have_only_rings, polygons_with_added_holes};
 use geopolars_compute::with_const_flags;
-use geopolars_views::{Kind, MultiPolygonArray, UncheckedStorage};
+use geopolars_views::{MultiPolygonArray, UncheckedStorage};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
 
@@ -13,32 +13,32 @@ use crate::parts::{
     closed_rings, lines_per_row, one_ring_per_row, rows_validity, validated_polygons, CloseRings,
     NullParts,
 };
-use crate::refused;
+use crate::NestedKind;
 
 /// Moves every null value below a row of one chunk of a `kind` column's storage out to that row.
 /// Implements the validation the Python constructors do once they have gathered the parts.
 /// A (multi)polygon is also null where it does not have only rings,
 /// after its open rings are closed with a `close`.
-/// A point is refused, as the constructors always gather into lists.
 pub fn validated_storage(
     chunk: &dyn Array,
-    kind: Kind,
+    kind: NestedKind,
     close: Option<CloseRings>,
 ) -> PolarsResult<Box<dyn Array>> {
     let storage = UncheckedStorage::new(chunk)?;
     Ok(match kind {
-        Kind::Point => return Err(refused("construct", kind)),
-        Kind::LineString => propagate_inner_nulls_of_line_strings(storage)
+        NestedKind::LineString => propagate_inner_nulls_of_line_strings(storage)
             .into_list_array()
             .boxed(),
-        Kind::MultiPoint => propagate_inner_nulls_of_multi_points(storage)
+        NestedKind::MultiPoint => propagate_inner_nulls_of_multi_points(storage)
             .into_list_array()
             .boxed(),
-        Kind::MultiLineString => propagate_inner_nulls_of_multi_line_strings(storage)
+        NestedKind::MultiLineString => propagate_inner_nulls_of_multi_line_strings(storage)
             .into_list_array()
             .boxed(),
-        Kind::Polygon => validated_polygons(propagate_inner_nulls_of_polygons(storage), close),
-        Kind::MultiPolygon => {
+        NestedKind::Polygon => {
+            validated_polygons(propagate_inner_nulls_of_polygons(storage), close)
+        }
+        NestedKind::MultiPolygon => {
             let mut array = propagate_inner_nulls_of_multi_polygons(storage);
             if let Some((rings, coords)) =
                 close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
