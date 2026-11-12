@@ -29,7 +29,7 @@
 use std::iter::Peekable;
 use std::ops::Range;
 
-use geopolars_core::{
+use geopolars_views::{
     same_place, Coords, LineStringArray, List, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray, ValidCoords, ValidList, MIN_RING_VERTICES,
 };
@@ -169,7 +169,7 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
 ) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     debug_assert!(
         lists.spans_all_of(coords.len()),
-        "the lists have to be trimmed (see the geopolars-core README on trimming)"
+        "the lists have to be trimmed (see the geopolars-views README on trimming)"
     );
     let (mut runs, mut passing) = (Vec::new(), None);
     let mut selected = selected.true_idx_iter().peekable();

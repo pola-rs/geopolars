@@ -21,7 +21,7 @@ pub const NAME: &str = "geoarrow.box";
 /// A `geoarrow.box` column's type.
 ///
 /// Its storage is a flat struct of bounds rather than nested coordinates,
-/// so it is deliberately not a [`Kind`](geopolars_core::Kind):
+/// so it is deliberately not a [`Kind`](geopolars_views::Kind):
 /// [`describe`](super::describe) refuses it, and so does every expression.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GeoBox {

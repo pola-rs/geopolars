@@ -7,7 +7,7 @@ use geopolars_compute::geos::{
     polygons_are_simple,
 };
 use geopolars_compute::native::{multi_points_are_simple, points_are_simple};
-use geopolars_core::{
+use geopolars_views::{
     downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["geopolars", "geopolars-core", "geopolars-compute"]
+members = ["geopolars", "geopolars-views", "geopolars-compute", "geopolars-core"]
 # The polars checkout for Python polars is its own workspace, not part of ours.
 exclude = [".polars"]
 

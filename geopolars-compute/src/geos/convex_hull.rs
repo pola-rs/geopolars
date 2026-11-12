@@ -47,8 +47,8 @@
 
 use std::ops::Range;
 
-use geopolars_core::output::SizeHint;
-use geopolars_core::{
+use geopolars_views::output::SizeHint;
+use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
     ValidCoords,
 };

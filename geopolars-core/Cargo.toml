@@ -5,7 +5,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-polars-core = { workspace = true, features = ["dtype-struct"] }
+# The views over the GeoArrow storage, and `Kind`.
+geopolars-views = { path = "../geopolars-views" }
+# The kernels on those views.
+geopolars-compute = { path = "../geopolars-compute" }
 polars-arrow = { workspace = true }
-polars-buffer = { workspace = true }
-geo-traits = "0.3.0"
+polars-core = { workspace = true }

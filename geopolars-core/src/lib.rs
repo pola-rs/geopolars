@@ -1,47 +1,49 @@
-//! Views over the Polars storage of GeoArrow geometries,
-//! and the arrays kernels build their output in.
+//! Picks the kernel for each kind of geometry.
 //!
 //! See the README.
 
-mod coords;
-mod decode;
-mod dimension;
-mod geometry_array;
-mod geotraits;
-mod kind;
-mod linestrings;
-mod lists;
-pub mod output;
-mod points;
-mod polygons;
-mod unchecked;
-mod untrimmed;
+mod add_holes;
+mod add_parts;
+mod affine;
+mod area;
+mod bounds;
+mod centroid;
+mod close_rings;
+mod convex_hull;
+mod count_coordinates;
+mod parts;
 
-use polars_arrow::array::Array;
-use polars_core::prelude::{polars_err, PolarsResult};
-
-pub use coords::{
-    is_close, is_close_abs, is_ring, same_place, same_place_within, same_place_within_abs,
-    same_position, AxisArrays, Coords, Tolerance, ValidCoords, MIN_RING_VERTICES,
+pub use add_holes::{add_holes, EmptyExterior};
+pub use add_parts::{add_parts, EmptyParts};
+pub use affine::affine_transform;
+pub use area::areas;
+pub use bounds::{bounds, column_extent};
+pub use centroid::centroids;
+pub use close_rings::close_rings;
+pub use convex_hull::convex_hulls;
+pub use count_coordinates::coordinate_counts;
+pub use parts::{
+    closed_rings, lines_per_row, one_ring_per_row, rows_validity, validated_polygons, CloseRings,
+    NullParts,
 };
-pub use decode::GeometryBuilder;
-pub use dimension::GeoDimension;
-pub use geometry_array::GeometryArray;
-pub use geotraits::{Coord, Geometry};
-pub use kind::Kind;
-pub use linestrings::{
-    LineStringArray, MultiLineStringArray, ScalarLineString, ScalarMultiLineString,
-};
-pub use lists::{List, ValidList};
-pub use points::{MultiPointArray, PointArray, ScalarMultiPoint, ScalarPoint};
-pub use polygons::{MultiPolygonArray, PolygonArray, ScalarMultiPolygon, ScalarPolygon};
-pub use unchecked::UncheckedStorage;
-pub use untrimmed::Untrimmed;
 
-/// Downcast one level of the storage to the array it has to be.
-/// The dtype was already checked, so this failing is a bug.
-pub fn downcast<'a, T: 'static>(array: &'a dyn Array, what: &str) -> PolarsResult<&'a T> {
-    array.as_any().downcast_ref::<T>().ok_or_else(
-        || polars_err!(ComputeError: "expected {what} in geometry storage, got: {:?}", array.dtype()),
-    )
+use geopolars_compute::GeoComputeResult;
+use geopolars_views::Kind;
+use polars_core::prelude::{polars_err, PolarsError, PolarsResult};
+
+/// For a kind the plugin already refused at plan time.
+fn refused(operation: &str, kind: Kind) -> PolarsError {
+    polars_err!(SchemaMismatch: "{operation} does not accept a `{}` column", kind.name())
+}
+
+/// Turns the result of a `geopolars_compute` kernel into a [`PolarsResult`].
+/// Can't just do Into<> because orphan rule.
+trait IntoPolarsResult<T> {
+    fn into_polars(self) -> PolarsResult<T>;
+}
+
+impl<T> IntoPolarsResult<T> for GeoComputeResult<T> {
+    fn into_polars(self) -> PolarsResult<T> {
+        self.map_err(|e| polars_err!(ComputeError: "{e}"))
+    }
 }

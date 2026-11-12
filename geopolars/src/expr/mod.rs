@@ -6,7 +6,7 @@
 //!
 //! Nothing in here names a concrete geometry. An expression asks
 //! [`geoarrow::describe`](crate::geoarrow::describe) what it was handed and then
-//! matches on the [`Kind`](geopolars_core::Kind) exhaustively.
+//! matches on the [`Kind`](geopolars_views::Kind) exhaustively.
 
 pub mod add_holes;
 pub mod add_parts;

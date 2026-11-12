@@ -5,7 +5,7 @@ use std::convert::Infallible;
 
 use ::rsgeo::algorithm::sweep::Cross;
 use ::rsgeo::{Coord, Intersections, Line, LineIntersection, PreparedGeometry, Relate};
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray, ScalarLineString,
     ScalarPolygon,
 };

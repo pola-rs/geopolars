@@ -18,8 +18,8 @@
 
 use std::ops::Range;
 
-use geopolars_core::output::list_array;
-use geopolars_core::{
+use geopolars_views::output::list_array;
+use geopolars_views::{
     same_place, LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PolygonArray,
     Untrimmed, ValidCoords, ValidList,
 };

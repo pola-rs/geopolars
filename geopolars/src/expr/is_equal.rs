@@ -5,7 +5,7 @@ use geopolars_compute::native::{
     line_strings_are_equal, multi_line_strings_are_equal, multi_points_are_equal,
     multi_polygons_are_equal, points_are_equal, polygons_are_equal, Coincidence,
 };
-use geopolars_core::{
+use geopolars_views::{
     downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };

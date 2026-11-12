@@ -854,6 +854,7 @@ dependencies = [
  "geoarrow-schema",
  "geopolars-compute",
  "geopolars-core",
+ "geopolars-views",
  "indexmap",
  "polars",
  "polars-arrow",
@@ -874,7 +875,7 @@ version = "0.1.0"
 dependencies = [
  "geo",
  "geographiclib-rs",
- "geopolars-core",
+ "geopolars-views",
  "geos",
  "polars-arrow",
  "proj",
@@ -883,6 +884,16 @@ dependencies = [
 
 [[package]]
 name = "geopolars-core"
+version = "0.1.0"
+dependencies = [
+ "geopolars-compute",
+ "geopolars-views",
+ "polars-arrow",
+ "polars-core",
+]
+
+[[package]]
+name = "geopolars-views"
 version = "0.1.0"
 dependencies = [
  "geo-traits",

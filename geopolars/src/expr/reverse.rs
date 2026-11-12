@@ -6,7 +6,7 @@ use geopolars_compute::native::{
     reverse_polygons,
 };
 use geopolars_compute::with_const_flags;
-use geopolars_core::{
+use geopolars_views::{
     downcast, Kind, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PolygonArray,
 };

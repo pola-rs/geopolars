@@ -1,6 +1,6 @@
 use std::fmt;
 
-use geopolars_core::MIN_RING_VERTICES;
+use geopolars_views::MIN_RING_VERTICES;
 use proj::ProjError;
 
 /// An error from one of the kernels of this crate.

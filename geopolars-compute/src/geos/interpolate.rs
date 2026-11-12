@@ -9,7 +9,7 @@
 //! The public functions take `early_finite_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
-use geopolars_core::{LineStringArray, MultiLineStringArray, PointArray};
+use geopolars_views::{LineStringArray, MultiLineStringArray, PointArray};
 use geos::Geom;
 
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};

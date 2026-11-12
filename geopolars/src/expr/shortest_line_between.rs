@@ -3,7 +3,7 @@
 
 use geopolars_compute::geos::{shortest_lines_against_one, shortest_lines_pairwise};
 use geopolars_compute::GeoComputeResult;
-use geopolars_core::{GeoDimension, GeometryArray, Kind, LineStringArray};
+use geopolars_views::{GeoDimension, GeometryArray, Kind, LineStringArray};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;

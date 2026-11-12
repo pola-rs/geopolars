@@ -6,7 +6,7 @@
 //! [super::selected_coords](mod@super::selected_coords) acts on them.
 //! The validity checks reject the rows holding one ([which_are_not_selected]).
 
-use geopolars_core::ValidCoords;
+use geopolars_views::ValidCoords;
 use polars_arrow::bitmap::Bitmap;
 
 /// Where `x` and `y` may lie, as `[xmin, ymin, xmax, ymax]`, ends included.

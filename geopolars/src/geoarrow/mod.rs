@@ -13,13 +13,13 @@ mod geo;
 mod pairs;
 
 pub use geo::Geo;
-pub use geopolars_core::GeoDimension;
+pub use geopolars_views::GeoDimension;
 pub use pairs::{aligned_pairs, single_chunk_masked_pairs, GeometryPairs};
 
 use std::any::Any;
 use std::sync::Arc;
 
-use geopolars_core::Kind;
+use geopolars_views::Kind;
 use polars::prelude::*;
 use polars_core::datatypes::extension::{register_extension_type, ExtensionTypeInstance};
 

@@ -9,7 +9,7 @@ use std::rc::Rc;
 use geopolars_compute::native::DistanceMetric;
 use geopolars_compute::with_const_flags;
 use geopolars_compute::{GeodesicMetric, Planar};
-use geopolars_core::{Coords, Kind, PointArray};
+use geopolars_views::{Coords, Kind, PointArray};
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;

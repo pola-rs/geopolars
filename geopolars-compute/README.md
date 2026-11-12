@@ -1,7 +1,7 @@
 # geopolars-compute
 
 Kernels for GeoArrow.
-They take the views of [`geopolars-core`](../geopolars-core/README.md),
+They take the views of [`geopolars-views`](../geopolars-views/README.md),
 and return Polars arrays.
 
 The crate holds:

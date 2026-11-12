@@ -8,7 +8,7 @@
 //!
 //! See [same_place] for `Z`.
 
-use geopolars_core::{
+use geopolars_views::{
     is_ring, same_place, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
     ScalarMultiLineString, ScalarPolygon, Untrimmed, MIN_RING_VERTICES,
 };

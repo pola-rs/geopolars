@@ -32,7 +32,7 @@ wrapped in a `List` per level of nesting (a point has 0, a linestring 1, a polyg
 
 | What | Python | Rust |
 | - | - | - |
-| List of geometries | `GEOMETRY_DTYPES` in `datatypes/registry.py` | `Kind::ALL` in `geopolars-core/src/kind.rs` |
+| List of geometries | `GEOMETRY_DTYPES` in `datatypes/registry.py` | `Kind::ALL` in `geopolars-views/src/kind.rs` |
 | Common base type | `GeoArrowType` in `datatypes/base.py` | `Geo` in `src/geoarrow/geo.rs` |
 | One geometry | `datatypes/point.py`, `polygon.py`, ... | a `Kind` variant |
 | Dimension (`xy`, `xyzm`) | `datatypes/dimension.py` | `src/geoarrow/dimension.rs` |
@@ -93,7 +93,7 @@ expr (namespaces) →  geo (functional) →  datatypes.
 On the Rust side, `src/expr/` mirrors `geo/` module by module (`area.rs`, `affine.rs`, `crs.rs`, ...),
 and `src/geoarrow/` is the shared glue: dtypes and dispatch.
 `src/proj.rs` asks PROJ about a CRS.
-Reading the Arrow storage in a kernel goes through the views of `geopolars-core`.
+Reading the Arrow storage in a kernel goes through the views of `geopolars-views`.
 
 ## Type checker
 

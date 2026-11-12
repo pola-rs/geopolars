@@ -9,7 +9,7 @@
 //! The public functions take `early_finite_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
-use geopolars_core::{GeometryArray, MultiPolygonArray, PolygonArray};
+use geopolars_views::{GeometryArray, MultiPolygonArray, PolygonArray};
 use geos::{BufferParams, Geom, Geometry, GeometryTypes};
 pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;

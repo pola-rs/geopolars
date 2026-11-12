@@ -3,7 +3,7 @@
 use geopolars_compute::geos::{
     simplify_line_strings, simplify_multi_line_strings, simplify_multi_polygons, simplify_polygons,
 };
-use geopolars_core::{
+use geopolars_views::{
     GeoDimension, Kind, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
 };
 use polars::prelude::*;

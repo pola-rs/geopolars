@@ -6,7 +6,7 @@
 //! ([CoordinateSelection::bounds](super::CoordinateSelection::bounds)),
 //! then act on them as in [super::selected_coords](mod@super::selected_coords).
 
-use geopolars_core::{
+use geopolars_views::{
     Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, ValidCoords,
 };

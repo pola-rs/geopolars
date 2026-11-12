@@ -26,8 +26,8 @@
 use std::convert::Infallible;
 use std::ops::Range;
 
-use geopolars_core::output::{box_struct, list_array};
-use geopolars_core::{
+use geopolars_views::output::{box_struct, list_array};
+use geopolars_views::{
     GeoDimension, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PointArray, PolygonArray, Untrimmed, ValidCoords,
 };

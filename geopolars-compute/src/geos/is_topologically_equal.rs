@@ -1,7 +1,7 @@
 //! Whether two geometries are topologically equal, forwarded to GEOS.
 //! See `is_topologically_equal` in Python for the rules.
 
-use geopolars_core::GeometryArray;
+use geopolars_views::GeometryArray;
 use geos::Geom;
 use polars_arrow::array::BooleanArray;
 

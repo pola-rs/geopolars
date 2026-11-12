@@ -13,7 +13,7 @@
 //!
 //! Null values below the rows are not looked at here, as in [crate::geoarrow_validity].
 
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, ScalarMultiPolygon, ScalarPolygon,
 };

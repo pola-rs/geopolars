@@ -7,7 +7,7 @@ use std::fmt::Display;
 use geopolars_compute::native::LengthMetric;
 use geopolars_compute::with_const_flags;
 use geopolars_compute::Planar;
-use geopolars_core::{Kind, LineStringArray, MultiLineStringArray};
+use geopolars_views::{Kind, LineStringArray, MultiLineStringArray};
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use pyo3_polars::derive::polars_expr;

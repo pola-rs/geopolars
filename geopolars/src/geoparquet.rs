@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use geoarrow_schema::Edges;
-use geopolars_core::Kind;
+use geopolars_views::Kind;
 use indexmap::IndexMap;
 use polars::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

@@ -11,7 +11,7 @@ use ::rsgeo::coordinate_position::CoordPos;
 use ::rsgeo::dimensions::Dimensions;
 use ::rsgeo::relate::IntersectionMatrix;
 use ::rsgeo::{Polygon, PreparedGeometry, Relate};
-use geopolars_core::{LineStringArray, ScalarLineString};
+use geopolars_views::{LineStringArray, ScalarLineString};
 use polars_arrow::array::BooleanArray;
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::datatypes::ArrowDataType;

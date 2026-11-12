@@ -1,7 +1,7 @@
 """Kernels on a chunk sliced from a larger one.
 
 Such a chunk still holds every list and coordinate of the larger one below its rows,
-until its view is trimmed (see the geopolars-core README on trimming).
+until its view is trimmed (see the geopolars-views README on trimming).
 """
 
 from __future__ import annotations

@@ -8,7 +8,7 @@ use geopolars_compute::inner_nulls::propagate_inner_nulls_of_multi_line_strings;
 use geopolars_compute::native::{
     multi_line_strings_joined, multi_line_strings_split_at_gaps, Coincidence, Gaps,
 };
-use geopolars_core::{Kind, UncheckedStorage};
+use geopolars_views::{Kind, UncheckedStorage};
 use polars::prelude::*;
 use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;

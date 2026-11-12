@@ -2,7 +2,7 @@
 //! Each predicate stops at the first failure.
 //! Rings have to be finite in x and y to be related.
 
-use geopolars_core::ScalarPolygon;
+use geopolars_views::ScalarPolygon;
 use geos::{Geometry, PreparedGeometry};
 
 use super::axes;

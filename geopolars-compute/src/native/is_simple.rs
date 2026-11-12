@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use geopolars_core::{MultiPointArray, PointArray};
+use geopolars_views::{MultiPointArray, PointArray};
 use polars_arrow::array::BooleanArray;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::datatypes::ArrowDataType;

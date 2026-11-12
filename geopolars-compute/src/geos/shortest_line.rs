@@ -2,8 +2,8 @@
 //!
 //! GEOS measures in x and y only, so every output is a `LineStringXY`.
 
-use geopolars_core::output::SizeHint;
-use geopolars_core::{GeometryArray, LineStringArray};
+use geopolars_views::output::SizeHint;
+use geopolars_views::{GeometryArray, LineStringArray};
 use geos::{Geom, Geometry};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::{combine_validities_and, combine_validities_and_not};

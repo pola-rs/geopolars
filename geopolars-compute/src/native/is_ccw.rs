@@ -16,7 +16,7 @@
 
 use std::ops::Range;
 
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray, ScalarLineString,
     ScalarPolygon, Untrimmed, ValidCoords, ValidList,
 };

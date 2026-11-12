@@ -1,6 +1,7 @@
 # Move dispatching from `geopolars` to `geopolars-core`
 
 Every plugin expression in `geopolars/src/expr/` still dispatches on `Kind` itself.
+The views moved to `geopolars-views`, so that `geopolars-core` can call the kernels of `geopolars-compute`.
 
 ## Shared dispatch helpers
 
@@ -12,15 +13,15 @@ Moving these first means the expressions that use them only need their imports c
 
 ## One geometry column, matching on `Kind` in the expression itself
 
-- [ ] `add_holes`: `add_holes`
-- [ ] `add_parts`: `add_parts`
-- [ ] `affine`: `affine`, `affine_about`, `affine_then_shift`
-- [ ] `area`: `area_planar`, `area_geodesic`
-- [ ] `bounds`: `bounds`, `total_bounds`
-- [ ] `centroid`: `centroid`
-- [ ] `close_rings`: `close_rings`
-- [ ] `convex_hull`: `convex_hull`
-- [ ] `count_coordinates`: `count_coordinates`
+- [x] `add_holes`: `add_holes`
+- [x] `add_parts`: `add_parts`
+- [x] `affine`: `affine`, `affine_about`, `affine_then_shift`
+- [x] `area`: `area_planar`, `area_geodesic`
+- [x] `bounds`: `bounds`, `total_bounds`
+- [x] `centroid`: `centroid`
+- [x] `close_rings`: `close_rings`
+- [x] `convex_hull`: `convex_hull`
+- [x] `count_coordinates`: `count_coordinates`
 - [ ] `crs`: `to_crs`
 - [ ] `filter_coordinates`: `filter_coordinates`
 - [ ] `fix_out_of_bounds`: `fix_out_of_bounds`

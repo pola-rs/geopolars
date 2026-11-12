@@ -3,7 +3,7 @@
 
 use geopolars_compute::geos::{rings_overlap_against_one, rings_overlap_pairwise};
 use geopolars_compute::with_const_flags;
-use geopolars_core::{downcast, Kind, LineStringArray};
+use geopolars_views::{downcast, Kind, LineStringArray};
 use polars::prelude::*;
 use polars_arrow::array::BooleanArray;
 use polars_arrow::datatypes::ArrowDataType;

@@ -9,7 +9,7 @@
 //! Null values below the rows are not looked at here:
 //! the views have to be built with them moved out to the rows (see [crate::inner_nulls]).
 
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray,
 };

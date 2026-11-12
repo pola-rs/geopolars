@@ -30,7 +30,7 @@
 
 use std::ops::Range;
 
-use geopolars_core::{
+use geopolars_views::{
     is_close, is_close_abs, LineStringArray, List, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray, Untrimmed, ValidCoords, ValidList,
 };

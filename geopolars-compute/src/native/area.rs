@@ -3,7 +3,9 @@
 use std::convert::Infallible;
 
 use geographiclib_rs::{PolygonArea, Winding};
-use geopolars_core::{MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed};
+use geopolars_views::{
+    MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed,
+};
 use polars_arrow::array::PrimitiveArray;
 
 use crate::per_row::per_row;

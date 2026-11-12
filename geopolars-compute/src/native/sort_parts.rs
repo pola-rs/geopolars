@@ -10,7 +10,7 @@
 //! Rings can also be rotated to start at their smallest rotation, before the parts are compared.
 //! An order map then holds a [RingStart] per ring: the ring, and the vertex it starts at.
 //! Rotated rings have to be closed or empty (see [SortOptions::rotate_rings]).
-//! They are checked with [is_closed_or_empty] rather than [is_ring](geopolars_core::is_ring),
+//! They are checked with [is_closed_or_empty] rather than [is_ring](geopolars_views::is_ring),
 //! as rotating needs no minimum number of vertices.
 //!
 //! # Const generic flags
@@ -40,7 +40,7 @@ use std::ops::Range;
 use super::is_valid::is_closed_or_empty;
 use super::rings::offsets_of;
 use crate::{GeoComputeError, GeoComputeResult};
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
     ScalarLineString, ScalarMultiLineString, ScalarMultiPoint, ScalarMultiPolygon, ScalarPolygon,
     ValidCoords, ValidList,

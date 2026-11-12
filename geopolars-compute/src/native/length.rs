@@ -12,7 +12,7 @@
 //! Every function here is generic over `IGNORE_NAN`.
 //! If `IGNORE_NAN=true`, a vertex with a NaN is skipped, so the line runs on to the next one.
 
-use geopolars_core::{LineStringArray, MultiLineStringArray, ScalarLineString};
+use geopolars_views::{LineStringArray, MultiLineStringArray, ScalarLineString};
 use polars_arrow::array::PrimitiveArray;
 
 use super::DistanceMetric;

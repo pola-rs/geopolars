@@ -1,7 +1,7 @@
 use geopolars_compute::geos::{
     interpolate_line_strings, interpolate_multi_line_strings, BufferDistance, InterpolateMode,
 };
-use geopolars_core::{downcast, Kind, LineStringArray, MultiLineStringArray, PointArray};
+use geopolars_views::{downcast, Kind, LineStringArray, MultiLineStringArray, PointArray};
 use polars::prelude::*;
 use polars_arrow::array::{Array, StructArray};
 use pyo3_polars::derive::polars_expr;

@@ -7,7 +7,7 @@ use geopolars_compute::native::{
     multi_points_without_repeats_in_succession, multi_polygons_without_repeats_in_succession,
     polygons_without_repeats_in_succession, Coincidence, CollapsedLines, LineOptions, TooShort,
 };
-use geopolars_core::{
+use geopolars_views::{
     downcast, Kind, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PolygonArray,
 };

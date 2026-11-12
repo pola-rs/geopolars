@@ -26,8 +26,8 @@
 
 use std::convert::Infallible;
 
-use geopolars_core::output::{f64_array, f64_array_masked};
-use geopolars_core::PointArray;
+use geopolars_views::output::{f64_array, f64_array_masked};
+use geopolars_views::PointArray;
 use polars_arrow::array::PrimitiveArray;
 
 use crate::{BaseMetric, GeoComputeError, GeodesicMetric, Planar, WithHeight};

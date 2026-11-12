@@ -7,7 +7,7 @@
 
 use std::iter::Peekable;
 
-use geopolars_core::{LineStringArray, List, MultiLineStringArray, ValidList};
+use geopolars_views::{LineStringArray, List, MultiLineStringArray, ValidList};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::Offsets;

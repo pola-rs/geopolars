@@ -3,7 +3,7 @@
 use geopolars_compute::native::{
     multi_polygon_exteriors, multi_polygon_interiors, polygon_exteriors, polygon_interiors,
 };
-use geopolars_core::{Kind, MultiPolygonArray, PolygonArray, Untrimmed};
+use geopolars_views::{Kind, MultiPolygonArray, PolygonArray, Untrimmed};
 use polars::prelude::*;
 use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;

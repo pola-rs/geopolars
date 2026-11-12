@@ -25,7 +25,7 @@ pub use self_intersects::{
 };
 
 use ::rsgeo::{Coord, LineString, Polygon};
-use geopolars_core::{is_ring, ScalarLineString};
+use geopolars_views::{is_ring, ScalarLineString};
 
 use crate::per_row::{per_part_optional_bool, per_row_optional_bool};
 use crate::{GeoComputeError, GeoComputeResult};

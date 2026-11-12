@@ -6,7 +6,7 @@ use geopolars_compute::native::{
     multi_polygons_snapped_to_grid, points_snapped_to_grid, polygons_snapped_to_grid, Grid,
     RoundMode,
 };
-use geopolars_core::{
+use geopolars_views::{
     downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };

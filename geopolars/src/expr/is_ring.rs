@@ -4,7 +4,7 @@
 
 use geopolars_compute::native::{line_strings_are_rings, multi_line_strings_are_rings};
 use geopolars_compute::with_const_flags;
-use geopolars_core::{Kind, LineStringArray, MultiLineStringArray};
+use geopolars_views::{Kind, LineStringArray, MultiLineStringArray};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 

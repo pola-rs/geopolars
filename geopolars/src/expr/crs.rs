@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use geopolars_compute::proj::{reproject_coords, reproject_valid_coords, Transformation};
 use geopolars_compute::GeoComputeError;
-use geopolars_core::{
+use geopolars_views::{
     downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };

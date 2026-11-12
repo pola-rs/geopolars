@@ -5,7 +5,7 @@ use geopolars_compute::native::{
     line_strings_are_ccw, multi_line_strings_are_ccw, multi_polygons_are_ccw, polygons_are_ccw,
 };
 use geopolars_compute::with_const_flags;
-use geopolars_core::{
+use geopolars_views::{
     Kind, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
 };
 use polars::prelude::*;

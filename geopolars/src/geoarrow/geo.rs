@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
-use geopolars_core::Kind;
+use geopolars_views::Kind;
 use polars_core::datatypes::extension::{
     ExtensionTypeFactory, ExtensionTypeImpl, ExtensionTypeInstance,
 };

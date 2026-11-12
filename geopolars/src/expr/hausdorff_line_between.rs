@@ -3,7 +3,7 @@
 
 use geopolars_compute::native::{hausdorff_lines_against_one, hausdorff_lines_pairwise, NonFinite};
 use geopolars_compute::GeoComputeResult;
-use geopolars_core::{GeometryArray, Kind, LineStringArray};
+use geopolars_views::{GeometryArray, Kind, LineStringArray};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;

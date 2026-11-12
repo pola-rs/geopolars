@@ -60,4 +60,4 @@ Every kernel in turn has to give valid output.
 
 Views from `new` are trimmed, and a view a kernel builds has to be too.
 A cheap kernel may take an `Untrimmed` view instead.
-See the [geopolars-core README](../geopolars-core/README.md#trimming).
+See the [geopolars-views README](../geopolars-views/README.md#trimming).

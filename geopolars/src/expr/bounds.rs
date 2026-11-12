@@ -1,17 +1,9 @@
 //! The bounding box of a geometry.
 
-use geopolars_compute::native::{
-    box_array, line_string_bounds, line_string_column_extent, multi_line_string_bounds,
-    multi_line_string_column_extent, multi_line_string_part_bounds, multi_point_bounds,
-    multi_point_column_extent, multi_point_part_bounds, multi_polygon_bounds,
-    multi_polygon_column_extent, multi_polygon_part_bounds, point_bounds, point_column_extent,
-    polygon_bounds, polygon_column_extent, BoxOptions, Extent,
-};
+use geopolars_compute::native::{box_array, BoxOptions, Extent};
 use geopolars_compute::with_const_flags;
-use geopolars_core::{
-    downcast, Coords, GeoDimension, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PointArray, PolygonArray,
-};
+use geopolars_core::column_extent;
+use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
 use polars_arrow::array::Array;
 use polars_arrow::bitmap::Bitmap;
@@ -52,88 +44,10 @@ fn kernel_output_type_bounds(input_fields: &[Field], kwargs: BoundsKwargs) -> Po
     Ok(Field::new(field.name().clone(), dtype))
 }
 
-/// The kernel of `kind` on one chunk of the storage.
-fn chunk_bounds(
-    chunk: &dyn Array,
-    kind: Kind,
-    (has_z, has_m): (bool, bool),
-    per_part: bool,
-    options: &BoxOptions,
-) -> PolarsResult<Box<dyn Array>> {
-    Ok(match kind {
-        Kind::Point => {
-            let array = PointArray::new(Coords::new(chunk)?);
-            with_const_flags!(Z = has_z, M = has_m; point_bounds::<Z, M>(&array, options)).boxed()
-        }
-        Kind::LineString => {
-            let array = LineStringArray::new_untrimmed(downcast(chunk, "a list of coordinates")?)?;
-            with_const_flags!(
-                Z = has_z, M = has_m;
-                line_string_bounds::<Z, M>(&array, options)
-            )
-            .boxed()
-        }
-        Kind::Polygon => {
-            let array = PolygonArray::new_untrimmed(downcast(chunk, "a list of rings")?)?;
-            with_const_flags!(Z = has_z, M = has_m; polygon_bounds::<Z, M>(&array, options)).boxed()
-        }
-        Kind::MultiPoint => {
-            let array = MultiPointArray::new_untrimmed(downcast(chunk, "a list of coordinates")?)?;
-            if per_part {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_point_part_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            } else {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_point_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            }
-        }
-        Kind::MultiLineString => {
-            let array =
-                MultiLineStringArray::new_untrimmed(downcast(chunk, "a list of linestrings")?)?;
-            if per_part {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_line_string_part_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            } else {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_line_string_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            }
-        }
-        Kind::MultiPolygon => {
-            let array = MultiPolygonArray::new_untrimmed(downcast(chunk, "a list of polygons")?)?;
-            if per_part {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_polygon_part_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            } else {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_polygon_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            }
-        }
-    })
-}
-
 /// See python `bounds`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_bounds)]
 fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
-    let (kind, dims) = (geo.kind, (geo.dim.has_z(), geo.dim.has_m()));
     let dtype = bounds_dtype(inputs[0].dtype(), kwargs.per_part)?;
     let options = BoxOptions {
         margin_x: kwargs.margin_x,
@@ -144,7 +58,9 @@ fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| chunk_bounds(chunk.as_ref(), kind, dims, kwargs.per_part, &options))
+        .map(|chunk| {
+            geopolars_core::bounds(chunk.as_ref(), geo.kind, geo.dim, kwargs.per_part, &options)
+        })
         .collect::<PolarsResult<Vec<_>>>()?;
     // SAFETY: every chunk is the storage of `dtype`.
     Ok(
@@ -170,38 +86,6 @@ fn kernel_output_type_total_bounds(input_fields: &[Field]) -> PolarsResult<Field
     Ok(Field::new(field.name().clone(), dtype))
 }
 
-/// The extent of one chunk of the storage.
-fn chunk_extent<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
-    chunk: &dyn Array,
-    kind: Kind,
-) -> PolarsResult<Option<Extent<Z, M>>> {
-    Ok(match kind {
-        Kind::Point => {
-            point_column_extent::<Z, M, IGNORE_NULLS>(&PointArray::new(Coords::new(chunk)?))
-        }
-        Kind::LineString => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            line_string_column_extent::<Z, M, IGNORE_NULLS>(&array)
-        }
-        Kind::Polygon => {
-            let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
-            polygon_column_extent::<Z, M, IGNORE_NULLS>(&array)
-        }
-        Kind::MultiPoint => {
-            let array = MultiPointArray::new(downcast(chunk, "a list of coordinates")?)?;
-            multi_point_column_extent::<Z, M, IGNORE_NULLS>(&array)
-        }
-        Kind::MultiLineString => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            multi_line_string_column_extent::<Z, M, IGNORE_NULLS>(&array)
-        }
-        Kind::MultiPolygon => {
-            let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
-            multi_polygon_column_extent::<Z, M, IGNORE_NULLS>(&array)
-        }
-    })
-}
-
 /// The box around every chunk of `storage`, as a column of one row.
 fn total_box<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
     storage: &Series,
@@ -211,7 +95,7 @@ fn total_box<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
 ) -> PolarsResult<Box<dyn Array>> {
     let mut total = Some(Extent::<Z, M>::EMPTY);
     for chunk in storage.chunks() {
-        let extent = chunk_extent::<Z, M, IGNORE_NULLS>(chunk.as_ref(), kind)?;
+        let extent = column_extent::<Z, M, IGNORE_NULLS>(chunk.as_ref(), kind)?;
         total = total.zip(extent).map(|(mut total, extent)| {
             total.merge(&extent);
             total

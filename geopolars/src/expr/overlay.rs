@@ -2,7 +2,7 @@
 //! (see [`geopolars_compute::geos::OverlayPairs`]).
 
 use geopolars_compute::geos::{Overlay, OverlayPairs};
-use geopolars_core::{GeometryArray, Kind};
+use geopolars_views::{GeometryArray, Kind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;

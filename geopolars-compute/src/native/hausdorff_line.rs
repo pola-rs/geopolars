@@ -32,7 +32,7 @@
 
 use std::ops::Range;
 
-use geopolars_core::{GeoDimension, GeometryArray, LineStringArray, List, ValidCoords, ValidList};
+use geopolars_views::{GeoDimension, GeometryArray, LineStringArray, List, ValidCoords, ValidList};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::Offsets;

@@ -18,7 +18,7 @@ use geopolars_compute::ogc_validity::{
     multi_polygons_are_valid_ogc, points_are_valid_ogc, polygons_are_valid_ogc,
     MultiPolygonTopologyChecks, PolygonTopologyChecks,
 };
-use geopolars_core::{
+use geopolars_views::{
     downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray, UncheckedStorage,
 };

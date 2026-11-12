@@ -5,7 +5,7 @@ use geopolars_compute::native::{
     line_strings_with_rings_rotated, multi_line_strings_sorted, multi_points_sorted,
     multi_polygons_sorted, polygons_with_holes_sorted, SortOptions,
 };
-use geopolars_core::{
+use geopolars_views::{
     downcast, Kind, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PolygonArray,
 };

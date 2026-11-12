@@ -1,12 +1,7 @@
 //! The centroid of a geometry.
 
-use geopolars_compute::native::{
-    line_string_centroids, multi_line_string_centroids, multi_polygon_centroids, polygon_centroids,
-};
-use geopolars_compute::with_const_flags;
-use geopolars_core::{
-    Kind, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
-};
+use geopolars_core::centroids;
+use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
@@ -38,35 +33,12 @@ fn kernel_output_type_centroid(input_fields: &[Field]) -> PolarsResult<Field> {
 #[polars_expr(output_type_func=kernel_output_type_centroid)]
 fn centroid(inputs: &[Series]) -> PolarsResult<Series> {
     let (point, kind) = centroid_of(inputs[0].dtype())?;
-    let (has_z, has_m) = (point.dim().has_z(), point.dim().has_m());
     let storage = inputs[0].ext()?.storage();
-
     let chunks = storage
-        .list()?
-        .downcast_iter()
-        .map(|rows| {
-            let points = match kind {
-                Kind::LineString => {
-                    let array = LineStringArray::new_untrimmed(rows)?;
-                    with_const_flags!(Z = has_z, M = has_m; line_string_centroids::<Z, M>(&array))
-                }
-                Kind::Polygon => {
-                    let array = PolygonArray::new_untrimmed(rows)?;
-                    with_const_flags!(Z = has_z, M = has_m; polygon_centroids::<Z, M>(&array))
-                }
-                Kind::MultiLineString => {
-                    let array = MultiLineStringArray::new_untrimmed(rows)?;
-                    with_const_flags!(
-                        Z = has_z, M = has_m;
-                        multi_line_string_centroids::<Z, M>(&array)
-                    )
-                }
-                Kind::MultiPolygon => {
-                    let array = MultiPolygonArray::new_untrimmed(rows)?;
-                    with_const_flags!(Z = has_z, M = has_m; multi_polygon_centroids::<Z, M>(&array))
-                }
-                Kind::Point | Kind::MultiPoint => unreachable!("refused by `centroid_of`"),
-            };
+        .chunks()
+        .iter()
+        .map(|chunk| {
+            let points = centroids(chunk.as_ref(), kind, point.dim())?;
             PolarsResult::Ok(points.into_struct_array().boxed())
         })
         .collect::<PolarsResult<Vec<_>>>()?;

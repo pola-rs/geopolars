@@ -4,7 +4,7 @@ use geopolars_compute::geos::{
     buffer_into_multi_polygons, buffer_into_polygons, BufferDistance, BufferStyle, CapStyle,
     JoinStyle, Side,
 };
-use geopolars_core::{GeoDimension, GeometryArray, Kind, MultiPolygonArray, PolygonArray};
+use geopolars_views::{GeoDimension, GeometryArray, Kind, MultiPolygonArray, PolygonArray};
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
 use pyo3_polars::derive::polars_expr;

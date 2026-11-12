@@ -1,9 +1,9 @@
 //! The geometry an encoding (`wkb`, `wkt`) is decoded into.
-//! [`GeometryBuilder`](geopolars_core::GeometryBuilder) builds it.
+//! [`GeometryBuilder`](geopolars_views::GeometryBuilder) builds it.
 
 use std::sync::Arc;
 
-use geopolars_core::Kind;
+use geopolars_views::Kind;
 use polars::prelude::*;
 use serde::Deserialize;
 

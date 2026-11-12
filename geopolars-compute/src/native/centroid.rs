@@ -21,7 +21,7 @@
 
 use std::convert::Infallible;
 
-use geopolars_core::{
+use geopolars_views::{
     Coords, LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PointArray,
     PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };

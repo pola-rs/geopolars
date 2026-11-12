@@ -7,8 +7,8 @@
 //! A list passes when it passes itself, and every item in it does.
 
 #[cfg(feature = "native")]
-use geopolars_core::List;
-use geopolars_core::ValidList;
+use geopolars_views::List;
+use geopolars_views::ValidList;
 #[cfg(feature = "native")]
 use polars_arrow::array::BooleanArray;
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
@@ -42,7 +42,7 @@ fn ends_before(ends: &[i64], item: usize) -> usize {
 fn lists_passing(lists: &ValidList, items: &Bitmap) -> Bitmap {
     debug_assert!(
         lists.spans_all_of(items.len()),
-        "the lists have to be trimmed (see the geopolars-core README on trimming)"
+        "the lists have to be trimmed (see the geopolars-views README on trimming)"
     );
     if items.unset_bits() * SPARSE_RATIO < lists.len() {
         lists_passing_sparse(lists, items)

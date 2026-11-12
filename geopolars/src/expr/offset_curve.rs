@@ -4,7 +4,7 @@ use geopolars_compute::geos::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, BufferDistance,
     JoinStyle, OffsetCurveStyle,
 };
-use geopolars_core::{downcast, GeoDimension, Kind, LineStringArray, MultiLineStringArray};
+use geopolars_views::{downcast, GeoDimension, Kind, LineStringArray, MultiLineStringArray};
 use polars::prelude::*;
 use polars_arrow::array::{Array, ListArray};
 use pyo3_polars::derive::polars_expr;

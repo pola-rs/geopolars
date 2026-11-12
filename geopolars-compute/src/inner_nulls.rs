@@ -2,7 +2,7 @@
 //! The views then hold to GeoArrow's rule that only the outermost level has nulls.
 //! The parts of a multi-geometry that hold a null value can instead be unset in the mask of a [MaskedParts].
 
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, UncheckedStorage, ValidCoords, ValidList,
 };

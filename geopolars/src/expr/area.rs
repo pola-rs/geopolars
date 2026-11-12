@@ -6,7 +6,8 @@ use std::fmt::Display;
 
 use geopolars_compute::native::AreaMetric;
 use geopolars_compute::Planar;
-use geopolars_core::{Kind, MultiPolygonArray, PolygonArray};
+use geopolars_core::areas;
+use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
@@ -55,25 +56,12 @@ fn kernel_output_type_area_geodesic(input_fields: &[Field]) -> PolarsResult<Fiel
 
 /// The area of every geometry in `geometries`, as `metric` measures it.
 fn measure(metric: &impl AreaMetric<Error: Display>, geometries: &Series) -> PolarsResult<Series> {
-    let multi = match describe(geometries.dtype())?.kind {
-        Kind::Polygon => false,
-        Kind::MultiPolygon => true,
-        kind @ (Kind::Point | Kind::LineString | Kind::MultiPoint | Kind::MultiLineString) => {
-            return Err(encloses_nothing(kind))
-        }
-    };
+    let kind = describe(geometries.dtype())?.kind;
     let storage = geometries.ext()?.storage();
-    let chunks = storage.list()?.downcast_iter().map(|rows| {
-        let areas = if multi {
-            let array = MultiPolygonArray::new_untrimmed(rows)?;
-            geopolars_compute::native::multi_polygon_areas(metric, &array)
-        } else {
-            let array = PolygonArray::new_untrimmed(rows)?;
-            geopolars_compute::native::polygon_areas(metric, &array)
-        }
-        .map_err(|e| polars_err!(ComputeError: "{e}"))?;
-        PolarsResult::Ok(areas)
-    });
+    let chunks = storage
+        .chunks()
+        .iter()
+        .map(|chunk| areas(chunk.as_ref(), kind, metric));
     Ok(Float64Chunked::try_from_chunk_iter(geometries.name().clone(), chunks)?.into_series())
 }
 

@@ -2,7 +2,7 @@
 //! (see [`geopolars_compute::geos::RelatePairs`]).
 
 use geopolars_compute::geos::RelatePairs;
-use geopolars_core::GeometryArray;
+use geopolars_views::GeometryArray;
 use polars::prelude::*;
 use polars_arrow::array::Utf8ViewArray;
 use polars_arrow::datatypes::ArrowDataType;

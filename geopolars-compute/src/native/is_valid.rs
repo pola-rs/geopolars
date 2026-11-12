@@ -12,13 +12,13 @@
 
 use std::ops::Range;
 
-use geopolars_core::{same_place, ValidCoords, ValidList};
+use geopolars_views::{same_place, ValidCoords, ValidList};
 #[cfg(feature = "geos")]
-use geopolars_core::{ScalarPolygon, MIN_RING_VERTICES};
+use geopolars_views::{ScalarPolygon, MIN_RING_VERTICES};
 use polars_arrow::bitmap::Bitmap;
 
 /// Whether `ring` is empty or closed, as GeoArrow asks.
-/// Unlike [is_ring](geopolars_core::is_ring), this asks for no minimum number of vertices.
+/// Unlike [is_ring](geopolars_views::is_ring), this asks for no minimum number of vertices.
 #[inline(always)]
 pub(crate) fn is_closed_or_empty<const Z: bool>(coords: &ValidCoords, ring: Range<usize>) -> bool {
     ring.is_empty() || same_place::<Z>(coords, ring.start, ring.end - 1)

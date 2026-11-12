@@ -7,7 +7,7 @@ use geopolars_compute::native::{
     multi_points_have_repeats_in_succession, multi_polygons_have_repeats_in_succession,
     points_have_repeats_in_succession, polygons_have_repeats_in_succession, Coincidence,
 };
-use geopolars_core::{
+use geopolars_views::{
     downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };

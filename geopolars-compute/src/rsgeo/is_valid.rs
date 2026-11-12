@@ -10,7 +10,7 @@ use ::rsgeo::coordinate_position::CoordPos;
 use ::rsgeo::dimensions::Dimensions;
 use ::rsgeo::relate::IntersectionMatrix;
 use ::rsgeo::{Polygon, PreparedGeometry, Relate};
-use geopolars_core::{ScalarLineString, ScalarMultiPolygon, ScalarPolygon};
+use geopolars_views::{ScalarLineString, ScalarMultiPolygon, ScalarPolygon};
 
 use super::rings_overlap::overlap;
 use super::self_intersects::finite_line_self_intersects;

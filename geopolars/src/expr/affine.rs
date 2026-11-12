@@ -2,16 +2,10 @@
 //! but not necessarily Euclidean distances and angles.
 //! The kernels live in `geopolars_compute::native`.
 
-use geopolars_compute::native::{
-    self, affine_line_strings, affine_multi_line_strings, affine_multi_points,
-    affine_multi_polygons, affine_points, affine_polygons, RowShift,
-};
-use geopolars_core::{
-    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PointArray, PolygonArray,
-};
+use geopolars_compute::native::{self, RowShift};
+use geopolars_core::affine_transform;
+use geopolars_views::{Coords, Kind, PointArray};
 use polars::prelude::*;
-use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -35,53 +29,6 @@ impl From<&AffineMatrix> for native::AffineMatrix {
     }
 }
 
-/// One chunk of `kind` geometries, transformed by `matrix` and `shift`.
-fn chunk_transformed(
-    chunk: &dyn Array,
-    kind: Kind,
-    matrix: &native::AffineMatrix,
-    shift: RowShift,
-) -> PolarsResult<Box<dyn Array>> {
-    Ok(match kind {
-        Kind::Point => {
-            let array = PointArray::new(Coords::new(chunk)?);
-            affine_points(matrix, &array, shift)
-                .into_struct_array()
-                .boxed()
-        }
-        Kind::LineString => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            affine_line_strings(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiPoint => {
-            let array = MultiPointArray::new(downcast(chunk, "a list of coordinates")?)?;
-            affine_multi_points(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::Polygon => {
-            let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
-            affine_polygons(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiLineString => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            affine_multi_line_strings(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiPolygon => {
-            let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
-            affine_multi_polygons(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-    })
-}
-
 /// The kernel behind affine ops like `translate` (see `geo/affine.py`).
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
@@ -91,7 +38,7 @@ fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| chunk_transformed(chunk.as_ref(), kind, &matrix, RowShift::None))
+        .map(|chunk| affine_transform(chunk.as_ref(), kind, &matrix, RowShift::None))
         .collect::<PolarsResult<_>>()?;
     // SAFETY: the geometries keep their kind and dimension, so this is the input's storage.
     Ok(unsafe {
@@ -155,7 +102,7 @@ fn affine_by_points(
     };
     let points = PointArray::new(Coords::new(points.chunks()[0].as_ref())?);
 
-    let chunk = chunk_transformed(
+    let chunk = affine_transform(
         storage.chunks()[0].as_ref(),
         kind,
         &matrix.into(),

@@ -6,7 +6,7 @@ use geopolars_compute::native::{
     multi_polygons_are_empty, points_are_empty, polygons_are_empty,
 };
 use geopolars_compute::with_const_flags;
-use geopolars_core::{
+use geopolars_views::{
     downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };

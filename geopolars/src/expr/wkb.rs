@@ -4,7 +4,7 @@
 
 use ::wkb::reader::read_wkb;
 use ::wkb::writer::{write_geometry, WriteOptions};
-use geopolars_core::{GeometryArray, GeometryBuilder};
+use geopolars_views::{GeometryArray, GeometryBuilder};
 use polars::prelude::*;
 use polars_arrow::array::MutableBinaryViewArray;
 use pyo3_polars::derive::polars_expr;

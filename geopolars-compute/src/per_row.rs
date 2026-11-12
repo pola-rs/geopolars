@@ -7,8 +7,8 @@
 //! The loop over the rows is generic over `ALL_VALID`.
 //! If `ALL_VALID=true`, every row is there, so none is checked for being null.
 
-use geopolars_core::output::{bool_array, f64_array, list_array};
-use geopolars_core::{List, ValidList};
+use geopolars_views::output::{bool_array, f64_array, list_array};
+use geopolars_views::{List, ValidList};
 use polars_arrow::array::{BooleanArray, ListArray, PrimitiveArray};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::Offsets;

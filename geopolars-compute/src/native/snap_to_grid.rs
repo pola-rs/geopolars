@@ -10,7 +10,7 @@
 //! [snapped_axis] is generic over `MODE`, the discriminant of a [RoundMode],
 //! as an enum cannot be a const generic.
 
-use geopolars_core::{
+use geopolars_views::{
     Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, ValidCoords,
 };

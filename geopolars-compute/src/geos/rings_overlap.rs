@@ -8,7 +8,7 @@
 //! Every function here that relates two rings is generic over `TOUCHING`.
 //! If `TOUCHING=true`, rings that only touch overlap too.
 
-use geopolars_core::{is_ring, LineStringArray, ScalarLineString};
+use geopolars_views::{is_ring, LineStringArray, ScalarLineString};
 use geos::{Geometry, PreparedGeometry};
 use polars_arrow::array::BooleanArray;
 use polars_arrow::compute::utils::combine_validities_and;

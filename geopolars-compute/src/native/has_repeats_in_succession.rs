@@ -19,7 +19,7 @@
 //! If `UNIQUE_M=true`, two points only coincide when their m values do too.
 //! A runtime `unique_m` is ignored for coordinates without an m.
 
-use geopolars_core::{
+use geopolars_views::{
     is_close, is_close_abs, same_place, same_place_within, same_place_within_abs, LineStringArray,
     List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray, PolygonArray,
     Tolerance, ValidCoords, ValidList,
@@ -125,7 +125,7 @@ macro_rules! with_coincide {
         use $crate::native::has_repeats_in_succession::{
             coincide_exactly, Coincidence, coincide_within_abs, coincide_within_rel, unique_axes,
         };
-        let coords: &geopolars_core::ValidCoords = $coords;
+        let coords: &geopolars_views::ValidCoords = $coords;
         let (unique_z, unique_m) = unique_axes(coords, $unique_z, $unique_m);
         $crate::with_const_flags!(
             UNIQUE_Z = unique_z, UNIQUE_M = unique_m;
