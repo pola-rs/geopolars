@@ -6,7 +6,7 @@ use geopolars_views::{
     downcast, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PolygonArray,
 };
-use polars_arrow::array::{Array, ListArray};
+use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
 
 use crate::{IntoPolarsResult, NestedKind};
@@ -21,26 +21,27 @@ pub fn convex_hulls(
     ccw_outer: bool,
     early_finite_check: bool,
 ) -> PolarsResult<PolygonArray> {
-    let rows = downcast::<ListArray<i64>>(chunk, "a list of parts")?;
     let (ignore, early) = (ignore_per_row_errors, early_finite_check);
     match kind {
         NestedKind::LineString => {
-            line_string_convex_hulls(&LineStringArray::new(rows)?, ignore, ccw_outer, early)
+            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
+            line_string_convex_hulls(&array, ignore, ccw_outer, early)
         }
         NestedKind::MultiPoint => {
-            multi_point_convex_hulls(&MultiPointArray::new(rows)?, ignore, ccw_outer, early)
+            let array = MultiPointArray::new(downcast(chunk, "a list of coordinates")?)?;
+            multi_point_convex_hulls(&array, ignore, ccw_outer, early)
         }
-        NestedKind::MultiLineString => multi_line_string_convex_hulls(
-            &MultiLineStringArray::new(rows)?,
-            ignore,
-            ccw_outer,
-            early,
-        ),
+        NestedKind::MultiLineString => {
+            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
+            multi_line_string_convex_hulls(&array, ignore, ccw_outer, early)
+        }
         NestedKind::Polygon => {
-            polygon_convex_hulls(&PolygonArray::new(rows)?, ignore, ccw_outer, early)
+            let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
+            polygon_convex_hulls(&array, ignore, ccw_outer, early)
         }
         NestedKind::MultiPolygon => {
-            multi_polygon_convex_hulls(&MultiPolygonArray::new(rows)?, ignore, ccw_outer, early)
+            let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
+            multi_polygon_convex_hulls(&array, ignore, ccw_outer, early)
         }
     }
     .into_polars()
