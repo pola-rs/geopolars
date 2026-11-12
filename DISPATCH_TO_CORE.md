@@ -37,19 +37,19 @@ Moving these first means the expressions that use them only need their imports c
 - [x] `offset_curve`: `offset_curve`
 - [x] `remove_repeats_in_succession`: `remove_repeats_in_succession`
 - [x] `reverse`: `reverse`
-- [ ] `rings`: `exterior`, `interior`
-- [ ] `simplify`: `simplify`
-- [ ] `snap_to_grid`: `snap_to_grid`
-- [ ] `sort_parts`: `sort_parts`
-- [ ] `to_ccw`: `to_ccw`
-- [ ] `buffer`: `buffer` (only picks the multi or single output; the array goes through `geometry_array`)
+- [x] `rings`: `exterior`, `interior`
+- [x] `simplify`: `simplify`
+- [x] `snap_to_grid`: `snap_to_grid`
+- [x] `sort_parts`: `sort_parts`
+- [x] `to_ccw`: `to_ccw`
+- [x] `buffer`: `buffer` (only picks the multi or single output; the array goes through `geometry_array`)
 
 ## Two geometry columns
 
-- [ ] `distance`: `distance` (`aligned_pairs` + `Kind` match)
-- [ ] `is_equal`: `is_equal` (`aligned_pairs` + `Kind` match)
-- [ ] `rings_overlap`: `rings_overlap` (`aligned_pairs` + `Kind` match)
-- [ ] `relate`: `relate` (via `geometry_array`)
+- [x] `distance`: `distance` (`aligned_pairs` + `Kind` match)
+- [x] `is_equal`: `is_equal` (`aligned_pairs` + `Kind` match)
+- [x] `rings_overlap`: `rings_overlap` (`aligned_pairs` + `Kind` match)
+- [x] `relate`: `relate` (via `geometry_array`)
 - [ ] `overlay`: `intersection`, `difference` (via `geometry_array`, plus a `Kind` match on the output)
 - [ ] `is_topologically_equal`: `is_topologically_equal` (via `geometry_array`)
 - [ ] `shortest_line_between`: `shortest_line_between` (via `geometry_array`)

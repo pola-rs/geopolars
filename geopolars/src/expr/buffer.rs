@@ -1,16 +1,13 @@
 //! The buffer of any geometry, forwarded to GEOS.
 
-use geopolars_compute::geos::{
-    buffer_into_multi_polygons, buffer_into_polygons, BufferDistance, BufferStyle, CapStyle,
-    JoinStyle, Side,
-};
-use geopolars_views::{GeoDimension, GeometryArray, Kind, MultiPolygonArray, PolygonArray};
+use geopolars_compute::geos::{BufferDistance, BufferStyle, CapStyle, JoinStyle, Side};
+use geopolars_core::buffers;
+use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
-use polars_arrow::array::{Array, ListArray};
+use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{describe, Geo};
 
 /// A multipolygon for a multi-kind, or with `allow_splitting`,
@@ -85,17 +82,12 @@ pub struct BufferKwargs {
     early_finite_check: bool,
 }
 
-/// One chunk of `kind` geometries, buffered.
-/// If `into_multi=true`, as multipolygons; otherwise as polygons.
-fn chunk_buffered(
-    chunk: &dyn Array,
-    kind: Kind,
-    into_multi: bool,
-    distance: BufferDistance,
-    kwargs: &BufferKwargs,
-) -> PolarsResult<ListArray<i64>> {
+/// See `buffer`.
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_buffer)]
+fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
+    let (dtype, kind, into_multi) = buffered_type(inputs[0].dtype(), &kwargs)?;
     let BufferKwargs {
-        distance: _,
+        distance,
         quadrant_segments,
         cap_style,
         join_style,
@@ -105,7 +97,7 @@ fn chunk_buffered(
         ccw_outer,
         ignore_per_row_errors,
         early_finite_check,
-    } = *kwargs;
+    } = kwargs;
     let style = &BufferStyle {
         quadrant_segments,
         cap_style,
@@ -113,24 +105,17 @@ fn chunk_buffered(
         mitre_limit,
         side,
     };
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-    let array = &GeometryArray::new(chunk, kind)?;
-    if into_multi {
-        buffer_into_multi_polygons(array, distance, style, ccw_outer, ignore, early)
-            .map(MultiPolygonArray::into_list_array)
-    } else {
-        buffer_into_polygons(array, distance, style, ccw_outer, ignore, early)
-            .map(PolygonArray::into_list_array)
-    }
-    .into_polars()
-}
-
-/// See `buffer`.
-#[polars_expr(output_type_func_with_kwargs=kernel_output_type_buffer)]
-fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
-    let (dtype, kind, into_multi) = buffered_type(inputs[0].dtype(), &kwargs)?;
-    let chunks = chunks_by_distance(inputs, kwargs.distance, |rows, distance| {
-        chunk_buffered(rows, kind, into_multi, distance, &kwargs)
+    let chunks = chunks_by_distance(inputs, distance, |rows, distance| {
+        buffers(
+            rows,
+            kind,
+            into_multi,
+            distance,
+            style,
+            ccw_outer,
+            ignore_per_row_errors,
+            early_finite_check,
+        )
     })?;
     // SAFETY: the buffers are XY polygons or multipolygons, as `dtype` says.
     Ok(

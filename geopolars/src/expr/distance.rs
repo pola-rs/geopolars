@@ -7,9 +7,9 @@ use std::fmt::Display;
 use std::rc::Rc;
 
 use geopolars_compute::native::DistanceMetric;
-use geopolars_compute::with_const_flags;
 use geopolars_compute::{GeodesicMetric, Planar};
-use geopolars_views::{Coords, Kind, PointArray};
+use geopolars_core::{distances_to_one, pairwise_distances};
+use geopolars_views::Kind;
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
@@ -119,65 +119,27 @@ fn kernel_output_type_distance(
     ))
 }
 
-/// [geopolars_compute::native::pairwise], into a polars array.
-fn pairwise<const Z: bool>(
-    metric: &impl DistanceMetric<Error: Display>,
-    a: &PointArray,
-    b: &PointArray,
-) -> PolarsResult<PrimitiveArray<f64>> {
-    geopolars_compute::native::pairwise::<Z, true, _>(metric, a, b)
-        .map_err(|e| polars_err!(ComputeError: "{e}"))
-}
-
-/// [geopolars_compute::native::against_one], into a polars array.
-fn against_one<const Z: bool>(
-    metric: &impl DistanceMetric<Error: Display>,
-    one: [f64; 3],
-    many: &PointArray,
-) -> PolarsResult<PrimitiveArray<f64>> {
-    geopolars_compute::native::against_one::<Z, true, _>(metric, one, many)
-        .map_err(|e| polars_err!(ComputeError: "{e}"))
-}
-
-fn points(chunk: &ArrayRef) -> PolarsResult<PointArray> {
-    Ok(PointArray::new(Coords::new(chunk.as_ref())?))
-}
-
-fn measure_chunks<const Z: bool>(
-    metric: &impl DistanceMetric<Error: Display>,
-    a: &Series,
-    b: &Series,
-) -> PolarsResult<Vec<PrimitiveArray<f64>>> {
-    Ok(match aligned_pairs(a, b)? {
-        GeometryPairs::Pairwise(pairs) => pairs
-            .iter()
-            .map(|(a, b)| pairwise::<Z>(metric, &points(a)?, &points(b)?))
-            .collect::<PolarsResult<Vec<_>>>()?,
-        // Distance goes both ways, so it does not matter which side `one` came from.
-        GeometryPairs::OneAgainstMany { a: one, b: many }
-        | GeometryPairs::ManyAgainstOne { a: many, b: one } => {
-            let one = points(&one)?
-                .get(0)
-                .position::<false, Z>()
-                .expect("`NULLS=false` always gives one");
-            many.iter()
-                .map(|many| against_one::<Z>(metric, one, &points(many)?))
-                .collect::<PolarsResult<Vec<_>>>()?
-        }
-        GeometryPairs::AllNull(lengths) => lengths
-            .iter()
-            .map(|&rows| PrimitiveArray::new_null(ArrowDataType::Float64, rows))
-            .collect(),
-    })
-}
-
 /// The distance between the points of `inputs[0]` and `inputs[1]`, measured with `metric`.
 fn measure(
     metric: &impl DistanceMetric<Error: Display>,
     inputs: &[Series],
 ) -> PolarsResult<Series> {
-    let z = describe(inputs[0].dtype())?.dim.has_z() && describe(inputs[1].dtype())?.dim.has_z();
-    let chunks = with_const_flags!(Z = z; measure_chunks::<Z>(metric, &inputs[0], &inputs[1]))?;
+    let chunks = match aligned_pairs(&inputs[0], &inputs[1])? {
+        GeometryPairs::Pairwise(pairs) => pairs
+            .iter()
+            .map(|(a, b)| pairwise_distances(a.as_ref(), b.as_ref(), metric))
+            .collect::<PolarsResult<Vec<_>>>()?,
+        // Distance goes both ways, so it does not matter which side `one` came from.
+        GeometryPairs::OneAgainstMany { a: one, b: many }
+        | GeometryPairs::ManyAgainstOne { a: many, b: one } => many
+            .iter()
+            .map(|many| distances_to_one(one.as_ref(), many.as_ref(), metric))
+            .collect::<PolarsResult<Vec<_>>>()?,
+        GeometryPairs::AllNull(lengths) => lengths
+            .iter()
+            .map(|&rows| PrimitiveArray::new_null(ArrowDataType::Float64, rows))
+            .collect(),
+    };
     Ok(Float64Chunked::from_chunk_iter(inputs[0].name().clone(), chunks).into_series())
 }
 

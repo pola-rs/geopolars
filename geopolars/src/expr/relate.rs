@@ -1,15 +1,12 @@
 //! The DE-9IM matrix of two geometries
 //! (see [`geopolars_compute::geos::RelatePairs`]).
 
-use geopolars_compute::geos::RelatePairs;
-use geopolars_views::GeometryArray;
 use polars::prelude::*;
 use polars_arrow::array::Utf8ViewArray;
 use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{
     describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, GeometryPairs,
 };
@@ -54,15 +51,7 @@ fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
     let chunks = chunk_pairs
         .iter()
-        .map(|(a, b)| {
-            let (a, b) = (
-                GeometryArray::new(a.as_ref(), a_kind)?,
-                GeometryArray::new(b.as_ref(), b_kind)?,
-            );
-            RelatePairs::new(&a, &b, ignore, early)
-                .and_then(|pairs| pairs.to_strings())
-                .into_polars()
-        })
+        .map(|(a, b)| geopolars_core::relate(a.as_ref(), a_kind, b.as_ref(), b_kind, ignore, early))
         .collect::<PolarsResult<Vec<_>>>()?;
     Ok(StringChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
 }
