@@ -40,6 +40,14 @@ Some operations require geometries to be passed individually,
 such as implementation of geo-traits for the `wkb` and `wkt` writers.
 These are types like `ScalarPoint`, `ScalarLineString`, etc.
 
+## Methods on the views
+
+A method on a view must cost nothing:
+O(1) per call, without allocating or writing,
+such as an accessor, a range or a span.
+Building a view (its constructors, and the trimming in `new`) is the exception.
+Anything that loops over the coordinates, allocates or writes belongs in `utils` in `geopolars-compute`.
+
 ## Views that might be invalid GeoArrow
 
 For reading and interop we might get data that is not valid GeoArrow.
