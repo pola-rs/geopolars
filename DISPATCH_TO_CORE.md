@@ -22,11 +22,11 @@ Moving these first means the expressions that use them only need their imports c
 - [x] `close_rings`: `close_rings`
 - [x] `convex_hull`: `convex_hull`
 - [x] `count_coordinates`: `count_coordinates`
-- [ ] `crs`: `to_crs`
-- [ ] `filter_coordinates`: `filter_coordinates`
-- [ ] `fix_out_of_bounds`: `fix_out_of_bounds`
-- [ ] `has_repeats_in_succession`: `has_repeats_in_succession`
-- [ ] `is_ccw`: `is_ccw`
+- [x] `crs`: `to_crs`
+- [x] `filter_coordinates`: `filter_coordinates`
+- [x] `fix_out_of_bounds`: `fix_out_of_bounds`
+- [x] `has_repeats_in_succession`: `has_repeats_in_succession`
+- [x] `is_ccw`: `is_ccw`
 - [ ] `is_empty`: `is_empty`
 - [ ] `is_ring`: `is_ring`
 - [ ] `is_simple`: `is_simple`

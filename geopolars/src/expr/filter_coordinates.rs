@@ -2,17 +2,9 @@
 //! through `geopolars_compute::native::*_with_selected`.
 //! See `filter_coordinates` in Python for the rules.
 
-use geopolars_compute::native::{
-    line_strings_with_selected, multi_line_strings_with_selected, multi_points_with_selected,
-    multi_polygons_with_selected, points_with_selected, polygons_with_selected,
-    CoordinateSelection, NonFinite, SelectedAction, TooShort,
-};
-use geopolars_views::{
-    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PointArray, PolygonArray,
-};
+use geopolars_compute::native::{CoordinateSelection, NonFinite, SelectedAction, TooShort};
+use geopolars_core::with_selected_coords;
 use polars::prelude::*;
-use polars_arrow::array::{Array, ListArray};
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -56,62 +48,6 @@ impl NonFiniteKwargs {
     }
 }
 
-/// `action` on the coordinates `selection` selects, for one chunk of the storage of a `kind`.
-/// Shared by [`filter_coordinates`] and `fix_out_of_bounds`.
-pub(super) fn chunk_with_selected(
-    chunk: &dyn Array,
-    kind: Kind,
-    selection: &CoordinateSelection,
-    action: SelectedAction,
-    too_short: TooShort,
-) -> PolarsResult<Box<dyn Array>> {
-    let rows = || downcast::<ListArray<i64>>(chunk, "a list of parts");
-    Ok(match kind {
-        Kind::Point => {
-            points_with_selected(&PointArray::new(Coords::new(chunk)?), selection, action)
-                .into_struct_array()
-                .boxed()
-        }
-        Kind::LineString => line_strings_with_selected(
-            &LineStringArray::new(rows()?)?,
-            selection,
-            action,
-            too_short,
-        )
-        .into_list_array()
-        .boxed(),
-        Kind::MultiPoint => multi_points_with_selected(
-            &MultiPointArray::new(rows()?)?,
-            selection,
-            action,
-            too_short,
-        )
-        .into_list_array()
-        .boxed(),
-        Kind::Polygon => {
-            polygons_with_selected(&PolygonArray::new(rows()?)?, selection, action, too_short)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiLineString => multi_line_strings_with_selected(
-            &MultiLineStringArray::new(rows()?)?,
-            selection,
-            action,
-            too_short,
-        )
-        .into_list_array()
-        .boxed(),
-        Kind::MultiPolygon => multi_polygons_with_selected(
-            &MultiPolygonArray::new(rows()?)?,
-            selection,
-            action,
-            too_short,
-        )
-        .into_list_array()
-        .boxed(),
-    })
-}
-
 /// See `filter_coordinates`.
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn filter_coordinates(inputs: &[Series], kwargs: NonFiniteKwargs) -> PolarsResult<Series> {
@@ -122,7 +58,7 @@ fn filter_coordinates(inputs: &[Series], kwargs: NonFiniteKwargs) -> PolarsResul
         .chunks()
         .iter()
         .map(|chunk| {
-            chunk_with_selected(
+            with_selected_coords(
                 chunk.as_ref(),
                 kind,
                 &selection,

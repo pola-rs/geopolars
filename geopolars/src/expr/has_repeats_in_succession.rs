@@ -2,17 +2,9 @@
 //! through `geopolars_compute::native::*_have_repeats_in_succession`.
 //! See `has_repeats_in_succession` in Python for the rules.
 
-use geopolars_compute::native::{
-    line_strings_have_repeats_in_succession, multi_line_strings_have_repeats_in_succession,
-    multi_points_have_repeats_in_succession, multi_polygons_have_repeats_in_succession,
-    points_have_repeats_in_succession, polygons_have_repeats_in_succession, Coincidence,
-};
-use geopolars_views::{
-    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PointArray, PolygonArray,
-};
+use geopolars_compute::native::Coincidence;
+use geopolars_core::have_repeats_in_succession;
 use polars::prelude::*;
-use polars_arrow::array::{Array, BooleanArray, ListArray};
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -26,50 +18,6 @@ pub struct HasRepeatsInSuccessionKwargs {
     rel_tol: Option<f64>,
     unique_z: bool,
     unique_m: bool,
-}
-
-/// [`has_repeats_in_succession`] for one chunk of the storage of a `kind`.
-fn chunk_has_repeats_in_succession(
-    chunk: &dyn Array,
-    kind: Kind,
-    coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
-) -> PolarsResult<BooleanArray> {
-    let rows = || downcast::<ListArray<i64>>(chunk, "a list of parts");
-    Ok(match kind {
-        Kind::Point => points_have_repeats_in_succession(&PointArray::new(Coords::new(chunk)?)),
-        Kind::LineString => line_strings_have_repeats_in_succession(
-            &LineStringArray::new(rows()?)?,
-            coincidence,
-            unique_z,
-            unique_m,
-        ),
-        Kind::MultiPoint => multi_points_have_repeats_in_succession(
-            &MultiPointArray::new(rows()?)?,
-            coincidence,
-            unique_z,
-            unique_m,
-        ),
-        Kind::MultiLineString => multi_line_strings_have_repeats_in_succession(
-            &MultiLineStringArray::new(rows()?)?,
-            coincidence,
-            unique_z,
-            unique_m,
-        ),
-        Kind::Polygon => polygons_have_repeats_in_succession(
-            &PolygonArray::new(rows()?)?,
-            coincidence,
-            unique_z,
-            unique_m,
-        ),
-        Kind::MultiPolygon => multi_polygons_have_repeats_in_succession(
-            &MultiPolygonArray::new(rows()?)?,
-            coincidence,
-            unique_z,
-            unique_m,
-        ),
-    })
 }
 
 /// For [`has_repeats_in_succession`]: a `bool` per geometry.
@@ -90,7 +38,7 @@ fn has_repeats_in_succession(
     let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol);
     let storage = geometries.ext()?.storage();
     let chunks = storage.chunks().iter().map(|chunk| {
-        chunk_has_repeats_in_succession(
+        have_repeats_in_succession(
             chunk.as_ref(),
             kind,
             coincidence,
