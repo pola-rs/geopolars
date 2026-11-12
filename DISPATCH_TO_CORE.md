@@ -27,16 +27,16 @@ Moving these first means the expressions that use them only need their imports c
 - [x] `fix_out_of_bounds`: `fix_out_of_bounds`
 - [x] `has_repeats_in_succession`: `has_repeats_in_succession`
 - [x] `is_ccw`: `is_ccw`
-- [ ] `is_empty`: `is_empty`
-- [ ] `is_ring`: `is_ring`
-- [ ] `is_simple`: `is_simple`
-- [ ] `is_valid`: `is_valid_geoarrow`, `is_valid_ogc`, `null_out_invalid_geoarrow`, `null_out_invalid_ogc`
-- [ ] `join_line_strings`: `join_line_strings`
-- [ ] `length`: `length`
-- [ ] `line_interpolate_point`: `line_interpolate_point`
-- [ ] `offset_curve`: `offset_curve`
-- [ ] `remove_repeats_in_succession`: `remove_repeats_in_succession`
-- [ ] `reverse`: `reverse`
+- [x] `is_empty`: `is_empty`
+- [x] `is_ring`: `is_ring`
+- [x] `is_simple`: `is_simple`
+- [x] `is_valid`: `is_valid_geoarrow`, `is_valid_ogc`, `null_out_invalid_geoarrow`, `null_out_invalid_ogc`
+- [x] `join_line_strings`: `join_line_strings`
+- [x] `length`: `length`
+- [x] `line_interpolate_point`: `line_interpolate_point`
+- [x] `offset_curve`: `offset_curve`
+- [x] `remove_repeats_in_succession`: `remove_repeats_in_succession`
+- [x] `reverse`: `reverse`
 - [ ] `rings`: `exterior`, `interior`
 - [ ] `simplify`: `simplify`
 - [ ] `snap_to_grid`: `snap_to_grid`

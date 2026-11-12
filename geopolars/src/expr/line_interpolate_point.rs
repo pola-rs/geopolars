@@ -1,14 +1,11 @@
-use geopolars_compute::geos::{
-    interpolate_line_strings, interpolate_multi_line_strings, BufferDistance, InterpolateMode,
-};
-use geopolars_views::{downcast, Kind, LineStringArray, MultiLineStringArray, PointArray};
+use geopolars_compute::geos::InterpolateMode;
+use geopolars_core::interpolated_points;
+use geopolars_views::Kind;
 use polars::prelude::*;
-use polars_arrow::array::{Array, StructArray};
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::buffer::chunks_by_distance;
-use super::IntoPolarsResult;
 use crate::geoarrow::{describe, Geo};
 
 /// A point with the input's dimension and metadata.
@@ -53,37 +50,6 @@ pub struct LineInterpolatePointKwargs {
     early_finite_check: bool,
 }
 
-/// The interpolated points of one chunk of `kind` geometries.
-fn chunk_interpolated(
-    chunk: &dyn Array,
-    kind: Kind,
-    distance: BufferDistance,
-    kwargs: &LineInterpolatePointKwargs,
-) -> PolarsResult<StructArray> {
-    let LineInterpolatePointKwargs {
-        distance: _,
-        mode,
-        ignore_per_row_errors,
-        early_finite_check,
-    } = *kwargs;
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-    match kind {
-        Kind::LineString => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            interpolate_line_strings(&array, distance, mode, ignore, early)
-        }
-        Kind::MultiLineString => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            interpolate_multi_line_strings(&array, distance, mode, ignore, early)
-        }
-        Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon => {
-            unreachable!("refused by `line_interpolate_point_type`")
-        }
-    }
-    .map(PointArray::into_struct_array)
-    .into_polars()
-}
-
 /// See `line_interpolate_point`.
 #[polars_expr(output_type_func=kernel_output_type_line_interpolate_point)]
 fn line_interpolate_point(
@@ -91,8 +57,22 @@ fn line_interpolate_point(
     kwargs: LineInterpolatePointKwargs,
 ) -> PolarsResult<Series> {
     let (dtype, kind) = line_interpolate_point_type(inputs[0].dtype())?;
-    let chunks = chunks_by_distance(inputs, kwargs.distance, |rows, distance| {
-        chunk_interpolated(rows, kind, distance, &kwargs)
+    let LineInterpolatePointKwargs {
+        distance,
+        mode,
+        ignore_per_row_errors,
+        early_finite_check,
+    } = kwargs;
+    let chunks = chunks_by_distance(inputs, distance, |rows, distance| {
+        let points = interpolated_points(
+            rows,
+            kind,
+            distance,
+            mode,
+            ignore_per_row_errors,
+            early_finite_check,
+        )?;
+        Ok(points.into_struct_array())
     })?;
     // SAFETY: the points have the input's dimension, as `dtype` says.
     Ok(

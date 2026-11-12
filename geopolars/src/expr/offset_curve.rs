@@ -1,17 +1,13 @@
 //! The offset curve of a linestring or multilinestring, forwarded to GEOS.
 
-use geopolars_compute::geos::{
-    offset_curves_into_line_strings, offset_curves_into_multi_line_strings, BufferDistance,
-    JoinStyle, OffsetCurveStyle,
-};
-use geopolars_views::{downcast, GeoDimension, Kind, LineStringArray, MultiLineStringArray};
+use geopolars_compute::geos::{JoinStyle, OffsetCurveStyle};
+use geopolars_core::offset_curves;
+use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
-use polars_arrow::array::{Array, ListArray};
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::buffer::{chunks_by_distance, JoinStyleDef};
-use super::IntoPolarsResult;
 use crate::geoarrow::{describe, Geo};
 
 /// Python refuses any other kind, so it never gets here.
@@ -72,59 +68,34 @@ pub struct OffsetCurveKwargs {
     early_finite_check: bool,
 }
 
-/// The offset curves of one chunk of `kind` geometries.
-/// If `into_multi=true`, as multilinestrings; otherwise as linestrings.
-fn chunk_offset_curves(
-    chunk: &dyn Array,
-    kind: Kind,
-    into_multi: bool,
-    distance: BufferDistance,
-    kwargs: &OffsetCurveKwargs,
-) -> PolarsResult<ListArray<i64>> {
+/// See `offset_curve`.
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_offset_curve)]
+fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Series> {
+    let (dtype, kind, into_multi) = offset_curve_type(inputs[0].dtype(), &kwargs)?;
     let OffsetCurveKwargs {
-        distance: _,
+        distance,
         quadrant_segments,
         join_style,
         mitre_limit,
         allow_splitting: _,
         ignore_per_row_errors,
         early_finite_check,
-    } = *kwargs;
+    } = kwargs;
     let style = &OffsetCurveStyle {
         quadrant_segments,
         join_style,
         mitre_limit,
     };
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-    match (kind, into_multi) {
-        (Kind::LineString, false) => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            offset_curves_into_line_strings(&array, distance, style, ignore, early)
-                .map(LineStringArray::into_list_array)
-        }
-        (Kind::LineString, true) => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            offset_curves_into_multi_line_strings(&array, distance, style, ignore, early)
-                .map(MultiLineStringArray::into_list_array)
-        }
-        (Kind::MultiLineString, _) => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            offset_curves_into_multi_line_strings(&array, distance, style, ignore, early)
-                .map(MultiLineStringArray::into_list_array)
-        }
-        (Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon, _) => {
-            unreachable!("refused by `offset_curve_type`")
-        }
-    }
-    .into_polars()
-}
-
-/// See `offset_curve`.
-#[polars_expr(output_type_func_with_kwargs=kernel_output_type_offset_curve)]
-fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Series> {
-    let (dtype, kind, into_multi) = offset_curve_type(inputs[0].dtype(), &kwargs)?;
-    let chunks = chunks_by_distance(inputs, kwargs.distance, |rows, distance| {
-        chunk_offset_curves(rows, kind, into_multi, distance, &kwargs)
+    let chunks = chunks_by_distance(inputs, distance, |rows, distance| {
+        offset_curves(
+            rows,
+            kind,
+            into_multi,
+            distance,
+            style,
+            ignore_per_row_errors,
+            early_finite_check,
+        )
     })?;
     // SAFETY: the offset curves are XY linestrings or multilinestrings, as `dtype` says.
     Ok(

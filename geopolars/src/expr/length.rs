@@ -5,11 +5,10 @@
 use std::fmt::Display;
 
 use geopolars_compute::native::LengthMetric;
-use geopolars_compute::with_const_flags;
 use geopolars_compute::Planar;
-use geopolars_views::{Kind, LineStringArray, MultiLineStringArray};
+use geopolars_core::lengths;
+use geopolars_views::Kind;
 use polars::prelude::*;
-use polars_arrow::array::PrimitiveArray;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -67,55 +66,18 @@ fn kernel_output_type_length(input_fields: &[Field], kwargs: LengthKwargs) -> Po
     length_dtype(&input_fields[0])
 }
 
-/// [geopolars_compute::native::line_string_lengths], into a polars array.
-fn line_string_lengths<const Z: bool, const IGNORE_NAN: bool>(
-    metric: &impl LengthMetric<Error: Display>,
-    array: &LineStringArray,
-) -> PolarsResult<PrimitiveArray<f64>> {
-    geopolars_compute::native::line_string_lengths::<Z, IGNORE_NAN, _>(metric, array)
-        .map_err(|e| polars_err!(ComputeError: "{e}"))
-}
-
-/// [geopolars_compute::native::multi_line_string_lengths], into a polars array.
-fn multi_line_string_lengths<const Z: bool, const IGNORE_NAN: bool>(
-    metric: &impl LengthMetric<Error: Display>,
-    array: &MultiLineStringArray,
-) -> PolarsResult<PrimitiveArray<f64>> {
-    geopolars_compute::native::multi_line_string_lengths::<Z, IGNORE_NAN, _>(metric, array)
-        .map_err(|e| polars_err!(ComputeError: "{e}"))
-}
-
 /// The length of every geometry in `geometries`, as `metric` measures it.
 fn measure(
     metric: &impl LengthMetric<Error: Display>,
     geometries: &Series,
     ignore_nan: bool,
 ) -> PolarsResult<Series> {
-    let multi = match describe(geometries.dtype())?.kind {
-        Kind::LineString => false,
-        Kind::MultiLineString => true,
-        kind @ (Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon) => {
-            return Err(has_no_length(kind))
-        }
-    };
+    let kind = describe(geometries.dtype())?.kind;
     let storage = geometries.ext()?.storage();
-    let chunks = storage.list()?.downcast_iter().map(|rows| {
-        if multi {
-            let array = MultiLineStringArray::new(rows)?;
-            let z = array.coords.dim().has_z();
-            with_const_flags!(
-                Z = z, IGNORE_NAN = ignore_nan;
-                multi_line_string_lengths::<Z, IGNORE_NAN>(metric, &array)
-            )
-        } else {
-            let array = LineStringArray::new(rows)?;
-            let z = array.coords.dim().has_z();
-            with_const_flags!(
-                Z = z, IGNORE_NAN = ignore_nan;
-                line_string_lengths::<Z, IGNORE_NAN>(metric, &array)
-            )
-        }
-    });
+    let chunks = storage
+        .chunks()
+        .iter()
+        .map(|chunk| lengths(chunk.as_ref(), kind, metric, ignore_nan));
     Ok(Float64Chunked::try_from_chunk_iter(geometries.name().clone(), chunks)?.into_series())
 }
 

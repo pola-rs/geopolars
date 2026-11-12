@@ -16,7 +16,17 @@ mod filter_coordinates;
 mod fix_out_of_bounds;
 mod has_repeats_in_succession;
 mod is_ccw;
+mod is_empty;
+mod is_ring;
+mod is_simple;
+mod is_valid;
+mod join_line_strings;
+mod length;
+mod line_interpolate_point;
+mod offset_curve;
 mod parts;
+mod remove_repeats_in_succession;
+mod reverse;
 
 pub use add_holes::{add_holes, EmptyExterior};
 pub use add_parts::{add_parts, EmptyParts};
@@ -32,10 +42,20 @@ pub use filter_coordinates::with_selected_coords;
 pub use fix_out_of_bounds::with_clamped_coords;
 pub use has_repeats_in_succession::have_repeats_in_succession;
 pub use is_ccw::are_ccw;
+pub use is_empty::are_empty;
+pub use is_ring::are_rings;
+pub use is_simple::are_simple;
+pub use is_valid::{are_valid, Validity};
+pub use join_line_strings::{join_line_strings, JoinGaps};
+pub use length::lengths;
+pub use line_interpolate_point::interpolated_points;
+pub use offset_curve::offset_curves;
 pub use parts::{
     closed_rings, lines_per_row, one_ring_per_row, rows_validity, validated_polygons, CloseRings,
     NullParts,
 };
+pub use remove_repeats_in_succession::without_repeats_in_succession;
+pub use reverse::reverse;
 
 use geopolars_compute::GeoComputeResult;
 use geopolars_views::Kind;

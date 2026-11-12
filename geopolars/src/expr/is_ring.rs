@@ -2,9 +2,8 @@
 //! or whether the parts of a multilinestring chain into one
 //! (see [`geopolars_compute::native::multi_line_strings_are_rings`]).
 
-use geopolars_compute::native::{line_strings_are_rings, multi_line_strings_are_rings};
-use geopolars_compute::with_const_flags;
-use geopolars_views::{Kind, LineStringArray, MultiLineStringArray};
+use geopolars_core::are_rings;
+use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
@@ -34,20 +33,9 @@ fn kernel_output_type_is_ring(input_fields: &[Field]) -> PolarsResult<Field> {
 fn is_ring(inputs: &[Series]) -> PolarsResult<Series> {
     let kind = line_kind(&inputs[0].field())?;
     let storage = inputs[0].ext()?.storage();
-    let name = inputs[0].name().clone();
-    let chunks = storage.list()?.downcast_iter();
-    if kind == Kind::LineString {
-        let chunks = chunks.map(|rows| {
-            let array = LineStringArray::new_untrimmed(rows)?;
-            let z = array.coords().dim().has_z();
-            PolarsResult::Ok(with_const_flags!(Z = z; line_strings_are_rings::<Z>(&array)))
-        });
-        return Ok(BooleanChunked::try_from_chunk_iter(name, chunks)?.into_series());
-    }
-    let chunks = chunks.map(|rows| {
-        let array = MultiLineStringArray::new_untrimmed(rows)?;
-        let z = array.coords().dim().has_z();
-        PolarsResult::Ok(with_const_flags!(Z = z; multi_line_strings_are_rings::<Z>(&array)))
-    });
-    Ok(BooleanChunked::try_from_chunk_iter(name, chunks)?.into_series())
+    let chunks = storage
+        .chunks()
+        .iter()
+        .map(|chunk| are_rings(chunk.as_ref(), kind));
+    Ok(BooleanChunked::try_from_chunk_iter(inputs[0].name().clone(), chunks)?.into_series())
 }
