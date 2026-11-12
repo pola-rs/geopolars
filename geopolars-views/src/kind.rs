@@ -96,11 +96,17 @@ impl Kind {
         Kind::ALL.into_iter().find(|kind| kind.display() == display)
     }
 
-    /// The names, for an error message:
-    /// e.g. `geoarrow.point` or `geoarrow.linestring`.
+    /// The names of every kind, for an error message.
+    /// See [`Kind::names_of`].
     pub fn names() -> String {
-        let names: Vec<String> = Kind::ALL
-            .iter()
+        Kind::names_of(Kind::ALL)
+    }
+
+    /// The names of `kinds`, for an error message:
+    /// e.g. `geoarrow.point` or `geoarrow.linestring`.
+    pub fn names_of(kinds: impl IntoIterator<Item = Kind>) -> String {
+        let names: Vec<String> = kinds
+            .into_iter()
             .map(|kind| format!("`{}`", kind.name()))
             .collect();
         match names.split_last() {

@@ -1,6 +1,6 @@
 //! The rings of a polygon (see the `rings` module of `geopolars_compute::native`).
 
-use geopolars_core::{exteriors, interiors};
+use geopolars_core::{exteriors, interiors, PolygonKind};
 use geopolars_views::Kind;
 use polars::prelude::*;
 use polars_arrow::array::Array;
@@ -11,22 +11,15 @@ use crate::geoarrow::{describe, Geo};
 /// A `kind` per polygon, or a list of them per multipolygon,
 /// with the input's dimension and metadata.
 /// Also the kind of the input.
-fn rings_type(dtype: &DataType, name: &str, kind: Kind) -> PolarsResult<(DataType, Kind)> {
+fn rings_type(dtype: &DataType, name: &str, kind: Kind) -> PolarsResult<(DataType, PolygonKind)> {
     let geo = describe(dtype)?;
-    let multi = match geo.kind {
-        Kind::Polygon => false,
-        Kind::MultiPolygon => true,
-        _ => polars_bail!(
-            SchemaMismatch: "{name} expects a polygon or multipolygon column, got: {}", dtype
-        ),
-    };
+    let polygon_kind = PolygonKind::new(name, geo.kind)?;
     let part = Geo::new(kind, geo.dim, geo.metadata.clone()).dtype();
-    let dtype = if multi {
-        DataType::List(Box::new(part))
-    } else {
-        part
+    let dtype = match polygon_kind {
+        PolygonKind::Polygon => part,
+        PolygonKind::MultiPolygon => DataType::List(Box::new(part)),
     };
-    Ok((dtype, geo.kind))
+    Ok((dtype, polygon_kind))
 }
 
 /// For [`exterior`].
@@ -45,8 +38,8 @@ fn kernel_output_type_interior(input_fields: &[Field]) -> PolarsResult<Field> {
 fn per_chunk(
     inputs: &[Series],
     dtype: &DataType,
-    kind: Kind,
-    rings: fn(&dyn Array, Kind) -> PolarsResult<Box<dyn Array>>,
+    kind: PolygonKind,
+    rings: fn(&dyn Array, PolygonKind) -> PolarsResult<Box<dyn Array>>,
 ) -> PolarsResult<Series> {
     let storage = inputs[0].ext()?.storage();
     let chunks = storage

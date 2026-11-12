@@ -1,6 +1,6 @@
 //! The convex hull of a linestring or polygon, or their multi-variants, forwarded to GEOS.
 
-use geopolars_core::convex_hulls;
+use geopolars_core::{convex_hulls, NestedKind};
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
@@ -9,33 +9,18 @@ use serde::Deserialize;
 use crate::geoarrow::{describe, Geo};
 
 /// A point encloses nothing, so it is refused.
-fn encloses_nothing(dtype: &DataType) -> PolarsError {
-    polars_err!(
-        SchemaMismatch:
-        "convex_hull expects a linestring, polygon, multipoint, multilinestring or multipolygon column, got: {}",
-        dtype
-    )
-}
-
 /// A polygon per geometry, with the input's metadata and z, but without m.
 /// Also the kind of the input.
-fn hull_type(dtype: &DataType) -> PolarsResult<(DataType, Kind)> {
+fn hull_type(dtype: &DataType) -> PolarsResult<(DataType, NestedKind)> {
     let geo = describe(dtype)?;
-    match geo.kind {
-        Kind::LineString
-        | Kind::MultiPoint
-        | Kind::MultiLineString
-        | Kind::Polygon
-        | Kind::MultiPolygon => {}
-        Kind::Point => return Err(encloses_nothing(dtype)),
-    }
+    let kind = NestedKind::new("convex_hull", geo.kind)?;
     let dim = if geo.dim.has_z() {
         GeoDimension::XYZ
     } else {
         GeoDimension::XY
     };
     let dtype = Geo::new(Kind::Polygon, dim, geo.metadata.clone()).dtype();
-    Ok((dtype, geo.kind))
+    Ok((dtype, kind))
 }
 
 /// For [`convex_hull`].

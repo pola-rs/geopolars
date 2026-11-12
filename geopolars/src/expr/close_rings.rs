@@ -1,12 +1,11 @@
 //! Closing the open rings (and linestrings) of a geometry.
 //! See `close_rings` in Python for the rules.
 
-use geopolars_core::CloseRings;
+use geopolars_core::{CloseRings, SegmentKind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
 use crate::geoarrow::describe;
 
 /// See python
@@ -24,10 +23,17 @@ impl From<CloseRingsKwargs> for CloseRings {
     }
 }
 
+/// For [`close_rings`]: the input's type.
+fn kernel_output_type_close_rings(input_fields: &[Field]) -> PolarsResult<Field> {
+    let field = &input_fields[0];
+    SegmentKind::new("close_rings", describe(field.dtype())?.kind)?;
+    Ok(field.clone())
+}
+
 /// See `close_rings`.
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+#[polars_expr(output_type_func=kernel_output_type_close_rings)]
 fn close_rings(inputs: &[Series], kwargs: CloseRingsKwargs) -> PolarsResult<Series> {
-    let kind = describe(inputs[0].dtype())?.kind;
+    let kind = SegmentKind::new("close_rings", describe(inputs[0].dtype())?.kind)?;
     let storage = inputs[0].ext()?.storage();
     let chunks = storage
         .chunks()

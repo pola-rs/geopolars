@@ -6,8 +6,7 @@ use std::fmt::Display;
 
 use geopolars_compute::native::AreaMetric;
 use geopolars_compute::Planar;
-use geopolars_core::areas;
-use geopolars_views::Kind;
+use geopolars_core::{areas, PolygonKind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
@@ -26,20 +25,10 @@ fn crs_of(field: &Field) -> PolarsResult<String> {
 
 /// Only polygons and multipolygons enclose anything: other kinds are refused
 /// rather than given an area of `0.0`.
-fn encloses_nothing(kind: Kind) -> PolarsError {
-    polars_err!(SchemaMismatch: "area does not accept a `{}` column", kind.name())
-}
-
 /// An `f64` per geometry: for a multipolygon, the sum of its parts.
 fn area_dtype(field: &Field) -> PolarsResult<Field> {
-    match describe(field.dtype())?.kind {
-        Kind::Polygon | Kind::MultiPolygon => {
-            Ok(Field::new(field.name().clone(), DataType::Float64))
-        }
-        kind @ (Kind::Point | Kind::LineString | Kind::MultiPoint | Kind::MultiLineString) => {
-            Err(encloses_nothing(kind))
-        }
-    }
+    PolygonKind::new("area", describe(field.dtype())?.kind)?;
+    Ok(Field::new(field.name().clone(), DataType::Float64))
 }
 
 /// For [`area_planar`]: in the unit of the coordinates squared.
@@ -56,7 +45,7 @@ fn kernel_output_type_area_geodesic(input_fields: &[Field]) -> PolarsResult<Fiel
 
 /// The area of every geometry in `geometries`, as `metric` measures it.
 fn measure(metric: &impl AreaMetric<Error: Display>, geometries: &Series) -> PolarsResult<Series> {
-    let kind = describe(geometries.dtype())?.kind;
+    let kind = PolygonKind::new("area", describe(geometries.dtype())?.kind)?;
     let storage = geometries.ext()?.storage();
     let chunks = storage
         .chunks()

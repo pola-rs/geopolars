@@ -2,23 +2,14 @@
 //! or whether the parts of a multilinestring chain into one
 //! (see [`geopolars_compute::native::multi_line_strings_are_rings`]).
 
-use geopolars_core::are_rings;
-use geopolars_views::Kind;
+use geopolars_core::{are_rings, LineKind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
 use crate::geoarrow::describe;
 
-fn line_kind(field: &Field) -> PolarsResult<Kind> {
-    match describe(field.dtype())?.kind {
-        kind @ (Kind::LineString | Kind::MultiLineString) => Ok(kind),
-        kind @ (Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon) => {
-            polars_bail!(
-                SchemaMismatch: "is_ring expects a `{}` or `{}` column, got: `{}`",
-                Kind::LineString.name(), Kind::MultiLineString.name(), kind.name()
-            )
-        }
-    }
+fn line_kind(field: &Field) -> PolarsResult<LineKind> {
+    LineKind::new("is_ring", describe(field.dtype())?.kind)
 }
 
 /// For [`is_ring`]: a `bool` per row.

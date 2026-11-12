@@ -1,6 +1,7 @@
 //! The simplification of a linestring or polygon, or their multi-variants, forwarded to GEOS.
 
-use geopolars_views::{GeoDimension, Kind};
+use geopolars_core::SegmentKind;
+use geopolars_views::GeoDimension;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
@@ -8,29 +9,18 @@ use serde::Deserialize;
 use crate::geoarrow::{describe, Geo};
 
 /// Python returns a point or multipoint as it is, so it never gets here.
-fn already_simple(dtype: &DataType) -> PolarsError {
-    polars_err!(
-        SchemaMismatch:
-        "simplify expects a linestring, polygon, multilinestring or multipolygon column, got: {}",
-        dtype
-    )
-}
-
 /// The input's kind and metadata, with its z, but without m.
 /// Also the kind of the input.
-fn simplified_type(dtype: &DataType) -> PolarsResult<(DataType, Kind)> {
+fn simplified_type(dtype: &DataType) -> PolarsResult<(DataType, SegmentKind)> {
     let geo = describe(dtype)?;
-    match geo.kind {
-        Kind::LineString | Kind::MultiLineString | Kind::Polygon | Kind::MultiPolygon => {}
-        Kind::Point | Kind::MultiPoint => return Err(already_simple(dtype)),
-    }
+    let kind = SegmentKind::new("simplify", geo.kind)?;
     let dim = if geo.dim.has_z() {
         GeoDimension::XYZ
     } else {
         GeoDimension::XY
     };
-    let dtype = Geo::new(geo.kind, dim, geo.metadata.clone()).dtype();
-    Ok((dtype, geo.kind))
+    let dtype = Geo::new(kind.kind(), dim, geo.metadata.clone()).dtype();
+    Ok((dtype, kind))
 }
 
 /// For [`simplify`].

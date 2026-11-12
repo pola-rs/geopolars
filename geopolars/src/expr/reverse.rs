@@ -1,11 +1,11 @@
 //! Reversing the order of a geometry's vertices.
 //! See `reverse` in Python for the rules.
 
+use geopolars_core::NestedKind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
 use crate::geoarrow::describe;
 
 /// See python
@@ -16,10 +16,17 @@ pub struct ReverseKwargs {
     nested: bool,
 }
 
+/// For [`reverse`]: the input's type.
+fn kernel_output_type_reverse(input_fields: &[Field]) -> PolarsResult<Field> {
+    let field = &input_fields[0];
+    NestedKind::new("reverse", describe(field.dtype())?.kind)?;
+    Ok(field.clone())
+}
+
 /// See `reverse`.
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+#[polars_expr(output_type_func=kernel_output_type_reverse)]
 fn reverse(inputs: &[Series], kwargs: ReverseKwargs) -> PolarsResult<Series> {
-    let kind = describe(inputs[0].dtype())?.kind;
+    let kind = NestedKind::new("reverse", describe(inputs[0].dtype())?.kind)?;
     let storage = inputs[0].ext()?.storage();
     let chunks = storage
         .chunks()

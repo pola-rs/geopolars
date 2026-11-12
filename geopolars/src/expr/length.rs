@@ -6,8 +6,7 @@ use std::fmt::Display;
 
 use geopolars_compute::native::LengthMetric;
 use geopolars_compute::Planar;
-use geopolars_core::lengths;
-use geopolars_views::Kind;
+use geopolars_core::{lengths, LineKind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
@@ -35,24 +34,11 @@ fn crs_of(field: &Field) -> PolarsResult<String> {
 
 /// Only linestrings and multilinestrings have a length: other kinds are refused
 /// rather than given a length of `0.0`.
-fn has_no_length(kind: Kind) -> PolarsError {
-    polars_err!(
-        SchemaMismatch: "a length is measured on a `{}` or `{}` column, got: `{}`",
-        Kind::LineString.name(), Kind::MultiLineString.name(), kind.name()
-    )
-}
-
 /// Length always returns an `f64`.
 /// Multilinestring: sum
 fn length_dtype(field: &Field) -> PolarsResult<Field> {
-    match describe(field.dtype())?.kind {
-        Kind::LineString | Kind::MultiLineString => {
-            Ok(Field::new(field.name().clone(), DataType::Float64))
-        }
-        kind @ (Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon) => {
-            Err(has_no_length(kind))
-        }
-    }
+    LineKind::new("length", describe(field.dtype())?.kind)?;
+    Ok(Field::new(field.name().clone(), DataType::Float64))
 }
 
 /// Output for length:
@@ -72,7 +58,7 @@ fn measure(
     geometries: &Series,
     ignore_nan: bool,
 ) -> PolarsResult<Series> {
-    let kind = describe(geometries.dtype())?.kind;
+    let kind = LineKind::new("length", describe(geometries.dtype())?.kind)?;
     let storage = geometries.ext()?.storage();
     let chunks = storage
         .chunks()

@@ -1,7 +1,7 @@
 //! The offset curve of a linestring or multilinestring, forwarded to GEOS.
 
 use geopolars_compute::geos::{JoinStyle, OffsetCurveStyle};
-use geopolars_core::offset_curves;
+use geopolars_core::{offset_curves, LineKind};
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
@@ -11,14 +11,6 @@ use super::buffer::{chunks_by_distance, JoinStyleDef};
 use crate::geoarrow::{describe, Geo};
 
 /// Python refuses any other kind, so it never gets here.
-fn not_a_line(dtype: &DataType) -> PolarsError {
-    polars_err!(
-        SchemaMismatch:
-        "offset_curve expects a linestring or multilinestring column, got: {}",
-        dtype
-    )
-}
-
 /// A multilinestring for a multilinestring, or with `allow_splitting`.
 /// Otherwise a linestring.
 /// It is XY, with the input's metadata.
@@ -26,14 +18,12 @@ fn not_a_line(dtype: &DataType) -> PolarsError {
 fn offset_curve_type(
     dtype: &DataType,
     kwargs: &OffsetCurveKwargs,
-) -> PolarsResult<(DataType, Kind, bool)> {
+) -> PolarsResult<(DataType, LineKind, bool)> {
     let geo = describe(dtype)?;
-    let into_multi = match geo.kind {
-        Kind::LineString => kwargs.allow_splitting,
-        Kind::MultiLineString => true,
-        Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon => {
-            return Err(not_a_line(dtype))
-        }
+    let line_kind = LineKind::new("offset_curve", geo.kind)?;
+    let into_multi = match line_kind {
+        LineKind::LineString => kwargs.allow_splitting,
+        LineKind::MultiLineString => true,
     };
     let kind = if into_multi {
         Kind::MultiLineString
@@ -41,7 +31,7 @@ fn offset_curve_type(
         Kind::LineString
     };
     let dtype = Geo::new(kind, GeoDimension::XY, geo.metadata.clone()).dtype();
-    Ok((dtype, geo.kind, into_multi))
+    Ok((dtype, line_kind, into_multi))
 }
 
 /// For [`offset_curve`].

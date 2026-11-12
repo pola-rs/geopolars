@@ -1,6 +1,6 @@
 //! The centroid of a geometry.
 
-use geopolars_core::centroids;
+use geopolars_core::{centroids, SegmentKind};
 use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
@@ -9,18 +9,10 @@ use crate::geoarrow::{describe, Geo};
 
 /// The point a `dtype` column's centroids are, and the kind of geometry they are of.
 /// The centroid keeps the geometry's dimension.
-fn centroid_of(dtype: &DataType) -> PolarsResult<(Geo, Kind)> {
+fn centroid_of(dtype: &DataType) -> PolarsResult<(Geo, SegmentKind)> {
     let geo = describe(dtype)?;
-    if let Kind::Point | Kind::MultiPoint = geo.kind {
-        polars_bail!(
-            SchemaMismatch: "centroid expects a (multi)linestring or (multi)polygon column, got: {}",
-            dtype
-        )
-    }
-    Ok((
-        Geo::new(Kind::Point, geo.dim, geo.metadata.clone()),
-        geo.kind,
-    ))
+    let kind = SegmentKind::new("centroid", geo.kind)?;
+    Ok((Geo::new(Kind::Point, geo.dim, geo.metadata.clone()), kind))
 }
 
 /// For [`centroid`].

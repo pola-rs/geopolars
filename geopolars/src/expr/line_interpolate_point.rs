@@ -1,5 +1,5 @@
 use geopolars_compute::geos::InterpolateMode;
-use geopolars_core::interpolated_points;
+use geopolars_core::{interpolated_points, LineKind};
 use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
@@ -10,19 +10,12 @@ use crate::geoarrow::{describe, Geo};
 
 /// A point with the input's dimension and metadata.
 /// Also the kind of the input.
-fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(DataType, Kind)> {
+fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(DataType, LineKind)> {
     let geo = describe(dtype)?;
-    match geo.kind {
-        Kind::LineString | Kind::MultiLineString => {}
-        // Python refuses any other kind, so it never gets here.
-        Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon => polars_bail!(
-            SchemaMismatch:
-            "line_interpolate_point expects a linestring or multilinestring column, got: {}",
-            dtype
-        ),
-    }
+    // Python refuses any other kind, so it never gets here.
+    let kind = LineKind::new("line_interpolate_point", geo.kind)?;
     let dtype = Geo::new(Kind::Point, geo.dim, geo.metadata.clone()).dtype();
-    Ok((dtype, geo.kind))
+    Ok((dtype, kind))
 }
 
 /// For [`line_interpolate_point`].
