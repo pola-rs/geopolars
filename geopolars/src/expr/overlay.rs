@@ -1,13 +1,13 @@
 //! The intersection and difference of two geometries
 //! (see [`geopolars_compute::geos::OverlayPairs`]).
 
-use geopolars_compute::geos::{Overlay, OverlayPairs};
-use geopolars_views::{GeometryArray, Kind};
+use geopolars_compute::geos::Overlay;
+use geopolars_core::OverlayOptions;
+use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{
     describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, Geo, GeoColumn, GeoDimension,
     GeometryPairs,
@@ -148,38 +148,6 @@ fn kernel_output_type_difference(
     Ok(Field::new(a.name().clone(), geo.dtype()))
 }
 
-/// Overlays `pairs` into the storage of `geo`'s kind and dimension.
-fn overlaid_storage(pairs: OverlayPairs, geo: &Geo, ccw_outer: bool) -> PolarsResult<ArrayRef> {
-    let z = geo.dim().has_z();
-    match geo.kind() {
-        Kind::Point => pairs
-            .into_points(z)
-            .map(|array| array.into_struct_array().boxed()),
-        Kind::MultiPoint => pairs
-            .into_multi_points(z)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::LineString => pairs
-            .into_line_strings(z)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::MultiLineString => pairs
-            .into_multi_line_strings(z)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::Polygon => pairs
-            .into_polygons(z, ccw_outer)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::MultiPolygon => pairs
-            .into_multi_polygons(z, ccw_outer)
-            .map(|array| array.into_list_array().boxed()),
-    }
-    .into_polars()
-}
-
-struct OverlayOptions {
-    ccw_outer: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
-}
-
 /// Overlays the two geometries of `inputs` into `geo`, which the output type function gave.
 fn overlaid(
     inputs: &[Series],
@@ -200,16 +168,20 @@ fn overlaid(
         }
     };
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (ignore, early) = (options.ignore_per_row_errors, options.early_finite_check);
+    let (kind, z) = (geo.kind(), geo.dim().has_z());
     let chunks = chunk_pairs
         .iter()
         .map(|(a, b)| {
-            let (a, b) = (
-                GeometryArray::new(a.as_ref(), a_kind)?,
-                GeometryArray::new(b.as_ref(), b_kind)?,
-            );
-            let pairs = OverlayPairs::new(&a, &b, overlay, ignore, early).into_polars()?;
-            overlaid_storage(pairs, &geo, options.ccw_outer)
+            geopolars_core::overlay(
+                a.as_ref(),
+                a_kind,
+                b.as_ref(),
+                b_kind,
+                overlay,
+                kind,
+                z,
+                options,
+            )
         })
         .collect::<PolarsResult<Vec<_>>>()?;
     #[cfg(debug_assertions)]

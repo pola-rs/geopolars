@@ -50,19 +50,19 @@ Moving these first means the expressions that use them only need their imports c
 - [x] `is_equal`: `is_equal` (`aligned_pairs` + `Kind` match)
 - [x] `rings_overlap`: `rings_overlap` (`aligned_pairs` + `Kind` match)
 - [x] `relate`: `relate` (via `geometry_array`)
-- [ ] `overlay`: `intersection`, `difference` (via `geometry_array`, plus a `Kind` match on the output)
-- [ ] `is_topologically_equal`: `is_topologically_equal` (via `geometry_array`)
-- [ ] `shortest_line_between`: `shortest_line_between` (via `geometry_array`)
-- [ ] `hausdorff_line_between`: `hausdorff_line_between` (via `geometry_array`)
+- [x] `overlay`: `intersection`, `difference` (via `geometry_array`, plus a `Kind` match on the output)
+- [x] `is_topologically_equal`: `is_topologically_equal` (via `geometry_array`)
+- [x] `shortest_line_between`: `shortest_line_between` (via `geometry_array`)
+- [x] `hausdorff_line_between`: `hausdorff_line_between` (via `geometry_array`)
 
 ## Encoding
 
-- [ ] `wkb`: `to_wkb` (via `for_each_geometry`), `from_wkb` (via `decode`)
-- [ ] `wkt`: `to_wkt` (via `for_each_geometry`), `from_wkt` (via `decode`)
+- [x] `wkb`: `to_wkb` (via `for_each_geometry`), `from_wkb` (via `decode`)
+- [x] `wkt`: `to_wkt` (via `for_each_geometry`), `from_wkt` (via `decode`)
 
 ## Constructors (dispatch on the output kind, not an input geometry)
 
-- [ ] `construct`: `linestring`, `polygon`, `multipoint`, `multilinestring`, `multipolygon`, `linestring_coords`, `polygon_coords`, `polygon_nested_coords`, `multipoint_coords`, `multilinestring_coords`, `multipolygon_coords`, `multipolygon_nested_coords`, `polygon_rings_in_separate_columns`
+- [x] `construct`: `linestring`, `polygon`, `multipoint`, `multilinestring`, `multipolygon`, `linestring_coords`, `polygon_coords`, `polygon_nested_coords`, `multipoint_coords`, `multilinestring_coords`, `multipolygon_coords`, `multipolygon_nested_coords`, `polygon_rings_in_separate_columns`
 
 ## Not on the list
 

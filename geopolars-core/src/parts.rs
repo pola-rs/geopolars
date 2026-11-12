@@ -36,7 +36,7 @@ pub enum NullParts {
 
 /// See [`close_open_rings`].
 /// The rings and their coordinates, or `None` if no ring changed.
-pub fn closed_rings(
+pub(crate) fn closed_rings(
     rings: &ValidList,
     coords: &ValidCoords,
     closing: CloseRings,
@@ -49,7 +49,10 @@ pub fn closed_rings(
 
 /// `array` with its open rings closed first if there is a `close`,
 /// and null where it does not have only rings (see [polygons_have_only_rings]).
-pub fn validated_polygons(mut array: PolygonArray, close: Option<CloseRings>) -> Box<dyn Array> {
+pub(crate) fn validated_polygons(
+    mut array: PolygonArray,
+    close: Option<CloseRings>,
+) -> Box<dyn Array> {
     if let Some((rings, coords)) =
         close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
     {
@@ -75,7 +78,7 @@ fn one_per_row(len: usize, validity: Option<&Bitmap>) -> List {
     List::from_offsets(offsets.into(), validity.cloned())
 }
 
-pub fn one_ring_per_row(exteriors: LineStringArray) -> PolygonArray {
+pub(crate) fn one_ring_per_row(exteriors: LineStringArray) -> PolygonArray {
     PolygonArray::from_parts(
         one_per_row(exteriors.rows.len(), exteriors.rows.validity()),
         exteriors.rows.ignoring_validity().clone(),
@@ -109,7 +112,7 @@ pub(crate) fn one_polygon_per_row(polygons: PolygonArray) -> MultiPolygonArray {
 
 /// Combines the validity of `base` and `parts` into that of a result built out of them.
 /// A null row of `parts` only makes the result null with [NullParts::Null].
-pub fn rows_validity(base: &List, parts: &List, null_parts: NullParts) -> Option<Bitmap> {
+pub(crate) fn rows_validity(base: &List, parts: &List, null_parts: NullParts) -> Option<Bitmap> {
     match null_parts {
         NullParts::Drop => base.validity().cloned(),
         NullParts::Null => combine_validities_and(base.validity(), parts.validity()),
@@ -120,7 +123,7 @@ pub fn rows_validity(base: &List, parts: &List, null_parts: NullParts) -> Option
 /// `chunk` only holds a single linestring per row if `listed=false`.
 /// A linestring holding a null value makes its row null.
 /// In a list of linestrings, [NullParts::Drop] unsets it in the mask instead.
-pub fn lines_per_row(
+pub(crate) fn lines_per_row(
     chunk: &dyn Array,
     listed: bool,
     null_parts: NullParts,

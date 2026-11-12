@@ -3,25 +3,15 @@
 use std::sync::Arc;
 
 use polars::prelude::*;
-use polars_arrow::array::{Array, ListArray};
+use polars_arrow::array::ListArray;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
 use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, GeoDimension};
-use geopolars_compute::inner_nulls::{
-    propagate_inner_nulls_of_line_strings, propagate_inner_nulls_of_multi_line_strings,
-    propagate_inner_nulls_of_multi_points, propagate_inner_nulls_of_multi_polygons,
-    propagate_inner_nulls_of_polygons,
-};
-use geopolars_compute::native::{multi_polygons_have_only_rings, polygons_with_added_holes};
-use geopolars_compute::with_const_flags;
-use geopolars_core::{
-    closed_rings, lines_per_row, one_ring_per_row, rows_validity, validated_polygons, CloseRings,
-    NullParts,
-};
-use geopolars_views::{Kind, MultiPolygonArray, UncheckedStorage};
+use geopolars_core::{assembled_polygons, validated_storage, NullParts};
+use geopolars_views::Kind;
 use polars_arrow::offset::Offsets;
 
 /// The keyword arguments of the constructors that build polygons:
@@ -175,58 +165,13 @@ fn kernel_output_type_multipolygon(
     )
 }
 
-/// One chunk of the storage of a `kind`, with every null value below a row moved out to it.
-/// A polygon is also null where it does not have only rings (see [polygons_have_only_rings]).
-/// With a `close`, the open rings of a polygon are closed first.
-fn validated_chunk(
-    chunk: &dyn Array,
-    kind: Kind,
-    close: Option<CloseRingsKwargs>,
-) -> PolarsResult<Box<dyn Array>> {
-    let close = close.map(CloseRings::from);
-    let storage = UncheckedStorage::new(chunk)?;
-    Ok(match kind {
-        Kind::Point => unreachable!("constructors always gather into lists"),
-        Kind::LineString => propagate_inner_nulls_of_line_strings(storage)
-            .into_list_array()
-            .boxed(),
-        Kind::MultiPoint => propagate_inner_nulls_of_multi_points(storage)
-            .into_list_array()
-            .boxed(),
-        Kind::MultiLineString => propagate_inner_nulls_of_multi_line_strings(storage)
-            .into_list_array()
-            .boxed(),
-        Kind::Polygon => validated_polygons(propagate_inner_nulls_of_polygons(storage), close),
-        Kind::MultiPolygon => {
-            let mut array = propagate_inner_nulls_of_multi_polygons(storage);
-            if let Some((rings, coords)) =
-                close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
-            {
-                array = MultiPolygonArray::from_parts(array.rows, array.polygons, rings, coords);
-            }
-            // A null row is `false` in the values too.
-            let z = array.coords.dim().has_z();
-            let valid = with_const_flags!(Z = z; multi_polygons_have_only_rings::<Z>(&array))
-                .values()
-                .clone();
-            MultiPolygonArray::from_parts(
-                array.rows.with_validity(Some(valid)),
-                array.polygons,
-                array.rings,
-                array.coords,
-            )
-            .into_list_array()
-            .boxed()
-        }
-    })
-}
-
-/// [validated_chunk] for every chunk of `storage`.
+/// [validated_storage] for every chunk of `storage`.
 fn validated(storage: Series, kind: Kind, close: Option<CloseRingsKwargs>) -> PolarsResult<Series> {
+    let close = close.map(Into::into);
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| validated_chunk(chunk.as_ref(), kind, close))
+        .map(|chunk| validated_storage(chunk.as_ref(), kind, close))
         .collect::<PolarsResult<Vec<_>>>()?;
     // SAFETY: the kind and dimension stay the same, so every chunk is still the storage.
     Ok(unsafe {
@@ -520,7 +465,7 @@ fn polygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Seri
     let chunks = exteriors
         .chunks()
         .iter()
-        .map(|chunk| assembled_polygons(chunk.as_ref(), None, kwargs.close))
+        .map(|chunk| assembled_polygons(chunk.as_ref(), None, kwargs.close.map(Into::into)))
         .collect::<PolarsResult<Vec<_>>>()?;
     // SAFETY: every chunk is the storage of a polygon of `geo`'s dimension.
     Ok(unsafe {
@@ -571,7 +516,11 @@ fn multipolygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult
         .downcast_iter()
         .map(|chunk| {
             let multi_polygons = one_ring_per_polygon(chunk);
-            validated_chunk(&multi_polygons, Kind::MultiPolygon, kwargs.close)
+            validated_storage(
+                &multi_polygons,
+                Kind::MultiPolygon,
+                kwargs.close.map(Into::into),
+            )
         })
         .collect::<PolarsResult<Vec<_>>>()?;
     // SAFETY: every chunk is the storage of a multipolygon of `geo`'s dimension.
@@ -815,35 +764,6 @@ pub(super) enum NullPartsDef {
     Null,
 }
 
-/// Assembles one chunk of polygons from one chunk of exterior rings and one of holes.
-/// The holes only hold a single ring per row if `listed=false`.
-/// See `polygons_from_rings_in_separate_columns` for the null values.
-fn assembled_polygons(
-    exteriors: &dyn Array,
-    holes: Option<(&dyn Array, bool, NullParts)>,
-    close: Option<CloseRingsKwargs>,
-) -> PolarsResult<Box<dyn Array>> {
-    let exteriors = one_ring_per_row(propagate_inner_nulls_of_line_strings(
-        UncheckedStorage::new(exteriors)?,
-    ));
-    let Some((holes, listed, null_parts)) = holes else {
-        // FIXME: this copies every coordinate into new buffers for nothing.
-        // `exteriors` already is a trimmed polygon of one ring per row, without a copy,
-        // so this can be `return Ok(validated_polygons(exteriors, close))`.
-        // `polygons_with_added_holes` can then take `holes` without the `Option`.
-        // This affects `polygons_from_coordinates`,
-        // and `polygons_from_rings_in_separate_columns` without holes.
-        let validity = exteriors.rows.validity().cloned();
-        let polygons = polygons_with_added_holes(&exteriors, None, validity);
-        return Ok(validated_polygons(polygons, close.map(Into::into)));
-    };
-
-    let holes = lines_per_row(holes, listed, null_parts)?;
-    let validity = rows_validity(&exteriors.rows, holes.rows(), null_parts);
-    let polygons = polygons_with_added_holes(&exteriors, Some(&holes), validity);
-    Ok(validated_polygons(polygons, close.map(Into::into)))
-}
-
 /// See `polygons_from_rings_in_separate_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon_rings_in_separate_columns)]
 fn polygon_rings_in_separate_columns(
@@ -852,14 +772,15 @@ fn polygon_rings_in_separate_columns(
 ) -> PolarsResult<Series> {
     let (geo, listed) = separate_rings(&fields_of(inputs), &kwargs.metadata())?;
     let exteriors = storage_of(&inputs[0])?;
+    let close = kwargs.close.map(Into::into);
     let chunk = match inputs.get(1) {
         Some(holes) => {
             let holes = parts_storage(holes, Kind::MultiLineString, geo.dim())?;
             let (exteriors, holes) = paired_rows(&exteriors, &holes, ("exteriors", "holes"))?;
             let holes = (holes.chunks()[0].as_ref(), listed, kwargs.null_parts);
-            assembled_polygons(exteriors.chunks()[0].as_ref(), Some(holes), kwargs.close)?
+            assembled_polygons(exteriors.chunks()[0].as_ref(), Some(holes), close)?
         }
-        None => assembled_polygons(exteriors.rechunk().chunks()[0].as_ref(), None, kwargs.close)?,
+        None => assembled_polygons(exteriors.rechunk().chunks()[0].as_ref(), None, close)?,
     };
     // SAFETY: the chunk is the storage of a polygon of `geo`'s dimension.
     Ok(unsafe {

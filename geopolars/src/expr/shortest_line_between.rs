@@ -1,14 +1,12 @@
 //! The shortest line between two geometries
 //! (see [`geopolars_compute::geos::shortest_lines_pairwise`]).
 
-use geopolars_compute::geos::{shortest_lines_against_one, shortest_lines_pairwise};
-use geopolars_compute::GeoComputeResult;
-use geopolars_views::{GeoDimension, GeometryArray, Kind, LineStringArray};
+use geopolars_core::{pairwise_shortest_lines, shortest_lines_to_one};
+use geopolars_views::{GeoDimension, Kind, LineStringArray};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{
     describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, Geo, GeometryPairs,
 };
@@ -51,12 +49,16 @@ fn shortest_line_between(
     let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
-            let one = GeometryArray::new(one.as_ref(), one_kind)?;
             many.iter()
                 .map(|many| {
-                    let many = GeometryArray::new(many.as_ref(), many_kind)?;
-                    lines_chunk(shortest_lines_against_one(
-                        &one, &many, one_is_a, ignore, early,
+                    lines_chunk(shortest_lines_to_one(
+                        one.as_ref(),
+                        one_kind,
+                        many.as_ref(),
+                        many_kind,
+                        one_is_a,
+                        ignore,
+                        early,
                     ))
                 })
                 .collect::<PolarsResult<Vec<_>>>()
@@ -65,9 +67,14 @@ fn shortest_line_between(
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| {
-                let a = GeometryArray::new(a.as_ref(), a_kind)?;
-                let b = GeometryArray::new(b.as_ref(), b_kind)?;
-                lines_chunk(shortest_lines_pairwise(a, b, ignore, early))
+                lines_chunk(pairwise_shortest_lines(
+                    a.as_ref(),
+                    a_kind,
+                    b.as_ref(),
+                    b_kind,
+                    ignore,
+                    early,
+                ))
             })
             .collect::<PolarsResult<Vec<_>>>()?,
         GeometryPairs::OneAgainstMany { a: one, b: many } => {
@@ -84,6 +91,6 @@ fn shortest_line_between(
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &dtype) })
 }
 
-fn lines_chunk(lines: GeoComputeResult<LineStringArray>) -> PolarsResult<ArrayRef> {
-    Ok(lines.into_polars()?.into_list_array().boxed())
+fn lines_chunk(lines: PolarsResult<LineStringArray>) -> PolarsResult<ArrayRef> {
+    Ok(lines?.into_list_array().boxed())
 }

@@ -1,8 +1,8 @@
-//! Glue for the GeoArrow data types, and dispatching to it.
+//! Glue for the GeoArrow data types, and lining up the chunks of two geometry columns.
 //!
 //! Expressions never name a concrete geometry:
-//! They ask [`describe`] what a column holds and dispatch on the [`Kind`] and [`Dimension`] it reports,
-//! so adding a geometry does not touch `crate::expr`.
+//! they ask [`describe`] what a column holds,
+//! and hand the [`Kind`] and [`GeoDimension`] it reports to `geopolars_core`, which picks the kernel.
 
 pub mod bbox;
 pub mod coord;

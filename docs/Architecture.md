@@ -62,8 +62,9 @@ so, like WKB and WKT, it is not a `Kind`, and it is not accepted by most operati
 
 Rust expressions never name a concrete geometry.
 They call `geoarrow::describe(dtype)` to get a `GeoColumn` (kind and dimension),
-then either ignore it (`coords::map_coords`) or match exhaustively on `Kind`.
-That way, adding a geometry only touches `src/geoarrow/` and doesn't affect `src/expr/`.
+then either ignore it (`coords::map_coords`) or hand its `Kind` to `geopolars-core`.
+That crate matches on the `Kind` exhaustively, wraps the storage in the view of that kind,
+and calls the kernel for it.
 
 ### Extension registries
 
@@ -91,9 +92,11 @@ expr (namespaces) →  geo (functional) →  datatypes.
 ```
 
 On the Rust side, `src/expr/` mirrors `geo/` module by module (`area.rs`, `affine.rs`, `crs.rs`, ...),
-and `src/geoarrow/` is the shared glue: dtypes and dispatch.
+and `src/geoarrow/` is the shared glue: dtypes, and lining up the chunks of two geometry columns.
 `src/proj.rs` asks PROJ about a CRS.
-Reading the Arrow storage in a kernel goes through the views of `geopolars-views`.
+Picking the kernel for each kind of geometry happens in `geopolars-core`.
+The kernels live in `geopolars-compute`,
+and read the Arrow storage through the views of `geopolars-views`.
 
 ## Type checker
 

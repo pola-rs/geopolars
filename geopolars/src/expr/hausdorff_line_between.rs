@@ -1,14 +1,13 @@
 //! The line spanning the Hausdorff distance between two geometries
 //! (see [`geopolars_compute::native::hausdorff_lines_pairwise`]).
 
-use geopolars_compute::native::{hausdorff_lines_against_one, hausdorff_lines_pairwise, NonFinite};
-use geopolars_compute::GeoComputeResult;
-use geopolars_views::{GeometryArray, Kind, LineStringArray};
+use geopolars_compute::native::NonFinite;
+use geopolars_core::{hausdorff_lines_to_one, pairwise_hausdorff_lines};
+use geopolars_views::{Kind, LineStringArray};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{
     describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, Geo, GeometryPairs,
 };
@@ -67,12 +66,16 @@ fn hausdorff_line_between(
     let (failing, ignore) = (kwargs.failing(), kwargs.ignore_per_row_errors);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
-            let one = GeometryArray::new(one.as_ref(), one_kind)?;
             many.iter()
                 .map(|many| {
-                    let many = GeometryArray::new(many.as_ref(), many_kind)?;
-                    lines_chunk(hausdorff_lines_against_one(
-                        &one, &many, one_is_a, failing, ignore,
+                    lines_chunk(hausdorff_lines_to_one(
+                        one.as_ref(),
+                        one_kind,
+                        many.as_ref(),
+                        many_kind,
+                        one_is_a,
+                        failing,
+                        ignore,
                     ))
                 })
                 .collect::<PolarsResult<Vec<_>>>()
@@ -81,9 +84,14 @@ fn hausdorff_line_between(
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| {
-                let a = GeometryArray::new(a.as_ref(), a_kind)?;
-                let b = GeometryArray::new(b.as_ref(), b_kind)?;
-                lines_chunk(hausdorff_lines_pairwise(&a, &b, failing, ignore))
+                lines_chunk(pairwise_hausdorff_lines(
+                    a.as_ref(),
+                    a_kind,
+                    b.as_ref(),
+                    b_kind,
+                    failing,
+                    ignore,
+                ))
             })
             .collect::<PolarsResult<Vec<_>>>()?,
         GeometryPairs::OneAgainstMany { a: one, b: many } => {
@@ -100,6 +108,6 @@ fn hausdorff_line_between(
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &dtype) })
 }
 
-fn lines_chunk(lines: GeoComputeResult<LineStringArray>) -> PolarsResult<ArrayRef> {
-    Ok(lines.into_polars()?.into_list_array().boxed())
+fn lines_chunk(lines: PolarsResult<LineStringArray>) -> PolarsResult<ArrayRef> {
+    Ok(lines?.into_list_array().boxed())
 }

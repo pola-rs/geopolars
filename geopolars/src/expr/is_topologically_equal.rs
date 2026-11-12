@@ -1,15 +1,13 @@
 //! Whether two geometries are topologically equal
 //! (see [`geopolars_compute::geos::topologically_equal`]).
 
-use geopolars_compute::geos::topologically_equal;
-use geopolars_views::GeometryArray;
+use geopolars_core::are_topologically_equal;
 use polars::prelude::*;
 use polars_arrow::array::BooleanArray;
 use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{
     describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, GeometryPairs,
 };
@@ -56,11 +54,7 @@ fn is_topologically_equal(
     let chunks = chunk_pairs
         .iter()
         .map(|(a, b)| {
-            let (a, b) = (
-                GeometryArray::new(a.as_ref(), a_kind)?,
-                GeometryArray::new(b.as_ref(), b_kind)?,
-            );
-            topologically_equal(&a, &b, ignore, early).into_polars()
+            are_topologically_equal(a.as_ref(), a_kind, b.as_ref(), b_kind, ignore, early)
         })
         .collect::<PolarsResult<Vec<_>>>()?;
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())

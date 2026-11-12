@@ -5,8 +5,8 @@
 //! modules here is for readers only -- nothing has to be registered.
 //!
 //! Nothing in here names a concrete geometry. An expression asks
-//! [`geoarrow::describe`](crate::geoarrow::describe) what it was handed and then
-//! matches on the [`Kind`](geopolars_views::Kind) exhaustively.
+//! [`geoarrow::describe`](crate::geoarrow::describe) what it was handed,
+//! and `geopolars_core` picks the kernel for its [`Kind`](geopolars_views::Kind).
 
 pub mod add_holes;
 pub mod add_parts;
@@ -50,19 +50,3 @@ pub mod sort_parts;
 pub mod to_ccw;
 pub mod wkb;
 pub mod wkt;
-
-use geopolars_compute::GeoComputeResult;
-use polars::prelude::{polars_err, PolarsResult};
-
-/// Turns the result of a `geopolars_compute` kernel into a [`PolarsResult`].
-/// Can't just do Into<> because orphan rule,
-/// and don't want to bring polars_err into scope of geopolars_compute.
-trait IntoPolarsResult<T> {
-    fn into_polars(self) -> PolarsResult<T>;
-}
-
-impl<T> IntoPolarsResult<T> for GeoComputeResult<T> {
-    fn into_polars(self) -> PolarsResult<T> {
-        self.map_err(|e| polars_err!(ComputeError: "{e}"))
-    }
-}
