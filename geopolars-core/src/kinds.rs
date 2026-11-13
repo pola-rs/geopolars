@@ -1,6 +1,9 @@
 //! The kinds an operation accepts, narrowed down from [`Kind`].
-//! Narrowing is the only place an operation refuses a kind,
-//! so the plugin's plan-time check and the kernel dispatch cannot disagree.
+//! An operation that takes some kinds, but not all of them, refuses the rest by narrowing.
+//! The plugin narrows with the same call at plan time and before dispatch,
+//! so the two cannot disagree on which kinds the operation takes.
+//! [`sort_parts`](crate::sort_parts) is the one exception,
+//! as it also refuses a linestring at run time unless it rotates rings.
 
 use geopolars_views::Kind;
 use polars_core::prelude::{polars_err, PolarsResult};

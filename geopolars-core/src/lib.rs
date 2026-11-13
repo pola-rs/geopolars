@@ -67,7 +67,7 @@ pub use is_equal::are_equal;
 pub use is_ring::are_rings;
 pub use is_simple::are_simple;
 pub use is_topologically_equal::are_topologically_equal;
-pub use is_valid::{are_valid, Validity};
+pub use is_valid::{are_valid, ValidityCheck};
 pub use join_line_strings::{join_line_strings, JoinGaps};
 pub use kinds::{LineKind, NestedKind, PolygonKind, SegmentKind};
 pub use length::lengths;

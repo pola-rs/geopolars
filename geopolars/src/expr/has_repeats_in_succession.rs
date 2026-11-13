@@ -1,5 +1,5 @@
 //! Whether a geometry has two points that coincide,
-//! through `geopolars_compute::native::*_have_repeats_in_succession`.
+//! through [`geopolars_core::have_repeats_in_succession`].
 //! See `has_repeats_in_succession` in Python for the rules.
 
 use geopolars_compute::native::Coincidence;

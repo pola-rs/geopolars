@@ -8,9 +8,10 @@ use serde::Deserialize;
 
 use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// Python returns a point or multipoint as it is, so it never gets here.
-/// The input's kind and metadata, with its z, but without m.
-/// Also the kind of the input.
+/// The type of the simplified geometries of a `dtype` column:
+/// the input's kind and metadata, with its z, but without m.
+/// Also gives the input's kind.
+/// A (multi)point is refused here, but Python returns it as it is without calling the plugin.
 fn simplified_type(dtype: &DataType) -> PolarsResult<(Geo, SegmentKind)> {
     let geo = describe(dtype)?;
     let kind = SegmentKind::new("simplify", geo.kind)?;

@@ -8,9 +8,10 @@ use serde::Deserialize;
 
 use crate::geoarrow::{describe, geometry_series, Geo};
 
+/// The type of the convex hulls of a `dtype` column:
+/// a polygon per geometry, with the input's metadata and z, but without m.
+/// Also gives the input's kind.
 /// A point encloses nothing, so it is refused.
-/// A polygon per geometry, with the input's metadata and z, but without m.
-/// Also the kind of the input.
 fn hull_type(dtype: &DataType) -> PolarsResult<(Geo, NestedKind)> {
     let geo = describe(dtype)?;
     let kind = NestedKind::new("convex_hull", geo.kind)?;

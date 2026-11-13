@@ -17,13 +17,13 @@ use polars_core::prelude::PolarsResult;
 /// Finds the bounding box of every geometry in one chunk of a `kind` column's storage
 /// of dimension `dim`.
 /// Implements the Python `bounds`.
-/// A multi-geometry gets a list of boxes, one per part, if `listed=true`.
-/// Other geometries ignore `listed`.
+/// A multi-geometry gets a list of boxes, one per part, if `per_part=true`.
+/// Other geometries ignore `per_part`.
 pub fn bounds(
     chunk: &dyn Array,
     kind: Kind,
     dim: GeoDimension,
-    listed: bool,
+    per_part: bool,
     options: &BoxOptions,
 ) -> PolarsResult<Box<dyn Array>> {
     let (has_z, has_m) = (dim.has_z(), dim.has_m());
@@ -46,7 +46,7 @@ pub fn bounds(
         }
         Kind::MultiPoint => {
             let array = MultiPointArray::new_untrimmed(downcast(chunk, "a list of coordinates")?)?;
-            if listed {
+            if per_part {
                 with_const_flags!(
                     Z = has_z, M = has_m;
                     multi_point_part_bounds::<Z, M>(&array, options)
@@ -63,7 +63,7 @@ pub fn bounds(
         Kind::MultiLineString => {
             let array =
                 MultiLineStringArray::new_untrimmed(downcast(chunk, "a list of linestrings")?)?;
-            if listed {
+            if per_part {
                 with_const_flags!(
                     Z = has_z, M = has_m;
                     multi_line_string_part_bounds::<Z, M>(&array, options)
@@ -79,7 +79,7 @@ pub fn bounds(
         }
         Kind::MultiPolygon => {
             let array = MultiPolygonArray::new_untrimmed(downcast(chunk, "a list of polygons")?)?;
-            if listed {
+            if per_part {
                 with_const_flags!(
                     Z = has_z, M = has_m;
                     multi_polygon_part_bounds::<Z, M>(&array, options)

@@ -21,8 +21,8 @@ use geopolars_views::{
 use polars_arrow::array::{Array, BooleanArray, ListArray};
 use polars_core::prelude::{polars_err, PolarsError, PolarsResult};
 
-/// Which validity to check, with its checks.
-pub enum Validity {
+/// Which validity to check, GeoArrow or OGC, with the checks it runs.
+pub enum ValidityCheck {
     /// See the Python `is_valid_geoarrow`.
     GeoArrow(CoordinateSelection),
     /// See the Python `is_valid_ogc`.
@@ -38,11 +38,13 @@ fn compute_err(e: impl std::fmt::Display) -> PolarsError {
 
 /// Checks whether every geometry in one chunk of a `kind` column's storage is valid.
 /// Implements the Python `is_valid_geoarrow` and `is_valid_ogc`.
+/// A row holding a null value below it is invalid if `check_null_coordinates=true`.
+/// Otherwise the views trust that no row holds one.
 pub fn are_valid(
     chunk: &dyn Array,
     kind: Kind,
     check_null_coordinates: bool,
-    validity: &Validity,
+    check: &ValidityCheck,
 ) -> PolarsResult<BooleanArray> {
     let propagate = check_null_coordinates;
     let unchecked = || UncheckedStorage::new(chunk);
@@ -55,9 +57,9 @@ pub fn are_valid(
             } else {
                 PointArray::new(Coords::new(chunk)?)
             };
-            match validity {
-                Validity::GeoArrow(selection) => points_are_valid_geoarrow(&array, selection),
-                Validity::Ogc { bounds, .. } => points_are_valid_ogc(&array, *bounds),
+            match check {
+                ValidityCheck::GeoArrow(selection) => points_are_valid_geoarrow(&array, selection),
+                ValidityCheck::Ogc { bounds, .. } => points_are_valid_ogc(&array, *bounds),
             }
         }
         Kind::LineString => {
@@ -66,9 +68,11 @@ pub fn are_valid(
             } else {
                 LineStringArray::new(rows()?)?
             };
-            match validity {
-                Validity::GeoArrow(selection) => line_strings_are_valid_geoarrow(&array, selection),
-                Validity::Ogc { bounds, .. } => line_strings_are_valid_ogc(&array, *bounds),
+            match check {
+                ValidityCheck::GeoArrow(selection) => {
+                    line_strings_are_valid_geoarrow(&array, selection)
+                }
+                ValidityCheck::Ogc { bounds, .. } => line_strings_are_valid_ogc(&array, *bounds),
             }
         }
         Kind::MultiPoint => {
@@ -77,9 +81,11 @@ pub fn are_valid(
             } else {
                 MultiPointArray::new(rows()?)?
             };
-            match validity {
-                Validity::GeoArrow(selection) => multi_points_are_valid_geoarrow(&array, selection),
-                Validity::Ogc { bounds, .. } => multi_points_are_valid_ogc(&array, *bounds),
+            match check {
+                ValidityCheck::GeoArrow(selection) => {
+                    multi_points_are_valid_geoarrow(&array, selection)
+                }
+                ValidityCheck::Ogc { bounds, .. } => multi_points_are_valid_ogc(&array, *bounds),
             }
         }
         Kind::MultiLineString => {
@@ -88,11 +94,13 @@ pub fn are_valid(
             } else {
                 MultiLineStringArray::new(rows()?)?
             };
-            match validity {
-                Validity::GeoArrow(selection) => {
+            match check {
+                ValidityCheck::GeoArrow(selection) => {
                     multi_line_strings_are_valid_geoarrow(&array, selection)
                 }
-                Validity::Ogc { bounds, .. } => multi_line_strings_are_valid_ogc(&array, *bounds),
+                ValidityCheck::Ogc { bounds, .. } => {
+                    multi_line_strings_are_valid_ogc(&array, *bounds)
+                }
             }
         }
         Kind::Polygon => {
@@ -101,9 +109,11 @@ pub fn are_valid(
             } else {
                 PolygonArray::new(rows()?)?
             };
-            match validity {
-                Validity::GeoArrow(selection) => polygons_are_valid_geoarrow(&array, selection),
-                Validity::Ogc { bounds, topology } => {
+            match check {
+                ValidityCheck::GeoArrow(selection) => {
+                    polygons_are_valid_geoarrow(&array, selection)
+                }
+                ValidityCheck::Ogc { bounds, topology } => {
                     polygons_are_valid_ogc(&array, *bounds, &topology.polygons)
                         .map_err(compute_err)?
                 }
@@ -115,17 +125,17 @@ pub fn are_valid(
             } else {
                 MultiPolygonArray::new(rows()?)?
             };
-            match validity {
-                Validity::GeoArrow(selection) => {
+            match check {
+                ValidityCheck::GeoArrow(selection) => {
                     multi_polygons_are_valid_geoarrow(&array, selection)
                 }
-                Validity::Ogc { bounds, topology } => {
+                ValidityCheck::Ogc { bounds, topology } => {
                     multi_polygons_are_valid_ogc(&array, *bounds, topology).map_err(compute_err)?
                 }
             }
         }
     };
-    // A null row stays null, and an incomplete one is invalid:
-    // both are `false` in `valid`'s values.
+    // Both a null row and a row the null values below it made null are `false` in `valid`'s values.
+    // Taking back the input's row validity keeps the first null, and makes the second invalid.
     Ok(valid.with_validity(chunk.validity().cloned()))
 }

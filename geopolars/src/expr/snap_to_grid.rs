@@ -1,4 +1,4 @@
-//! Snapping every coordinate onto a grid, through `geopolars_compute::native::*_snapped_to_grid`.
+//! Snapping every coordinate onto a grid, through [`geopolars_core::snap_to_grid`].
 //! See `snap_to_grid` in Python for the rules.
 
 use geopolars_compute::native::{Grid, RoundMode};

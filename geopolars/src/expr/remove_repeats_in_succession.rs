@@ -1,5 +1,5 @@
 //! Removing the points that coincide with the one before them,
-//! through `geopolars_compute::native::*_without_repeats_in_succession`.
+//! through [`geopolars_core::without_repeats_in_succession`].
 //! See `remove_repeats_in_succession` in Python for the rules.
 
 use geopolars_compute::native::{Coincidence, CollapsedLines, LineOptions, TooShort};

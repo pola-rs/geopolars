@@ -61,7 +61,7 @@ pub fn assembled_polygons(
     let Some((holes, listed, null_parts)) = holes else {
         // FIXME: this copies every coordinate into new buffers for nothing.
         // `exteriors` already is a trimmed polygon of one ring per row, without a copy,
-        // so this can be `return Ok(validated_polygons(exteriors, close))`.
+        // so this can be `return Ok(GeometryArray::Polygon(validated_polygons(exteriors, close)))`.
         // `polygons_with_added_holes` can then take `holes` without the `Option`.
         // This affects `polygons_from_coordinates`,
         // and `polygons_from_rings_in_separate_columns` without holes.

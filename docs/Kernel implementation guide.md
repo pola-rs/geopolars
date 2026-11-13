@@ -36,10 +36,11 @@ That way we only need to have helpers on one side too :)
 
 ## Use view types
 
-Write kernels to take in view types, and output view types,
-rather than using type-erased ones like `Box<dyn Array>`.
-This makes it clear what type of data the kernel expects,
-which functions both in documenting the code as well as reducing the chance to introduce bugs.
+Write kernels to take in view types, rather than type-erased ones like `Box<dyn Array>`.
+A kernel that gives geometries returns a view type too (e.g. a `PolygonArray`).
+Any other kernel returns a concrete Polars array (e.g. a `BooleanArray`).
+This makes it clear what type of data the kernel expects and gives,
+which both documents the code and reduces the chance to introduce bugs.
 
 ## Error handling
 
@@ -67,4 +68,4 @@ Every kernel in turn has to give valid output.
 
 Views from `new` are trimmed, and a view a kernel builds has to be too.
 A cheap kernel may take an `Untrimmed` view instead.
-See the [geopolars-views README](../geopolars-views/README.md#trimming).
+See [Trimming](<View Types.md#trimming>).

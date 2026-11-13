@@ -42,7 +42,7 @@ fn ends_before(ends: &[i64], item: usize) -> usize {
 fn lists_passing(lists: &ValidList, items: &Bitmap) -> Bitmap {
     debug_assert!(
         lists.spans_all_of(items.len()),
-        "the lists have to be trimmed (see the geopolars-views README on trimming)"
+        "the lists have to be trimmed (see \"Trimming\" in docs/View Types.md)"
     );
     if items.unset_bits() * SPARSE_RATIO < lists.len() {
         lists_passing_sparse(lists, items)

@@ -1,6 +1,3 @@
-//! Adding holes to polygons, from another column.
-//! See `add_holes` in Python for the rules.
-
 use geopolars_core::{EmptyExterior, NullParts};
 use geopolars_views::Kind;
 use polars::prelude::*;

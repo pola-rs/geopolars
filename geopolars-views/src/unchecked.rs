@@ -40,7 +40,7 @@ impl UncheckedStorage {
         Ok(Self { lists, coords }.trimmed())
     }
 
-    /// This storage, with every level sliced to what its rows use (see the README on trimming).
+    /// This storage, with every level sliced to what its rows use (see "Trimming" in docs/View Types.md).
     fn trimmed(self) -> Self {
         let mut items = 0..self.lists.first().map_or(self.coords.len(), List::len);
         let lists = (self.lists.iter())

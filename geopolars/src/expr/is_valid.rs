@@ -1,10 +1,10 @@
-//! Whether a geometry is valid, by GeoArrow (through `geopolars_compute::geoarrow_validity`)
-//! or by OGC Simple Features (through `geopolars_compute::ogc_validity`).
+//! Whether a geometry is valid, by GeoArrow or by OGC Simple Features,
+//! through [`geopolars_core::are_valid`].
 //! See `is_valid_geoarrow` and `is_valid_ogc` in Python for the rules.
 
 use geopolars_compute::native::{Bounds, CoordinateSelection, NonFinite};
 use geopolars_compute::ogc_validity::{MultiPolygonTopologyChecks, PolygonTopologyChecks};
-use geopolars_core::{are_valid, Validity};
+use geopolars_core::{are_valid, ValidityCheck};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
@@ -69,14 +69,14 @@ impl IsValidOgcKwargs {
 fn are_valid_per_chunk(
     geometries: &Series,
     check_null_coordinates: bool,
-    validity: &Validity,
+    check: &ValidityCheck,
 ) -> PolarsResult<BooleanChunked> {
     let kind = describe(geometries.dtype())?.kind;
     let storage = geometries.ext()?.storage();
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| are_valid(chunk.as_ref(), kind, check_null_coordinates, validity));
+        .map(|chunk| are_valid(chunk.as_ref(), kind, check_null_coordinates, check));
     BooleanChunked::try_from_chunk_iter(geometries.name().clone(), chunks)
 }
 
@@ -97,16 +97,16 @@ fn are_valid_geoarrow(
     are_valid_per_chunk(
         geometries,
         kwargs.check_null_coordinates,
-        &Validity::GeoArrow(selection),
+        &ValidityCheck::GeoArrow(selection),
     )
 }
 
 fn are_valid_ogc(geometries: &Series, kwargs: &IsValidOgcKwargs) -> PolarsResult<BooleanChunked> {
-    let validity = Validity::Ogc {
+    let check = ValidityCheck::Ogc {
         bounds: kwargs.bounds,
         topology: kwargs.topology(),
     };
-    are_valid_per_chunk(geometries, kwargs.check_null_coordinates, &validity)
+    are_valid_per_chunk(geometries, kwargs.check_null_coordinates, &check)
 }
 
 /// For [`is_valid_geoarrow`] and [`is_valid_ogc`]: a `bool` per geometry.

@@ -1,7 +1,3 @@
-//! Geometric transformations that preserve lines and parallelism,
-//! but not necessarily Euclidean distances and angles.
-//! The kernels live in `geopolars_compute::native`.
-
 use geopolars_compute::native;
 use geopolars_core::{affine_transform, affine_transform_about, affine_transform_then_shift};
 use geopolars_views::Kind;

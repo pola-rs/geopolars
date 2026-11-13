@@ -1,7 +1,6 @@
 //! Joining a list of linestrings, or the parts of a multilinestring, into one linestring per row,
 //! or with `gaps="split"` into one multilinestring split at each gap,
-//! through `geopolars_compute::native::multi_line_strings_joined`
-//! and `geopolars_compute::native::multi_line_strings_split_at_gaps`.
+//! through [`geopolars_core::join_line_strings`].
 //! See `join_line_strings` in Python for the rules.
 
 use geopolars_compute::native::Coincidence;

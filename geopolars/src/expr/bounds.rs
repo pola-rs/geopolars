@@ -49,7 +49,6 @@ fn kernel_output_type_bounds(input_fields: &[Field], kwargs: BoundsKwargs) -> Po
 fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
     let dtype = bounds_dtype(inputs[0].dtype(), kwargs.per_part)?;
-    let listed = boxes_in_list(geo.kind, kwargs.per_part);
     let options = BoxOptions {
         margin_x: kwargs.margin_x,
         margin_y: kwargs.margin_y,
@@ -59,10 +58,12 @@ fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| geopolars_core::bounds(chunk.as_ref(), geo.kind, geo.dim, listed, &options))
+        .map(|chunk| {
+            geopolars_core::bounds(chunk.as_ref(), geo.kind, geo.dim, kwargs.per_part, &options)
+        })
         .collect::<PolarsResult<Vec<_>>>()?;
     // SAFETY: `geopolars_core::bounds` gives the boxes of `geo.dim`,
-    // in a list exactly when `boxes_in_list` says so, as `bounds_dtype` does.
+    // in a list exactly for a multi-geometry with `per_part=true`, as `boxes_in_list` says.
     Ok(
         unsafe {
             Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &dtype)

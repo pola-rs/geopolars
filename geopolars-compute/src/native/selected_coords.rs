@@ -169,7 +169,7 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
 ) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     debug_assert!(
         lists.spans_all_of(coords.len()),
-        "the lists have to be trimmed (see the geopolars-views README on trimming)"
+        "the lists have to be trimmed (see \"Trimming\" in docs/View Types.md)"
     );
     let (mut runs, mut passing) = (Vec::new(), None);
     let mut selected = selected.true_idx_iter().peekable();
