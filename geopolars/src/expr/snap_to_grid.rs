@@ -1,3 +1,6 @@
+//! Snapping every coordinate onto a grid.
+//! Implements the Python `snap_to_grid`.
+
 use geopolars_compute::native::{Grid, RoundMode};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
@@ -14,7 +17,8 @@ enum RoundModeDef {
     ToZero,
 }
 
-/// See [`Grid`].
+/// The keyword arguments of the Python `snap_to_grid`,
+/// with a `z` left out of `spacing` or `origin` filled in as 0.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SnapToGridKwargs {
@@ -24,7 +28,6 @@ struct SnapToGridKwargs {
     mode: RoundMode,
 }
 
-/// See `snap_to_grid`.
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn snap_to_grid(inputs: &[Series], kwargs: SnapToGridKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;

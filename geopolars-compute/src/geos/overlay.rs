@@ -1,5 +1,5 @@
 //! The overlays of two geometries (their intersection or difference), forwarded to GEOS.
-//! See `intersection` and `difference` in Python for the rules.
+//! Implements the Python `intersection` and `difference`.
 
 use geopolars_views::output::SizeHint;
 use geopolars_views::{

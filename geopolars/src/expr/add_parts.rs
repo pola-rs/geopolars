@@ -1,5 +1,5 @@
 //! Adding parts to geometries, from another column.
-//! See `add_parts` in Python for the rules.
+//! Implements the Python `add_parts`.
 
 use geopolars_core::{EmptyParts, NullParts};
 use polars::prelude::*;
@@ -18,8 +18,7 @@ enum EmptyPartsDef {
     Drop,
 }
 
-/// The keyword arguments of `add_parts`.
-/// These have to be mirrored on the Python side.
+/// The keyword arguments of the Python `add_parts`.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AddPartsKwargs {
@@ -45,7 +44,6 @@ fn kernel_output_type_add_parts(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-/// See `add_parts`.
 #[polars_expr(output_type_func=kernel_output_type_add_parts)]
 fn add_parts(inputs: &[Series], kwargs: AddPartsKwargs) -> PolarsResult<Series> {
     let (geo, listed) = parts_added(&fields_of(inputs))?;

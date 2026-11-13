@@ -3,6 +3,7 @@
 //!
 //! Translating, rotating, scaling and skewing are all one of these,
 //! so they share one kernel, and differ only in the matrix they hand it.
+//! Implements the Python `affine_transform`, which documents how a geometry is transformed.
 //!
 //! # Const generic flags
 //!
@@ -33,7 +34,6 @@ use polars_arrow::compute::utils::combine_validities_and;
 ///
 /// A geometry without a `z` reads it as 0 and has no `z'` to write,
 /// so `c`, `f` and the whole bottom row do nothing to it.
-/// `m` is a measure, not a position, so it is never transformed.
 pub struct AffineMatrix {
     // Only the coordinates the row actually uses are read:
     // a kernel this simple spends its time moving data, not multiplying it,

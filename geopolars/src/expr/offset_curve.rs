@@ -1,4 +1,5 @@
 //! The offset curve of a linestring or multilinestring, forwarded to GEOS.
+//! Implements the Python `offset_curve`.
 
 use geopolars_compute::geos::{JoinStyle, OffsetCurveStyle};
 use geopolars_core::{offset_curves, LineKind};
@@ -10,9 +11,8 @@ use serde::Deserialize;
 use super::buffer::{chunks_by_distance, JoinStyleDef};
 use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// The type of the offset curves of a `dtype` column (XY).
-/// Also gives the input's kind, and whether the curves are multilinestrings
-/// (for a multilinestring, or with `allow_splitting=true`).
+/// The type of the offset curves of a `dtype` column, as the Python `offset_curve` gives it.
+/// Also gives the input's kind, and whether the curves are multilinestrings.
 fn offset_curve_type(
     dtype: &DataType,
     kwargs: &OffsetCurveKwargs,
@@ -34,7 +34,6 @@ fn offset_curve_type(
     Ok((curve, line_kind, into_multi))
 }
 
-/// For [`offset_curve`].
 fn kernel_output_type_offset_curve(
     input_fields: &[Field],
     kwargs: OffsetCurveKwargs,
@@ -43,7 +42,7 @@ fn kernel_output_type_offset_curve(
     Ok(Field::new(input_fields[0].name().clone(), curve.dtype()))
 }
 
-/// See python docs for details.
+/// The keyword arguments of the Python `offset_curve`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OffsetCurveKwargs {
@@ -58,7 +57,6 @@ pub struct OffsetCurveKwargs {
     early_finite_check: bool,
 }
 
-/// See `offset_curve`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_offset_curve)]
 fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Series> {
     let (curve, kind, into_multi) = offset_curve_type(inputs[0].dtype(), &kwargs)?;

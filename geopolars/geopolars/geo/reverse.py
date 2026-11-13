@@ -50,14 +50,14 @@ def reverse(
     | `MultiLineStringXY[ZM]` | every linestring |
     | `MultiPolygonXY[ZM]` | the exterior of every polygon |
 
-    With `reverse_holes=True`, the direction of the holes of a (multi)polygon are reversed too.
+    With `reverse_holes=True`, the holes of a (multi)polygon are reversed too.
     The order of a polygon's rings is kept.
 
     With `nested=True`, the order of the parts of a multilinestring or multipolygon
     is reversed as well.
-    With `nested=False`, every part keeps its place.
     For a multilinestring, this reverses it as a whole, which is the cheaper option.
     For a multipolygon, it is the more expensive one.
+    With `nested=False`, every part keeps its place.
 
     {ignores_empty_and_invalid}
 

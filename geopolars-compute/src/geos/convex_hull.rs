@@ -6,13 +6,8 @@
 //! For a polygon or a multipolygon, these are only the coordinates of the exteriors.
 //! A valid polygon will not change in size if you add or remove interior sections after all.
 //!
-//! Some cases where the hull collapses can be caught in advance:
-//! - A row of one coordinate encloses nothing, so it never goes to GEOS.
-//! - An set of coordinates cannot enclose anything
-//! - A two-point line can only enclose a line, so not a polygon -> also reject early
-//!
-//! GEOS has clockwise winding order,
-//! so the user gets to choose if we want to reverse it.
+//! An empty row, or a row of one coordinate, never goes to GEOS,
+//! as its hull is known in advance.
 //!
 //! This trick almost always gives the same hull as GEOS on the geometry itself,
 //! but there are some edge cases:
@@ -57,21 +52,12 @@ use geos::{CoordSeq, Geom, Geometry, GeometryTypes};
 use super::{axes, xy_is_finite_or_error, GeosGeometries, GeosRow};
 use crate::GeoComputeResult;
 
-// Because we don't consider CRS,
-// A geometry crossing the antimeridian is hulled the long way round.
+// TODO: a geometry crossing the antimeridian is hulled the long way round.
 // We could add a flag that checks if the input crosses it (>180°),
-// and then reproject them back
+// and then reproject them back.
 
-/// The convex hull of every row, forwarded to GEOS.
-/// GEOS keeps z, but drops m.
-/// An empty linestring's hull is empty.
-/// A straight linestring (or one of a single vertex) has a point or a line for a hull,
-/// so that row is null.
-/// If `ignore_per_row_errors=true`, a row GEOS fails on is null,
-/// otherwise its error is returned.
-/// If `ccw_outer=true`, the exterior is made to run counter-clockwise
-/// at a small performance cost. If it is not set, orientation is clockwise,
-/// as GEOS gives it.
+/// Finds the convex hull of every linestring through GEOS.
+/// Implements the Python `convex_hull` for linestrings, which documents its behaviour.
 pub fn line_string_convex_hulls(
     array: &LineStringArray,
     ignore_per_row_errors: bool,
@@ -89,7 +75,6 @@ pub fn line_string_convex_hulls(
 }
 
 /// Like [`line_string_convex_hulls`], with one hull around all the points.
-/// One or two points, or points all on one line, give a null row.
 pub fn multi_point_convex_hulls(
     array: &MultiPointArray,
     ignore_per_row_errors: bool,
@@ -124,7 +109,6 @@ pub fn multi_line_string_convex_hulls(
 }
 
 /// Like [`line_string_convex_hulls`], hulling only the exterior.
-/// A polygon with zero area gives a null row.
 pub fn polygon_convex_hulls(
     array: &PolygonArray,
     ignore_per_row_errors: bool,
@@ -147,7 +131,6 @@ pub fn polygon_convex_hulls(
 
 /// Like [`line_string_convex_hulls`],
 /// with one hull of the exteriors of all the parts as a whole.
-/// A multipolygon with zero area gives a null row.
 pub fn multi_polygon_convex_hulls(
     array: &MultiPolygonArray,
     ignore_per_row_errors: bool,

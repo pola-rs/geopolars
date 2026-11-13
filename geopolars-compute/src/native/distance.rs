@@ -1,8 +1,6 @@
-//! How far apart points are, as a [DistanceMetric] measures them.
-//! Functionality for:
-//! - distance between arrays of two points
-//! - distance between one fixed and an array of others
-//! - n*n distances (between each and all other)
+//! How far apart points are, as a [DistanceMetric] measures them,
+//! either row by row ([pairwise]) or from one fixed point ([against_one]).
+//! Implements the Python `distance`.
 //!
 //! # Const generic flags
 //!

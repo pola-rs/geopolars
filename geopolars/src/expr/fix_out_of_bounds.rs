@@ -1,7 +1,5 @@
-//! Fixing the coordinates outside the CRS's bounds,
-//! through [`geopolars_core::with_selected_coords`],
-//! or [`geopolars_core::with_clamped_coords`] to clamp.
-//! See `fix_out_of_bounds` in Python for the rules.
+//! Fixing the coordinates outside the CRS's bounds.
+//! Implements the Python `fix_out_of_bounds`.
 
 use geopolars_compute::native::{Bounds, CoordinateSelection, OutOfBoundsAction, TooShort};
 use geopolars_core::{with_clamped_coords, with_selected_coords};
@@ -22,10 +20,11 @@ enum OutOfBoundsActionDef {
     Clamp,
 }
 
-/// See `OutOfBounds` in python, with its `crs_bounds` looked up as `bounds`.
+/// The keyword arguments of the Python `fix_out_of_bounds`.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FixOutOfBoundsKwargs {
+    /// The bounds that `crs_bounds` names, looked up at plan time.
     bounds: Bounds,
     #[serde(with = "OutOfBoundsActionDef")]
     action: OutOfBoundsAction,
@@ -33,7 +32,6 @@ pub struct FixOutOfBoundsKwargs {
     too_short: TooShort,
 }
 
-/// See `fix_out_of_bounds`.
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn fix_out_of_bounds(inputs: &[Series], kwargs: FixOutOfBoundsKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;

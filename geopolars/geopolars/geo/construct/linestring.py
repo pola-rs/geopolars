@@ -33,6 +33,8 @@ def line_string_from_vertices(
     )
     ```
 
+    {null_inside_row}
+
     {constructed_geoarrow_valid}
     """
     return _gather("linestring", vertices, _metadata(crs))
@@ -53,6 +55,8 @@ def line_string_from_columns(
     ```python
     df.select(geo.line_string_from_columns("lon", "lat", z="elevation"))
     ```
+
+    {null_inside_row}
 
     {constructed_geoarrow_valid}
     """
@@ -108,6 +112,8 @@ def multi_line_string_from_line_strings(
     )
     ```
 
+    {null_inside_row}
+
     {constructed_geoarrow_valid}
     """
     return _gather("multilinestring", line_strings, _metadata(crs))
@@ -128,6 +134,8 @@ def multi_line_string_from_columns(
     ```python
     df.select(geo.multi_line_string_from_columns("lon", "lat"))
     ```
+
+    {null_inside_row}
 
     {constructed_geoarrow_valid}
     """

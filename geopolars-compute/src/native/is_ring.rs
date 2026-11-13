@@ -1,8 +1,6 @@
-//! Whether a linestring is a ring: at least [MIN_RING_VERTICES] vertices,
-//! with its last at exactly the same place as its first.
-//! A multilinestring is a ring when its parts chain into one (see [multi_line_strings_are_rings]).
-//! A polygon has only rings when every ring is one, or every ring is empty.
-//! m is a measure rather than a position, so it is not compared.
+//! Whether a linestring is a ring, or the parts of a multilinestring chain into one.
+//! Implements the Python `is_ring`.
+//! The polygon kernels serve the operations that build polygons out of rings.
 //!
 //! # Const generic flags
 //!
@@ -22,9 +20,6 @@ pub fn line_strings_are_rings<const Z: bool>(array: &Untrimmed<LineStringArray>)
     })
 }
 
-/// Whether the parts of `multi` chain into one ring.
-/// each part ends where the next starts, and the last ends where the first starts.
-/// Other than that same requirements as single linestring.
 #[inline(always)]
 fn parts_form_ring<const Z: bool>(multi: &ScalarMultiLineString) -> bool {
     let coords = multi.coords;
@@ -47,7 +42,6 @@ fn parts_form_ring<const Z: bool>(multi: &ScalarMultiLineString) -> bool {
     joined_vertices >= MIN_RING_VERTICES && same_place::<Z>(coords, first.vertices.start, end)
 }
 
-/// See [parts_form_ring] for what makes a ring.
 pub fn multi_line_strings_are_rings<const Z: bool>(
     array: &Untrimmed<MultiLineStringArray>,
 ) -> BooleanArray {
@@ -57,7 +51,6 @@ pub fn multi_line_strings_are_rings<const Z: bool>(
 // TODO: Not yet converted to bitmask pass, but is a minor candidate for it.
 // Mark the rings that are rings or empty in a mask,
 // and fold it with `rows_passing` (see the TODO at `polygon_shape_is_valid`).
-/// Whether every ring of `polygon` is a ring, or every one is empty (the empty polygon).
 #[inline(always)]
 fn has_only_rings<const Z: bool>(polygon: &ScalarPolygon) -> bool {
     if polygon.has_empty_exterior() {
@@ -68,12 +61,12 @@ fn has_only_rings<const Z: bool>(polygon: &ScalarPolygon) -> bool {
         .all(|ring| is_ring::<Z>(ring.coords, ring.vertices))
 }
 
-/// See [has_only_rings].
+/// Whether every ring of each polygon is a ring, or every one is empty (the empty polygon).
 pub fn polygons_have_only_rings<const Z: bool>(array: &PolygonArray) -> BooleanArray {
     per_row_bool(&array.rows, |i| has_only_rings::<Z>(&array.get(i)))
 }
 
-/// Whether every polygon [has only rings](has_only_rings).
+/// Whether every polygon of each multipolygon has only rings, as [polygons_have_only_rings] asks.
 pub fn multi_polygons_have_only_rings<const Z: bool>(array: &MultiPolygonArray) -> BooleanArray {
     per_row_bool(&array.rows, |i| {
         array

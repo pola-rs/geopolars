@@ -1,27 +1,15 @@
 //! Whether two geometries are equal coordinate by coordinate, exactly or within a tolerance.
-//! See `is_equal` in Python for the rules.
+//! Implements the Python `is_equal`.
 //!
 //! Every kernel takes `a`, and `b` of the same length (row by row) or of a single row (against every row of `a`).
 //! Every comparison stops at the first part length or value that does not match.
 //!
 //! # Const generic flags
 //!
-//! ## `UNIQUE_Z`
-//!
-//! Every kernel is generic over `UNIQUE_Z`, or takes it as `unique_z`.
-//! The z values are only compared if `UNIQUE_Z=true`.
-//! A runtime `unique_z` is ignored for coordinates without a z.
-//!
-//! ## `UNIQUE_M`
-//!
-//! Every kernel is generic over `UNIQUE_M`, or takes it as `unique_m`.
-//! The m values are only compared if `UNIQUE_M=true`.
-//! A runtime `unique_m` is ignored for coordinates without an m.
-//!
-//! ## `NANS_EQUAL`
-//!
-//! Every kernel is generic over `NANS_EQUAL`, or takes it as `nans_equal`.
-//! Two NaNs are only equal if `NANS_EQUAL=true`.
+//! Every kernel is generic over `UNIQUE_Z`, `UNIQUE_M`, and `NANS_EQUAL`,
+//! or takes them at runtime as the Python `unique_z`, `unique_m`, and `nans_equal`.
+//! A runtime `unique_z` or `unique_m` is ignored for coordinates without that axis.
+//! `UNIQUE_Z` and `UNIQUE_M` may only be `true` for an axis the coordinates have.
 
 // TODO: With current implementation, the order matters for MultiPoints, Multi*, and Linestring rings.
 // Maybe we should allow giving a bool to first sort?

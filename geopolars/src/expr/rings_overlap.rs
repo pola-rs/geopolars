@@ -1,5 +1,5 @@
-//! Whether two rings overlap
-//! (see [`geopolars_compute::geos::rings_overlap_pairwise`]).
+//! Whether two rings overlap.
+//! Implements the Python `rings_overlap`.
 
 use geopolars_core::{pairwise_rings_overlap, rings_overlap_one};
 use geopolars_views::Kind;
@@ -11,17 +11,14 @@ use serde::Deserialize;
 
 use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs};
 
+/// The keyword arguments of the Python `rings_overlap`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RingsOverlapKwargs {
-    /// Whether rings that only touch overlap too.
     include_touching: bool,
     ignore_per_row_errors: bool,
 }
 
-/// For [`rings_overlap`]: a `bool`, named after the first ring.
-///
-/// Both have to be linestrings, in the same CRS (or neither declaring one).
 fn kernel_output_type_rings_overlap(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "rings_overlap takes two rings, got {} inputs", input_fields.len());
@@ -38,7 +35,6 @@ fn kernel_output_type_rings_overlap(input_fields: &[Field]) -> PolarsResult<Fiel
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-/// See `rings_overlap`.
 #[polars_expr(output_type_func=kernel_output_type_rings_overlap)]
 fn rings_overlap(inputs: &[Series], kwargs: RingsOverlapKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);

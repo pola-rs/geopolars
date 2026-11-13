@@ -1,3 +1,6 @@
+//! The line spanning the Hausdorff distance between two geometries.
+//! Implements the Python `hausdorff_line_between`.
+
 use geopolars_compute::native::NonFinite;
 use geopolars_core::{hausdorff_lines_to_one, pairwise_hausdorff_lines};
 use geopolars_views::Kind;
@@ -10,7 +13,8 @@ use crate::geoarrow::{
     GeometryPairs,
 };
 
-/// See python. Its `non_finite` arrives as `select_non_finite` and `select_empty`,
+/// The keyword arguments of the Python `hausdorff_line_between`.
+/// Its `non_finite` arrives as `select_non_finite` and `select_empty`,
 /// which select the coordinates that fail their row.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,7 +44,6 @@ fn hausdorff_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<Geo> 
     Ok(Geo::new(Kind::LineString, dim, a.metadata.clone()))
 }
 
-/// For [`hausdorff_line_between`], named after the first geometry.
 fn kernel_output_type_hausdorff_line_between(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "hausdorff_line_between takes two geometries, got {} inputs", input_fields.len());
@@ -51,7 +54,6 @@ fn kernel_output_type_hausdorff_line_between(input_fields: &[Field]) -> PolarsRe
     ))
 }
 
-/// See `hausdorff_line_between`.
 #[polars_expr(output_type_func=kernel_output_type_hausdorff_line_between)]
 fn hausdorff_line_between(
     inputs: &[Series],

@@ -1,6 +1,5 @@
-//! Removing the points that coincide with the one before them,
-//! through [`geopolars_core::without_repeats_in_succession`].
-//! See `remove_repeats_in_succession` in Python for the rules.
+//! Removing the points that coincide with the one before them.
+//! Implements the Python `remove_repeats_in_succession`.
 
 use geopolars_compute::native::{Coincidence, CollapsedLines, LineOptions, TooShort};
 use geopolars_core::without_repeats_in_succession;
@@ -26,7 +25,7 @@ pub(super) enum TooShortDef {
     Empty,
 }
 
-/// See python
+/// The keyword arguments of the Python `remove_repeats_in_succession`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RemoveRepeatsInSuccessionKwargs {
@@ -40,7 +39,6 @@ pub struct RemoveRepeatsInSuccessionKwargs {
     too_short: TooShort,
 }
 
-/// See `remove_repeats_in_succession`.
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn remove_repeats_in_succession(
     inputs: &[Series],

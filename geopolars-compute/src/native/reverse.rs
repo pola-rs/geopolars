@@ -1,5 +1,5 @@
 //! Reversing the order of a geometry's vertices.
-//! See `reverse` in Python for the rules.
+//! Implements the Python `reverse`.
 //!
 //! Every kernel copies the coordinates once, then reverses runs of them in place.
 //! The list levels are shared with the input, unless the order of the parts changes.
@@ -9,15 +9,13 @@
 //!
 //! ## `REVERSE_HOLES`
 //!
-//! [reverse_polygons] and [reverse_multi_polygons] are generic over `REVERSE_HOLES`.
-//! If `REVERSE_HOLES=false`, only the exterior of every polygon is reversed.
-//! If `REVERSE_HOLES=true`, its holes are reversed too.
+//! [reverse_polygons] and [reverse_multi_polygons] are generic over `REVERSE_HOLES`,
+//! the Python `reverse_holes`.
 //!
 //! ## `NESTED`
 //!
-//! [reverse_multi_line_strings] and [reverse_multi_polygons] are generic over `NESTED`.
-//! If `NESTED=true`, the order of every row's parts is reversed as well.
-//! The rings of a polygon keep their order, so its exterior stays first.
+//! [reverse_multi_line_strings] and [reverse_multi_polygons] are generic over `NESTED`,
+//! the Python `nested`.
 
 use std::ops::Range;
 
@@ -29,7 +27,8 @@ use polars_arrow::offset::Offsets;
 
 use super::rings::offsets_of;
 
-/// `coords` with the exterior of each of `polygons` reversed.
+/// `coords` with the exterior of each of `polygons` reversed,
+/// or every ring if `REVERSE_HOLES=true`.
 /// Each item of `polygons` is the range of that polygon's rings in `rings`.
 fn reverse_rings<const REVERSE_HOLES: bool>(
     polygons: impl Iterator<Item = Range<usize>> + Clone,
@@ -129,8 +128,7 @@ pub fn reverse_multi_line_strings<const NESTED: bool>(
     }
 }
 
-/// With `NESTED=true`, the polygons are first reordered into a copy,
-/// so unlike for multilinestrings, this is the more expensive option.
+/// With `NESTED=true`, the polygons are first reordered into a copy.
 pub fn reverse_multi_polygons<const REVERSE_HOLES: bool, const NESTED: bool>(
     array: &MultiPolygonArray,
 ) -> MultiPolygonArray {

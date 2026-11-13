@@ -47,6 +47,8 @@ def point(
     df.select(geo.point("lon", "lat", crs="EPSG:4326"))
     ```
 
+    {null_inside_row}
+
     {constructed_geoarrow_valid}
     """
     given = _given(x, y, z, m)
@@ -79,6 +81,8 @@ def multi_point_from_points(
     )
     ```
 
+    {null_inside_row}
+
     {constructed_geoarrow_valid}
     """
     return _gather("multipoint", points, _metadata(crs))
@@ -99,6 +103,8 @@ def multi_point_from_columns(
     ```python
     df.select(geo.multi_point_from_columns("lon", "lat", m="seen_at"))
     ```
+
+    {null_inside_row}
 
     {constructed_geoarrow_valid}
     """

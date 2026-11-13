@@ -1,4 +1,5 @@
 //! Building a geometry out of the parts it is made of.
+//! Implements the Python constructors, each kernel naming the one it implements.
 
 use std::sync::Arc;
 
@@ -14,15 +15,12 @@ use geopolars_core::{
 };
 use geopolars_views::{GeoDimension, Kind};
 
-/// The keyword arguments of the constructors that build polygons:
-/// [`MetadataKwargs`], plus whether and how to close open rings.
-/// These have to be mirrored on the Python side.
+/// The keyword arguments of the Python constructors that build polygons:
+/// [`MetadataKwargs`], plus `close`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PolygonKwargs {
-    /// The CRS the coordinates are in, in any form PROJ accepts.
     pub crs: Option<String>,
-    /// How to close every open ring, as `close_rings` does.
     pub close: Option<CloseRingsKwargs>,
 }
 
@@ -202,7 +200,7 @@ fn gather(
     validated(&storage.into_series(), geo, kind, close)
 }
 
-/// See `linestring_from_vertices`.
+/// Implements the Python `line_string_from_vertices`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_linestring)]
 fn linestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     let vertices = &inputs[0];
@@ -218,7 +216,7 @@ fn linestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series>
     }
 }
 
-/// See `polygons_from_rings_in_single_column`.
+/// Implements the Python `polygons_from_rings_in_single_column`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon)]
 fn polygon(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     gather(
@@ -230,7 +228,7 @@ fn polygon(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     )
 }
 
-/// See `multipoint_from_points`.
+/// Implements the Python `multi_point_from_points`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipoint)]
 fn multipoint(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     // Note that this is basically the same as linestring, but just a different [Kind].
@@ -243,7 +241,7 @@ fn multipoint(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series>
     )
 }
 
-/// See `multilinestring_from_linestrings`.
+/// Implements the Python `multi_line_string_from_line_strings`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multilinestring)]
 fn multilinestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     gather(
@@ -255,7 +253,7 @@ fn multilinestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Se
     )
 }
 
-/// See `multipolygon_from_polygons`.
+/// Implements the Python `multi_polygons_from_polygons`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipolygon)]
 fn multipolygon(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     gather(
@@ -388,7 +386,7 @@ fn kernel_output_type_multipolygon_nested_coords(
 /// Interleave columns that each nest their coordinate `nesting` `List` layers
 /// deep into one `List`-of-that-depth of coordinate structs.
 ///
-/// Only the first column's offsets survive; the callers checks the rest carry the same ones.
+/// Only the first column's offsets survive; the caller checks the rest carry the same ones.
 fn interleave(columns: &[Series], nesting: u8) -> PolarsResult<Series> {
     if nesting == 0 {
         let coordinates = columns
@@ -459,13 +457,13 @@ fn interleaved_columns(inputs: &[Series], nesting: u8) -> PolarsResult<Series> {
     interleave(&columns, nesting)
 }
 
-/// See `linestring_from_columns`.
+/// Implements the Python `line_string_from_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_linestring_coords)]
 fn linestring_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     zip(inputs, &kwargs, None, NestedKind::LineString)
 }
 
-/// See `polygons_from_coordinates`.
+/// Implements the Python `polygons_from_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon_coords)]
 fn polygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     let geo = zipped_exteriors(&fields_of(inputs), &kwargs.metadata(), Kind::Polygon)?;
@@ -478,7 +476,7 @@ fn polygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Seri
     geometry_series(exteriors.name().clone(), geo, chunks)
 }
 
-/// See `polygons_from_nested_coordinates`.
+/// Implements the Python `polygons_from_nested_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon_nested_coords)]
 fn polygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     zip(
@@ -489,19 +487,19 @@ fn polygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResu
     )
 }
 
-/// See `multipoint_from_columns`.
+/// Implements the Python `multi_point_from_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipoint_coords)]
 fn multipoint_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     zip(inputs, &kwargs, None, NestedKind::MultiPoint)
 }
 
-/// See `multilinestring_from_columns`.
+/// Implements the Python `multi_line_string_from_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multilinestring_coords)]
 fn multilinestring_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     zip(inputs, &kwargs, None, NestedKind::MultiLineString)
 }
 
-/// See `multi_polygons_from_coordinates`.
+/// Implements the Python `multi_polygons_from_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipolygon_coords)]
 fn multipolygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     let geo = zipped_exteriors(&fields_of(inputs), &kwargs.metadata(), Kind::MultiPolygon)?;
@@ -514,7 +512,7 @@ fn multipolygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult
     geometry_series(exteriors.name().clone(), geo, chunks)
 }
 
-/// See `multi_polygons_from_nested_coordinates`.
+/// Implements the Python `multi_polygons_from_nested_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipolygon_nested_coords)]
 fn multipolygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     zip(
@@ -635,13 +633,12 @@ pub(super) fn listed_parts(
     Ok((layout.listed, layout.metadata))
 }
 
-/// [`PolygonKwargs`], plus what a null hole does.
+/// The keyword arguments of the Python `polygons_from_rings_in_separate_columns`:
+/// [`PolygonKwargs`], plus `null_parts`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SeparateRingsKwargs {
-    /// The CRS the coordinates are in, in any form PROJ accepts.
     pub crs: Option<String>,
-    /// How to close every open ring, as `close_rings` does.
     pub close: Option<CloseRingsKwargs>,
     #[serde(with = "NullPartsDef")]
     null_parts: NullParts,
@@ -754,7 +751,7 @@ pub(super) enum NullPartsDef {
     Null,
 }
 
-/// See `polygons_from_rings_in_separate_columns`.
+/// Implements the Python `polygons_from_rings_in_separate_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon_rings_in_separate_columns)]
 fn polygon_rings_in_separate_columns(
     inputs: &[Series],

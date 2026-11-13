@@ -87,6 +87,9 @@ unless every hole of it is empty too (the empty polygon).""",
     "constructed_geoarrow_valid": """\
 Every geometry this functions builds is valid by `is_valid_geoarrow`,
 but it might not be valid by `is_valid_ogc`, nor simple (see `is_simple`).""",
+    "null_inside_row": """\
+A null anywhere inside a row (such as a null vertex, or a null coordinate value)
+makes the whole row null, as GeoArrow only allows nulls at the outermost level.""",
     "empty_and_null": """\
 An empty geometry gives an empty {output}, and a null one a null {output}.""",
     "keeps_type_dimension_and_crs": """\
@@ -183,6 +186,7 @@ The metadata of a `{encoding_dtype}` column is carried over, and `crs` labels th
 the same way it does for the constructors.""",
     "box_of_coordinates": """\
 The bounds are the minimum and maximum of the stored coordinates.
+A NaN is skipped.
 z and m are bounded like x and y.""",
     "box_around_the_globe": """\
 With a geographic CRS, `x` is then brought back into `[-180, 180]`

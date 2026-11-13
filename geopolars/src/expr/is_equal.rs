@@ -1,4 +1,5 @@
-//! Whether two geometries are equal, coordinate by coordinate
+//! Whether two geometries are equal, coordinate by coordinate.
+//! Implements the Python `is_equal`.
 
 use geopolars_compute::native::Coincidence;
 use polars::prelude::*;
@@ -9,7 +10,7 @@ use serde::Deserialize;
 
 use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs};
 
-/// See python
+/// The keyword arguments of the Python `is_equal`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct IsEqualKwargs {
@@ -20,9 +21,6 @@ pub struct IsEqualKwargs {
     unique_m: bool,
 }
 
-/// For [`is_equal`]: a `bool`, named after the first geometry.
-///
-/// Both have to be the same kind and dimension, in the same CRS (or neither declaring one).
 fn kernel_output_type_is_equal(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "is_equal takes two geometries, got {} inputs", input_fields.len());
@@ -37,7 +35,6 @@ fn kernel_output_type_is_equal(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-/// See `is_equal`.
 #[polars_expr(output_type_func=kernel_output_type_is_equal)]
 fn is_equal(inputs: &[Series], kwargs: IsEqualKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);

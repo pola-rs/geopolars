@@ -1,5 +1,5 @@
 //! Joining the linestrings of each row into one, end to start.
-//! See `join_line_strings` in Python for the rules.
+//! Implements the Python `join_line_strings`.
 //!
 //! The parts of a row already lie one after the other in the coordinates,
 //! so a join only needs new offsets, and the coordinates are shared.
@@ -16,10 +16,8 @@ use super::has_repeats_in_succession::{with_coincide, Coincidence};
 use super::selected_coords::{line_strings_without_selected, multi_line_strings_without_selected};
 use super::too_short::TooShort;
 
-/// What [multi_line_strings_joined] does at a gap: a join whose two vertices do not coincide.
-/// See `gaps` of `join_line_strings` in Python.
-/// `gaps="split"` gives multilinestrings, so it has no variant here.
-/// See [multi_line_strings_split_at_gaps] for it.
+/// `gaps` of the Python `join_line_strings`, for [multi_line_strings_joined].
+/// `gaps="split"` gives multilinestrings, so [multi_line_strings_split_at_gaps] does it instead.
 #[derive(Debug, Clone, Copy)]
 pub enum Gaps {
     Null,
@@ -69,9 +67,7 @@ fn vertices_per_row(array: &MultiLineStringArray) -> ValidList {
     ValidList::from_offsets(unsafe { Offsets::new_unchecked(offsets) }.into())
 }
 
-/// One linestring per row of `array`, out of all its parts.
-/// A row with a gap is null with [Gaps::Null].
-/// With `drop_repeated_joins=true`, the first vertex of a part is dropped where it coincides with the end of the one before.
+/// Joins the parts of every multilinestring into one linestring.
 pub fn multi_line_strings_joined(
     array: &MultiLineStringArray,
     coincidence: Coincidence,

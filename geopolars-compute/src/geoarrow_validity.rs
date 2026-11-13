@@ -1,5 +1,5 @@
 //! Whether each geometry is valid by the GeoArrow spec, and holds no selected coordinate.
-//! See `is_valid_geoarrow` in Python for the rules.
+//! Implements the Python `is_valid_geoarrow`.
 //!
 //! Every check writes a mask of the items that pass at its own level.
 //! These levels are the coordinates (`which_are_not_selected`) and the rings (`rings_are_closed`).

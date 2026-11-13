@@ -1,5 +1,5 @@
 //! Closing the open rings (and linestrings) of a geometry.
-//! See `close_rings` in Python for the rules.
+//! Implements the Python `close_rings`.
 
 use geopolars_core::{CloseRings, SegmentKind};
 use polars::prelude::*;
@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use crate::geoarrow::{describe, geometry_series};
 
-/// See python
+/// The keyword arguments of the Python `close_rings`.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CloseRingsKwargs {
@@ -29,7 +29,6 @@ fn kernel_output_type_close_rings(input_fields: &[Field]) -> PolarsResult<Field>
     Ok(field.clone())
 }
 
-/// See `close_rings`.
 #[polars_expr(output_type_func=kernel_output_type_close_rings)]
 fn close_rings(inputs: &[Series], kwargs: CloseRingsKwargs) -> PolarsResult<Series> {
     let kind = SegmentKind::new("close_rings", describe(inputs[0].dtype())?.kind)?;

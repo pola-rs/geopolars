@@ -1,5 +1,5 @@
 //! The DE-9IM matrix of two geometries
-//! (see [`geopolars_compute::geos::RelatePairs`]).
+//! Implements the Python `relate`.
 
 use polars::prelude::*;
 use polars_arrow::array::Utf8ViewArray;
@@ -11,7 +11,7 @@ use crate::geoarrow::{
     describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, GeometryPairs,
 };
 
-/// See python
+/// The keyword arguments of the Python `relate`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RelateKwargs {
@@ -19,9 +19,6 @@ pub struct RelateKwargs {
     early_finite_check: bool,
 }
 
-/// For [`relate`]: a `String`, named after the first geometry.
-///
-/// Both can be of any kind and dimension, in the same CRS (or neither declaring one).
 fn kernel_output_type_relate(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "relate takes two geometries, got {} inputs", input_fields.len());
@@ -30,7 +27,6 @@ fn kernel_output_type_relate(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(a.name().clone(), DataType::String))
 }
 
-/// See `relate`.
 #[polars_expr(output_type_func=kernel_output_type_relate)]
 fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);

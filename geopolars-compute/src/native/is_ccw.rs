@@ -1,18 +1,11 @@
-//! Whether a geometry runs counter-clockwise in x and y, and making it so.
-//! m and z don't really matter here.
+//! Whether a geometry runs counter-clockwise, and making it so.
+//! Implements the Python `is_ccw` and `to_ccw`.
 //!
 //! # Const generic flags
 //!
-//! ## `CW`
-//!
-//! [ring_runs] is generic over `CW`.
-//! If `CW=true`, it checks for clockwise instead.
-//!
 //! ## `HOLES_CW`
 //!
-//! The polygon and multipolygon kernels are generic over `HOLES_CW`.
-//! If `HOLES_CW=true`, the holes have to run clockwise.
-//! If `HOLES_CW=false`, the holes have to run counter-clockwise, like the exterior.
+//! The polygon and multipolygon kernels are generic over `HOLES_CW`, the Python `holes_cw`.
 
 use std::ops::Range;
 
@@ -25,9 +18,9 @@ use polars_arrow::array::BooleanArray;
 use super::area::twice_signed_area;
 use crate::per_row::per_row_bool;
 
-/// Whether `ring` runs counter-clockwise.
-/// An empty ring runs either way.
-/// Any other ring that encloses nothing runs neither way.
+/// Whether `ring` runs counter-clockwise, or clockwise if `CW=true`,
+/// by the rules of the Python `is_ccw`.
+/// An empty ring therefore gives `true` for either `CW`.
 #[inline(always)]
 fn ring_runs<const CW: bool>(ring: &ScalarLineString) -> bool {
     if ring.vertices.is_empty() {
@@ -41,8 +34,6 @@ fn ring_runs<const CW: bool>(ring: &ScalarLineString) -> bool {
     }
 }
 
-/// Whether `polygon` has its exterior counter-clockwise, and its holes the way `HOLES_CW` says.
-/// No rings at all is the empty polygon, which runs either way.
 #[inline(always)]
 fn polygon_is_ccw<const HOLES_CW: bool>(polygon: &ScalarPolygon) -> bool {
     let mut rings = polygon.rings();
@@ -60,8 +51,6 @@ pub fn polygons_are_ccw<const HOLES_CW: bool>(array: &Untrimmed<PolygonArray>) -
     per_row_bool(array.rows(), |i| polygon_is_ccw::<HOLES_CW>(&array.get(i)))
 }
 
-/// Whether every linestring of a multilinestring runs counter-clockwise, for every row of a chunk.
-/// No linestrings at all runs either way.
 pub fn multi_line_strings_are_ccw(array: &Untrimmed<MultiLineStringArray>) -> BooleanArray {
     per_row_bool(array.rows(), |i| {
         array
@@ -71,8 +60,6 @@ pub fn multi_line_strings_are_ccw(array: &Untrimmed<MultiLineStringArray>) -> Bo
     })
 }
 
-/// Whether every polygon of a multipolygon [is CCW](polygon_is_ccw), for every row of a chunk.
-/// No polygons at all runs either way.
 pub fn multi_polygons_are_ccw<const HOLES_CW: bool>(
     array: &Untrimmed<MultiPolygonArray>,
 ) -> BooleanArray {

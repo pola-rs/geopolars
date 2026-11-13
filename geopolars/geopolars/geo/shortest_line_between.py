@@ -58,7 +58,8 @@ def shortest_line_between(
     It also puts geometries on either side of the antimeridian a world apart.
     A latitude beyond 90° raises.
 
-    If either geometry is empty, so is the line.
+    {null_on_either_side}
+    If either geometry is empty, so is the line, and that row does not go to GEOS either.
 
     {geos_errors}
 

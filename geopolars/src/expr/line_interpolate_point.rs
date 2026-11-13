@@ -1,3 +1,6 @@
+//! The point at a distance along a line, forwarded to GEOS.
+//! Implements the Python `line_interpolate_point`.
+
 use geopolars_compute::geos::InterpolateMode;
 use geopolars_core::{interpolated_points, LineKind};
 use geopolars_views::Kind;
@@ -8,7 +11,7 @@ use serde::Deserialize;
 use super::buffer::chunks_by_distance;
 use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// A point with the input's dimension and metadata.
+/// The type of the points of a `dtype` column, as the Python `line_interpolate_point` gives it.
 /// Also the kind of the input.
 fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(Geo, LineKind)> {
     let geo = describe(dtype)?;
@@ -18,7 +21,6 @@ fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(Geo, LineKind)
     Ok((point, kind))
 }
 
-/// For [`line_interpolate_point`].
 fn kernel_output_type_line_interpolate_point(input_fields: &[Field]) -> PolarsResult<Field> {
     let (point, _) = line_interpolate_point_type(input_fields[0].dtype())?;
     Ok(Field::new(input_fields[0].name().clone(), point.dtype()))
@@ -31,7 +33,7 @@ enum InterpolateModeDef {
     Normalized,
 }
 
-/// See python docs for details.
+/// The keyword arguments of the Python `line_interpolate_point`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LineInterpolatePointKwargs {
@@ -43,7 +45,6 @@ pub struct LineInterpolatePointKwargs {
     early_finite_check: bool,
 }
 
-/// See `line_interpolate_point`.
 #[polars_expr(output_type_func=kernel_output_type_line_interpolate_point)]
 fn line_interpolate_point(
     inputs: &[Series],

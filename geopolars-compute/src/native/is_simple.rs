@@ -1,5 +1,5 @@
 //! Whether a point or multipoint is simple.
-//! See `is_simple` in Python for the rules.
+//! Implements the Python `is_simple` for these kinds.
 
 use std::ops::Range;
 
@@ -19,7 +19,6 @@ fn has_coinciding_points(points: Range<usize>, coincide: impl Fn(usize, usize) -
         .any(|i| (i + 1..points.end).any(|j| coincide(i, j)))
 }
 
-/// Every point is simple, so this is `true` for every point that is there.
 pub fn points_are_simple(array: &PointArray) -> BooleanArray {
     let coords = &array.coords;
     let values = Bitmap::new_with_value(true, coords.ignoring_validity().len());

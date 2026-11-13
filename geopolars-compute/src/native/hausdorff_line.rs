@@ -1,9 +1,8 @@
 //! The line between two geometries that spans their Hausdorff distance.
-//! See Python `hausdorff_line_between` for the rules.
+//! Implements the Python `hausdorff_line_between`.
 //!
-//! Every vertex of each geometry is measured to the nearest point on the parts of the other, in x and y.
-//! The furthest of these over both directions gives the line, as in the discrete Hausdorff distance of GEOS.
-//! It is a brute-force search: every vertex against every segment of the other geometry,
+//! As in the discrete Hausdorff distance of GEOS, it is a brute-force search:
+//! every vertex against every segment of the other geometry,
 //! except that a vertex stops being measured once it can no longer be the furthest.
 //!
 //! # Why don't we use the GEOS impl?
@@ -543,7 +542,7 @@ fn lines_between<const SKIP: bool>(
 }
 
 /// Finds, row by row, the line from `a` to `b` that spans their Hausdorff distance.
-/// Implements the Python `hausdorff_line_between`, which documents its behaviour.
+/// Implements the Python `hausdorff_line_between`.
 /// A row holding a coordinate that `failing` selects fails.
 /// The search leaves out every other coordinate that is not finite.
 /// The lines have the axes both `a` and `b` have.

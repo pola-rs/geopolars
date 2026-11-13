@@ -1,4 +1,5 @@
 //! Moving a geometry from one coordinate reference system to another.
+//! Implements the Python `to_crs`.
 
 use std::cell::OnceCell;
 use std::rc::Rc;
@@ -15,9 +16,10 @@ use crate::cache::{SharedCache, ThreadCache};
 use crate::geoarrow::{describe, geometry_series, Geo};
 use crate::proj::specifies_z;
 
+/// The keyword arguments of the Python `to_crs`.
 #[derive(Deserialize)]
 struct ToCrsKwargs {
-    /// The CRS to reproject to, in any form PROJ accepts.
+    /// The `crs` of the Python `to_crs`.
     to: String,
     allow_projection_with_unscaled_z: bool,
     assume_z_in_target_crs: bool,
@@ -31,8 +33,6 @@ fn reprojected_geometry_type(dtype: &DataType, to: &str) -> PolarsResult<Geo> {
     Ok(Geo::new(geo.kind, geo.dim, Arc::new(metadata)))
 }
 
-/// For [`to_crs`]: the same geometry, but the
-/// metadata now names the target CRS, so the dtype is a different one.
 fn kernel_output_type_to_crs(input_fields: &[Field], kwargs: ToCrsKwargs) -> PolarsResult<Field> {
     let field = &input_fields[0];
     // Built here as well as in the kernel, so a CRS PROJ cannot use fails while the plan is built.
@@ -98,7 +98,7 @@ fn transformation_from_template(key: &(String, String)) -> PolarsResult<Transfor
     )
 }
 
-/// Whether the `z` of `dtype` goes through PROJ, as in the table of `to_crs` in `geo/crs.py`.
+/// Whether the `z` of `dtype` goes through PROJ, as in the table of the Python `to_crs`.
 /// Errors where that table needs a flag that is not set.
 fn reprojects_z(
     dtype: &DataType,
@@ -139,7 +139,6 @@ fn reprojects_z(
     }
 }
 
-/// See `to_crs`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_to_crs)]
 fn to_crs(inputs: &[Series], kwargs: ToCrsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;

@@ -1,6 +1,6 @@
 //! The rules for single coordinates.
-//! They decide which coordinate is the empty point, which is not finite, and which lies outside the bounds.
-//! See `filter_coordinates` and `fix_out_of_bounds` in Python for the rules.
+//! They decide which coordinate is the empty point, which is not finite, and which lies outside the bounds,
+//! as the Python `filter_coordinates` and `fix_out_of_bounds` document.
 //!
 //! [selected_coords] marks the coordinates a [CoordinateSelection] selects, in one pass.
 //! [super::selected_coords](mod@super::selected_coords) acts on them.

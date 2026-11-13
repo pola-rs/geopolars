@@ -1,5 +1,5 @@
 //! The intersection and difference of two geometries
-//! (see [`geopolars_compute::geos::OverlayPairs`]).
+//! Implements the Python `intersection` and `difference`.
 
 use geopolars_compute::geos::Overlay;
 use geopolars_core::OverlayOptions;
@@ -33,7 +33,7 @@ impl TopologicalDimension {
     }
 }
 
-/// See python
+/// The keyword arguments of the Python `intersection`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct IntersectionKwargs {
@@ -44,7 +44,7 @@ pub struct IntersectionKwargs {
     early_finite_check: bool,
 }
 
-/// See python
+/// The keyword arguments of the Python `difference`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DifferenceKwargs {
@@ -125,7 +125,6 @@ fn overlay_dimension(a: &GeoColumn, b: &GeoColumn) -> GeoDimension {
     }
 }
 
-/// For [`intersection`]: a geometry (see [`intersection_type`]), named after the first one.
 fn kernel_output_type_intersection(
     input_fields: &[Field],
     kwargs: IntersectionKwargs,
@@ -187,7 +186,7 @@ fn overlaid(
     geometry_series(a.name().clone(), geo, chunks)
 }
 
-/// See `intersection`.
+/// Implements the Python `intersection`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_intersection)]
 fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<Series> {
     let geo = intersection_type(inputs[0].dtype(), inputs[1].dtype(), &kwargs)?;
@@ -199,7 +198,7 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
     overlaid(inputs, geo, Overlay::Intersection, options)
 }
 
-/// See `difference`.
+/// Implements the Python `difference`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_difference)]
 fn difference(inputs: &[Series], kwargs: DifferenceKwargs) -> PolarsResult<Series> {
     let geo = difference_type(inputs[0].dtype(), inputs[1].dtype(), &kwargs)?;

@@ -1,6 +1,5 @@
-//! Whether a geometry has two points that coincide,
-//! through [`geopolars_core::have_repeats_in_succession`].
-//! See `has_repeats_in_succession` in Python for the rules.
+//! Whether a geometry has two points in a row that coincide.
+//! Implements the Python `has_repeats_in_succession`.
 
 use geopolars_compute::native::Coincidence;
 use geopolars_core::have_repeats_in_succession;
@@ -10,7 +9,7 @@ use serde::Deserialize;
 
 use crate::geoarrow::describe;
 
-/// See python
+/// The keyword arguments of the Python `has_repeats_in_succession`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HasRepeatsInSuccessionKwargs {
@@ -20,14 +19,12 @@ pub struct HasRepeatsInSuccessionKwargs {
     unique_m: bool,
 }
 
-/// For [`has_repeats_in_succession`]: a `bool` per geometry.
 fn kernel_output_type_has_repeats_in_succession(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     describe(field.dtype())?;
     Ok(Field::new(field.name().clone(), DataType::Boolean))
 }
 
-/// See `has_repeats_in_succession`.
 #[polars_expr(output_type_func=kernel_output_type_has_repeats_in_succession)]
 fn has_repeats_in_succession(
     inputs: &[Series],

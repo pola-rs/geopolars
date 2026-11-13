@@ -10,6 +10,7 @@ use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
 
 /// Transforms every geometry in one chunk of a `kind` column's storage by `matrix`.
+/// Implements the Python `affine_transform` with an origin given as numbers.
 /// The result is of the same kind and dimension.
 pub fn affine_transform(
     chunk: &dyn Array,
@@ -21,6 +22,7 @@ pub fn affine_transform(
 
 /// Transforms every geometry like [`affine_transform`], but about an origin of its own
 /// (see [`RowShift::About`]).
+/// Implements the Python `affine_transform` with an origin given as a point column.
 ///
 /// `origins` is the storage of a point column, with one point per row of `chunk`.
 pub fn affine_transform_about(
@@ -35,6 +37,7 @@ pub fn affine_transform_about(
 
 /// Transforms every geometry like [`affine_transform`], then moves it by a vector of its own
 /// (see [`RowShift::Then`]).
+/// Implements the Python `translate` with an offset given as columns.
 ///
 /// `vectors` is the storage of a point column, with one point per row of `chunk`.
 pub fn affine_transform_then_shift(

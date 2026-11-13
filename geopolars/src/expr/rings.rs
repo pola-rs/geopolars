@@ -1,4 +1,5 @@
-//! The rings of a polygon (see the `rings` module of `geopolars_compute::native`).
+//! The exterior and interior rings of a polygon.
+//! Implements the Python `exterior` and `interior`.
 
 use geopolars_core::{exteriors, interiors, PolygonKind};
 use geopolars_views::Kind;
@@ -22,13 +23,11 @@ fn rings_type(dtype: &DataType, name: &str, kind: Kind) -> PolarsResult<(DataTyp
     Ok((dtype, polygon_kind))
 }
 
-/// For [`exterior`].
 fn kernel_output_type_exterior(input_fields: &[Field]) -> PolarsResult<Field> {
     let (dtype, _) = rings_type(input_fields[0].dtype(), "exterior", Kind::LineString)?;
     Ok(Field::new(input_fields[0].name().clone(), dtype))
 }
 
-/// For [`interior`].
 fn kernel_output_type_interior(input_fields: &[Field]) -> PolarsResult<Field> {
     let (dtype, _) = rings_type(input_fields[0].dtype(), "interior", Kind::MultiLineString)?;
     Ok(Field::new(input_fields[0].name().clone(), dtype))
@@ -51,14 +50,14 @@ fn per_chunk(
     storage_series(inputs[0].name().clone(), chunks, dtype)
 }
 
-/// See `exterior`.
+/// Implements the Python `exterior`.
 #[polars_expr(output_type_func=kernel_output_type_exterior)]
 fn exterior(inputs: &[Series]) -> PolarsResult<Series> {
     let (dtype, kind) = rings_type(inputs[0].dtype(), "exterior", Kind::LineString)?;
     per_chunk(inputs, &dtype, kind, exteriors)
 }
 
-/// See `interior`.
+/// Implements the Python `interior`.
 #[polars_expr(output_type_func=kernel_output_type_interior)]
 fn interior(inputs: &[Series]) -> PolarsResult<Series> {
     let (dtype, kind) = rings_type(inputs[0].dtype(), "interior", Kind::MultiLineString)?;

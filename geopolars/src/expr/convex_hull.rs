@@ -1,4 +1,5 @@
 //! The convex hull of a linestring or polygon, or their multi-variants, forwarded to GEOS.
+//! Implements the Python `convex_hull`.
 
 use geopolars_core::{convex_hulls, NestedKind};
 use geopolars_views::{GeoDimension, Kind};
@@ -8,10 +9,8 @@ use serde::Deserialize;
 
 use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// The type of the convex hulls of a `dtype` column:
-/// a polygon per geometry, with the input's metadata and z, but without m.
+/// The type of the convex hulls of a `dtype` column, as the Python `convex_hull` gives it.
 /// Also gives the input's kind.
-/// A point encloses nothing, so it is refused.
 fn hull_type(dtype: &DataType) -> PolarsResult<(Geo, NestedKind)> {
     let geo = describe(dtype)?;
     let kind = NestedKind::new("convex_hull", geo.kind)?;
@@ -24,13 +23,12 @@ fn hull_type(dtype: &DataType) -> PolarsResult<(Geo, NestedKind)> {
     Ok((hull, kind))
 }
 
-/// For [`convex_hull`].
 fn kernel_output_type_convex_hull(input_fields: &[Field]) -> PolarsResult<Field> {
     let (hull, _) = hull_type(input_fields[0].dtype())?;
     Ok(Field::new(input_fields[0].name().clone(), hull.dtype()))
 }
 
-/// See python docs for details.
+/// The keyword arguments of the Python `convex_hull`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConvexHullKwargs {
@@ -39,7 +37,6 @@ pub struct ConvexHullKwargs {
     early_finite_check: bool,
 }
 
-/// See `convex_hull`.
 #[polars_expr(output_type_func=kernel_output_type_convex_hull)]
 fn convex_hull(inputs: &[Series], kwargs: ConvexHullKwargs) -> PolarsResult<Series> {
     let (hull, kind) = hull_type(inputs[0].dtype())?;

@@ -1,6 +1,5 @@
-//! Emptying, dropping or nulling the coordinates that are not finite, or empty,
-//! through [`geopolars_core::with_selected_coords`].
-//! See `filter_coordinates` in Python for the rules.
+//! Emptying, dropping or nulling the coordinates that are not finite, or empty.
+//! Implements the Python `filter_coordinates`.
 
 use geopolars_compute::native::{CoordinateSelection, NonFinite, SelectedAction, TooShort};
 use geopolars_core::with_selected_coords;
@@ -20,7 +19,7 @@ enum SelectedActionDef {
     SetNull,
 }
 
-/// See python
+/// The keyword arguments of the Python `filter_coordinates`, as the Python `NonFinite` holds them.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NonFiniteKwargs {
@@ -48,7 +47,6 @@ impl NonFiniteKwargs {
     }
 }
 
-/// See `filter_coordinates`.
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn filter_coordinates(inputs: &[Series], kwargs: NonFiniteKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;

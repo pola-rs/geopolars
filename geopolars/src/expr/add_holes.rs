@@ -1,3 +1,6 @@
+//! Adding holes to polygons, from another column.
+//! Implements the Python `add_holes`.
+
 use geopolars_core::{EmptyExterior, NullParts};
 use geopolars_views::Kind;
 use polars::prelude::*;
@@ -8,12 +11,10 @@ use super::close_rings::CloseRingsKwargs;
 use super::construct::{fields_of, listed_parts, paired_rows, parts_storage, NullPartsDef};
 use crate::geoarrow::{describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 
-/// The keyword arguments of `add_holes`.
-/// These have to be mirrored on the Python side.
+/// The keyword arguments of the Python `add_holes`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AddHolesKwargs {
-    /// How to close every open ring, as `close_rings` does.
     pub close: Option<CloseRingsKwargs>,
     #[serde(with = "NullPartsDef")]
     null_parts: NullParts,
@@ -52,7 +53,6 @@ fn kernel_output_type_add_holes(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-/// See `add_holes`.
 #[polars_expr(output_type_func=kernel_output_type_add_holes)]
 fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> {
     let (geo, listed) = holes_added(&fields_of(inputs))?;

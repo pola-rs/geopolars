@@ -47,8 +47,9 @@ pub fn offset_curves_into_line_strings(
     .into_line_string_array::<false>(ignore_per_row_errors)
 }
 
-/// Like [`offset_curves_into_line_strings`], as a multilinestring,
+/// Like [`offset_curves_into_line_strings`], but into a multilinestring,
 /// for a linestring or multilinestring.
+/// Implements the Python `offset_curve` where it gives a multilinestring.
 /// A row that GEOS splits into several linestrings gets them all as parts.
 pub fn offset_curves_into_multi_line_strings(
     array: &impl ToGeosRows,

@@ -1,5 +1,5 @@
 //! Sorting the parts of a geometry.
-//! See `sort_parts` in Python for the rules.
+//! Implements the Python `sort_parts`, which documents the order.
 //!
 //! Each row first gets an order map: the index of every part, in sorted order.
 //! [PartSorter] builds it one row at a time,
@@ -26,7 +26,6 @@
 //! ## `DESCENDING`
 //!
 //! If `DESCENDING=true`, the parts are sorted from greatest to smallest.
-//! Equal parts keep their order either way.
 //!
 //! ## `ROTATE_RINGS`
 //!
@@ -611,10 +610,11 @@ impl PartSorter {
     }
 }
 
-/// See `sort_parts` in Python.
+/// The options of the Python `sort_parts`.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SortOptions {
     pub descending: bool,
+    /// `rings="rotate"` in Python.
     pub rotate_rings: bool,
     pub ignore_per_row_errors: bool,
 }

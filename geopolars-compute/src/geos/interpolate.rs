@@ -26,12 +26,8 @@ pub enum InterpolateMode {
     Normalized,
 }
 
-/// Gets a point on the line, at `distance` from the start.
-/// A negative distance counts back from the end.
-/// A `distance` beyond either end gives that end.
-/// A NaN or infinite distance fails like a GEOS error.
-/// A null distance gives a null row, also for an empty line.
-/// A line without vertices gives an empty point, even for a NaN or infinite distance.
+/// Gets the point at `distance` along every linestring through GEOS.
+/// Implements the Python `line_interpolate_point` for linestrings, which documents its behaviour.
 pub fn interpolate_line_strings(
     array: &LineStringArray,
     distance: BufferDistance,
@@ -48,9 +44,7 @@ pub fn interpolate_line_strings(
     .into_point_array(array.coords.dim())
 }
 
-/// Like [`interpolate_line_strings`], along the parts one after the other.
-/// The gaps between the parts don't count.
-/// An empty part is skipped:
+/// Like [`interpolate_line_strings`], for multilinestrings, walking the parts one after the other.
 pub fn interpolate_multi_line_strings(
     array: &MultiLineStringArray,
     distance: BufferDistance,
@@ -58,7 +52,8 @@ pub fn interpolate_multi_line_strings(
     ignore_per_row_errors: bool,
     early_finite_check: bool,
 ) -> GeoComputeResult<PointArray> {
-    // GEOS reads a vertex of every part it walks, beyond the end of an empty one.
+    // An empty part is skipped,
+    // as GEOS reads a vertex of every part it walks, beyond the end of an empty one.
     interpolate_via_geos(
         multi_line_strings_to_geos_rows(
             array,

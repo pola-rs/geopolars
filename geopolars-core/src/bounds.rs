@@ -17,8 +17,8 @@ use polars_core::prelude::PolarsResult;
 /// Finds the bounding box of every geometry in one chunk of a `kind` column's storage
 /// of dimension `dim`.
 /// Implements the Python `bounds`.
-/// A multi-geometry gets a list of boxes, one per part, if `per_part=true`.
-/// Other geometries ignore `per_part`.
+/// A multi-geometry only gets one box around all its parts,
+/// rather than a list of boxes, if `per_part=false`.
 pub fn bounds(
     chunk: &dyn Array,
     kind: Kind,

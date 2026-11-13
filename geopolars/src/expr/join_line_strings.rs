@@ -1,7 +1,5 @@
-//! Joining a list of linestrings, or the parts of a multilinestring, into one linestring per row,
-//! or with `gaps="split"` into one multilinestring split at each gap,
-//! through [`geopolars_core::join_line_strings`].
-//! See `join_line_strings` in Python for the rules.
+//! Joining the linestrings of each row into one.
+//! Implements the Python `join_line_strings`.
 
 use geopolars_compute::native::Coincidence;
 use geopolars_core::JoinGaps;
@@ -21,7 +19,7 @@ enum JoinGapsDef {
     Split,
 }
 
-/// See python
+/// The keyword arguments of the Python `join_line_strings`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JoinLineStringsKwargs {
@@ -64,7 +62,6 @@ fn kernel_output_type_join_line_strings(
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-/// See `join_line_strings` in Python.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_join_line_strings)]
 fn join_line_strings(inputs: &[Series], kwargs: JoinLineStringsKwargs) -> PolarsResult<Series> {
     let geo = joined_type(inputs[0].dtype(), &kwargs)?;

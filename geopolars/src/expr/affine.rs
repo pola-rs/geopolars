@@ -1,3 +1,9 @@
+//! Affine transformations of a geometry.
+//! Implements the Python `affine_transform`, `translate`, `rotate`, `skew`, and `scale`,
+//! and their `_about_centroid` variants.
+//! An origin given as a point column goes to `affine_about`,
+//! and an offset of `translate` given as columns to `affine_then_shift`.
+
 use geopolars_compute::native;
 use geopolars_core::{affine_transform, affine_transform_about, affine_transform_then_shift};
 use geopolars_views::Kind;
@@ -25,7 +31,7 @@ impl From<&AffineMatrix> for native::AffineMatrix {
     }
 }
 
-/// The kernel behind affine ops like `translate` (see `geo/affine.py`).
+/// See [`affine_transform`].
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
@@ -65,7 +71,6 @@ fn kernel_output_type_same_geometry_by_points(input_fields: &[Field]) -> PolarsR
     Ok(geometry.clone())
 }
 
-/// The kernel behind affine ops about a point per row (see `geo/affine.py`).
 /// See [`affine_transform_about`].
 #[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
 fn affine_about(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
@@ -81,8 +86,7 @@ fn affine_about(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series>
     geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }
 
-/// The kernel behind affine ops that move every geometry by a vector of its own
-/// (see `geo/affine.py`). See [`affine_transform_then_shift`].
+/// See [`affine_transform_then_shift`].
 #[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
 fn affine_then_shift(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;

@@ -1,4 +1,5 @@
 //! The buffer of any geometry, forwarded to GEOS.
+//! Implements the Python `buffer`.
 
 use geopolars_compute::geos::{BufferDistance, BufferStyle, CapStyle, JoinStyle, Side};
 use geopolars_core::buffers;
@@ -10,10 +11,8 @@ use serde::Deserialize;
 
 use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// A multipolygon for a multi-kind, or with `allow_splitting`,
-/// when `distance` is a column or at most 0.
-/// Otherwise a polygon.
-/// It is XY, with the input's metadata.
+/// Used for Python `buffer`.
+/// The type of the buffers of a `dtype` column
 /// Also the kind of the input, and whether the output is a multipolygon.
 fn buffered_type(dtype: &DataType, kwargs: &BufferKwargs) -> PolarsResult<(Geo, Kind, bool)> {
     let geo = describe(dtype)?;
@@ -32,7 +31,6 @@ fn buffered_type(dtype: &DataType, kwargs: &BufferKwargs) -> PolarsResult<(Geo, 
     Ok((buffered, geo.kind, into_multi))
 }
 
-/// For [`buffer`].
 fn kernel_output_type_buffer(input_fields: &[Field], kwargs: BufferKwargs) -> PolarsResult<Field> {
     let (buffered, _, _) = buffered_type(input_fields[0].dtype(), &kwargs)?;
     Ok(Field::new(input_fields[0].name().clone(), buffered.dtype()))
@@ -62,7 +60,7 @@ enum SideDef {
     Right,
 }
 
-/// See python docs for details.
+/// The keyword arguments of the Python `buffer`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BufferKwargs {
@@ -82,7 +80,6 @@ pub struct BufferKwargs {
     early_finite_check: bool,
 }
 
-/// See `buffer`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_buffer)]
 fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
     let (buffered, kind, into_multi) = buffered_type(inputs[0].dtype(), &kwargs)?;

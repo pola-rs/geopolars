@@ -19,7 +19,7 @@ use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::Offsets;
 use polars_core::prelude::PolarsResult;
 
-/// How to close an open ring. See [`close_open_rings`] for `snap_z` and `snap_m`.
+/// How to close an open ring: the flags of the Python `close_rings`.
 #[derive(Debug, Clone, Copy)]
 pub struct CloseRings {
     pub snap_z: bool,

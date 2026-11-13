@@ -1,5 +1,5 @@
 //! Whether two geometries are topologically equal, forwarded to GEOS.
-//! See `is_topologically_equal` in Python for the rules.
+//! Implements the Python `is_topologically_equal`.
 
 use geopolars_views::GeometryArray;
 use geos::Geom;
@@ -24,7 +24,7 @@ fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Op
 }
 
 /// Tests whether two arrays of geometries are topologically equal, row by row.
-/// Implements the Python `is_topologically_equal`, which documents its behaviour.
+/// Implements the Python `is_topologically_equal`.
 /// A single row on either side is compared against every row of the other.
 /// Each side is converted to GEOS in full, so a row paired with a null can still fail.
 ///

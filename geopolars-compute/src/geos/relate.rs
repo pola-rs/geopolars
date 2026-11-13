@@ -1,5 +1,5 @@
 //! The DE-9IM matrix of two geometries, forwarded to GEOS.
-//! See `relate` in Python for the rules.
+//! Implements the Python `relate`.
 
 use geopolars_views::GeometryArray;
 use geos::{Geom, Geometry};

@@ -82,6 +82,8 @@ def add_parts(
     | `"keep"` | is added like any other part |
     | `"drop"` | is left out |
 
+    {empty_point}
+
     ```python
     df.select(geo.add_parts("roads", "new_roads"))
 

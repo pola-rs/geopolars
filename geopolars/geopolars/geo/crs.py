@@ -81,6 +81,7 @@ def to_crs(
 
     {crs_forms}
     The source CRS is read from the column's metadata.
+    The result declares `crs` instead, and keeps the rest of the metadata.
     `m` is carried through untouched.
 
     A CRS specifies `z` when it is compound, or when its coordinate system has three axes

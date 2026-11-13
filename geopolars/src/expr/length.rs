@@ -1,6 +1,5 @@
-//! How long a linestring is:
-//! - in the space its coordinates lie in ([`DistanceMethod::Planar`]),
-//! - along the ellipsoid of its CRS ([`DistanceMethod::Geodesic`]).
+//! How long a linestring is.
+//! Implements the Python `length`.
 
 use std::fmt::Display;
 
@@ -14,11 +13,11 @@ use serde::Deserialize;
 use super::distance::{geodesic_metric, DistanceMethod};
 use crate::geoarrow::describe;
 
+/// The keyword arguments of the Python `length`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LengthKwargs {
     method: DistanceMethod,
-    /// Skip vertices with a NaN, rather than letting the length become NaN.
     ignore_nan: bool,
 }
 
@@ -32,17 +31,13 @@ fn crs_of(field: &Field) -> PolarsResult<String> {
     geo.metadata.crs().map(str::to_owned)
 }
 
-/// Length always returns an `f64`.
-/// Multilinestring: sum
-/// Types other than linestrings or multilinestrings are refused.
+/// Refuses every kind but linestrings and multilinestrings,
+/// as the Python side gives the others their `0.0` itself.
 fn length_dtype(field: &Field) -> PolarsResult<Field> {
     LineKind::new("length", describe(field.dtype())?.kind)?;
     Ok(Field::new(field.name().clone(), DataType::Float64))
 }
 
-/// Output for length:
-/// - Planar is in the unit of the coordinates
-/// - geodesic in the unit of the CRS
 fn kernel_output_type_length(input_fields: &[Field], kwargs: LengthKwargs) -> PolarsResult<Field> {
     if let DistanceMethod::Geodesic = kwargs.method {
         // So a CRS PROJ cannot measure in fails while the plan is built.
@@ -66,7 +61,6 @@ fn measure(
     Ok(Float64Chunked::try_from_chunk_iter(geometries.name().clone(), chunks)?.into_series())
 }
 
-/// See `length`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_length)]
 fn length(inputs: &[Series], kwargs: LengthKwargs) -> PolarsResult<Series> {
     match kwargs.method {

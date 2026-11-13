@@ -1,6 +1,6 @@
-//! How far apart points are.
-//! A [DistanceMetric] picks how distance is measured (planar, geodesic, ...).
-//! Wraps [`geopolars_core::pairwise_distances`] and [`geopolars_core::distances_to_one`].
+//! How far apart two points are.
+//! Implements the Python `distance`.
+//! Also holds the [`geodesic_metric`] cache, which `area` and `length` measure with too.
 
 use std::fmt::Display;
 use std::rc::Rc;
@@ -44,7 +44,7 @@ fn build(crs: &str) -> PolarsResult<GeodesicMetric> {
     ))
 }
 
-/// How `distance` measures, as passed from Python.
+/// The `method` of the Python `distance` and `length`, which the Python side always resolves.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum DistanceMethod {
@@ -54,6 +54,7 @@ pub(crate) enum DistanceMethod {
     Geodesic,
 }
 
+/// The keyword arguments of the Python `distance`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DistanceKwargs {
@@ -98,7 +99,6 @@ fn geodesic_crs(fields: &[Field]) -> PolarsResult<String> {
     })
 }
 
-/// Distance is returned as `f64`, named after the first point.
 fn kernel_output_type_distance(
     input_fields: &[Field],
     kwargs: DistanceKwargs,
@@ -142,7 +142,6 @@ fn measure(
     Ok(Float64Chunked::from_chunk_iter(inputs[0].name().clone(), chunks).into_series())
 }
 
-/// See `distance`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_distance)]
 fn distance(inputs: &[Series], kwargs: DistanceKwargs) -> PolarsResult<Series> {
     let fields = [

@@ -1,4 +1,5 @@
 //! Converting between `geoarrow.wkb` and our native geometries.
+//! Implements the Python `to_wkb` and `from_wkb`.
 //!
 //! The `wkb` crate does the encoding and decoding itself.
 
@@ -13,7 +14,6 @@ use crate::geoarrow::decode::{target, DecodeKwargs};
 use crate::geoarrow::describe;
 use crate::geoarrow::encoded::{describe_encoded, Encoded, Encoding};
 
-/// For [`to_wkb`]: WKB carrying the geometry's metadata.
 fn kernel_output_type_to_wkb(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     let geo = describe(field.dtype())?;
@@ -21,7 +21,7 @@ fn kernel_output_type_to_wkb(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(field.name().clone(), wkb.dtype()))
 }
 
-/// See `to_wkb`.
+/// Implements the Python `to_wkb`.
 #[polars_expr(output_type_func=kernel_output_type_to_wkb)]
 fn to_wkb(inputs: &[Series]) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
@@ -58,7 +58,7 @@ fn kernel_output_type_from_wkb(
     Ok(Field::new(field.name().clone(), geo.dtype()))
 }
 
-/// See `from_wkb`.
+/// Implements the Python `from_wkb`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_from_wkb)]
 fn from_wkb(inputs: &[Series], kwargs: DecodeKwargs) -> PolarsResult<Series> {
     let geo = target(describe_encoded(inputs[0].dtype(), Encoding::Wkb)?, &kwargs)?;

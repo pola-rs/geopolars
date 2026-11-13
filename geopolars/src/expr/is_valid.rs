@@ -1,6 +1,7 @@
 //! Whether a geometry is valid, by GeoArrow or by OGC Simple Features,
-//! through [`geopolars_core::are_valid`].
-//! See `is_valid_geoarrow` and `is_valid_ogc` in Python for the rules.
+//! and nulling out the ones that are not.
+//! Implements the Python `is_valid_geoarrow`, `is_valid_ogc`,
+//! `null_out_invalid_geoarrow`, and `null_out_invalid_ogc`.
 
 use geopolars_compute::native::{Bounds, CoordinateSelection, NonFinite};
 use geopolars_compute::ogc_validity::{MultiPolygonTopologyChecks, PolygonTopologyChecks};
@@ -13,10 +14,11 @@ use serde::Deserialize;
 use super::coords::kernel_output_type_same_geometry;
 use crate::geoarrow::{describe, geometry_series};
 
-/// See python
+/// The keyword arguments of the Python `is_valid_geoarrow` and `null_out_invalid_geoarrow`.
 #[derive(Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct IsValidGeoArrowKwargs {
+    /// The bounds `out_of_bounds` names, looked up at plan time.
     bounds: Option<Bounds>,
     check_null_coordinates: bool,
     check_finite_coordinates: bool,
@@ -32,10 +34,11 @@ impl Default for IsValidGeoArrowKwargs {
     }
 }
 
-/// See python
+/// The keyword arguments of the Python `is_valid_ogc` and `null_out_invalid_ogc`.
 #[derive(Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct IsValidOgcKwargs {
+    /// The bounds `out_of_bounds` names, looked up at plan time.
     bounds: Option<Bounds>,
     check_null_coordinates: bool,
     check_ring_self_intersect: bool,
@@ -110,20 +113,17 @@ fn are_valid_ogc(geometries: &Series, kwargs: &IsValidOgcKwargs) -> PolarsResult
     are_valid_per_chunk(geometries, kwargs.check_null_coordinates, &check)
 }
 
-/// For [`is_valid_geoarrow`] and [`is_valid_ogc`]: a `bool` per geometry.
 fn kernel_output_type_is_valid(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     describe(field.dtype())?;
     Ok(Field::new(field.name().clone(), DataType::Boolean))
 }
 
-/// See `is_valid_geoarrow`.
 #[polars_expr(output_type_func=kernel_output_type_is_valid)]
 fn is_valid_geoarrow(inputs: &[Series], kwargs: IsValidGeoArrowKwargs) -> PolarsResult<Series> {
     Ok(are_valid_geoarrow(&inputs[0], &kwargs)?.into_series())
 }
 
-/// See `is_valid_ogc`.
 #[polars_expr(output_type_func=kernel_output_type_is_valid)]
 fn is_valid_ogc(inputs: &[Series], kwargs: IsValidOgcKwargs) -> PolarsResult<Series> {
     Ok(are_valid_ogc(&inputs[0], &kwargs)?.into_series())
@@ -131,7 +131,6 @@ fn is_valid_ogc(inputs: &[Series], kwargs: IsValidOgcKwargs) -> PolarsResult<Ser
 
 /// `geometries`, null where `keep` is `false`.
 /// `keep`'s values alone say what stays: a null row has to be `false` in them.
-/// On a column where every row stays, it copies nothing.
 fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series> {
     if keep.all() {
         return Ok(geometries.clone());
@@ -150,7 +149,6 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
     geometry_series(storage.name().clone(), geo.geo(), chunks)
 }
 
-/// See `null_out_invalid_geoarrow`.
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn null_out_invalid_geoarrow(
     inputs: &[Series],
@@ -160,7 +158,6 @@ fn null_out_invalid_geoarrow(
     keep_rows(&inputs[0], &are_valid_geoarrow(&inputs[0], &kwargs)?)
 }
 
-/// See `null_out_invalid_ogc`.
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn null_out_invalid_ogc(inputs: &[Series], kwargs: IsValidOgcKwargs) -> PolarsResult<Series> {
     // A null row is `false` in the values.

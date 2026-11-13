@@ -1,8 +1,8 @@
-//! Whether a linestring or polygon is simple.
-//! See `is_simple` in Python for the rules.
+//! Whether a linestring or polygon, or their multi-variants, is simple.
+//! Implements the Python `is_simple` for these kinds.
 //!
-//! GEOS only knows how lines run for finite x and y, so anything else is not simple.
-//! A polygon is simple when each of its rings is, so every ring goes to GEOS as a linestring on its own.
+//! GEOS only knows how lines run for finite x and y, so a non-finite line never reaches it.
+//! Every ring of a polygon goes to GEOS as a linestring on its own.
 
 use std::ops::Range;
 
@@ -36,8 +36,6 @@ fn line_is_simple(axes: &Axes, vertices: Range<usize>) -> GeoComputeResult<bool>
     }
 }
 
-/// Whether the ring through `vertices` is simple.
-/// With fewer than 4 vertices, a ring that is not empty can only go back and forth.
 fn ring_is_simple(axes: &Axes, vertices: Range<usize>) -> GeoComputeResult<bool> {
     if vertices.is_empty() {
         return Ok(true);
@@ -57,7 +55,6 @@ fn polygon_is_simple(axes: &Axes, polygon: &ScalarPolygon) -> GeoComputeResult<b
     Ok(true)
 }
 
-/// Whether `multi` is simple: every part is, and two parts only meet where both have an end.
 fn multi_line_is_simple(multi: &ScalarMultiLineString) -> GeoComputeResult<bool> {
     let axes = axes(multi.coords);
     if !is_xy_finite(&axes, multi.lines.span(multi.parts.clone())) {

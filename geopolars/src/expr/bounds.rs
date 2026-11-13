@@ -1,4 +1,5 @@
-//! The bounding box of a geometry.
+//! The bounding box of a geometry, or of a whole column.
+//! Implements the Python `bounds` and `total_bounds`.
 
 use geopolars_compute::native::BoxOptions;
 use geopolars_views::Kind;
@@ -9,16 +10,15 @@ use serde::Deserialize;
 use crate::geoarrow::bbox::GeoBox;
 use crate::geoarrow::{describe, storage_series};
 
-/// See python `bounds`.
-/// `turn` is the CRS's longitude turn, asked of PROJ at plan time.
-/// If `per_part=true`, a multi-geometry gets a list of boxes, one per part.
-/// If `per_part=false`, it gets one box around the whole row.
+/// The keyword arguments of the Python `bounds`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BoundsKwargs {
     margin_x: f64,
     margin_y: f64,
+    /// The CRS's longitude turn, asked of PROJ at plan time.
     turn: Option<f64>,
+    /// Only `false` for the GeoParquet covering, which wants one box around a whole multi-geometry.
     per_part: bool,
 }
 
@@ -37,14 +37,12 @@ fn bounds_dtype(dtype: &DataType, per_part: bool) -> PolarsResult<DataType> {
     })
 }
 
-/// For [`bounds`].
 fn kernel_output_type_bounds(input_fields: &[Field], kwargs: BoundsKwargs) -> PolarsResult<Field> {
     let field = &input_fields[0];
     let dtype = bounds_dtype(field.dtype(), kwargs.per_part)?;
     Ok(Field::new(field.name().clone(), dtype))
 }
 
-/// See python `bounds`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_bounds)]
 fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
@@ -65,23 +63,21 @@ fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     storage_series(inputs[0].name().clone(), chunks, &dtype)
 }
 
-/// See python `total_bounds`.
-/// `turn` is the CRS's longitude turn, asked of PROJ at plan time.
+/// The keyword arguments of the Python `total_bounds`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TotalBoundsKwargs {
+    /// See [`BoundsKwargs`].
     turn: Option<f64>,
     ignore_nulls: bool,
 }
 
-/// For [`total_bounds`].
 fn kernel_output_type_total_bounds(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     let dtype = bounds_dtype(field.dtype(), false)?;
     Ok(Field::new(field.name().clone(), dtype))
 }
 
-/// See python `total_bounds`.
 #[polars_expr(output_type_func=kernel_output_type_total_bounds)]
 fn total_bounds(inputs: &[Series], kwargs: TotalBoundsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;

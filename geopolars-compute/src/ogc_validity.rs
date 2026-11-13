@@ -1,8 +1,8 @@
-//! Whether each geometry is valid by OGC Simple Features, as GEOS's `is_valid` has it.
-//! See `is_valid_ogc` in Python for the rules.
+//! Whether each geometry is valid by OGC Simple Features.
+//! Implements the Python `is_valid_ogc`.
 //!
 //! Every geometry is held to the checks of [crate::geoarrow_validity] first,
-//! with every coordinate finite: only a point or multipoint may hold the empty point.
+//! with every coordinate finite as the Python `is_valid_ogc` asks.
 //! Its shape is checked natively too, with a mask per level like those checks.
 //! Then GEOS checks its topology.
 //! It only does so for the rows that pass every other check.
@@ -31,7 +31,7 @@ use crate::native::{
 use crate::passing::{passing_bool_array, rows_passing};
 use crate::GeoComputeResult;
 
-/// The topology checks to run on a polygon. See `is_valid_ogc` in Python.
+/// The topology checks of the Python `is_valid_ogc` that apply to a polygon.
 #[derive(Debug, Clone, Copy)]
 pub struct PolygonTopologyChecks {
     pub check_ring_self_intersect: bool,
@@ -48,10 +48,10 @@ impl PolygonTopologyChecks {
     }
 }
 
-/// The topology checks to run on a multipolygon. See `is_valid_ogc` in Python.
+/// The topology checks of the Python `is_valid_ogc`.
 #[derive(Debug, Clone, Copy)]
 pub struct MultiPolygonTopologyChecks {
-    /// Every part is checked for these individually
+    /// Every part is checked for these individually.
     pub polygons: PolygonTopologyChecks,
     pub check_multi_polygon_self_overlap: bool,
 }
@@ -208,7 +208,6 @@ pub fn multi_line_strings_are_valid_ogc(
     passing_bool_array(rows.len(), rows.validity(), passing)
 }
 
-/// A polygon that fails one of the `topology` checks is invalid, if there are any.
 pub fn polygons_are_valid_ogc(
     array: &PolygonArray,
     bounds: Option<Bounds>,
@@ -232,8 +231,6 @@ pub fn polygons_are_valid_ogc(
     Ok(passing_bool_array(rows.len(), rows.validity(), passing))
 }
 
-/// [polygons_are_valid_ogc] for every part.
-/// A multipolygon that fails one of the `topology` checks is invalid too, if there are any.
 pub fn multi_polygons_are_valid_ogc(
     array: &MultiPolygonArray,
     bounds: Option<Bounds>,

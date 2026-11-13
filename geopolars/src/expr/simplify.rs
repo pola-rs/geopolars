@@ -1,4 +1,5 @@
-//! The simplification of a linestring or polygon, or their multi-variants, forwarded to GEOS.
+//! The simplification of a linestring or polygon, or their multi-variants.
+//! Implements the Python `simplify`.
 
 use geopolars_core::SegmentKind;
 use geopolars_views::GeoDimension;
@@ -8,9 +9,10 @@ use serde::Deserialize;
 
 use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// The type of the simplified geometries of a `dtype` column.
-/// This is drops the m on the inputs kind.
+/// The type of the simplified geometries of a `dtype` column, as the Python `simplify` gives it.
+/// Also gives the input's kind.
 fn simplified_type(dtype: &DataType) -> PolarsResult<(Geo, SegmentKind)> {
+    // TODO: split this into two functions instead of joined
     let geo = describe(dtype)?;
     let kind = SegmentKind::new("simplify", geo.kind)?;
     let dim = if geo.dim.has_z() {
@@ -22,7 +24,6 @@ fn simplified_type(dtype: &DataType) -> PolarsResult<(Geo, SegmentKind)> {
     Ok((simplified, kind))
 }
 
-/// For [`simplify`].
 fn kernel_output_type_simplify(input_fields: &[Field]) -> PolarsResult<Field> {
     let (simplified, _) = simplified_type(input_fields[0].dtype())?;
     Ok(Field::new(
@@ -31,7 +32,7 @@ fn kernel_output_type_simplify(input_fields: &[Field]) -> PolarsResult<Field> {
     ))
 }
 
-/// See python docs for details.
+/// The keyword arguments of the Python `simplify`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SimplifyKwargs {
@@ -41,7 +42,6 @@ pub struct SimplifyKwargs {
     early_finite_check: bool,
 }
 
-/// See `simplify`.
 #[polars_expr(output_type_func=kernel_output_type_simplify)]
 fn simplify(inputs: &[Series], kwargs: SimplifyKwargs) -> PolarsResult<Series> {
     let (simplified, kind) = simplified_type(inputs[0].dtype())?;

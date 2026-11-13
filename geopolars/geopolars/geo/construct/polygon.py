@@ -35,6 +35,8 @@ def polygons_from_rings_in_single_column(
     `geoarrow.linestring`s or the bare vertex lists a linestring wraps. The
     first ring of a polygon is its exterior ring; the rest are its holes.
 
+    {null_inside_row}
+
     Every ring has to be a ring (see [`is_ring`][geopolars.geo.is_ring]):
     at least 4 vertices, the last one repeating the first.
     A polygon with a ring that is not one is null in the result.
@@ -87,7 +89,7 @@ def polygons_from_rings_in_separate_columns(
 
     {paired_rows}
 
-    A null exterior gives a null polygon.
+    A null exterior, or one with a null anywhere inside it, gives a null polygon.
     {null_parts}
 
     The polygon takes the CRS of the exterior,
@@ -152,7 +154,7 @@ def polygons_from_coordinates(
     df.select(geo.polygons_from_coordinates("lon", "lat"))
     ```
 
-    Rings are checked (and closed with `close`)
+    Nulls are handled, and rings checked (and closed with `close`),
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
     """
     return _from_columns("polygon_coords", x, y, z, m, _polygon_kwargs(crs, close))
@@ -177,7 +179,7 @@ def polygons_from_nested_coordinates(
     df.select(geo.polygons_from_nested_coordinates("lon", "lat"))
     ```
 
-    Rings are checked (and closed with `close`)
+    Nulls are handled, and rings checked (and closed with `close`),
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
     """
     return _from_columns(
@@ -218,7 +220,7 @@ def multi_polygons_from_polygons(
     )
     ```
 
-    Rings are checked (and closed with `close`)
+    Nulls are handled, and rings checked (and closed with `close`),
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
     A multipolygon with a polygon that fails this is null in the result.
     """
@@ -245,7 +247,7 @@ def multi_polygons_from_coordinates(
     df.select(geo.multi_polygons_from_coordinates("lon", "lat"))
     ```
 
-    Rings are checked (and closed with `close`)
+    Nulls are handled, and rings checked (and closed with `close`),
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
     A multipolygon with a polygon that fails this is null in the result.
     """
@@ -271,7 +273,7 @@ def multi_polygons_from_nested_coordinates(
     df.select(geo.multi_polygons_from_nested_coordinates("lon", "lat"))
     ```
 
-    Rings are checked (and closed with `close`)
+    Nulls are handled, and rings checked (and closed with `close`),
     as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
     A multipolygon with a polygon that fails this is null in the result.
     """

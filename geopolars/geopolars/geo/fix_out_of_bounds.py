@@ -110,6 +110,7 @@ def fix_out_of_bounds(
     - `"area_of_use"`: as `"crs"`, and `x` and `y` also have to lie inside the area
       PROJ says the CRS is meant for (UTM zone 31N covers 0 to 6 degrees east, for one).
       Data just past it is common and often fine.
+      An area of use that crosses the antimeridian only bounds the latitude.
     - `"area_of_use_wrapped_longitude"`: as `"area_of_use"`, with longitude as in `"crs_wrapped_longitude"`.
 
     `x` is always the longitude and `y` the latitude, as GeoArrow stores them,

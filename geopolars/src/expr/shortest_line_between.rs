@@ -1,5 +1,5 @@
-//! The shortest line between two geometries
-//! (see [`geopolars_compute::geos::shortest_lines_pairwise`]).
+//! The shortest line between two geometries.
+//! Implements the Python `shortest_line_between`.
 
 use geopolars_core::{pairwise_shortest_lines, shortest_lines_to_one};
 use geopolars_views::{GeoDimension, Kind};
@@ -12,7 +12,7 @@ use crate::geoarrow::{
     GeometryPairs,
 };
 
-/// See python
+/// The keyword arguments of the Python `shortest_line_between`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ShortestLineBetweenKwargs {
@@ -30,7 +30,6 @@ fn shortest_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<Geo> {
     ))
 }
 
-/// For [`shortest_line_between`], named after the first geometry.
 fn kernel_output_type_shortest_line_between(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "shortest_line_between takes two geometries, got {} inputs", input_fields.len());
@@ -41,7 +40,6 @@ fn kernel_output_type_shortest_line_between(input_fields: &[Field]) -> PolarsRes
     ))
 }
 
-/// See `shortest_line_between`.
 #[polars_expr(output_type_func=kernel_output_type_shortest_line_between)]
 fn shortest_line_between(
     inputs: &[Series],

@@ -1,4 +1,5 @@
 //! Adding the parts of one multi-geometry column to those of another.
+//! Implements the Python `add_parts`.
 
 use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,

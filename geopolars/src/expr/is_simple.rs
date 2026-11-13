@@ -1,4 +1,5 @@
-//! Whether a geometry is simple, through [`geopolars_core::are_simple`].
+//! Whether a geometry is simple.
+//! Implements the Python `is_simple`.
 
 use geopolars_core::are_simple;
 use polars::prelude::*;
@@ -6,14 +7,12 @@ use pyo3_polars::derive::polars_expr;
 
 use crate::geoarrow::describe;
 
-/// For [`is_simple`]: a `bool` per geometry.
 fn kernel_output_type_is_simple(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     describe(field.dtype())?;
     Ok(Field::new(field.name().clone(), DataType::Boolean))
 }
 
-/// See `is_simple`.
 #[polars_expr(output_type_func=kernel_output_type_is_simple)]
 fn is_simple(inputs: &[Series]) -> PolarsResult<Series> {
     let geometries = &inputs[0];

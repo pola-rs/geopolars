@@ -1,10 +1,7 @@
-//! The centroid of a geometry, in one pass over the storage:
-//! - a linestring's is the midpoint of every segment, weighted by its length,
-//! - a polygon's is the shoelace formula, over the planar area,
-//! - a multi-geometry's is that of its parts together: the running sum just goes on over them.
-//!
-//! A geometry without length or area has no centroid, so its row is null.
-//! The centroid keeps the geometry's dimension.
+//! The centroid of a linestring or polygon, or their multi-variants, in one pass over the storage.
+//! Implements the Python `centroid`, which documents how every kind is weighted.
+//! A polygon uses the shoelace formula.
+//! A multi-geometry's running sum just goes on over its parts.
 //!
 //! # Const generic flags
 //!
