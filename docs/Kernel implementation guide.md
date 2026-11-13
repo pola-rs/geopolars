@@ -42,6 +42,31 @@ Any other kernel returns a concrete Polars array (e.g. a `BooleanArray`).
 This makes it clear what type of data the kernel expects and gives,
 which both documents the code and reduces the chance to introduce bugs.
 
+## Helpers
+
+Before writing a helper, check that the views or `utils` do not have it already.
+Where a helper goes depends on what it costs:
+
+- `geopolars-views` only holds what costs nothing:
+  O(1) per call, without allocating or writing (accessors, ranges, spans).
+  Building a view belongs there too.
+  See [View Types]("../docs/View Types.md#methods-on-the-views").
+- `utils` in `geopolars-compute` holds every other helper that is shared,
+  by native kernels, GEOS kernels or both.
+  This includes filters, and anything that loops over the coordinates, allocates or writes.
+  Put them directly in `utils`, without sub-modules.
+- A kernel module only holds helpers for that kernel alone.
+
+A kernel module should not import a helper from another kernel module.
+The exception is the kernel's core function, if it is separated out:
+The function that computes its result for one item (row, part or ring),
+such as `twice_signed_area` in `area`.
+Calling another kernel as a whole is fine.
+
+Keep a helper as private as you can.
+Inline one that only forwards to another function, or whose name says less than its body.
+Helpers get no tests of their own: the Python tests cover them through the expressions.
+
 ## Error handling
 
 How to handle errors depends on where they are raised.

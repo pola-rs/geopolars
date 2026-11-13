@@ -20,5 +20,6 @@ The crate holds:
   or marks the parts holding one in a mask instead.
 - the fold of each level's mask up to the rows in `passing`.
   `inner_nulls` and the validity kernels use it.
+- the helpers that kernels share in `utils`.
 
 See the [docs](../docs/Kernel implementation guide.md) for more details.
