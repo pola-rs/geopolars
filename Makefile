@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: install install-release polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet rebuild test test-rust test-python clean
+.PHONY: install install-release wheel polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet rebuild test test-rust test-python clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -32,6 +32,18 @@ install: polars-src
 # Sync the venv, building the plugin optimized.
 install-release: polars-src
 	$(UV_SYNC)
+
+WHEEL_SRC := target/wheel-src
+
+## Build a release wheel into target/wheels, with the `@doc` docstrings filled in,
+## so that editors show them.
+## maturin cannot rewrite Python files itself, so this builds from a copy of the tracked files.
+wheel:
+	rm -rf $(WHEEL_SRC) && mkdir -p $(WHEEL_SRC)
+	git ls-files -z | tar --null -T - -cf - | tar -xf - -C $(WHEEL_SRC)
+	python3 scripts/expand_docstrings.py $(WHEEL_SRC)/geopolars/geopolars
+	cd $(WHEEL_SRC)/geopolars && CARGO_TARGET_DIR=$(CURDIR)/target \
+		$(CURDIR)/.venv/bin/maturin build --release --out $(CURDIR)/target/wheels
 
 ## Check out POLARS_REV into POLARS_DIR, if it isn't already.
 polars-src: $(POLARS_STAMP)
