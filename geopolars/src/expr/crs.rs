@@ -12,7 +12,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::cache::{SharedCache, ThreadCache};
-use crate::geoarrow::{describe, same_geometry_series, Geo};
+use crate::geoarrow::{describe, geometry_series, Geo};
 use crate::proj::specifies_z;
 
 #[derive(Deserialize)]
@@ -153,9 +153,5 @@ fn to_crs(inputs: &[Series], kwargs: ToCrsKwargs) -> PolarsResult<Series> {
         .map(|chunk| reproject(chunk.as_ref(), geo.kind, &cached.transformation, z))
         .collect::<PolarsResult<_>>()?;
     let reprojected = reprojected_geometry_type(inputs[0].dtype(), &kwargs.to)?;
-    Ok(same_geometry_series(
-        storage.name().clone(),
-        reprojected,
-        chunks,
-    ))
+    geometry_series(storage.name().clone(), reprojected, chunks)
 }

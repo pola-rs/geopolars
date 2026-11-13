@@ -7,7 +7,7 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, same_geometry_series};
+use crate::geoarrow::{describe, geometry_series};
 
 /// `rings` of `sort_parts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -49,5 +49,5 @@ fn sort_parts(inputs: &[Series], kwargs: SortPartsKwargs) -> PolarsResult<Series
         .map(|chunk| geopolars_core::sort_parts(chunk.as_ref(), kind, options))
         .collect::<PolarsResult<_>>()?;
     let geo = describe(inputs[0].dtype())?.geo();
-    Ok(same_geometry_series(inputs[0].name().clone(), geo, chunks))
+    geometry_series(inputs[0].name().clone(), geo, chunks)
 }

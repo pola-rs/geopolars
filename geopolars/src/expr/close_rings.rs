@@ -6,7 +6,7 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, same_geometry_series};
+use crate::geoarrow::{describe, geometry_series};
 
 /// See python
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -38,13 +38,8 @@ fn close_rings(inputs: &[Series], kwargs: CloseRingsKwargs) -> PolarsResult<Seri
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| {
-            Ok(
-                geopolars_core::close_rings(chunk.as_ref(), kind, kwargs.into())?
-                    .unwrap_or_else(|| chunk.clone()),
-            )
-        })
+        .map(|chunk| geopolars_core::close_rings(chunk.as_ref(), kind, kwargs.into()))
         .collect::<PolarsResult<_>>()?;
     let geo = describe(inputs[0].dtype())?.geo();
-    Ok(same_geometry_series(inputs[0].name().clone(), geo, chunks))
+    geometry_series(inputs[0].name().clone(), geo, chunks)
 }

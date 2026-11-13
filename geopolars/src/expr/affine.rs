@@ -6,7 +6,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, same_geometry_series};
+use crate::geoarrow::{describe, geometry_series};
 
 // TODO: (Blocked until z-centroid is implemented): allow rotation around x/y for polygon
 // TODO: (Blocked until z-centroid is implemented): allow scaling around z for polygon(?)
@@ -37,7 +37,7 @@ fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
         .map(|chunk| affine_transform(chunk.as_ref(), kind, &matrix))
         .collect::<PolarsResult<_>>()?;
     let geo = describe(inputs[0].dtype())?.geo();
-    Ok(same_geometry_series(inputs[0].name().clone(), geo, chunks))
+    geometry_series(inputs[0].name().clone(), geo, chunks)
 }
 
 /// For an operation by the points of a second column,
@@ -78,11 +78,7 @@ fn affine_about(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series>
         origins.chunks()[0].as_ref(),
     )?;
     let geo = describe(inputs[0].dtype())?.geo();
-    Ok(same_geometry_series(
-        inputs[0].name().clone(),
-        geo,
-        vec![chunk],
-    ))
+    geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }
 
 /// The kernel behind affine ops that move every geometry by a vector of its own
@@ -98,11 +94,7 @@ fn affine_then_shift(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Se
         vectors.chunks()[0].as_ref(),
     )?;
     let geo = describe(inputs[0].dtype())?.geo();
-    Ok(same_geometry_series(
-        inputs[0].name().clone(),
-        geo,
-        vec![chunk],
-    ))
+    geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }
 
 fn storage_and_points_per_geometry(inputs: &[Series]) -> PolarsResult<(Series, Series)> {

@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
 use super::remove_repeats_in_succession::TooShortDef;
-use crate::geoarrow::{describe, same_geometry_series};
+use crate::geoarrow::{describe, geometry_series};
 
 #[derive(Deserialize)]
 #[serde(remote = "SelectedAction", rename_all = "snake_case")]
@@ -68,5 +68,5 @@ fn filter_coordinates(inputs: &[Series], kwargs: NonFiniteKwargs) -> PolarsResul
         })
         .collect::<PolarsResult<_>>()?;
     let geo = describe(inputs[0].dtype())?.geo();
-    Ok(same_geometry_series(inputs[0].name().clone(), geo, chunks))
+    geometry_series(inputs[0].name().clone(), geo, chunks)
 }

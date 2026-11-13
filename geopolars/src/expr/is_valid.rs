@@ -5,12 +5,13 @@
 use geopolars_compute::native::{Bounds, CoordinateSelection, NonFinite};
 use geopolars_compute::ogc_validity::{MultiPolygonTopologyChecks, PolygonTopologyChecks};
 use geopolars_core::{are_valid, ValidityCheck};
+use geopolars_views::GeometryArray;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, same_geometry_series};
+use crate::geoarrow::{describe, geometry_series};
 
 /// See python
 #[derive(Debug, Deserialize)]
@@ -141,13 +142,12 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
         .chunks()
         .iter()
         .zip(keep.downcast_iter())
-        .map(|(chunk, keep)| chunk.with_validity(Some(keep.values().clone())))
-        .collect();
-    Ok(same_geometry_series(
-        storage.name().clone(),
-        geo.geo(),
-        chunks,
-    ))
+        .map(|(chunk, keep)| {
+            let geometries = GeometryArray::new(chunk.as_ref(), geo.kind)?;
+            Ok(geometries.with_validity(Some(keep.values().clone())))
+        })
+        .collect::<PolarsResult<_>>()?;
+    geometry_series(storage.name().clone(), geo.geo(), chunks)
 }
 
 /// See `null_out_invalid_geoarrow`.

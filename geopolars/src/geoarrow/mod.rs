@@ -116,22 +116,6 @@ pub fn geometry_series(
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &geo.dtype()) })
 }
 
-/// Turns the chunks of a kernel that keeps every geometry's kind and dimension into a `geo` column.
-///
-/// `chunks` must come from a column of `geo`'s kind and dimension, though its metadata may differ.
-pub fn same_geometry_series(name: PlSmallStr, geo: Geo, chunks: Vec<ArrayRef>) -> Series {
-    #[cfg(debug_assertions)]
-    {
-        let storage = geo.dim().storage(geo.kind().nesting());
-        for chunk in &chunks {
-            let dtype = DataType::from_arrow_dtype(chunk.dtype());
-            debug_assert_eq!(dtype, storage, "the kernel changed the storage");
-        }
-    }
-    // SAFETY: the geometries keep their kind and dimension, so every chunk is still `geo`'s storage.
-    unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &geo.dtype()) }
-}
-
 /// The [Kind] of a geometry column, see [describe].
 pub fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
     Ok(describe(geometries.dtype())?.kind)

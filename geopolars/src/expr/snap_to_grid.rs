@@ -7,7 +7,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, same_geometry_series};
+use crate::geoarrow::{describe, geometry_series};
 
 #[derive(Deserialize)]
 #[serde(remote = "RoundMode", rename_all = "snake_case")]
@@ -48,5 +48,5 @@ fn snap_to_grid(inputs: &[Series], kwargs: SnapToGridKwargs) -> PolarsResult<Ser
         .map(|chunk| geopolars_core::snap_to_grid(chunk.as_ref(), kind, &grid))
         .collect::<PolarsResult<_>>()?;
     let geo = describe(inputs[0].dtype())?.geo();
-    Ok(same_geometry_series(inputs[0].name().clone(), geo, chunks))
+    geometry_series(inputs[0].name().clone(), geo, chunks)
 }
