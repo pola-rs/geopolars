@@ -237,23 +237,33 @@ than per ring or per polygon. Typical uses:
 }
 
 
-def doc(**kwargs: str) -> Callable[[T], T]:
-    """Fill the `{section}`s of a function's or class's docstring.
+def fill_docstring(docstring: str, kwargs: dict[str, str]) -> str:
+    """Fill the `{section}`s of a docstring with the `@doc` decorator.
 
     The docstring is dedented first,
     so a section's lines line up with the lines around it.
+    """
+    template = inspect.cleandoc(docstring)
+    names = {name for _, name, _, _ in Formatter().parse(template) if name}
+    shared = {
+        name: _shared_docs[name].format(**kwargs)
+        for name in names & _shared_docs.keys()
+    }
+    return template.format(**{**shared, **kwargs})
+
+
+def doc(**kwargs: str) -> Callable[[T], T]:
+    """Fill the `{section}`s of a function's or class's docstring.
+
+    As editors don't run decorators,
+    `make wheel` also writes the filled docstrings into the wheel's source
+    (see `scripts/expand_docstrings.py`).
     """
 
     def decorator(obj: T) -> T:
         if obj.__doc__ is None:  # Stripped with `python -OO`.
             return obj
-        template = inspect.cleandoc(obj.__doc__)
-        names = {name for _, name, _, _ in Formatter().parse(template) if name}
-        shared = {
-            name: _shared_docs[name].format(**kwargs)
-            for name in names & _shared_docs.keys()
-        }
-        obj.__doc__ = template.format(**{**shared, **kwargs})
+        obj.__doc__ = fill_docstring(obj.__doc__, kwargs)
         return obj
 
     return decorator

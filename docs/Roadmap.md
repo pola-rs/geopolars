@@ -104,8 +104,7 @@ creating new geometries
 ## Architecture
 
 - [x] do the matching on kind in geopolars_core, not in the plugin.
-- [ ] Ask Claude to check how our native kernels compare to GEOS' source. Is there any numeric-specific (e.g dealing with subnormal numbers) that they do, and we don't?
+- [ ] Consistency pass over all existing kernels to make sure they follow the documented structure.
 - [ ] Ask claude to make a matrix for what we cover compared to geopandas/GEOS for internal referencing
 - [ ] The doc decorator does not work with popup hints. That's a dealbreaker.
 - [ ] Instead of doc decorator, see if we can make a central page that we reference to (e.g 'how do we handle errors in geos')
-- [ ] Make all GEOS kernels the shape as described in the kernel impl guide (Always store of geos things of things)
