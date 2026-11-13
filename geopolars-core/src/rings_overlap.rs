@@ -15,6 +15,8 @@ fn rings(chunk: &dyn Array) -> PolarsResult<LineStringArray> {
 /// Checks whether the rings on the same row of two chunks of linestring storage overlap,
 /// through GEOS.
 /// Implements the Python `rings_overlap`.
+///
+/// `a` and `b` must have the same length.
 pub fn pairwise_rings_overlap(
     a: &dyn Array,
     b: &dyn Array,

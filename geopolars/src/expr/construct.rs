@@ -165,7 +165,7 @@ fn kernel_output_type_multipolygon(
     )
 }
 
-/// [validated_storage] for every chunk of `storage`, as a `geo` column.
+/// Runs [validated_storage] on every chunk of `storage`, and gives the result as a `geo` column.
 fn validated(
     storage: &Series,
     geo: Geo,

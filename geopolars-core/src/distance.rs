@@ -17,6 +17,8 @@ fn both_have_z(a: &PointArray, b: &PointArray) -> bool {
 /// Measures the distance between the points on the same row of two chunks of point storage,
 /// as `metric` measures it.
 /// Implements the Python `distance`.
+///
+/// `a` and `b` must have the same length.
 pub fn pairwise_distances(
     a: &dyn Array,
     b: &dyn Array,

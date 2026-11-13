@@ -32,9 +32,9 @@ What remains in the plugin is a thin layer per expression in `src/expr/`.
 - It checks the input's dtype with `describe`.
   An expression that only takes some kinds narrows the `Kind` (e.g. to a `LineKind`) at plan time,
   which refuses any other kind.
-- It hands every chunk of the storage (plus its kind), to the function for the expression in `../geopolars-core`.
+- It hands every chunk of the storage (plus its kind) to the function for the expression in `../geopolars-core`.
   That function wraps the chunk in the views from `geopolars-views` (`List`, `ValidCoords`, ...),
-  calls the kernel for that kind.
+  and calls the kernel for that kind.
 - It turns the chunks it gets back into a `Series` of the output type.
 
 ## Implementation tiers

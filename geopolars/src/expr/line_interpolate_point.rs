@@ -12,7 +12,7 @@ use crate::geoarrow::{describe, geometry_series, Geo};
 /// Also the kind of the input.
 fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(Geo, LineKind)> {
     let geo = describe(dtype)?;
-    // Python refuses any other kind, so it never gets here.
+    // Python already refuses any other kind before it reaches the plugin.
     let kind = LineKind::new("line_interpolate_point", geo.kind)?;
     let point = Geo::new(Kind::Point, geo.dim, geo.metadata.clone());
     Ok((point, kind))

@@ -161,7 +161,6 @@ impl GeometryArray {
     }
 }
 
-/// Calls `f` with `row(i)` for every row `i` of `array`, or `None` where it is null.
 fn for_each_geometry_row<'a>(
     array: &GeometryArray,
     f: &mut impl FnMut(Option<Geometry<'a>>) -> PolarsResult<()>,

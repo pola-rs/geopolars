@@ -38,8 +38,8 @@ fn compute_err(e: impl std::fmt::Display) -> PolarsError {
 
 /// Checks whether every geometry in one chunk of a `kind` column's storage is valid.
 /// Implements the Python `is_valid_geoarrow` and `is_valid_ogc`.
-/// A row holding a null value below it is invalid if `check_null_coordinates=true`.
-/// Otherwise the views trust that no row holds one.
+/// The views trust that no row holds a null value below it, unless `check_null_coordinates=true`.
+/// Such a row is then invalid.
 pub fn are_valid(
     chunk: &dyn Array,
     kind: Kind,
@@ -135,7 +135,7 @@ pub fn are_valid(
             }
         }
     };
-    // Both a null row and a row the null values below it made null are `false` in `valid`'s values.
-    // Taking back the input's row validity keeps the first null, and makes the second invalid.
+    // In `valid`'s values, a null row and a row made null by a null value below it are both `false`.
+    // Restoring the input's row validity keeps the former null, and makes the latter invalid.
     Ok(valid.with_validity(chunk.validity().cloned()))
 }

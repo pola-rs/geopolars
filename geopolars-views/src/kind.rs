@@ -96,8 +96,7 @@ impl Kind {
         Kind::ALL.into_iter().find(|kind| kind.display() == display)
     }
 
-    /// The names of every kind, for an error message.
-    /// See [`Kind::names_of`].
+    /// [`Kind::names_of`] for every kind.
     pub fn names() -> String {
         Kind::names_of(Kind::ALL)
     }

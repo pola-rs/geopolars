@@ -16,7 +16,7 @@ pub struct OverlayOptions {
 /// Overlays the geometries on the same row of a chunk of an `a_kind` column's storage
 /// and one of a `b_kind` column's, through GEOS.
 /// Implements the Python `intersection` and `difference`.
-/// The result is of `output_kind`, with z exactly if `z=true`.
+/// The result is an XY `output_kind`, or XYZ if `z=true`.
 /// See [`OverlayPairs::new`] for the lengths `a` and `b` may have.
 #[allow(clippy::too_many_arguments)]
 pub fn overlay(

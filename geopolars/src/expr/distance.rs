@@ -118,7 +118,7 @@ fn kernel_output_type_distance(
     ))
 }
 
-/// The distance between the points of `inputs[0]` and `inputs[1]`, measured with `metric`.
+/// Measures the distance between the points of `inputs[0]` and `inputs[1]` with `metric`.
 fn measure(
     metric: &impl DistanceMetric<Error: Display>,
     inputs: &[Series],

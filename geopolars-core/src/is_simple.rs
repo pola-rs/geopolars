@@ -12,8 +12,8 @@ use polars_core::prelude::PolarsResult;
 
 use crate::IntoPolarsResult;
 
-/// Checks whether every geometry in one chunk of a `kind` column's storage is simple:
-/// natively for (multi)points, through GEOS for the other kinds.
+/// Checks whether every geometry in one chunk of a `kind` column's storage is simple.
+/// (Multi)points are checked natively, the other kinds through GEOS.
 /// Implements the Python `is_simple`.
 pub fn are_simple(chunk: &dyn Array, kind: Kind) -> PolarsResult<BooleanArray> {
     let rows = || downcast::<ListArray<i64>>(chunk, "a list of parts");

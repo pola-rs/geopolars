@@ -34,7 +34,8 @@ fn kernel_output_type_interior(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(input_fields[0].name().clone(), dtype))
 }
 
-/// Every chunk of the `kind` geometries `inputs[0]` put through `rings`, as a Series of `dtype`.
+/// Runs `rings` on every chunk of the `kind` geometries in `inputs[0]`,
+/// and gives the result as a Series of `dtype`.
 fn per_chunk(
     inputs: &[Series],
     dtype: &DataType,

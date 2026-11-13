@@ -11,9 +11,8 @@ use super::buffer::{chunks_by_distance, JoinStyleDef};
 use crate::geoarrow::{describe, geometry_series, Geo};
 
 /// The type of the offset curves of a `dtype` column: XY, with the input's metadata.
-/// A curve is a multilinestring for a multilinestring, or with `allow_splitting`.
-/// It is a linestring for a linestring without `allow_splitting`.
-/// Also gives the input's kind, and whether the output is a multilinestring.
+/// Also gives the input's kind, and whether the curves are multilinestrings
+/// (for a multilinestring, or with `allow_splitting=true`).
 /// Any other kind is refused here, but Python already refuses it before calling the plugin.
 fn offset_curve_type(
     dtype: &DataType,

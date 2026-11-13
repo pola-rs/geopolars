@@ -19,7 +19,8 @@ pub fn affine_transform(
     affine_transform_with_row_shift(chunk, kind, matrix, RowShift::None)
 }
 
-/// [`affine_transform`], but every geometry about an origin of its own (see [`RowShift::About`]).
+/// Transforms every geometry like [`affine_transform`], but about an origin of its own
+/// (see [`RowShift::About`]).
 ///
 /// `origins` is the storage of a point column, with one point per row of `chunk`.
 pub fn affine_transform_about(
@@ -32,7 +33,7 @@ pub fn affine_transform_about(
     affine_transform_with_row_shift(chunk, kind, matrix, RowShift::About(&origins))
 }
 
-/// [`affine_transform`], then moves every geometry by a vector of its own
+/// Transforms every geometry like [`affine_transform`], then moves it by a vector of its own
 /// (see [`RowShift::Then`]).
 ///
 /// `vectors` is the storage of a point column, with one point per row of `chunk`.
