@@ -16,7 +16,7 @@ pub struct OverlayOptions {
 /// Overlays the geometries on the same row of a chunk of an `a_kind` column's storage
 /// and one of a `b_kind` column's, through GEOS.
 /// Implements the Python `intersection` and `difference`.
-/// The result is the storage of `output_kind`, with z exactly if `z=true`.
+/// The result is of `output_kind`, with z exactly if `z=true`.
 /// See [`OverlayPairs::new`] for the lengths `a` and `b` may have.
 #[allow(clippy::too_many_arguments)]
 pub fn overlay(
@@ -28,7 +28,7 @@ pub fn overlay(
     output_kind: Kind,
     z: bool,
     options: OverlayOptions,
-) -> PolarsResult<Box<dyn Array>> {
+) -> PolarsResult<GeometryArray> {
     let (a, b) = (
         GeometryArray::new(a, a_kind)?,
         GeometryArray::new(b, b_kind)?,
@@ -41,24 +41,18 @@ pub fn overlay(
     let pairs = OverlayPairs::new(&a, &b, overlay, ignore_per_row_errors, early_finite_check)
         .into_polars()?;
     match output_kind {
-        Kind::Point => pairs
-            .into_points(z)
-            .map(|array| array.into_struct_array().boxed()),
-        Kind::MultiPoint => pairs
-            .into_multi_points(z)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::LineString => pairs
-            .into_line_strings(z)
-            .map(|array| array.into_list_array().boxed()),
+        Kind::Point => pairs.into_points(z).map(GeometryArray::Point),
+        Kind::MultiPoint => pairs.into_multi_points(z).map(GeometryArray::MultiPoint),
+        Kind::LineString => pairs.into_line_strings(z).map(GeometryArray::LineString),
         Kind::MultiLineString => pairs
             .into_multi_line_strings(z)
-            .map(|array| array.into_list_array().boxed()),
+            .map(GeometryArray::MultiLineString),
         Kind::Polygon => pairs
             .into_polygons(z, ccw_outer)
-            .map(|array| array.into_list_array().boxed()),
+            .map(GeometryArray::Polygon),
         Kind::MultiPolygon => pairs
             .into_multi_polygons(z, ccw_outer)
-            .map(|array| array.into_list_array().boxed()),
+            .map(GeometryArray::MultiPolygon),
     }
     .into_polars()
 }

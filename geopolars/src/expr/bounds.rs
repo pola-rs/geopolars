@@ -26,11 +26,15 @@ pub struct BoundsKwargs {
     per_part: bool,
 }
 
+fn boxes_in_list(kind: Kind, per_part: bool) -> bool {
+    per_part && kind.is_multi()
+}
+
 /// The box of `dtype`'s dimension and metadata, in a list if each part gets one.
 fn bounds_dtype(dtype: &DataType, per_part: bool) -> PolarsResult<DataType> {
     let geo = describe(dtype)?;
     let bbox = GeoBox::new(geo.dim, geo.metadata.clone()).dtype();
-    Ok(if per_part && geo.kind.is_multi() {
+    Ok(if boxes_in_list(geo.kind, per_part) {
         DataType::List(Box::new(bbox))
     } else {
         bbox
@@ -49,6 +53,7 @@ fn kernel_output_type_bounds(input_fields: &[Field], kwargs: BoundsKwargs) -> Po
 fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
     let dtype = bounds_dtype(inputs[0].dtype(), kwargs.per_part)?;
+    let listed = boxes_in_list(geo.kind, kwargs.per_part);
     let options = BoxOptions {
         margin_x: kwargs.margin_x,
         margin_y: kwargs.margin_y,
@@ -58,9 +63,7 @@ fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| {
-            geopolars_core::bounds(chunk.as_ref(), geo.kind, geo.dim, kwargs.per_part, &options)
-        })
+        .map(|chunk| geopolars_core::bounds(chunk.as_ref(), geo.kind, geo.dim, listed, &options))
         .collect::<PolarsResult<Vec<_>>>()?;
     // SAFETY: every chunk is the storage of `dtype`.
     Ok(

@@ -3,13 +3,14 @@
 
 use geopolars_compute::native::NonFinite;
 use geopolars_core::{hausdorff_lines_to_one, pairwise_hausdorff_lines};
-use geopolars_views::{Kind, LineStringArray};
+use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::geoarrow::{
-    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, Geo, GeometryPairs,
+    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_masked_pairs, Geo,
+    GeometryPairs,
 };
 
 /// See python. Its `non_finite` arrives as `select_non_finite` and `select_empty`,
@@ -35,11 +36,11 @@ impl HausdorffLineBetweenKwargs {
     }
 }
 
-fn hausdorff_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<DataType> {
+fn hausdorff_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<Geo> {
     let (a, b) = (describe(a)?, describe(b)?);
     ensure_same_crs(&a, &b)?;
     let dim = a.dim.shared_with(b.dim);
-    Ok(Geo::new(Kind::LineString, dim, a.metadata.clone()).dtype())
+    Ok(Geo::new(Kind::LineString, dim, a.metadata.clone()))
 }
 
 /// For [`hausdorff_line_between`], named after the first geometry.
@@ -49,7 +50,7 @@ fn kernel_output_type_hausdorff_line_between(input_fields: &[Field]) -> PolarsRe
     };
     Ok(Field::new(
         a.name().clone(),
-        hausdorff_line_between_type(a.dtype(), b.dtype())?,
+        hausdorff_line_between_type(a.dtype(), b.dtype())?.dtype(),
     ))
 }
 
@@ -60,7 +61,7 @@ fn hausdorff_line_between(
     kwargs: HausdorffLineBetweenKwargs,
 ) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let dtype = hausdorff_line_between_type(a.dtype(), b.dtype())?;
+    let lines = hausdorff_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
     let (failing, ignore) = (kwargs.failing(), kwargs.ignore_per_row_errors);
@@ -68,7 +69,7 @@ fn hausdorff_line_between(
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
             many.iter()
                 .map(|many| {
-                    lines_chunk(hausdorff_lines_to_one(
+                    hausdorff_lines_to_one(
                         one.as_ref(),
                         one_kind,
                         many.as_ref(),
@@ -76,7 +77,7 @@ fn hausdorff_line_between(
                         one_is_a,
                         failing,
                         ignore,
-                    ))
+                    )
                 })
                 .collect::<PolarsResult<Vec<_>>>()
         };
@@ -84,14 +85,7 @@ fn hausdorff_line_between(
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| {
-                lines_chunk(pairwise_hausdorff_lines(
-                    a.as_ref(),
-                    a_kind,
-                    b.as_ref(),
-                    b_kind,
-                    failing,
-                    ignore,
-                ))
+                pairwise_hausdorff_lines(a.as_ref(), a_kind, b.as_ref(), b_kind, failing, ignore)
             })
             .collect::<PolarsResult<Vec<_>>>()?,
         GeometryPairs::OneAgainstMany { a: one, b: many } => {
@@ -101,13 +95,12 @@ fn hausdorff_line_between(
             against_one(one, b_kind, many, a_kind, false)?
         }
         GeometryPairs::AllNull(lengths) => {
-            return Ok(Series::full_null(name, lengths.iter().sum(), &dtype));
+            return Ok(Series::full_null(
+                name,
+                lengths.iter().sum(),
+                &lines.dtype(),
+            ));
         }
     };
-    // SAFETY: the lines are linestrings with the axes both sides have, as `dtype` says.
-    Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &dtype) })
-}
-
-fn lines_chunk(lines: PolarsResult<LineStringArray>) -> PolarsResult<ArrayRef> {
-    Ok(lines?.into_list_array().boxed())
+    geometry_series(name, lines, chunks)
 }

@@ -2,20 +2,20 @@
 
 use geopolars_compute::geos::{BufferDistance, BufferStyle, CapStyle, JoinStyle, Side};
 use geopolars_core::buffers;
-use geopolars_views::{GeoDimension, Kind};
+use geopolars_views::{GeoDimension, GeometryArray, Kind};
 use polars::prelude::*;
 use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, Geo};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
 /// A multipolygon for a multi-kind, or with `allow_splitting`,
 /// when `distance` is a column or at most 0.
 /// Otherwise a polygon.
 /// It is XY, with the input's metadata.
 /// Also the kind of the input, and whether the output is a multipolygon.
-fn buffered_type(dtype: &DataType, kwargs: &BufferKwargs) -> PolarsResult<(DataType, Kind, bool)> {
+fn buffered_type(dtype: &DataType, kwargs: &BufferKwargs) -> PolarsResult<(Geo, Kind, bool)> {
     let geo = describe(dtype)?;
     let is_multi = match geo.kind {
         Kind::Point | Kind::LineString | Kind::Polygon => false,
@@ -28,14 +28,14 @@ fn buffered_type(dtype: &DataType, kwargs: &BufferKwargs) -> PolarsResult<(DataT
     } else {
         Kind::Polygon
     };
-    let dtype = Geo::new(kind, GeoDimension::XY, geo.metadata.clone()).dtype();
-    Ok((dtype, geo.kind, into_multi))
+    let buffered = Geo::new(kind, GeoDimension::XY, geo.metadata.clone());
+    Ok((buffered, geo.kind, into_multi))
 }
 
 /// For [`buffer`].
 fn kernel_output_type_buffer(input_fields: &[Field], kwargs: BufferKwargs) -> PolarsResult<Field> {
-    let (dtype, _, _) = buffered_type(input_fields[0].dtype(), &kwargs)?;
-    Ok(Field::new(input_fields[0].name().clone(), dtype))
+    let (buffered, _, _) = buffered_type(input_fields[0].dtype(), &kwargs)?;
+    Ok(Field::new(input_fields[0].name().clone(), buffered.dtype()))
 }
 
 #[derive(Deserialize)]
@@ -85,7 +85,7 @@ pub struct BufferKwargs {
 /// See `buffer`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_buffer)]
 fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
-    let (dtype, kind, into_multi) = buffered_type(inputs[0].dtype(), &kwargs)?;
+    let (buffered, kind, into_multi) = buffered_type(inputs[0].dtype(), &kwargs)?;
     let BufferKwargs {
         distance,
         quadrant_segments,
@@ -117,30 +117,23 @@ fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
             early_finite_check,
         )
     })?;
-    // SAFETY: the buffers are XY polygons or multipolygons, as `dtype` says.
-    Ok(
-        unsafe {
-            Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &dtype)
-        },
-    )
+    geometry_series(inputs[0].name().clone(), buffered, chunks)
 }
 
 /// Every chunk of the geometries, the first input, through `chunk`.
 /// `distance` is `None` when the distances are a column, the second input.
 /// Then the geometries are rechunked into one chunk, to line up with the distances.
-pub(super) fn chunks_by_distance<A: Array>(
+pub(super) fn chunks_by_distance(
     inputs: &[Series],
     distance: Option<f64>,
-    chunk: impl Fn(&dyn Array, BufferDistance) -> PolarsResult<A>,
-) -> PolarsResult<Vec<ArrayRef>> {
+    chunk: impl Fn(&dyn Array, BufferDistance) -> PolarsResult<GeometryArray>,
+) -> PolarsResult<Vec<GeometryArray>> {
     let storage = inputs[0].ext()?.storage();
     match distance {
         Some(distance) => storage
             .chunks()
             .iter()
-            .map(|rows| {
-                Ok(Box::new(chunk(rows.as_ref(), BufferDistance::Constant(distance))?) as ArrayRef)
-            })
+            .map(|rows| chunk(rows.as_ref(), BufferDistance::Constant(distance)))
             .collect(),
         None => {
             let storage = storage.rechunk();
@@ -154,7 +147,7 @@ pub(super) fn chunks_by_distance<A: Array>(
             );
             let distance = BufferDistance::PerRow(distances.f64()?.downcast_as_array());
             let rows = storage.chunks()[0].as_ref();
-            Ok(vec![Box::new(chunk(rows, distance)?)])
+            Ok(vec![chunk(rows, distance)?])
         }
     }
 }

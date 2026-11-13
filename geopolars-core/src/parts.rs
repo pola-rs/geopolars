@@ -52,7 +52,7 @@ pub(crate) fn closed_rings(
 pub(crate) fn validated_polygons(
     mut array: PolygonArray,
     close: Option<CloseRings>,
-) -> Box<dyn Array> {
+) -> PolygonArray {
     if let Some((rings, coords)) =
         close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
     {
@@ -68,8 +68,6 @@ pub(crate) fn validated_polygons(
         array.rings,
         array.coords,
     )
-    .into_list_array()
-    .boxed()
 }
 
 fn one_per_row(len: usize, validity: Option<&Bitmap>) -> List {

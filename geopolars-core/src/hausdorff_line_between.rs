@@ -1,5 +1,5 @@
 use geopolars_compute::native::{hausdorff_lines_against_one, hausdorff_lines_pairwise, NonFinite};
-use geopolars_views::{GeometryArray, Kind, LineStringArray};
+use geopolars_views::{GeometryArray, Kind};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
 
@@ -16,12 +16,14 @@ pub fn pairwise_hausdorff_lines(
     b_kind: Kind,
     failing: NonFinite,
     ignore_per_row_errors: bool,
-) -> PolarsResult<LineStringArray> {
+) -> PolarsResult<GeometryArray> {
     let (a, b) = (
         GeometryArray::new(a, a_kind)?,
         GeometryArray::new(b, b_kind)?,
     );
-    hausdorff_lines_pairwise(&a, &b, failing, ignore_per_row_errors).into_polars()
+    hausdorff_lines_pairwise(&a, &b, failing, ignore_per_row_errors)
+        .map(GeometryArray::LineString)
+        .into_polars()
 }
 
 /// Finds the line spanning the Hausdorff distance between the geometry in `one`,
@@ -36,7 +38,7 @@ pub fn hausdorff_lines_to_one(
     lines_start_on_one: bool,
     failing: NonFinite,
     ignore_per_row_errors: bool,
-) -> PolarsResult<LineStringArray> {
+) -> PolarsResult<GeometryArray> {
     let one = GeometryArray::new(one, one_kind)?;
     let many = GeometryArray::new(many, many_kind)?;
     hausdorff_lines_against_one(
@@ -46,5 +48,6 @@ pub fn hausdorff_lines_to_one(
         failing,
         ignore_per_row_errors,
     )
+    .map(GeometryArray::LineString)
     .into_polars()
 }

@@ -9,7 +9,7 @@ use serde::Deserialize;
 use super::construct::{
     fields_of, listed_parts, paired_rows, part_kinds, parts_storage, NullPartsDef,
 };
-use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo};
+use crate::geoarrow::{describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 
 #[derive(Deserialize)]
 #[serde(remote = "EmptyParts", rename_all = "snake_case")]
@@ -62,8 +62,5 @@ fn add_parts(inputs: &[Series], kwargs: AddPartsKwargs) -> PolarsResult<Series> 
         kwargs.null_parts,
         kwargs.empty_parts,
     )?;
-    // SAFETY: the chunk is the storage of a multi-geometry of `geo`'s kind and dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), vec![chunk], &geo.dtype())
-    })
+    geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }

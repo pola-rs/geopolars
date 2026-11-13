@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use super::construct::{fields_of, listed_parts, paired_rows, parts_storage, NullPartsDef};
-use crate::geoarrow::{describe, ensure_same_crs_unless_bare, Geo};
+use crate::geoarrow::{describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 
 /// The keyword arguments of `add_holes`.
 /// These have to be mirrored on the Python side.
@@ -71,8 +71,5 @@ fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> 
         kwargs.empty_exterior,
         kwargs.close.map(Into::into),
     )?;
-    // SAFETY: the chunk is the storage of a polygon of `geo`'s dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), vec![chunk], &geo.dtype())
-    })
+    geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }

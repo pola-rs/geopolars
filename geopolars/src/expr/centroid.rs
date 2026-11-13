@@ -5,7 +5,7 @@ use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 
-use crate::geoarrow::{describe, Geo};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
 /// The point a `dtype` column's centroids are, and the kind of geometry they are of.
 /// The centroid keeps the geometry's dimension.
@@ -29,13 +29,7 @@ fn centroid(inputs: &[Series]) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| {
-            let points = centroids(chunk.as_ref(), kind, point.dim())?;
-            PolarsResult::Ok(points.into_struct_array().boxed())
-        })
+        .map(|chunk| centroids(chunk.as_ref(), kind, point.dim()))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: every chunk is the storage `point` describes.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &point.dtype())
-    })
+    geometry_series(inputs[0].name().clone(), point, chunks)
 }

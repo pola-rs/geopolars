@@ -1,13 +1,14 @@
 use polars_arrow::array::{Array, ListArray};
 use polars_arrow::bitmap::Bitmap;
-use polars_core::prelude::PolarsResult;
+use polars_core::prelude::{CompatLevel, PolarsResult};
 
 use crate::{
-    downcast, Coords, Geometry, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PointArray, PolygonArray,
+    downcast, Coords, GeoDimension, Geometry, Kind, LineStringArray, MultiLineStringArray,
+    MultiPointArray, MultiPolygonArray, PointArray, PolygonArray,
 };
 
-/// An array of any one kind of geometry, for kernels that take every kind.
+/// An array of any one kind of geometry,
+/// for kernels that take every kind, and for the geometries `geopolars-core` hands back.
 pub enum GeometryArray {
     Point(PointArray),
     LineString(LineStringArray),
@@ -33,6 +34,50 @@ impl GeometryArray {
                 GeometryArray::MultiPolygon(MultiPolygonArray::new(rows(chunk)?)?)
             }
         })
+    }
+
+    pub fn kind(&self) -> Kind {
+        match self {
+            GeometryArray::Point(_) => Kind::Point,
+            GeometryArray::LineString(_) => Kind::LineString,
+            GeometryArray::Polygon(_) => Kind::Polygon,
+            GeometryArray::MultiPoint(_) => Kind::MultiPoint,
+            GeometryArray::MultiLineString(_) => Kind::MultiLineString,
+            GeometryArray::MultiPolygon(_) => Kind::MultiPolygon,
+        }
+    }
+
+    pub fn dim(&self) -> GeoDimension {
+        match self {
+            GeometryArray::Point(array) => array.coords.dim(),
+            GeometryArray::LineString(array) => array.coords.dim(),
+            GeometryArray::Polygon(array) => array.coords.dim(),
+            GeometryArray::MultiPoint(array) => array.coords.dim(),
+            GeometryArray::MultiLineString(array) => array.coords.dim(),
+            GeometryArray::MultiPolygon(array) => array.coords.dim(),
+        }
+    }
+
+    /// The polars storage of the column, taking over its buffers:
+    /// always the storage [`GeoDimension::storage`] gives for [`dim`](Self::dim)
+    /// and the [`nesting`](Kind::nesting) of [`kind`](Self::kind).
+    pub fn into_storage(self) -> Box<dyn Array> {
+        let (kind, dim) = (self.kind(), self.dim());
+        let storage = match self {
+            GeometryArray::Point(array) => array.into_struct_array().boxed(),
+            GeometryArray::LineString(array) => array.into_list_array().boxed(),
+            GeometryArray::Polygon(array) => array.into_list_array().boxed(),
+            GeometryArray::MultiPoint(array) => array.into_list_array().boxed(),
+            GeometryArray::MultiLineString(array) => array.into_list_array().boxed(),
+            GeometryArray::MultiPolygon(array) => array.into_list_array().boxed(),
+        };
+        debug_assert_eq!(
+            storage.dtype(),
+            &dim.storage(kind.nesting()).to_arrow(CompatLevel::newest()),
+            "the view of a `{}` gave another storage",
+            kind.display()
+        );
+        storage
     }
 
     #[allow(clippy::len_without_is_empty)]

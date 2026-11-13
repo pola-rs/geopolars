@@ -19,7 +19,7 @@ pub use pairs::{aligned_pairs, single_chunk_masked_pairs, GeometryPairs};
 use std::any::Any;
 use std::sync::Arc;
 
-use geopolars_views::Kind;
+use geopolars_views::{GeometryArray, Kind};
 use polars::prelude::*;
 use polars_core::datatypes::extension::{register_extension_type, ExtensionTypeInstance};
 
@@ -84,6 +84,52 @@ pub fn describe(dtype: &DataType) -> PolarsResult<GeoColumn<'_>> {
     polars_bail!(
         SchemaMismatch: "`{}` is not registered with this library, got: {}", kind.name(), dtype
     )
+}
+
+impl GeoColumn<'_> {
+    pub fn geo(&self) -> Geo {
+        Geo::new(self.kind, self.dim, self.metadata.clone())
+    }
+}
+
+/// Turns one of the GeoPolars view types back into a Polars-compatible `Series`.
+/// Errors if a chunk is of another kind or dimension.
+/// that is a bug, where the output type function and the kernel disagree.
+pub fn geometry_series(
+    name: PlSmallStr,
+    geo: Geo,
+    chunks: Vec<GeometryArray>,
+) -> PolarsResult<Series> {
+    let chunks = chunks
+        .into_iter()
+        .map(|chunk| {
+            polars_ensure!(
+                (chunk.kind(), chunk.dim()) == (geo.kind(), geo.dim()),
+                ComputeError: "the kernel gave `{}[{}]`, but `{}[{}]` was planned",
+                chunk.kind().display(), chunk.dim().tag(), geo.kind().display(), geo.dim().tag()
+            );
+            Ok(chunk.into_storage())
+        })
+        .collect::<PolarsResult<Vec<_>>>()?;
+    // SAFETY: every chunk is of `geo`'s kind and dimension,
+    // and `into_storage` gives exactly the storage of those.
+    Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &geo.dtype()) })
+}
+
+/// A `geo` column of `chunks`,
+/// which a kernel that keeps every geometry's kind and dimension made from a column of `geo`'s.
+/// That column's metadata may differ.
+pub fn same_geometry_series(name: PlSmallStr, geo: Geo, chunks: Vec<ArrayRef>) -> Series {
+    #[cfg(debug_assertions)]
+    {
+        let storage = geo.dim().storage(geo.kind().nesting());
+        for chunk in &chunks {
+            let dtype = DataType::from_arrow_dtype(chunk.dtype());
+            debug_assert_eq!(dtype, storage, "the kernel changed the storage");
+        }
+    }
+    // SAFETY: the geometries keep their kind and dimension, so every chunk is still `geo`'s storage.
+    unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &geo.dtype()) }
 }
 
 /// The [Kind] of a geometry column, see [describe].

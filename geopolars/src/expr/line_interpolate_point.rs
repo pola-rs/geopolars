@@ -6,22 +6,22 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::buffer::chunks_by_distance;
-use crate::geoarrow::{describe, Geo};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
 /// A point with the input's dimension and metadata.
 /// Also the kind of the input.
-fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(DataType, LineKind)> {
+fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(Geo, LineKind)> {
     let geo = describe(dtype)?;
     // Python refuses any other kind, so it never gets here.
     let kind = LineKind::new("line_interpolate_point", geo.kind)?;
-    let dtype = Geo::new(Kind::Point, geo.dim, geo.metadata.clone()).dtype();
-    Ok((dtype, kind))
+    let point = Geo::new(Kind::Point, geo.dim, geo.metadata.clone());
+    Ok((point, kind))
 }
 
 /// For [`line_interpolate_point`].
 fn kernel_output_type_line_interpolate_point(input_fields: &[Field]) -> PolarsResult<Field> {
-    let (dtype, _) = line_interpolate_point_type(input_fields[0].dtype())?;
-    Ok(Field::new(input_fields[0].name().clone(), dtype))
+    let (point, _) = line_interpolate_point_type(input_fields[0].dtype())?;
+    Ok(Field::new(input_fields[0].name().clone(), point.dtype()))
 }
 
 #[derive(Deserialize)]
@@ -49,7 +49,7 @@ fn line_interpolate_point(
     inputs: &[Series],
     kwargs: LineInterpolatePointKwargs,
 ) -> PolarsResult<Series> {
-    let (dtype, kind) = line_interpolate_point_type(inputs[0].dtype())?;
+    let (point, kind) = line_interpolate_point_type(inputs[0].dtype())?;
     let LineInterpolatePointKwargs {
         distance,
         mode,
@@ -57,20 +57,14 @@ fn line_interpolate_point(
         early_finite_check,
     } = kwargs;
     let chunks = chunks_by_distance(inputs, distance, |rows, distance| {
-        let points = interpolated_points(
+        interpolated_points(
             rows,
             kind,
             distance,
             mode,
             ignore_per_row_errors,
             early_finite_check,
-        )?;
-        Ok(points.into_struct_array())
+        )
     })?;
-    // SAFETY: the points have the input's dimension, as `dtype` says.
-    Ok(
-        unsafe {
-            Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &dtype)
-        },
-    )
+    geometry_series(inputs[0].name().clone(), point, chunks)
 }

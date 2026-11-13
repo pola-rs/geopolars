@@ -3,8 +3,8 @@ use geopolars_compute::geos::{
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
 use geopolars_views::{
-    downcast, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PolygonArray,
+    downcast, GeometryArray, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PolygonArray,
 };
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -20,7 +20,7 @@ pub fn convex_hulls(
     ignore_per_row_errors: bool,
     ccw_outer: bool,
     early_finite_check: bool,
-) -> PolarsResult<PolygonArray> {
+) -> PolarsResult<GeometryArray> {
     let (ignore, early) = (ignore_per_row_errors, early_finite_check);
     match kind {
         NestedKind::LineString => {
@@ -44,5 +44,6 @@ pub fn convex_hulls(
             multi_polygon_convex_hulls(&array, ignore, ccw_outer, early)
         }
     }
+    .map(GeometryArray::Polygon)
     .into_polars()
 }

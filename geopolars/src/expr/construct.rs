@@ -9,7 +9,9 @@ use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
-use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, GeoDimension};
+use crate::geoarrow::{
+    coord, describe, ensure_same_crs_unless_bare, geometry_series, Geo, GeoDimension,
+};
 use geopolars_core::{assembled_polygons, validated_storage, NestedKind, NullParts};
 use geopolars_views::Kind;
 use polars_arrow::offset::Offsets;
@@ -165,9 +167,10 @@ fn kernel_output_type_multipolygon(
     )
 }
 
-/// [validated_storage] for every chunk of `storage`.
+/// [validated_storage] for every chunk of `storage`, as a `geo` column.
 fn validated(
-    storage: Series,
+    storage: &Series,
+    geo: Geo,
     kind: NestedKind,
     close: Option<CloseRingsKwargs>,
 ) -> PolarsResult<Series> {
@@ -177,10 +180,7 @@ fn validated(
         .iter()
         .map(|chunk| validated_storage(chunk.as_ref(), kind, close))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: the kind and dimension stay the same, so every chunk is still the storage.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(storage.name().clone(), chunks, storage.dtype())
-    })
+    geometry_series(storage.name().clone(), geo, chunks)
 }
 
 /// Gather a list of `part`s into one geometry of `kind` per row.
@@ -201,7 +201,7 @@ fn gather(
         })
     })?;
 
-    Ok(validated(storage.into_series(), kind, close)?.into_extension(geo.instance()))
+    validated(&storage.into_series(), geo, kind, close)
 }
 
 /// See `linestring_from_vertices`.
@@ -429,7 +429,7 @@ fn zip(
 ) -> PolarsResult<Series> {
     let geo = zipped(&fields_of(inputs), kwargs, kind.kind())?;
     let storage = interleaved_columns(inputs, kind.kind().nesting())?;
-    Ok(validated(storage, kind, close)?.into_extension(geo.instance()))
+    validated(&storage, geo, kind, close)
 }
 
 /// The storage one coordinate column per axis zips into,
@@ -477,10 +477,7 @@ fn polygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Seri
         .iter()
         .map(|chunk| assembled_polygons(chunk.as_ref(), None, kwargs.close.map(Into::into)))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: every chunk is the storage of a polygon of `geo`'s dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(exteriors.name().clone(), chunks, &geo.dtype())
-    })
+    geometry_series(exteriors.name().clone(), geo, chunks)
 }
 
 /// See `polygons_from_nested_coordinates`.
@@ -538,10 +535,7 @@ fn multipolygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult
             )
         })
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: every chunk is the storage of a multipolygon of `geo`'s dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(exteriors.name().clone(), chunks, &geo.dtype())
-    })
+    geometry_series(exteriors.name().clone(), geo, chunks)
 }
 
 /// See `multi_polygons_from_nested_coordinates`.
@@ -802,8 +796,5 @@ fn polygon_rings_in_separate_columns(
         }
         None => assembled_polygons(exteriors.rechunk().chunks()[0].as_ref(), None, close)?,
     };
-    // SAFETY: the chunk is the storage of a polygon of `geo`'s dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), vec![chunk], &geo.dtype())
-    })
+    geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }

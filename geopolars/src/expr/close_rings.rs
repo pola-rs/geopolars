@@ -6,7 +6,7 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::describe;
+use crate::geoarrow::{describe, same_geometry_series};
 
 /// See python
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -45,8 +45,6 @@ fn close_rings(inputs: &[Series], kwargs: CloseRingsKwargs) -> PolarsResult<Seri
             )
         })
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: the geometries keep their kind and dimension, so this is the input's storage.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, inputs[0].dtype())
-    })
+    let geo = describe(inputs[0].dtype())?.geo();
+    Ok(same_geometry_series(inputs[0].name().clone(), geo, chunks))
 }

@@ -10,7 +10,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::describe;
+use crate::geoarrow::{describe, same_geometry_series};
 
 /// See python
 #[derive(Debug, Deserialize)]
@@ -142,11 +142,11 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
         .zip(keep.downcast_iter())
         .map(|(chunk, keep)| chunk.with_validity(Some(keep.values().clone())))
         .collect();
-    // SAFETY: only the outer validity changed, so every chunk is still the storage.
-    let storage = unsafe {
-        Series::from_chunks_and_dtype_unchecked(storage.name().clone(), chunks, storage.dtype())
-    };
-    Ok(storage.into_extension(geo.typ.clone()))
+    Ok(same_geometry_series(
+        storage.name().clone(),
+        geo.geo(),
+        chunks,
+    ))
 }
 
 /// See `null_out_invalid_geoarrow`.

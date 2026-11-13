@@ -6,12 +6,12 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, Geo};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
 /// A point encloses nothing, so it is refused.
 /// A polygon per geometry, with the input's metadata and z, but without m.
 /// Also the kind of the input.
-fn hull_type(dtype: &DataType) -> PolarsResult<(DataType, NestedKind)> {
+fn hull_type(dtype: &DataType) -> PolarsResult<(Geo, NestedKind)> {
     let geo = describe(dtype)?;
     let kind = NestedKind::new("convex_hull", geo.kind)?;
     let dim = if geo.dim.has_z() {
@@ -19,14 +19,14 @@ fn hull_type(dtype: &DataType) -> PolarsResult<(DataType, NestedKind)> {
     } else {
         GeoDimension::XY
     };
-    let dtype = Geo::new(Kind::Polygon, dim, geo.metadata.clone()).dtype();
-    Ok((dtype, kind))
+    let hull = Geo::new(Kind::Polygon, dim, geo.metadata.clone());
+    Ok((hull, kind))
 }
 
 /// For [`convex_hull`].
 fn kernel_output_type_convex_hull(input_fields: &[Field]) -> PolarsResult<Field> {
-    let (dtype, _) = hull_type(input_fields[0].dtype())?;
-    Ok(Field::new(input_fields[0].name().clone(), dtype))
+    let (hull, _) = hull_type(input_fields[0].dtype())?;
+    Ok(Field::new(input_fields[0].name().clone(), hull.dtype()))
 }
 
 /// See python docs for details.
@@ -41,26 +41,20 @@ pub struct ConvexHullKwargs {
 /// See `convex_hull`.
 #[polars_expr(output_type_func=kernel_output_type_convex_hull)]
 fn convex_hull(inputs: &[Series], kwargs: ConvexHullKwargs) -> PolarsResult<Series> {
-    let (dtype, kind) = hull_type(inputs[0].dtype())?;
+    let (hull, kind) = hull_type(inputs[0].dtype())?;
     let storage = inputs[0].ext()?.storage();
     let chunks = storage
         .chunks()
         .iter()
         .map(|chunk| {
-            let hulls = convex_hulls(
+            convex_hulls(
                 chunk.as_ref(),
                 kind,
                 kwargs.ignore_per_row_errors,
                 kwargs.ccw_outer,
                 kwargs.early_finite_check,
-            )?;
-            PolarsResult::Ok(hulls.into_list_array().boxed())
+            )
         })
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: the hulls are polygons of `dtype`'s dimension, its storage.
-    Ok(
-        unsafe {
-            Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &dtype)
-        },
-    )
+    geometry_series(inputs[0].name().clone(), hull, chunks)
 }

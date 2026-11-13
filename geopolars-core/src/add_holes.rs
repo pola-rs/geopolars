@@ -1,5 +1,5 @@
 use geopolars_compute::native::{have_room_for_holes, polygons_with_added_holes};
-use geopolars_views::{downcast, PolygonArray};
+use geopolars_views::{downcast, GeometryArray, PolygonArray};
 use polars_arrow::array::Array;
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_core::prelude::PolarsResult;
@@ -25,7 +25,7 @@ pub fn add_holes(
     null_parts: NullParts,
     empty_exterior: EmptyExterior,
     close: Option<CloseRings>,
-) -> PolarsResult<Box<dyn Array>> {
+) -> PolarsResult<GeometryArray> {
     let polygons = PolygonArray::new(downcast(polygons, "a list of rings")?)?;
     let holes = lines_per_row(holes, listed, null_parts)?;
     let validity = rows_validity(&polygons.rows, holes.rows(), null_parts);
@@ -38,5 +38,5 @@ pub fn add_holes(
         EmptyExterior::Keep => (holes.only_on_rows(&room), validity),
     };
     let added = polygons_with_added_holes(&polygons, Some(&holes), validity);
-    Ok(validated_polygons(added, close))
+    Ok(GeometryArray::Polygon(validated_polygons(added, close)))
 }

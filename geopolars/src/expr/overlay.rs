@@ -9,8 +9,8 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::geoarrow::{
-    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, Geo, GeoColumn, GeoDimension,
-    GeometryPairs,
+    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_masked_pairs, Geo, GeoColumn,
+    GeoDimension, GeometryPairs,
 };
 
 /// The topological dimension of an input, or of the parts an intersection keeps.
@@ -184,17 +184,7 @@ fn overlaid(
             )
         })
         .collect::<PolarsResult<Vec<_>>>()?;
-    #[cfg(debug_assertions)]
-    {
-        let storage = geo.dim().storage(geo.kind().nesting());
-        let storage = storage.to_arrow(CompatLevel::newest());
-        for chunk in &chunks {
-            debug_assert_eq!(chunk.dtype(), &storage, "the kernel gave another storage");
-        }
-    }
-    // SAFETY: every chunk is the storage of `geo`'s kind, with z exactly when `geo` has it.
-    // `overlay_dimension` never gives m, so z alone fixes the dimension.
-    Ok(unsafe { Series::from_chunks_and_dtype_unchecked(a.name().clone(), chunks, &geo.dtype()) })
+    geometry_series(a.name().clone(), geo, chunks)
 }
 
 /// See `intersection`.

@@ -4,7 +4,7 @@ use geopolars_compute::native::{
     multi_polygons_with_added_parts, WithoutEmptyParts,
 };
 use geopolars_views::{
-    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    downcast, Coords, GeometryArray, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
 };
 use polars_arrow::array::Array;
@@ -35,7 +35,7 @@ pub fn add_parts(
     listed: bool,
     null_parts: NullParts,
     empty_parts: EmptyParts,
-) -> PolarsResult<Box<dyn Array>> {
+) -> PolarsResult<GeometryArray> {
     let rows = |what| downcast(base_geometry, what);
     let drop = empty_parts == EmptyParts::Drop;
     Ok(match kind {
@@ -52,8 +52,7 @@ pub fn add_parts(
             let parts = points_per_row(parts, listed, null_parts)?;
             let parts = without_empty_parts_if(drop, parts);
             let validity = rows_validity(base.rows(), parts.rows(), null_parts);
-            let added = multi_points_with_added_parts(&base, &parts, validity);
-            added.into_list_array().boxed()
+            GeometryArray::MultiPoint(multi_points_with_added_parts(&base, &parts, validity))
         }
         Kind::LineString | Kind::MultiLineString => {
             let base = match kind {
@@ -67,7 +66,7 @@ pub fn add_parts(
             let parts = without_empty_parts_if(drop, parts);
             let validity = rows_validity(base.rows(), parts.rows(), null_parts);
             let added = multi_line_strings_with_added_parts(&base, &parts, validity);
-            added.into_list_array().boxed()
+            GeometryArray::MultiLineString(added)
         }
         Kind::Polygon | Kind::MultiPolygon => {
             let base = match kind {
@@ -81,7 +80,7 @@ pub fn add_parts(
             let parts = without_empty_parts_if(drop, parts);
             let validity = rows_validity(base.rows(), parts.rows(), null_parts);
             let added = multi_polygons_with_added_parts(&base, &parts, validity);
-            added.into_list_array().boxed()
+            GeometryArray::MultiPolygon(added)
         }
     })
 }

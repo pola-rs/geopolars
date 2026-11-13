@@ -12,7 +12,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::construct::storage_of;
-use crate::geoarrow::{describe, Geo};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
 #[derive(Deserialize)]
 #[serde(remote = "JoinGaps", rename_all = "snake_case")]
@@ -84,9 +84,5 @@ fn join_line_strings(inputs: &[Series], kwargs: JoinLineStringsKwargs) -> Polars
             )
         })
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: `joined_type` and `geopolars_core::join_line_strings` both pick the kind from `kwargs.gaps`,
-    // and the kernels keep the input's coordinates, so each chunk is the storage of `geo`.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &geo.dtype())
-    })
+    geometry_series(inputs[0].name().clone(), geo, chunks)
 }

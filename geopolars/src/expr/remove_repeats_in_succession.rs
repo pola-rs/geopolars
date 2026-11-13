@@ -9,7 +9,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::describe;
+use crate::geoarrow::{describe, same_geometry_series};
 
 #[derive(Deserialize)]
 #[serde(remote = "CollapsedLines", rename_all = "snake_case")]
@@ -67,8 +67,6 @@ fn remove_repeats_in_succession(
             )
         })
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: the geometries keep their kind and dimension, so this is the input's storage.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, inputs[0].dtype())
-    })
+    let geo = describe(inputs[0].dtype())?.geo();
+    Ok(same_geometry_series(inputs[0].name().clone(), geo, chunks))
 }

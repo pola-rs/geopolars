@@ -6,12 +6,12 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{describe, Geo};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
 /// Python returns a point or multipoint as it is, so it never gets here.
 /// The input's kind and metadata, with its z, but without m.
 /// Also the kind of the input.
-fn simplified_type(dtype: &DataType) -> PolarsResult<(DataType, SegmentKind)> {
+fn simplified_type(dtype: &DataType) -> PolarsResult<(Geo, SegmentKind)> {
     let geo = describe(dtype)?;
     let kind = SegmentKind::new("simplify", geo.kind)?;
     let dim = if geo.dim.has_z() {
@@ -19,14 +19,17 @@ fn simplified_type(dtype: &DataType) -> PolarsResult<(DataType, SegmentKind)> {
     } else {
         GeoDimension::XY
     };
-    let dtype = Geo::new(kind.kind(), dim, geo.metadata.clone()).dtype();
-    Ok((dtype, kind))
+    let simplified = Geo::new(kind.kind(), dim, geo.metadata.clone());
+    Ok((simplified, kind))
 }
 
 /// For [`simplify`].
 fn kernel_output_type_simplify(input_fields: &[Field]) -> PolarsResult<Field> {
-    let (dtype, _) = simplified_type(input_fields[0].dtype())?;
-    Ok(Field::new(input_fields[0].name().clone(), dtype))
+    let (simplified, _) = simplified_type(input_fields[0].dtype())?;
+    Ok(Field::new(
+        input_fields[0].name().clone(),
+        simplified.dtype(),
+    ))
 }
 
 /// See python docs for details.
@@ -42,7 +45,7 @@ pub struct SimplifyKwargs {
 /// See `simplify`.
 #[polars_expr(output_type_func=kernel_output_type_simplify)]
 fn simplify(inputs: &[Series], kwargs: SimplifyKwargs) -> PolarsResult<Series> {
-    let (dtype, kind) = simplified_type(inputs[0].dtype())?;
+    let (simplified, kind) = simplified_type(inputs[0].dtype())?;
     let SimplifyKwargs {
         tolerance,
         preserve_topology,
@@ -54,21 +57,15 @@ fn simplify(inputs: &[Series], kwargs: SimplifyKwargs) -> PolarsResult<Series> {
         .chunks()
         .iter()
         .map(|chunk| {
-            let simplified = geopolars_core::simplify(
+            geopolars_core::simplify(
                 chunk.as_ref(),
                 kind,
                 tolerance,
                 preserve_topology,
                 ignore_per_row_errors,
                 early_finite_check,
-            )?;
-            Ok(simplified.boxed())
+            )
         })
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: the simplified geometries are of the input's kind, in `dtype`'s dimension: its storage.
-    Ok(
-        unsafe {
-            Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &dtype)
-        },
-    )
+    geometry_series(inputs[0].name().clone(), simplified, chunks)
 }

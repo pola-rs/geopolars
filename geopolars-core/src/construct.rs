@@ -5,7 +5,7 @@ use geopolars_compute::inner_nulls::{
 };
 use geopolars_compute::native::{multi_polygons_have_only_rings, polygons_with_added_holes};
 use geopolars_compute::with_const_flags;
-use geopolars_views::{MultiPolygonArray, UncheckedStorage};
+use geopolars_views::{GeometryArray, MultiPolygonArray, UncheckedStorage};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
 
@@ -23,21 +23,22 @@ pub fn validated_storage(
     chunk: &dyn Array,
     kind: NestedKind,
     close: Option<CloseRings>,
-) -> PolarsResult<Box<dyn Array>> {
+) -> PolarsResult<GeometryArray> {
     let storage = UncheckedStorage::new(chunk)?;
     Ok(match kind {
-        NestedKind::LineString => propagate_inner_nulls_of_line_strings(storage)
-            .into_list_array()
-            .boxed(),
-        NestedKind::MultiPoint => propagate_inner_nulls_of_multi_points(storage)
-            .into_list_array()
-            .boxed(),
-        NestedKind::MultiLineString => propagate_inner_nulls_of_multi_line_strings(storage)
-            .into_list_array()
-            .boxed(),
-        NestedKind::Polygon => {
-            validated_polygons(propagate_inner_nulls_of_polygons(storage), close)
+        NestedKind::LineString => {
+            GeometryArray::LineString(propagate_inner_nulls_of_line_strings(storage))
         }
+        NestedKind::MultiPoint => {
+            GeometryArray::MultiPoint(propagate_inner_nulls_of_multi_points(storage))
+        }
+        NestedKind::MultiLineString => {
+            GeometryArray::MultiLineString(propagate_inner_nulls_of_multi_line_strings(storage))
+        }
+        NestedKind::Polygon => GeometryArray::Polygon(validated_polygons(
+            propagate_inner_nulls_of_polygons(storage),
+            close,
+        )),
         NestedKind::MultiPolygon => {
             let mut array = propagate_inner_nulls_of_multi_polygons(storage);
             if let Some((rings, coords)) =
@@ -50,14 +51,12 @@ pub fn validated_storage(
             let valid = with_const_flags!(Z = z; multi_polygons_have_only_rings::<Z>(&array))
                 .values()
                 .clone();
-            MultiPolygonArray::from_parts(
+            GeometryArray::MultiPolygon(MultiPolygonArray::from_parts(
                 array.rows.with_validity(Some(valid)),
                 array.polygons,
                 array.rings,
                 array.coords,
-            )
-            .into_list_array()
-            .boxed()
+            ))
         }
     })
 }
@@ -70,7 +69,7 @@ pub fn assembled_polygons(
     exteriors: &dyn Array,
     holes: Option<(&dyn Array, bool, NullParts)>,
     close: Option<CloseRings>,
-) -> PolarsResult<Box<dyn Array>> {
+) -> PolarsResult<GeometryArray> {
     let exteriors = one_ring_per_row(propagate_inner_nulls_of_line_strings(
         UncheckedStorage::new(exteriors)?,
     ));
@@ -83,11 +82,11 @@ pub fn assembled_polygons(
         // and `polygons_from_rings_in_separate_columns` without holes.
         let validity = exteriors.rows.validity().cloned();
         let polygons = polygons_with_added_holes(&exteriors, None, validity);
-        return Ok(validated_polygons(polygons, close));
+        return Ok(GeometryArray::Polygon(validated_polygons(polygons, close)));
     };
 
     let holes = lines_per_row(holes, listed, null_parts)?;
     let validity = rows_validity(&exteriors.rows, holes.rows(), null_parts);
     let polygons = polygons_with_added_holes(&exteriors, Some(&holes), validity);
-    Ok(validated_polygons(polygons, close))
+    Ok(GeometryArray::Polygon(validated_polygons(polygons, close)))
 }
