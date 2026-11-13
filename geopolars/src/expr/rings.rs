@@ -6,7 +6,7 @@ use polars::prelude::*;
 use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 
-use crate::geoarrow::{describe, Geo};
+use crate::geoarrow::{describe, storage_series, Geo};
 
 /// A `kind` per polygon, or a list of them per multipolygon,
 /// with the input's dimension and metadata.
@@ -48,9 +48,7 @@ fn per_chunk(
         .iter()
         .map(|chunk| rings(chunk.as_ref(), kind))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: `exteriors` and `interiors` document the storage they give,
-    // which `rings_type` describes in the same way.
-    Ok(unsafe { Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, dtype) })
+    storage_series(inputs[0].name().clone(), chunks, dtype)
 }
 
 /// See `exterior`.

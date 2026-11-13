@@ -116,6 +116,37 @@ pub fn geometry_series(
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &geo.dtype()) })
 }
 
+/// Turns the chunks of storage a kernel gave back into a `dtype` column,
+/// for output that is not a geometry, such as boxes or lists of geometries.
+/// Errors if a chunk is not `dtype`'s storage.
+/// Such an error is a bug, as the output type function and the kernel then disagree.
+pub fn storage_series(
+    name: PlSmallStr,
+    chunks: Vec<ArrayRef>,
+    dtype: &DataType,
+) -> PolarsResult<Series> {
+    let storage = storage_of(dtype);
+    for chunk in &chunks {
+        let given = DataType::from_arrow_dtype(chunk.dtype());
+        polars_ensure!(
+            given == storage,
+            ComputeError: "the kernel gave `{given}`, but `{storage}` was planned"
+        );
+    }
+    // SAFETY: every chunk is the storage of `dtype`.
+    Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, dtype) })
+}
+
+/// `dtype` with every extension type replaced by its storage.
+/// Unlike [`DataType::to_storage`], this also replaces one inside a list.
+fn storage_of(dtype: &DataType) -> DataType {
+    match dtype {
+        DataType::Extension(_, storage) => storage_of(storage),
+        DataType::List(inner) => DataType::List(Box::new(storage_of(inner))),
+        _ => dtype.clone(),
+    }
+}
+
 /// The [Kind] of a geometry column, see [describe].
 pub fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
     Ok(describe(geometries.dtype())?.kind)
