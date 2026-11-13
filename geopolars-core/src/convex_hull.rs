@@ -11,8 +11,7 @@ use polars_core::prelude::PolarsResult;
 
 use crate::{IntoPolarsResult, NestedKind};
 
-/// Finds the convex hull of every geometry in one chunk of a `kind` column's storage,
-/// through GEOS.
+/// Finds the convex hull of every geometry in one chunk of a `kind` column's storage.
 /// Implements the Python `convex_hull`.
 pub fn convex_hulls(
     chunk: &dyn Array,

@@ -1,6 +1,3 @@
-//! Snapping every coordinate onto a grid, through [`geopolars_core::snap_to_grid`].
-//! See `snap_to_grid` in Python for the rules.
-
 use geopolars_compute::native::{Grid, RoundMode};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;

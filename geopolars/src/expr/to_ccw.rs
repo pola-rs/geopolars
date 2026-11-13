@@ -15,7 +15,7 @@ pub struct ToCcwKwargs {
     holes_cw: bool,
 }
 
-/// For [`to_ccw`]: the input's type.
+/// is the input's type.
 fn kernel_output_type_to_ccw(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     SegmentKind::new("to_ccw", describe(field.dtype())?.kind)?;

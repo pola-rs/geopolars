@@ -1,6 +1,3 @@
-//! Sorting the parts of a geometry.
-//! See `sort_parts` in Python for the rules.
-
 use geopolars_compute::native::SortOptions;
 use geopolars_core::NestedKind;
 use polars::prelude::*;
@@ -26,7 +23,7 @@ pub struct SortPartsKwargs {
     ignore_per_row_errors: bool,
 }
 
-/// For [`sort_parts`]: the input's type.
+/// is the input's type.
 fn kernel_output_type_sort_parts(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     NestedKind::new("sort_parts", describe(field.dtype())?.kind)?;

@@ -1,5 +1,4 @@
 //! Whether a geometry is simple, through [`geopolars_core::are_simple`].
-//! See `is_simple` in Python for the rules.
 
 use geopolars_core::are_simple;
 use polars::prelude::*;

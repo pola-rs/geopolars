@@ -1,12 +1,11 @@
 //! Expressions over GeoArrow geometry columns.
 //!
-//! Polars finds the expression functions by doing a `dlsym` for `_polars_plugin_*`
-//! to get symbols out of this compiled library, so how they are split across
-//! modules here is for readers only -- nothing has to be registered.
+//! Note that organisition into submodules is for readers only,
+//! as Polars finds the expression functions by doing a `dlsym` for `_polars_plugin_*`
 //!
-//! Nothing in here names a concrete geometry. An expression asks
-//! [`geoarrow::describe`](crate::geoarrow::describe) what it was handed,
-//! and `geopolars_core` picks the kernel for its [`Kind`](geopolars_views::Kind).
+//!
+//! This all just dispatches to `geopolars_core`,
+//! which picks a kernel in `geopolars_compute`.
 
 pub mod add_holes;
 pub mod add_parts;

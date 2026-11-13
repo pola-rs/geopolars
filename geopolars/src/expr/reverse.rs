@@ -16,7 +16,8 @@ pub struct ReverseKwargs {
     nested: bool,
 }
 
-/// For [`reverse`]: the input's type.
+/// For [`reverse`].
+/// This gives the input's type.
 fn kernel_output_type_reverse(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     NestedKind::new("reverse", describe(field.dtype())?.kind)?;

@@ -7,8 +7,8 @@ use polars_core::prelude::{polars_err, PolarsResult};
 
 use crate::PolygonKind;
 
-/// Measures the area of every polygon or multipolygon in one chunk of a `kind` column's storage,
-/// as `metric` measures it.
+/// Measures the area of every polygon or multipolygon in one chunk of a `kind` column's storage.
+/// How it is measured (geodesic, planar, etc) is determined by `metric`.
 /// Implements the Python `area_planar` and `area_geodesic`.
 pub fn areas(
     chunk: &dyn Array,

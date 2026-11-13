@@ -1,6 +1,3 @@
-//! The line spanning the Hausdorff distance between two geometries
-//! (see [`geopolars_compute::native::hausdorff_lines_pairwise`]).
-
 use geopolars_compute::native::NonFinite;
 use geopolars_core::{hausdorff_lines_to_one, pairwise_hausdorff_lines};
 use geopolars_views::Kind;

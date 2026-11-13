@@ -1,5 +1,4 @@
 //! Whether two geometries are equal, coordinate by coordinate
-//! (see [`geopolars_compute::native::points_are_equal`] and the kernels of the other kinds).
 
 use geopolars_compute::native::Coincidence;
 use polars::prelude::*;

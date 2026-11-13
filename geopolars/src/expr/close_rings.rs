@@ -23,7 +23,6 @@ impl From<CloseRingsKwargs> for CloseRings {
     }
 }
 
-/// For [`close_rings`]: the input's type.
 fn kernel_output_type_close_rings(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     SegmentKind::new("close_rings", describe(field.dtype())?.kind)?;

@@ -32,10 +32,9 @@ fn crs_of(field: &Field) -> PolarsResult<String> {
     geo.metadata.crs().map(str::to_owned)
 }
 
-/// Only linestrings and multilinestrings have a length: other kinds are refused
-/// rather than given a length of `0.0`.
 /// Length always returns an `f64`.
 /// Multilinestring: sum
+/// Types other than linestrings or multilinestrings are refused.
 fn length_dtype(field: &Field) -> PolarsResult<Field> {
     LineKind::new("length", describe(field.dtype())?.kind)?;
     Ok(Field::new(field.name().clone(), DataType::Float64))

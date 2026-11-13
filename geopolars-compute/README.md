@@ -2,7 +2,7 @@
 
 Kernels for GeoArrow.
 They take the views of [`geopolars-views`](../geopolars-views/README.md).
-They return views for geometries, and Polars arrays otherwise.
+They return views for geometries, and Polars arrays for non-geo types.
 
 The crate holds:
 

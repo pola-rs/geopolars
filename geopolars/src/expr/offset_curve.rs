@@ -10,14 +10,15 @@ use serde::Deserialize;
 use super::buffer::{chunks_by_distance, JoinStyleDef};
 use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// The type of the offset curves of a `dtype` column: XY, with the input's metadata.
+/// The type of the offset curves of a `dtype` column (XY).
 /// Also gives the input's kind, and whether the curves are multilinestrings
 /// (for a multilinestring, or with `allow_splitting=true`).
-/// Any other kind is refused here, but Python already refuses it before calling the plugin.
 fn offset_curve_type(
     dtype: &DataType,
     kwargs: &OffsetCurveKwargs,
 ) -> PolarsResult<(Geo, LineKind, bool)> {
+    // non-string kinds should already be refused in python,
+    // but second check never hurt nobody.
     let geo = describe(dtype)?;
     let line_kind = LineKind::new("offset_curve", geo.kind)?;
     let into_multi = match line_kind {

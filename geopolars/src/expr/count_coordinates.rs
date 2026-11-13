@@ -1,6 +1,3 @@
-//! How many coordinates a geometry is made of.
-//! See `count_coordinates` in Python for the rules.
-
 use geopolars_core::coordinate_counts;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;

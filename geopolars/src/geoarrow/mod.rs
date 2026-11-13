@@ -1,7 +1,7 @@
 //! Glue for the GeoArrow data types, and lining up the chunks of two geometry columns.
 //!
-//! Expressions never name a concrete geometry:
-//! they ask [`describe`] what a column holds,
+//! Expressions never name a concrete geometry.
+//! Instead, they ask [`describe`] what a column holds,
 //! and hand the [`Kind`] and [`GeoDimension`] it reports to `geopolars_core`,
 //! which picks the kernel.
 

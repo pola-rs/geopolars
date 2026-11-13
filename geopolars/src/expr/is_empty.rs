@@ -1,6 +1,3 @@
-//! Whether a geometry is empty.
-//! See `is_empty` in Python for the rules.
-
 use geopolars_core::are_empty;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
