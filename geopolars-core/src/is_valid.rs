@@ -38,9 +38,6 @@ fn compute_err(e: impl std::fmt::Display) -> PolarsError {
 
 /// Checks whether every geometry in one chunk of a `kind` column's storage is valid.
 /// Implements the Python `is_valid_geoarrow` and `is_valid_ogc`.
-///
-/// If `check_null_coordinates=true`, every null value below a row is first moved out to the row
-/// (see [geopolars_compute::inner_nulls]), so that the views can trust the rest.
 pub fn are_valid(
     chunk: &dyn Array,
     kind: Kind,

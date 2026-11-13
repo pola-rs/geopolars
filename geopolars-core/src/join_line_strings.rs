@@ -17,8 +17,7 @@ pub enum JoinGaps {
 /// Joins the linestrings on every row of one chunk of a multilinestring column's storage
 /// (or of a list of linestrings, which is the same storage).
 /// Implements the Python `join_line_strings`.
-/// The result is a multilinestring with [`JoinGaps::Split`],
-/// and a linestring otherwise.
+/// The result is a linestring, or a multilinestring with [`JoinGaps::Split`].
 pub fn join_line_strings(
     chunk: &dyn Array,
     coincidence: Coincidence,

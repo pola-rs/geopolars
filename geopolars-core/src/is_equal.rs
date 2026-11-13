@@ -12,6 +12,7 @@ use polars_core::prelude::PolarsResult;
 /// Checks whether the geometries on the same row of two chunks of a `kind` column's storage
 /// are equal, coordinate by coordinate.
 /// Implements the Python `is_equal`.
+///
 /// `b` must be as long as `a`, or a single row.
 pub fn are_equal(
     a: &dyn Array,

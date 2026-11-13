@@ -14,10 +14,10 @@ use crate::parts::{
 };
 use crate::NestedKind;
 
-/// Moves every null value below a row of one chunk of a `kind` column's storage out to that row.
+/// Moves every null value below a row out to that row, in one chunk of a `kind` column's storage.
 /// Implements the validation the Python constructors do once they have gathered the parts.
-/// A (multi)polygon is also null where it does not have only rings,
-/// after its open rings are closed with a `close`.
+/// A (multi)polygon is also null where it does not have only rings.
+/// Its open rings are closed before that check if there is a `close`.
 pub fn validated_storage(
     chunk: &dyn Array,
     kind: NestedKind,
@@ -47,8 +47,9 @@ pub fn validated_storage(
 
 /// Assembles one chunk of polygons from one chunk of exterior rings and one of holes.
 /// Implements the Python `polygons_from_rings_in_separate_columns`,
-/// and `polygons_from_coordinates` without `holes`.
-/// The holes only hold a single ring per row if `listed=false`.
+/// and `polygons_from_coordinates`, which passes no `holes`.
+/// `holes` carries the chunk of holes together with its `listed` and `null_parts`.
+/// The chunk only holds a single ring per row if `listed=false`.
 pub fn assembled_polygons(
     exteriors: &dyn Array,
     holes: Option<(&dyn Array, bool, NullParts)>,
@@ -75,8 +76,8 @@ pub fn assembled_polygons(
     Ok(GeometryArray::Polygon(validated_polygons(polygons, close)))
 }
 
-/// Assembles one chunk of multipolygons from one chunk of rows of exterior rings,
-/// with a polygon per ring.
+/// Assembles one chunk of multipolygons with a polygon per exterior ring,
+/// from one chunk of lists of exterior rings.
 /// Implements the Python `multi_polygons_from_coordinates`.
 pub fn assembled_multi_polygons(
     exteriors: &dyn Array,

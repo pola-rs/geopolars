@@ -36,8 +36,7 @@ pub enum NullParts {
     Null,
 }
 
-/// See [`close_open_rings`].
-/// The rings and their coordinates, or `None` if no ring changed.
+/// Closes the open `rings` like [`close_open_rings`], or gives `None` if no ring changed.
 pub(crate) fn closed_rings(
     rings: &ValidList,
     coords: &ValidCoords,
@@ -49,8 +48,8 @@ pub(crate) fn closed_rings(
     Some((closed.rows.ignoring_validity().clone(), closed.coords))
 }
 
-/// `array` with its open rings closed first if there is a `close`,
-/// and null where it does not have only rings (see [polygons_have_only_rings]).
+/// Nulls out every polygon that does not have only rings (see [polygons_have_only_rings]).
+/// Open rings are closed before that check if there is a `close`.
 pub(crate) fn validated_polygons(
     mut array: PolygonArray,
     close: Option<CloseRings>,

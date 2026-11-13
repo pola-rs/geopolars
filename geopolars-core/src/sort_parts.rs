@@ -12,9 +12,11 @@ use polars_core::prelude::{polars_bail, PolarsResult};
 use crate::{IntoPolarsResult, NestedKind};
 
 /// Sorts the parts of every geometry in one chunk of a `kind` column's storage.
-/// Implements the Python `sort_parts`,
-/// which hands back a point, or a linestring it does not rotate, without calling this.
+/// Implements the Python `sort_parts`.
 /// The result is the storage of the same kind and dimension.
+///
+/// A linestring is refused unless `options.rotate_rings=true`.
+/// The Python `sort_parts` hands such a linestring back without calling this, like a point.
 pub fn sort_parts(
     chunk: &dyn Array,
     kind: NestedKind,

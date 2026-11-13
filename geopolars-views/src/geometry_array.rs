@@ -58,8 +58,8 @@ impl GeometryArray {
         }
     }
 
-    /// The polars storage of the column, taking over its buffers:
-    /// always the storage [`GeoDimension::storage`] gives for [`dim`](Self::dim)
+    /// Turns this into the Polars storage of a column, taking over its buffers.
+    /// It is always the storage [`GeoDimension::storage`] gives for [`dim`](Self::dim)
     /// and the [`nesting`](Kind::nesting) of [`kind`](Self::kind).
     pub fn into_storage(self) -> Box<dyn Array> {
         let (kind, dim) = (self.kind(), self.dim());
@@ -132,37 +132,37 @@ impl GeometryArray {
         }
     }
 
-    /// Calls `f` with every row: the geometry, or `None` for a null.
-    /// For the `wkb` and `wkt` writers, which take geometries through geo-traits.
+    /// Calls `f` with every row as a geo-traits geometry, or `None` for a null row.
+    /// The `wkb` and `wkt` writers take geometries this way.
     pub fn for_each_geometry<'a>(
         &'a self,
         mut f: impl FnMut(Option<Geometry<'a>>) -> PolarsResult<()>,
     ) -> PolarsResult<()> {
         match self {
             GeometryArray::Point(array) => {
-                for_each_row(self, &mut f, |i| Geometry::Point(array.get(i)))
+                for_each_geometry_row(self, &mut f, |i| Geometry::Point(array.get(i)))
             }
             GeometryArray::LineString(array) => {
-                for_each_row(self, &mut f, |i| Geometry::LineString(array.get(i)))
+                for_each_geometry_row(self, &mut f, |i| Geometry::LineString(array.get(i)))
             }
             GeometryArray::Polygon(array) => {
-                for_each_row(self, &mut f, |i| Geometry::Polygon(array.get(i)))
+                for_each_geometry_row(self, &mut f, |i| Geometry::Polygon(array.get(i)))
             }
             GeometryArray::MultiPoint(array) => {
-                for_each_row(self, &mut f, |i| Geometry::MultiPoint(array.get(i)))
+                for_each_geometry_row(self, &mut f, |i| Geometry::MultiPoint(array.get(i)))
             }
             GeometryArray::MultiLineString(array) => {
-                for_each_row(self, &mut f, |i| Geometry::MultiLineString(array.get(i)))
+                for_each_geometry_row(self, &mut f, |i| Geometry::MultiLineString(array.get(i)))
             }
             GeometryArray::MultiPolygon(array) => {
-                for_each_row(self, &mut f, |i| Geometry::MultiPolygon(array.get(i)))
+                for_each_geometry_row(self, &mut f, |i| Geometry::MultiPolygon(array.get(i)))
             }
         }
     }
 }
 
 /// Calls `f` with `row(i)` for every row `i` of `array`, or `None` where it is null.
-fn for_each_row<'a>(
+fn for_each_geometry_row<'a>(
     array: &GeometryArray,
     f: &mut impl FnMut(Option<Geometry<'a>>) -> PolarsResult<()>,
     row: impl Fn(usize) -> Geometry<'a>,

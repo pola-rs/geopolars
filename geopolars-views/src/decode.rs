@@ -19,7 +19,6 @@ use crate::{GeoDimension, Kind};
 pub struct GeometryBuilder {
     kind: Kind,
     dim: GeoDimension,
-    /// How the input is spelled in an error message: `WKB`.
     label: &'static str,
     /// One buffer per coordinate, in [`GeoDimension::field_names`] order.
     coords: Vec<Vec<f64>>,
@@ -29,6 +28,7 @@ pub struct GeometryBuilder {
 }
 
 impl GeometryBuilder {
+    /// `label` is how the input is spelled in an error message: `WKB`.
     pub fn new(kind: Kind, dim: GeoDimension, label: &'static str, capacity: usize) -> Self {
         Self {
             kind,

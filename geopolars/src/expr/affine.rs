@@ -109,9 +109,6 @@ fn affine_then_shift(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Se
     ))
 }
 
-/// The storage of the geometries of `inputs[0]`, and that of the points of `inputs[1]`,
-/// as single chunks with one point per geometry.
-/// A single point is repeated for every geometry.
 fn storage_and_points_per_geometry(inputs: &[Series]) -> PolarsResult<(Series, Series)> {
     let storage = inputs[0].ext()?.storage().rechunk();
     let points = inputs[1].ext()?.storage();

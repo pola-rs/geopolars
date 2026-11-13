@@ -48,7 +48,7 @@ impl GeoDimension {
     }
 
     /// How the dimension is spelled in a type name: `point[xy]`, `LineStringXY`.
-    /// The same thing [`Dimension::field_names`] says, but as one `const` string.
+    /// The same thing [`GeoDimension::field_names`] says, but as one `const` string.
     pub const fn tag(self) -> &'static str {
         match self {
             GeoDimension::XY => "xy",

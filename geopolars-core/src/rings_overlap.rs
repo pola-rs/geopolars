@@ -29,9 +29,11 @@ pub fn pairwise_rings_overlap(
     .map_err(compute_err)
 }
 
-/// Checks whether the ring in `one`, a single row that is not null,
-/// overlaps every ring in a chunk of linestring storage, through GEOS.
+/// Checks whether the ring in `one` overlaps every ring in a chunk of linestring storage,
+/// through GEOS.
 /// Implements the Python `rings_overlap`.
+///
+/// `one` must be a single row that is not null.
 pub fn rings_overlap_one(
     one: &dyn Array,
     many: &dyn Array,

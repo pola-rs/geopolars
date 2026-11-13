@@ -10,8 +10,9 @@ use crate::IntoPolarsResult;
 
 /// Reprojects every geometry in one chunk of a `kind` column's storage by `transformation`.
 /// Implements the Python `to_crs`.
-/// See [`geopolars_compute::proj`] for `z`.
 /// The result is the storage of the same kind and dimension.
+///
+/// `z`: see [`geopolars_compute::proj`]
 pub fn reproject(
     chunk: &dyn Array,
     kind: Kind,

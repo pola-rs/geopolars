@@ -38,7 +38,7 @@ pub use polygons::{MultiPolygonArray, PolygonArray, ScalarMultiPolygon, ScalarPo
 pub use unchecked::UncheckedStorage;
 pub use untrimmed::Untrimmed;
 
-/// Downcast one level of the storage to the array it has to be.
+/// Downcasts one level of the storage to the array it has to be.
 /// The dtype was already checked, so this failing is a bug.
 pub fn downcast<'a, T: 'static>(array: &'a dyn Array, what: &str) -> PolarsResult<&'a T> {
     array.as_any().downcast_ref::<T>().ok_or_else(

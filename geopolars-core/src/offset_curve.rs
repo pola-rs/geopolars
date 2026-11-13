@@ -11,8 +11,8 @@ use crate::{IntoPolarsResult, LineKind};
 /// Finds the offset curve of every linestring or multilinestring
 /// in one chunk of a `kind` column's storage, through GEOS.
 /// Implements the Python `offset_curve`.
-/// The result is XY multilinestrings for a multilinestring or if `into_multi=true`,
-/// and XY linestrings otherwise.
+/// The result is XY linestrings.
+/// It is XY multilinestrings for a multilinestring, or if `into_multi=true`.
 pub fn offset_curves(
     chunk: &dyn Array,
     kind: LineKind,

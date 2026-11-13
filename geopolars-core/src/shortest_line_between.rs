@@ -8,6 +8,7 @@ use crate::IntoPolarsResult;
 /// Finds the shortest line between the geometries on the same row through GEOS,
 /// for a chunk of an `a_kind` column's storage and one of a `b_kind` column's.
 /// Implements the Python `shortest_line_between`.
+///
 /// `a` and `b` must have the same length.
 pub fn pairwise_shortest_lines(
     a: &dyn Array,
@@ -26,11 +27,12 @@ pub fn pairwise_shortest_lines(
         .into_polars()
 }
 
-/// Finds the shortest line between the geometry in `one`,
-/// a single row of a `one_kind` column's storage,
+/// Finds the shortest line between the geometry in `one`, of a `one_kind` column's storage,
 /// and every geometry in a chunk of a `many_kind` column's storage, through GEOS.
 /// Implements the Python `shortest_line_between`.
-/// Every line starts on `one` if `lines_start_on_one=true`, and on the row of `many` otherwise.
+/// Every line starts on the row of `many`, unless `lines_start_on_one=true`.
+///
+/// `one` must be a single row.
 pub fn shortest_lines_to_one(
     one: &dyn Array,
     one_kind: Kind,

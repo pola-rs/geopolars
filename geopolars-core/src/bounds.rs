@@ -18,7 +18,7 @@ use polars_core::prelude::PolarsResult;
 /// of dimension `dim`.
 /// Implements the Python `bounds`.
 /// A multi-geometry gets a list of boxes, one per part, if `listed=true`.
-/// Other geometries cannot be listed.
+/// Other geometries ignore `listed`.
 pub fn bounds(
     chunk: &dyn Array,
     kind: Kind,
@@ -118,12 +118,11 @@ fn total_bounds_internal<const Z: bool, const M: bool, const IGNORE_NULLS: bool>
     dim: GeoDimension,
     options: &BoxOptions,
 ) -> PolarsResult<Box<dyn Array>> {
-    // TODO: This should work per chunk: find the total bounds of each chunk on its own,
-    // and then combine those into the total bounds of the whole column.
-    // This is in preparation for streaming plugins.
+    // TODO: In preparation for streaming plugins, this should take a single chunk and give its extent.
+    // The plugin then combines the extents of the chunks into the total bounds of the whole column.
     let mut total = Some(Extent::<Z, M>::EMPTY);
     for chunk in chunks {
-        let extent = column_extent::<Z, M, IGNORE_NULLS>(chunk.as_ref(), kind)?;
+        let extent = total_bounds_chunk_extent::<Z, M, IGNORE_NULLS>(chunk.as_ref(), kind)?;
         total = total.zip(extent).map(|(mut total, extent)| {
             total.merge(&extent);
             total
@@ -134,8 +133,8 @@ fn total_bounds_internal<const Z: bool, const M: bool, const IGNORE_NULLS: bool>
     Ok(box_array(dim, &[total], validity).boxed())
 }
 
-/// Finds the extent of every geometry in one chunk of a `kind` column's storage together.
-fn column_extent<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
+/// `None` if the chunk has a null row and `IGNORE_NULLS=false`.
+fn total_bounds_chunk_extent<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
     chunk: &dyn Array,
     kind: Kind,
 ) -> PolarsResult<Option<Extent<Z, M>>> {

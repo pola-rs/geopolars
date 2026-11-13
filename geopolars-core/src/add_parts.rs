@@ -22,8 +22,7 @@ pub enum EmptyParts {
     Drop,
 }
 
-/// Adds `parts` to the geometries in `base_geometry`, one chunk of each,
-/// where `base_geometry` is a chunk of a `kind` column's storage.
+/// Adds `parts` to every geometry in `base_geometry`, one chunk of a `kind` column's storage.
 /// Implements the Python `add_parts`.
 /// `parts` only holds a single part per row if `listed=false`.
 /// A single base geometry is turned into a Multi* geometry.

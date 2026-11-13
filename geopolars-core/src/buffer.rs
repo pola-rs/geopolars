@@ -9,7 +9,7 @@ use crate::IntoPolarsResult;
 
 /// Buffers every geometry in one chunk of a `kind` column's storage, through GEOS.
 /// Implements the Python `buffer`.
-/// The result is XY multipolygons if `into_multi=true`, and XY polygons otherwise.
+/// The result is XY polygons, or XY multipolygons if `into_multi=true`.
 #[allow(clippy::too_many_arguments)]
 pub fn buffers(
     chunk: &dyn Array,

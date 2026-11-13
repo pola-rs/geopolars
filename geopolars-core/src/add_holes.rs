@@ -17,7 +17,6 @@ pub enum EmptyExterior {
 /// Adds `holes` to `polygons`, one chunk of each.
 /// Implements the Python `add_holes`.
 /// `holes` only holds a single ring per row if `listed=false`.
-/// With a `close`, the open rings are closed first.
 pub fn add_holes(
     polygons: &dyn Array,
     holes: &dyn Array,

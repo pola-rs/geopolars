@@ -1,7 +1,7 @@
 //! GeoArrow geometries are not implemented as concrete rust types,
 //! but as enums ([Kind]) so that dispatching follows the way Polars does it.
 
-/// A GeoArrow native geometry, which takes some [`GeoDimension`](crate::GeoDimension).
+/// A GeoArrow native geometry type, apart from its [`GeoDimension`](crate::GeoDimension).
 /// Used for dispatching.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -70,7 +70,7 @@ impl Kind {
 
     /// Tells us how deeply nested the data type is.
     /// A geoarrow.linestring is a collection of points, so it is 1.
-    /// A geoarrow.polygon is a collection of linestings, so it is 2.
+    /// A geoarrow.polygon is a collection of linestrings, so it is 2.
     /// A geoarrow.multipolygon is a collection of polygons, so it is 3.
     ///
     /// Warning: This does not uniquely identify a geometry kind:

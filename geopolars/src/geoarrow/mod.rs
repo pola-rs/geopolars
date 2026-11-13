@@ -92,7 +92,7 @@ impl GeoColumn<'_> {
     }
 }
 
-/// Turns one of the GeoPolars view types back into a Polars-compatible `Series`.
+/// Turns the chunks a kernel gave back into a `geo` column.
 /// Errors if a chunk is of another kind or dimension than `geo`.
 /// Such an error is a bug, as the output type function and the kernel then disagree.
 pub fn geometry_series(
@@ -116,9 +116,9 @@ pub fn geometry_series(
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &geo.dtype()) })
 }
 
-/// A `geo` column of `chunks`,
-/// which a kernel that keeps every geometry's kind and dimension made from a column of `geo`'s.
-/// That column's metadata may differ.
+/// Turns the chunks of a kernel that keeps every geometry's kind and dimension into a `geo` column.
+///
+/// `chunks` must come from a column of `geo`'s kind and dimension, though its metadata may differ.
 pub fn same_geometry_series(name: PlSmallStr, geo: Geo, chunks: Vec<ArrayRef>) -> Series {
     #[cfg(debug_assertions)]
     {

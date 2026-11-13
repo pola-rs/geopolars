@@ -95,7 +95,7 @@ On the Rust side, `src/expr/` mirrors `geo/` module by module (`area.rs`, `affin
 and `src/geoarrow/` is the shared glue: dtypes, and lining up the chunks of two geometry columns.
 `src/proj.rs` asks PROJ about a CRS.
 Picking the kernel for each kind of geometry happens in `geopolars-core`.
-The kernels live in `geopolars-compute`,
+The kernels that are dispatched to live in `geopolars-compute`,
 and read the Arrow storage through the views of `geopolars-views`.
 
 ## Type checker

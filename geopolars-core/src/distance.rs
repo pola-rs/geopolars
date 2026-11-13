@@ -27,9 +27,11 @@ pub fn pairwise_distances(
         .map_err(|e| polars_err!(ComputeError: "{e}"))
 }
 
-/// Measures the distance from the point in `one`, a single row that is not null,
+/// Measures the distance from the point in `one`
 /// to every point in a chunk of point storage, as `metric` measures it.
 /// Implements the Python `distance`.
+///
+/// `one` must be a single row that is not null.
 pub fn distances_to_one(
     one: &dyn Array,
     many: &dyn Array,

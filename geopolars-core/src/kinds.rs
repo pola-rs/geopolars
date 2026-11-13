@@ -15,7 +15,7 @@ pub enum LineKind {
 impl LineKind {
     const ALL: [Self; 2] = [Self::LineString, Self::MultiLineString];
 
-    /// Narrows `kind` for `operation`, which refuses any other kind.
+    /// Narrows `kind`, or refuses any other kind in an error naming `operation`.
     pub fn new(operation: &str, kind: Kind) -> PolarsResult<Self> {
         narrowed(operation, kind, Self::ALL, Self::kind)
     }
@@ -38,7 +38,7 @@ pub enum PolygonKind {
 impl PolygonKind {
     const ALL: [Self; 2] = [Self::Polygon, Self::MultiPolygon];
 
-    /// Narrows `kind` for `operation`, which refuses any other kind.
+    /// Narrows `kind`, or refuses any other kind in an error naming `operation`.
     pub fn new(operation: &str, kind: Kind) -> PolarsResult<Self> {
         narrowed(operation, kind, Self::ALL, Self::kind)
     }
@@ -68,7 +68,7 @@ impl SegmentKind {
         Self::MultiPolygon,
     ];
 
-    /// Narrows `kind` for `operation`, which refuses any other kind.
+    /// Narrows `kind`, or refuses any other kind in an error naming `operation`.
     pub fn new(operation: &str, kind: Kind) -> PolarsResult<Self> {
         narrowed(operation, kind, Self::ALL, Self::kind)
     }
@@ -102,7 +102,7 @@ impl NestedKind {
         Self::MultiPolygon,
     ];
 
-    /// Narrows `kind` for `operation`, which refuses any other kind.
+    /// Narrows `kind`, or refuses any other kind in an error naming `operation`.
     pub fn new(operation: &str, kind: Kind) -> PolarsResult<Self> {
         narrowed(operation, kind, Self::ALL, Self::kind)
     }
