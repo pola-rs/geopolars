@@ -10,8 +10,8 @@ use polars_core::prelude::PolarsResult;
 
 use crate::SegmentKind;
 
-/// Checks whether every (multi)linestring or (multi)polygon in one chunk of a `kind` column's storage
-/// runs counter-clockwise.
+/// Checks whether every (multi)linestring or (multi)polygon runs counter-clockwise,
+/// for one chunk of a `kind` column's storage.
 /// Implements the Python `is_ccw`.
 pub fn are_ccw(chunk: &dyn Array, kind: SegmentKind, holes_cw: bool) -> PolarsResult<BooleanArray> {
     Ok(match kind {

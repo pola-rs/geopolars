@@ -61,7 +61,8 @@ fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
         .iter()
         .map(|chunk| geopolars_core::bounds(chunk.as_ref(), geo.kind, geo.dim, listed, &options))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: every chunk is the storage of `dtype`.
+    // SAFETY: `geopolars_core::bounds` gives the boxes of `geo.dim`,
+    // in a list exactly when `boxes_in_list` says so, as `bounds_dtype` does.
     Ok(
         unsafe {
             Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &dtype)
@@ -104,6 +105,6 @@ fn total_bounds(inputs: &[Series], kwargs: TotalBoundsKwargs) -> PolarsResult<Se
     let storage = inputs[0].ext()?.storage();
     let chunk =
         geopolars_core::total_bounds(storage.chunks(), kind, dim, kwargs.ignore_nulls, &options)?;
-    // SAFETY: the chunk is the storage of `dtype`.
+    // SAFETY: `geopolars_core::total_bounds` gives a box of `dim`, which `dtype` describes.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, vec![chunk], &dtype) })
 }

@@ -35,7 +35,7 @@ wrapped in a `List` per level of nesting (a point has 0, a linestring 1, a polyg
 | List of geometries | `GEOMETRY_DTYPES` in `datatypes/registry.py` | `Kind::ALL` in `geopolars-views/src/kind.rs` |
 | Common base type | `GeoArrowType` in `datatypes/base.py` | `Geo` in `src/geoarrow/geo.rs` |
 | One geometry | `datatypes/point.py`, `polygon.py`, ... | a `Kind` variant |
-| Dimension (`xy`, `xyzm`) | `datatypes/dimension.py` | `src/geoarrow/dimension.rs` |
+| Dimension (`xy`, `xyzm`) | `datatypes/dimension.py` | `GeoDimension` in `geopolars-views/src/dimension.rs` |
 | CRS metadata | goes through `extension_metadata` (Rust) | `src/geoarrow/crs.rs` |
 
 Two things work differently on the two sides:

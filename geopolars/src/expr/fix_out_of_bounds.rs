@@ -1,5 +1,6 @@
 //! Fixing the coordinates outside the CRS's bounds,
-//! through `geopolars_compute::native::*_with_selected`, or `*_with_clamped_coords` to clamp.
+//! through [`geopolars_core::with_selected_coords`],
+//! or [`geopolars_core::with_clamped_coords`] to clamp.
 //! See `fix_out_of_bounds` in Python for the rules.
 
 use geopolars_compute::native::{Bounds, CoordinateSelection, OutOfBoundsAction, TooShort};

@@ -46,8 +46,8 @@ pub fn validated_storage(
 }
 
 /// Assembles one chunk of polygons from one chunk of exterior rings and one of holes.
-/// Implements the Python `polygons_from_rings_in_separate_columns`, and `polygons_from_coordinates`
-/// without `holes`.
+/// Implements the Python `polygons_from_rings_in_separate_columns`,
+/// and `polygons_from_coordinates` without `holes`.
 /// The holes only hold a single ring per row if `listed=false`.
 pub fn assembled_polygons(
     exteriors: &dyn Array,

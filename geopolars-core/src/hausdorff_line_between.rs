@@ -27,7 +27,8 @@ pub fn pairwise_hausdorff_lines(
 }
 
 /// Finds the line spanning the Hausdorff distance between the geometry in `one`,
-/// a single row of a `one_kind` column's storage, and every geometry in a chunk of a `many_kind` column's storage.
+/// a single row of a `one_kind` column's storage,
+/// and every geometry in a chunk of a `many_kind` column's storage.
 /// Implements the Python `hausdorff_line_between`.
 /// Every line starts on `one` if `lines_start_on_one=true`, and on the row of `many` otherwise.
 pub fn hausdorff_lines_to_one(

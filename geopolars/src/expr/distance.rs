@@ -1,7 +1,6 @@
 //! How far apart points are.
-//! Uses [DistanceMetric] to choose the how to measure distance (Planar/geodesic etc)
-//! Wraps functions from [geopolars_compute::native::distance]
-//!
+//! A [DistanceMetric] picks how distance is measured (planar, geodesic, ...).
+//! Wraps [`geopolars_core::pairwise_distances`] and [`geopolars_core::distances_to_one`].
 
 use std::fmt::Display;
 use std::rc::Rc;

@@ -2,7 +2,8 @@
 //!
 //! Expressions never name a concrete geometry:
 //! they ask [`describe`] what a column holds,
-//! and hand the [`Kind`] and [`GeoDimension`] it reports to `geopolars_core`, which picks the kernel.
+//! and hand the [`Kind`] and [`GeoDimension`] it reports to `geopolars_core`,
+//! which picks the kernel.
 
 pub mod bbox;
 pub mod coord;
@@ -92,8 +93,8 @@ impl GeoColumn<'_> {
 }
 
 /// Turns one of the GeoPolars view types back into a Polars-compatible `Series`.
-/// Errors if a chunk is of another kind or dimension.
-/// that is a bug, where the output type function and the kernel disagree.
+/// Errors if a chunk is of another kind or dimension than `geo`.
+/// Such an error is a bug, as the output type function and the kernel then disagree.
 pub fn geometry_series(
     name: PlSmallStr,
     geo: Geo,

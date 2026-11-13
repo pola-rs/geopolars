@@ -9,7 +9,8 @@ use geopolars_views::{
 use polars_arrow::array::{Array, ListArray};
 use polars_core::prelude::PolarsResult;
 
-/// Snaps every coordinate of every geometry in one chunk of a `kind` column's storage onto `grid`.
+/// Snaps every coordinate of every geometry onto `grid`,
+/// for one chunk of a `kind` column's storage.
 /// Implements the Python `snap_to_grid`.
 /// The result is the storage of the same kind and dimension.
 pub fn snap_to_grid(chunk: &dyn Array, kind: Kind, grid: &Grid) -> PolarsResult<Box<dyn Array>> {

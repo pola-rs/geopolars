@@ -1,5 +1,5 @@
 //! Emptying, dropping or nulling the coordinates that are not finite, or empty,
-//! through `geopolars_compute::native::*_with_selected`.
+//! through [`geopolars_core::with_selected_coords`].
 //! See `filter_coordinates` in Python for the rules.
 
 use geopolars_compute::native::{CoordinateSelection, NonFinite, SelectedAction, TooShort};

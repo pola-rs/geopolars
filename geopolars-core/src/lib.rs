@@ -90,7 +90,8 @@ use geopolars_compute::GeoComputeResult;
 use polars_core::prelude::{polars_err, PolarsResult};
 
 /// Turns the result of a `geopolars_compute` kernel into a [`PolarsResult`].
-/// Can't just do Into<> because orphan rule.
+/// Can't just do Into<> because orphan rule,
+/// and don't want to bring polars_err into scope of geopolars_compute.
 trait IntoPolarsResult<T> {
     fn into_polars(self) -> PolarsResult<T>;
 }

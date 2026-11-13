@@ -47,7 +47,8 @@ fn per_chunk(
         .iter()
         .map(|chunk| rings(chunk.as_ref(), kind))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: every chunk is the storage `dtype` describes.
+    // SAFETY: `exteriors` and `interiors` document the storage they give,
+    // which `rings_type` describes in the same way.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, dtype) })
 }
 

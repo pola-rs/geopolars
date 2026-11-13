@@ -103,7 +103,7 @@ creating new geometries
 
 ## Architecture
 
-- [ ] do the matching on kind in geopolars_core, not in the plugin.
+- [x] do the matching on kind in geopolars_core, not in the plugin.
 - [ ] Ask Claude to check how our native kernels compare to GEOS' source. Is there any numeric-specific (e.g dealing with subnormal numbers) that they do, and we don't?
 - [ ] Ask claude to make a matrix for what we cover compared to geopandas/GEOS for internal referencing
 - [ ] The doc decorator does not work with popup hints. That's a dealbreaker.

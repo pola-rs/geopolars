@@ -8,8 +8,8 @@ use polars_core::prelude::{polars_err, PolarsResult};
 
 use crate::LineKind;
 
-/// Measures the length of every linestring or multilinestring in one chunk of a `kind` column's storage,
-/// as `metric` measures it.
+/// Measures the length of every linestring or multilinestring as `metric` measures it,
+/// for one chunk of a `kind` column's storage.
 /// Implements the Python `length`.
 pub fn lengths(
     chunk: &dyn Array,

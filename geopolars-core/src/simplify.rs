@@ -9,8 +9,8 @@ use polars_core::prelude::PolarsResult;
 
 use crate::{IntoPolarsResult, SegmentKind};
 
-/// Simplifies every (multi)linestring or (multi)polygon in one chunk of a `kind` column's storage,
-/// through GEOS.
+/// Simplifies every (multi)linestring or (multi)polygon through GEOS,
+/// for one chunk of a `kind` column's storage.
 /// Implements the Python `simplify`.
 /// The result is of the same kind, with the input's z but without m.
 pub fn simplify(

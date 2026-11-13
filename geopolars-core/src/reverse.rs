@@ -12,7 +12,8 @@ use polars_core::prelude::PolarsResult;
 
 use crate::NestedKind;
 
-/// Reverses the order of the vertices of every geometry in one chunk of a `kind` column's storage.
+/// Reverses the order of the vertices of every geometry,
+/// for one chunk of a `kind` column's storage.
 /// Implements the Python `reverse`.
 /// The result is the storage of the same kind and dimension.
 pub fn reverse(

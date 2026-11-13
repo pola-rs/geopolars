@@ -39,7 +39,7 @@ proj = { version = "0.31", features = ["bundled_proj"] }
 # Must match the version `proj` pins, so both link the same bundled PROJ.
 proj-sys = "0.27"
 geoarrow-schema = "0.9.0"
-# Views over the GeoArrow storage, and `GeoDimension`.
+# Views over the GeoArrow storage, `Kind`, and `GeoDimension`.
 geopolars-views = { path = "../geopolars-views" }
 # The kernels on those views.
 geopolars-compute = { path = "../geopolars-compute" }

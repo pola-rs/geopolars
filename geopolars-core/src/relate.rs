@@ -5,8 +5,8 @@ use polars_core::prelude::PolarsResult;
 
 use crate::IntoPolarsResult;
 
-/// Finds the DE-9IM matrix of the geometries on the same row of a chunk of an `a_kind` column's storage
-/// and one of a `b_kind` column's, through GEOS.
+/// Finds the DE-9IM matrix of the geometries on the same row through GEOS,
+/// for a chunk of an `a_kind` column's storage and one of a `b_kind` column's.
 /// Implements the Python `relate`.
 /// See [`RelatePairs::new`] for the lengths `a` and `b` may have.
 pub fn relate(
