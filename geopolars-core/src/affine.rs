@@ -9,10 +9,45 @@ use geopolars_views::{
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
 
-/// Transforms every geometry in one chunk of a `kind` column's storage by `matrix`,
-/// and moves it by `shift`.
+/// Transforms every geometry in one chunk of a `kind` column's storage by `matrix`.
 /// The result is the storage of the same kind and dimension.
 pub fn affine_transform(
+    chunk: &dyn Array,
+    kind: Kind,
+    matrix: &AffineMatrix,
+) -> PolarsResult<Box<dyn Array>> {
+    affine_transform_with_row_shift(chunk, kind, matrix, RowShift::None)
+}
+
+/// Transforms every geometry in one chunk of a `kind` column's storage by `matrix`,
+/// about an origin of its own: see [`RowShift::About`].
+///
+/// `origins` is the storage of a point column, with one point per row of `chunk`.
+pub fn affine_transform_about(
+    chunk: &dyn Array,
+    kind: Kind,
+    matrix: &AffineMatrix,
+    origins: &dyn Array,
+) -> PolarsResult<Box<dyn Array>> {
+    let origins = PointArray::new(Coords::new(origins)?);
+    affine_transform_with_row_shift(chunk, kind, matrix, RowShift::About(&origins))
+}
+
+/// Transforms every geometry in one chunk of a `kind` column's storage by `matrix`,
+/// then moves it by a vector of its own: see [`RowShift::Then`].
+///
+/// `vectors` is the storage of a point column, with one point per row of `chunk`.
+pub fn affine_transform_then_shift(
+    chunk: &dyn Array,
+    kind: Kind,
+    matrix: &AffineMatrix,
+    vectors: &dyn Array,
+) -> PolarsResult<Box<dyn Array>> {
+    let vectors = PointArray::new(Coords::new(vectors)?);
+    affine_transform_with_row_shift(chunk, kind, matrix, RowShift::Then(&vectors))
+}
+
+fn affine_transform_with_row_shift(
     chunk: &dyn Array,
     kind: Kind,
     matrix: &AffineMatrix,

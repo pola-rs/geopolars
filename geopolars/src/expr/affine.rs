@@ -2,9 +2,9 @@
 //! but not necessarily Euclidean distances and angles.
 //! The kernels live in `geopolars_compute::native`.
 
-use geopolars_compute::native::{self, RowShift};
-use geopolars_core::affine_transform;
-use geopolars_views::{Coords, Kind, PointArray};
+use geopolars_compute::native;
+use geopolars_core::{affine_transform, affine_transform_about, affine_transform_then_shift};
+use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
@@ -38,7 +38,7 @@ fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| affine_transform(chunk.as_ref(), kind, &matrix, RowShift::None))
+        .map(|chunk| affine_transform(chunk.as_ref(), kind, &matrix))
         .collect::<PolarsResult<_>>()?;
     let geo = describe(inputs[0].dtype())?.geo();
     Ok(same_geometry_series(inputs[0].name().clone(), geo, chunks))
@@ -70,41 +70,16 @@ fn kernel_output_type_same_geometry_by_points(input_fields: &[Field]) -> PolarsR
 }
 
 /// The kernel behind affine ops about a point per row (see `geo/affine.py`).
-/// See [`RowShift::About`].
+/// See [`affine_transform_about`].
 #[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
 fn affine_about(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
-    affine_by_points(inputs, &kwargs, |origins| RowShift::About(origins))
-}
-
-/// The kernel behind affine ops that move every geometry by a vector of its own
-/// (see `geo/affine.py`). See [`RowShift::Then`].
-#[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
-fn affine_then_shift(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
-    affine_by_points(inputs, &kwargs, |vectors| RowShift::Then(vectors))
-}
-
-/// Transform the geometries of `inputs[0]` by `matrix`,
-/// and by `shift` of the points of `inputs[1]`: one per geometry, or one for all of them.
-fn affine_by_points(
-    inputs: &[Series],
-    matrix: &AffineMatrix,
-    shift: for<'a> fn(&'a PointArray) -> RowShift<'a>,
-) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
-    let storage = inputs[0].ext()?.storage().rechunk();
-    let points = inputs[1].ext()?.storage();
-    let points = match (storage.len(), points.len()) {
-        (n, m) if n == m => points.rechunk(),
-        (n, 1) => points.new_from_index(0, n).rechunk(),
-        (n, m) => polars_bail!(ShapeMismatch: "cannot transform {n} geometries by {m} points"),
-    };
-    let points = PointArray::new(Coords::new(points.chunks()[0].as_ref())?);
-
-    let chunk = affine_transform(
+    let (storage, origins) = storage_and_points_per_geometry(inputs)?;
+    let chunk = affine_transform_about(
         storage.chunks()[0].as_ref(),
         kind,
-        &matrix.into(),
-        shift(&points),
+        &(&kwargs).into(),
+        origins.chunks()[0].as_ref(),
     )?;
     let geo = describe(inputs[0].dtype())?.geo();
     Ok(same_geometry_series(
@@ -112,4 +87,38 @@ fn affine_by_points(
         geo,
         vec![chunk],
     ))
+}
+
+/// The kernel behind affine ops that move every geometry by a vector of its own
+/// (see `geo/affine.py`). See [`affine_transform_then_shift`].
+#[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
+fn affine_then_shift(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
+    let kind = describe(inputs[0].dtype())?.kind;
+    let (storage, vectors) = storage_and_points_per_geometry(inputs)?;
+    let chunk = affine_transform_then_shift(
+        storage.chunks()[0].as_ref(),
+        kind,
+        &(&kwargs).into(),
+        vectors.chunks()[0].as_ref(),
+    )?;
+    let geo = describe(inputs[0].dtype())?.geo();
+    Ok(same_geometry_series(
+        inputs[0].name().clone(),
+        geo,
+        vec![chunk],
+    ))
+}
+
+/// The storage of the geometries of `inputs[0]`, and that of the points of `inputs[1]`,
+/// as single chunks with one point per geometry.
+/// A single point is repeated for every geometry.
+fn storage_and_points_per_geometry(inputs: &[Series]) -> PolarsResult<(Series, Series)> {
+    let storage = inputs[0].ext()?.storage().rechunk();
+    let points = inputs[1].ext()?.storage();
+    let points = match (storage.len(), points.len()) {
+        (n, m) if n == m => points.rechunk(),
+        (n, 1) => points.new_from_index(0, n).rechunk(),
+        (n, m) => polars_bail!(ShapeMismatch: "cannot transform {n} geometries by {m} points"),
+    };
+    Ok((storage, points))
 }
