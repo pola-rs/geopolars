@@ -1,8 +1,8 @@
 //! GeoArrow geometries are not implemented as concrete rust types,
 //! but as enums ([Kind]) so that dispatching follows the way Polars does it.
 
-/// A GeoArrow native geometry.
-/// Every variant represents a [`Geo`](super::Geo) with some [`Dimension`](super::Dimension).
+/// A GeoArrow native geometry type,
+/// separated from its [`GeoDimension`](crate::GeoDimension).
 /// Used for dispatching.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -71,13 +71,13 @@ impl Kind {
 
     /// Tells us how deeply nested the data type is.
     /// A geoarrow.linestring is a collection of points, so it is 1.
-    /// A geoarrow.polygon is a collection of linestings, so it is 2.
+    /// A geoarrow.polygon is a collection of linestrings, so it is 2.
     /// A geoarrow.multipolygon is a collection of polygons, so it is 3.
     ///
     /// Warning: This does not uniquely identify a geometry kind:
     /// E.g. geoarrow.linestring and geoarrow.multipoint both have a nesting of 1.
     /// The extension name is what tells them apart,
-    /// which is why [`describe`](super::describe) reads the name and derives the nesting,
+    /// which is why a column's kind is read from its name and the nesting derived from it,
     /// rather than the other way round.
     pub const fn nesting(self) -> u8 {
         match self {
@@ -97,11 +97,16 @@ impl Kind {
         Kind::ALL.into_iter().find(|kind| kind.display() == display)
     }
 
-    /// The names, for an error message:
-    /// e.g. `geoarrow.point` or `geoarrow.linestring`.
+    /// [`Kind::names_of`] for every kind.
     pub fn names() -> String {
-        let names: Vec<String> = Kind::ALL
-            .iter()
+        Kind::names_of(Kind::ALL)
+    }
+
+    /// The names of `kinds`, for an error message:
+    /// e.g. `geoarrow.point` or `geoarrow.linestring`.
+    pub fn names_of(kinds: impl IntoIterator<Item = Kind>) -> String {
+        let names: Vec<String> = kinds
+            .into_iter()
             .map(|kind| format!("`{}`", kind.name()))
             .collect();
         match names.split_last() {

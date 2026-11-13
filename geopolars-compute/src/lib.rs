@@ -1,4 +1,4 @@
-//! Kernels on GeoArrow, taking the views of `geopolars-core`:
+//! Kernels on GeoArrow, taking the views of `geopolars-views`:
 //! [native] ones of our own, and [geos], [rsgeo] and [proj] ones forwarding to those libraries.
 //! [geoarrow_validity] and [ogc_validity] are the checks of `is_valid_geoarrow` and `is_valid_ogc`.
 //! [inner_nulls] moves null values below the rows out to the rows,

@@ -145,15 +145,8 @@ fn geographic_turns(crs: &str) -> PolarsResult<Option<[f64; 2]>> {
 }
 
 /// Gets a bounding box of the CRS provided, as `[xmin, ymin, xmax, ymax]`.
-///
-/// - A geographic CRS bounds latitude to a quarter turn either side of the equator,
-///   and longitude to half a turn either side of the prime meridian,
-///   each in the unit of its own axis (see [geographic_turns]).
-///   `allow_wrapped_longitude` stretches longitude up to a full turn east,
-///   so data in the 0 to 360 convention fits too.
-/// - `within_area_of_use` also bounds them by the area PROJ says the CRS is meant for,
-///   converted into the CRS's own `x` and `y`.
-///   Such an area that crosses the antimeridian in a geographic CRS only bounds latitude.
+/// The flags pick one of the `crs_bounds` of the Python `fix_out_of_bounds`, which documents them.
+/// A geographic CRS is bounded in the unit of its own axes (see [geographic_turns]).
 ///
 /// `crs` is anything PROJ accepts.
 pub fn crs_bounds(

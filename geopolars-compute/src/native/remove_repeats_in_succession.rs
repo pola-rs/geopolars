@@ -1,5 +1,5 @@
 //! Removing the points that coincide with the one kept before them.
-//! See `remove_repeats_in_succession` in Python for the rules.
+//! Implements the Python `remove_repeats_in_succession`.
 //!
 //! Every kernel marks the repeated vertices ([repeats_in_succession]).
 //! Linestrings and rings then keep their last vertex ([keep_last_vertices]).
@@ -9,7 +9,7 @@
 
 use std::ops::Range;
 
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
     ValidList,
 };
@@ -22,7 +22,7 @@ use super::selected_coords::{
 };
 use super::too_short::TooShort;
 
-/// See `collapsed_lines` of `remove_repeats_in_succession` in Python.
+/// The `collapsed_lines` of the Python `remove_repeats_in_succession`.
 #[derive(Debug, Clone, Copy)]
 pub enum CollapsedLines {
     KeepEnds,
@@ -35,8 +35,7 @@ impl CollapsedLines {
     }
 }
 
-/// What happens to a linestring that collapses, or that is too short.
-/// See `remove_repeats_in_succession` in Python.
+/// The `collapsed_lines` and `too_short` of the Python `remove_repeats_in_succession`.
 #[derive(Debug, Clone, Copy)]
 pub struct LineOptions {
     pub collapsed_lines: CollapsedLines,
@@ -81,7 +80,8 @@ pub fn line_strings_without_repeats_in_succession(
     line_strings_without_selected(array, &repeated.freeze(), options.too_short)
 }
 
-/// The points of a multipoint have no ends to keep, and are never too short.
+/// Takes no [LineOptions],
+/// as the points of a multipoint have no ends to keep, and are never too short.
 pub fn multi_points_without_repeats_in_succession(
     array: &MultiPointArray,
     coincidence: Coincidence,
@@ -93,7 +93,7 @@ pub fn multi_points_without_repeats_in_succession(
     multi_points_without_selected(array, &repeated.freeze(), TooShort::Keep)
 }
 
-/// Rings always keep both ends, so they stay closed.
+/// Takes no [CollapsedLines], as rings always keep both ends.
 pub fn polygons_without_repeats_in_succession(
     array: &PolygonArray,
     coincidence: Coincidence,
@@ -124,7 +124,7 @@ pub fn multi_line_strings_without_repeats_in_succession(
     multi_line_strings_without_selected(array, &repeated.freeze(), options.too_short)
 }
 
-/// Rings always keep both ends, so they stay closed.
+/// Takes no [CollapsedLines], as rings always keep both ends.
 pub fn multi_polygons_without_repeats_in_succession(
     array: &MultiPolygonArray,
     coincidence: Coincidence,

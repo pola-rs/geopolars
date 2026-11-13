@@ -1,5 +1,4 @@
-//! The ring and shape checks of `is_valid_geoarrow` and `is_valid_ogc`.
-//! See them in Python for the rules.
+//! The ring and shape checks of the Python `is_valid_geoarrow` and `is_valid_ogc`.
 //! The coordinate checks are in [super::coordinate_selection].
 //! Each check gives a bitmap over a whole level, set where an item passes.
 //!
@@ -12,13 +11,13 @@
 
 use std::ops::Range;
 
-use geopolars_core::{same_place, ValidCoords, ValidList};
+use geopolars_views::{same_place, ValidCoords, ValidList};
 #[cfg(feature = "geos")]
-use geopolars_core::{ScalarPolygon, MIN_RING_VERTICES};
+use geopolars_views::{ScalarPolygon, MIN_RING_VERTICES};
 use polars_arrow::bitmap::Bitmap;
 
 /// Whether `ring` is empty or closed, as GeoArrow asks.
-/// Unlike [is_ring](geopolars_core::is_ring), this asks for no minimum number of vertices.
+/// Unlike [is_ring](geopolars_views::is_ring), this asks for no minimum number of vertices.
 #[inline(always)]
 pub(crate) fn is_closed_or_empty<const Z: bool>(coords: &ValidCoords, ring: Range<usize>) -> bool {
     ring.is_empty() || same_place::<Z>(coords, ring.start, ring.end - 1)
@@ -54,7 +53,7 @@ fn has_at_least_distinct_vertices(
         == min
 }
 
-/// OGC accepts lines with at least two distinct vertices (or empty)
+/// Whether each of `lines` has a shape OGC accepts (see the Python `is_valid_ogc`).
 #[cfg(feature = "geos")]
 pub(crate) fn line_shapes_are_valid(lines: &ValidList, coords: &ValidCoords) -> Bitmap {
     Bitmap::from_iter(
@@ -68,8 +67,6 @@ pub(crate) fn line_shapes_are_valid(lines: &ValidList, coords: &ValidCoords) -> 
 // Mark the rings that are empty or have at least 4 distinct vertices in a mask,
 // and fold it with `rows_passing`.
 // The polygons then only need a mask from the offsets: either every ring is empty, or none is.
-/// Whether `polygon` has a shape OGC accepts:
-/// every ring empty, or every ring with at least 4 distinct vertices.
 #[cfg(feature = "geos")]
 #[inline(always)]
 fn polygon_shape_is_valid(polygon: &ScalarPolygon) -> bool {

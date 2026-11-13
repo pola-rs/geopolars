@@ -1,7 +1,5 @@
 # geopolars-core
 
-Views over the Polars storage of GeoArrow geometries,
-and the arrays kernels build their output in.
-The kernels in [`geopolars-compute`](../geopolars-compute/README.md) take these directly.
-
-See [the guide on view types]("../docs/View Types.md") for more information.
+Picks the kernel for each kind of geometry.
+It wraps a chunk of a geometry column's storage in the [`geopolars-views`](../geopolars-views/README.md) view of its `Kind`,
+and calls the [`geopolars-compute`](../geopolars-compute/README.md) kernel for that view.

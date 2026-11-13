@@ -1,15 +1,16 @@
 //! The intersection and difference of two geometries
-//! (see [`geopolars_compute::geos::OverlayPairs`]).
+//! Implements the Python `intersection` and `difference`.
 
-use geopolars_compute::geos::{Overlay, OverlayPairs};
+use geopolars_compute::geos::Overlay;
+use geopolars_core::OverlayOptions;
+use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, Geo, GeoColumn,
-    GeoDimension, GeometryPairs, Kind,
+    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_masked_pairs, Geo, GeoColumn,
+    GeometryPairs,
 };
 
 /// The topological dimension of an input, or of the parts an intersection keeps.
@@ -32,7 +33,7 @@ impl TopologicalDimension {
     }
 }
 
-/// See python
+/// The keyword arguments of the Python `intersection`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct IntersectionKwargs {
@@ -43,7 +44,7 @@ pub struct IntersectionKwargs {
     early_finite_check: bool,
 }
 
-/// See python
+/// The keyword arguments of the Python `difference`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DifferenceKwargs {
@@ -124,7 +125,6 @@ fn overlay_dimension(a: &GeoColumn, b: &GeoColumn) -> GeoDimension {
     }
 }
 
-/// For [`intersection`]: a geometry (see [`intersection_type`]), named after the first one.
 fn kernel_output_type_intersection(
     input_fields: &[Field],
     kwargs: IntersectionKwargs,
@@ -147,38 +147,6 @@ fn kernel_output_type_difference(
     Ok(Field::new(a.name().clone(), geo.dtype()))
 }
 
-/// Overlays `pairs` into the storage of `geo`'s kind and dimension.
-fn overlaid_storage(pairs: OverlayPairs, geo: &Geo, ccw_outer: bool) -> PolarsResult<ArrayRef> {
-    let z = geo.dim().has_z();
-    match geo.kind() {
-        Kind::Point => pairs
-            .into_points(z)
-            .map(|array| array.into_struct_array().boxed()),
-        Kind::MultiPoint => pairs
-            .into_multi_points(z)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::LineString => pairs
-            .into_line_strings(z)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::MultiLineString => pairs
-            .into_multi_line_strings(z)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::Polygon => pairs
-            .into_polygons(z, ccw_outer)
-            .map(|array| array.into_list_array().boxed()),
-        Kind::MultiPolygon => pairs
-            .into_multi_polygons(z, ccw_outer)
-            .map(|array| array.into_list_array().boxed()),
-    }
-    .into_polars()
-}
-
-struct OverlayOptions {
-    ccw_outer: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
-}
-
 /// Overlays the two geometries of `inputs` into `geo`, which the output type function gave.
 fn overlaid(
     inputs: &[Series],
@@ -199,32 +167,26 @@ fn overlaid(
         }
     };
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (ignore, early) = (options.ignore_per_row_errors, options.early_finite_check);
+    let (kind, z) = (geo.kind(), geo.dim().has_z());
     let chunks = chunk_pairs
         .iter()
         .map(|(a, b)| {
-            let (a, b) = (
-                geometry_array(a.as_ref(), a_kind)?,
-                geometry_array(b.as_ref(), b_kind)?,
-            );
-            let pairs = OverlayPairs::new(&a, &b, overlay, ignore, early).into_polars()?;
-            overlaid_storage(pairs, &geo, options.ccw_outer)
+            geopolars_core::overlay(
+                a.as_ref(),
+                a_kind,
+                b.as_ref(),
+                b_kind,
+                overlay,
+                kind,
+                z,
+                options,
+            )
         })
         .collect::<PolarsResult<Vec<_>>>()?;
-    #[cfg(debug_assertions)]
-    {
-        let storage = geo.dim().storage(geo.kind().nesting());
-        let storage = storage.to_arrow(CompatLevel::newest());
-        for chunk in &chunks {
-            debug_assert_eq!(chunk.dtype(), &storage, "the kernel gave another storage");
-        }
-    }
-    // SAFETY: every chunk is the storage of `geo`'s kind, with z exactly when `geo` has it.
-    // `overlay_dimension` never gives m, so z alone fixes the dimension.
-    Ok(unsafe { Series::from_chunks_and_dtype_unchecked(a.name().clone(), chunks, &geo.dtype()) })
+    geometry_series(a.name().clone(), geo, chunks)
 }
 
-/// See `intersection`.
+/// Implements the Python `intersection`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_intersection)]
 fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<Series> {
     let geo = intersection_type(inputs[0].dtype(), inputs[1].dtype(), &kwargs)?;
@@ -236,7 +198,7 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
     overlaid(inputs, geo, Overlay::Intersection, options)
 }
 
-/// See `difference`.
+/// Implements the Python `difference`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_difference)]
 fn difference(inputs: &[Series], kwargs: DifferenceKwargs) -> PolarsResult<Series> {
     let geo = difference_type(inputs[0].dtype(), inputs[1].dtype(), &kwargs)?;

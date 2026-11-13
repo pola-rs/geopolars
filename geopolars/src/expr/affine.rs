@@ -1,22 +1,18 @@
-//! Geometric transformations that preserve lines and parallelism,
-//! but not necessarily Euclidean distances and angles.
-//! The kernels live in `geopolars_compute::native`.
+//! Affine transformations of a geometry.
+//! Implements the Python `affine_transform`, `translate`, `rotate`, `skew`, and `scale`,
+//! and their `_about_centroid` variants.
+//! An origin given as a point column goes to `affine_about`,
+//! and an offset of `translate` given as columns to `affine_then_shift`.
 
-use geopolars_compute::native::{
-    self, affine_line_strings, affine_multi_line_strings, affine_multi_points,
-    affine_multi_polygons, affine_points, affine_polygons, RowShift,
-};
-use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
-};
+use geopolars_compute::native;
+use geopolars_core::{affine_transform, affine_transform_about, affine_transform_then_shift};
+use geopolars_views::Kind;
 use polars::prelude::*;
-use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use crate::geoarrow::{describe, Kind};
+use crate::geoarrow::{describe, geometry_series};
 
 // TODO: (Blocked until z-centroid is implemented): allow rotation around x/y for polygon
 // TODO: (Blocked until z-centroid is implemented): allow scaling around z for polygon(?)
@@ -35,54 +31,7 @@ impl From<&AffineMatrix> for native::AffineMatrix {
     }
 }
 
-/// One chunk of `kind` geometries, transformed by `matrix` and `shift`.
-fn chunk_transformed(
-    chunk: &dyn Array,
-    kind: Kind,
-    matrix: &native::AffineMatrix,
-    shift: RowShift,
-) -> PolarsResult<Box<dyn Array>> {
-    Ok(match kind {
-        Kind::Point => {
-            let array = PointArray::new(Coords::new(chunk)?);
-            affine_points(matrix, &array, shift)
-                .into_struct_array()
-                .boxed()
-        }
-        Kind::LineString => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            affine_line_strings(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiPoint => {
-            let array = MultiPointArray::new(downcast(chunk, "a list of coordinates")?)?;
-            affine_multi_points(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::Polygon => {
-            let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
-            affine_polygons(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiLineString => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            affine_multi_line_strings(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiPolygon => {
-            let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
-            affine_multi_polygons(matrix, &array, shift)
-                .into_list_array()
-                .boxed()
-        }
-    })
-}
-
-/// The kernel behind affine ops like `translate` (see `geo/affine.py`).
+/// See [`affine_transform`].
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
 fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
@@ -91,12 +40,10 @@ fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| chunk_transformed(chunk.as_ref(), kind, &matrix, RowShift::None))
+        .map(|chunk| affine_transform(chunk.as_ref(), kind, &matrix))
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: the geometries keep their kind and dimension, so this is the input's storage.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, inputs[0].dtype())
-    })
+    let geo = describe(inputs[0].dtype())?.geo();
+    geometry_series(inputs[0].name().clone(), geo, chunks)
 }
 
 /// For an operation by the points of a second column,
@@ -124,28 +71,37 @@ fn kernel_output_type_same_geometry_by_points(input_fields: &[Field]) -> PolarsR
     Ok(geometry.clone())
 }
 
-/// The kernel behind affine ops about a point per row (see `geo/affine.py`).
-/// See [`RowShift::About`].
+/// See [`affine_transform_about`].
 #[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
 fn affine_about(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
-    affine_by_points(inputs, &kwargs, |origins| RowShift::About(origins))
+    let kind = describe(inputs[0].dtype())?.kind;
+    let (storage, origins) = storage_and_points_per_geometry(inputs)?;
+    let chunk = affine_transform_about(
+        storage.chunks()[0].as_ref(),
+        kind,
+        &(&kwargs).into(),
+        origins.chunks()[0].as_ref(),
+    )?;
+    let geo = describe(inputs[0].dtype())?.geo();
+    geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }
 
-/// The kernel behind affine ops that move every geometry by a vector of its own
-/// (see `geo/affine.py`). See [`RowShift::Then`].
+/// See [`affine_transform_then_shift`].
 #[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
 fn affine_then_shift(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
-    affine_by_points(inputs, &kwargs, |vectors| RowShift::Then(vectors))
+    let kind = describe(inputs[0].dtype())?.kind;
+    let (storage, vectors) = storage_and_points_per_geometry(inputs)?;
+    let chunk = affine_transform_then_shift(
+        storage.chunks()[0].as_ref(),
+        kind,
+        &(&kwargs).into(),
+        vectors.chunks()[0].as_ref(),
+    )?;
+    let geo = describe(inputs[0].dtype())?.geo();
+    geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }
 
-/// Transform the geometries of `inputs[0]` by `matrix`,
-/// and by `shift` of the points of `inputs[1]`: one per geometry, or one for all of them.
-fn affine_by_points(
-    inputs: &[Series],
-    matrix: &AffineMatrix,
-    shift: for<'a> fn(&'a PointArray) -> RowShift<'a>,
-) -> PolarsResult<Series> {
-    let kind = describe(inputs[0].dtype())?.kind;
+fn storage_and_points_per_geometry(inputs: &[Series]) -> PolarsResult<(Series, Series)> {
     let storage = inputs[0].ext()?.storage().rechunk();
     let points = inputs[1].ext()?.storage();
     let points = match (storage.len(), points.len()) {
@@ -153,20 +109,5 @@ fn affine_by_points(
         (n, 1) => points.new_from_index(0, n).rechunk(),
         (n, m) => polars_bail!(ShapeMismatch: "cannot transform {n} geometries by {m} points"),
     };
-    let points = PointArray::new(Coords::new(points.chunks()[0].as_ref())?);
-
-    let chunk = chunk_transformed(
-        storage.chunks()[0].as_ref(),
-        kind,
-        &matrix.into(),
-        shift(&points),
-    )?;
-    // SAFETY: the geometries keep their kind and dimension, so this is the input's storage.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(
-            inputs[0].name().clone(),
-            vec![chunk],
-            inputs[0].dtype(),
-        )
-    })
+    Ok((storage, points))
 }

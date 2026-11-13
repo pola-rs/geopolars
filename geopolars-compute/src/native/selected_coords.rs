@@ -1,13 +1,10 @@
-//! What to do with the selected coordinates of a geometry,
-//! shared by `filter_coordinates` and `fix_out_of_bounds`.
+//! What to do with the selected coordinates of a geometry.
+//! Implements the `action` and `too_short` of the Python `filter_coordinates` and `fix_out_of_bounds`.
 //! Every kernel marks the coordinates its [CoordinateSelection] selects ([selected_coords]),
-//! then acts on them. See [SelectedAction] for the actions.
+//! then takes its [SelectedAction] on them.
 //!
 //! [SelectedAction::Drop] copies the kept coordinates once, a run of them at a time.
 //! No part is ever removed, so only the innermost list level gets new offsets.
-//! A linestring or ring left [too short](is_too_short) is handled by [TooShort].
-//! A point cannot lose its coordinate, so it becomes the empty point instead.
-//! The other actions keep every offset.
 //! A null row is processed like any other, as its value is masked anyway.
 //!
 //! # Const generic flags
@@ -29,7 +26,7 @@
 use std::iter::Peekable;
 use std::ops::Range;
 
-use geopolars_core::{
+use geopolars_views::{
     same_place, Coords, LineStringArray, List, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray, ValidCoords, ValidList, MIN_RING_VERTICES,
 };
@@ -46,11 +43,8 @@ use crate::passing::valid_rows_passing;
 /// See `action` of `NonFinite` and `OutOfBounds` in Python.
 #[derive(Debug, Clone, Copy)]
 pub enum SelectedAction {
-    /// Every axis of a selected coordinate becomes NaN.
     SetEmpty,
-    /// A selected coordinate is removed.
     Drop,
-    /// A row holding a selected coordinate becomes null.
     SetNull,
 }
 
@@ -169,7 +163,7 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
 ) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     debug_assert!(
         lists.spans_all_of(coords.len()),
-        "the lists have to be trimmed (see the geopolars-core README on trimming)"
+        "the lists have to be trimmed (see \"Trimming\" in docs/View Types.md)"
     );
     let (mut runs, mut passing) = (Vec::new(), None);
     let mut selected = selected.true_idx_iter().peekable();

@@ -3,7 +3,7 @@
 use std::ops::Range;
 use std::{array, mem};
 
-use geopolars_core::{
+use geopolars_views::{
     List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray, ValidCoords,
     ValidList,
 };

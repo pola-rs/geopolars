@@ -78,8 +78,8 @@ pub use topology::{meet_only_at_points_and_no_overlap, polygon_rings_fit};
 
 use std::ops::Range;
 
-use geopolars_core::output::SizeHint;
-use geopolars_core::{
+use geopolars_views::output::SizeHint;
+use geopolars_views::{
     Coords, GeoDimension, GeometryArray, List, MultiPointArray, PointArray, ScalarPoint,
     ValidCoords,
 };

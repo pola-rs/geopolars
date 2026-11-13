@@ -1,4 +1,4 @@
-use geopolars_core::{Coords, GeoDimension, List, MultiPointArray, PointArray, ValidCoords};
+use geopolars_views::{Coords, GeoDimension, List, MultiPointArray, PointArray, ValidCoords};
 use geos::{Geom, GeometryTypes};
 
 use super::{

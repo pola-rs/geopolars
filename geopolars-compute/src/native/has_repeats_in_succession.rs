@@ -1,5 +1,5 @@
 //! Whether a geometry has two points in a row that coincide.
-//! See `has_repeats_in_succession` in Python for the rules.
+//! Implements the Python `has_repeats_in_succession`.
 //!
 //! [repeats_in_succession] marks the repeated vertices, in one pass.
 //! The kernels here fold that mask up to the rows.
@@ -7,19 +7,12 @@
 //!
 //! # Const generic flags
 //!
-//! [coincide_exactly], [coincide_within_abs], and [coincide_within_rel] are generic over `UNIQUE_Z` and `UNIQUE_M`.
-//!
-//! ## `UNIQUE_Z`
-//!
-//! If `UNIQUE_Z=true`, two points only coincide when their z values do too.
-//! A runtime `unique_z` is ignored for coordinates without a z.
-//!
-//! ## `UNIQUE_M`
-//!
-//! If `UNIQUE_M=true`, two points only coincide when their m values do too.
-//! A runtime `unique_m` is ignored for coordinates without an m.
+//! [coincide_exactly], [coincide_within_abs], and [coincide_within_rel] are generic over `UNIQUE_Z` and `UNIQUE_M`,
+//! the Python `unique_z` and `unique_m`.
+//! These may only be `true` for an axis the coordinates have,
+//! so a runtime one goes through [unique_axes].
 
-use geopolars_core::{
+use geopolars_views::{
     is_close, is_close_abs, same_place, same_place_within, same_place_within_abs, LineStringArray,
     List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray, PolygonArray,
     Tolerance, ValidCoords, ValidList,
@@ -125,7 +118,7 @@ macro_rules! with_coincide {
         use $crate::native::has_repeats_in_succession::{
             coincide_exactly, Coincidence, coincide_within_abs, coincide_within_rel, unique_axes,
         };
-        let coords: &geopolars_core::ValidCoords = $coords;
+        let coords: &geopolars_views::ValidCoords = $coords;
         let (unique_z, unique_m) = unique_axes(coords, $unique_z, $unique_m);
         $crate::with_const_flags!(
             UNIQUE_Z = unique_z, UNIQUE_M = unique_m;
@@ -209,7 +202,6 @@ fn rows_with_repeats(
     BooleanArray::new(ArrowDataType::Boolean, values, rows.validity().cloned())
 }
 
-/// A point has nothing to coincide with, so this is `false` for every point that is there.
 pub fn points_have_repeats_in_succession(array: &PointArray) -> BooleanArray {
     let coords = &array.coords;
     let values = Bitmap::new_zeroed(coords.ignoring_validity().len());

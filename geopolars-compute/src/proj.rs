@@ -21,7 +21,7 @@ use std::ops::Range;
 use std::os::raw::c_int;
 use std::ptr;
 
-use geopolars_core::{Coords, ValidCoords};
+use geopolars_views::{Coords, ValidCoords};
 use polars_arrow::bitmap::utils::SlicesIterator;
 use polars_arrow::bitmap::Bitmap;
 use proj::ProjError;

@@ -1,5 +1,5 @@
 //! Views that may hold lists and coordinates outside their rows, and trimming them.
-//! See the README on trimming.
+//! See "Trimming" in docs/View Types.md.
 
 use crate::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
@@ -7,7 +7,7 @@ use crate::{
     ValidCoords, ValidList,
 };
 
-/// A view that may hold lists and coordinates outside its rows (see the README on trimming).
+/// A view that may hold lists and coordinates outside its rows (see "Trimming" in docs/View Types.md).
 /// A kernel reaches the levels below the rows only through the offsets of the rows.
 /// It reads the view part by part, so it cannot pass it on as a plain one.
 pub struct Untrimmed<T>(pub(crate) T);

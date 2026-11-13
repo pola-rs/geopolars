@@ -1,7 +1,7 @@
 //! Pairing up the rows of two arrays of geometries, for a GEOS operation on two geometries.
 
-use geopolars_core::output::SizeHint;
-use geopolars_core::GeometryArray;
+use geopolars_views::output::SizeHint;
+use geopolars_views::GeometryArray;
 use polars_arrow::bitmap::Bitmap;
 
 use super::{rows_without_vertices, GeosGeometries, GeosRow, ToGeosRows};

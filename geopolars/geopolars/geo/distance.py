@@ -98,6 +98,7 @@ def distance(
     If only one of the points has a `z`, there is no height difference to count,
     and they are measured as if neither had one.
     `m` is always ignored.
+    An empty point gives a NaN distance.
     Either side may be a single point, in which case its distance to all the other points is measured.
 
     ```python

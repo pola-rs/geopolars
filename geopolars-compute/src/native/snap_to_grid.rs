@@ -1,5 +1,5 @@
-//! Snapping every coordinate onto a grid, for `snap_to_grid`.
-//! See `snap_to_grid` in Python for the rules.
+//! Snapping every coordinate onto a grid.
+//! Implements the Python `snap_to_grid`.
 //!
 //! Every kernel only rewrites x, y and z, and keeps every offset.
 //!
@@ -10,21 +10,17 @@
 //! [snapped_axis] is generic over `MODE`, the discriminant of a [RoundMode],
 //! as an enum cannot be a const generic.
 
-use geopolars_core::{
+use geopolars_views::{
     Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, ValidCoords,
 };
 
-/// Which grid line a coordinate goes to, as `mode` of Polars' `Expr.round`,
-/// but counted in spacings from the origin.
+/// Which grid line a coordinate goes to: see `mode` of the Python `snap_to_grid`.
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum RoundMode {
-    /// The nearest one. A tie goes to the one an even number of spacings from the origin.
     HalfToEven,
-    /// The nearest one. A tie goes to the one further from the origin.
     HalfAwayFromZero,
-    /// The one between the coordinate and the origin.
     ToZero,
 }
 
@@ -33,7 +29,7 @@ const HALF_AWAY_FROM_ZERO: u8 = RoundMode::HalfAwayFromZero as u8;
 const TO_ZERO: u8 = RoundMode::ToZero as u8;
 
 /// A grid of lines `spacing` apart along each axis (x, y and z), one of them running through `origin`.
-/// A spacing of 0 leaves that axis as it is.
+/// See the Python `snap_to_grid`, which takes the same arguments.
 #[derive(Debug, Clone, Copy)]
 pub struct Grid {
     pub spacing: [f64; 3],
@@ -56,7 +52,7 @@ fn snapped_axis<const MODE: u8>(values: &[f64], spacing: f64, origin: f64) -> Ve
         .collect()
 }
 
-/// `coords`, with x, y and z snapped onto `grid`. NaN stays NaN; m is shared.
+/// `coords`, with x, y and z snapped onto `grid`, sharing m.
 fn snapped(coords: &ValidCoords, grid: &Grid) -> ValidCoords {
     let snap = |axis: usize, values: &[f64]| {
         let (spacing, origin) = (grid.spacing[axis], grid.origin[axis]);

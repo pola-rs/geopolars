@@ -6,8 +6,8 @@
 
 use std::ops::Range;
 
-use geopolars_core::output::SizeHint;
-use geopolars_core::{
+use geopolars_views::output::SizeHint;
+use geopolars_views::{
     List, MultiPolygonArray, PolygonArray, ScalarMultiPolygon, ScalarPolygon, ValidList,
 };
 use geos::{Geom, Geometry, GeometryTypes};

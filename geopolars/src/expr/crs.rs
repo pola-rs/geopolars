@@ -1,27 +1,25 @@
 //! Moving a geometry from one coordinate reference system to another.
+//! Implements the Python `to_crs`.
 
 use std::cell::OnceCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use geopolars_compute::proj::{reproject_coords, reproject_valid_coords, Transformation};
+use geopolars_compute::proj::Transformation;
 use geopolars_compute::GeoComputeError;
-use geopolars_core::{
-    downcast, Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
-    PointArray, PolygonArray,
-};
+use geopolars_core::reproject;
 use polars::prelude::*;
-use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::cache::{SharedCache, ThreadCache};
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, geometry_series, Geo};
 use crate::proj::specifies_z;
 
+/// The keyword arguments of the Python `to_crs`.
 #[derive(Deserialize)]
 struct ToCrsKwargs {
-    /// The CRS to reproject to, in any form PROJ accepts.
+    /// The `crs` of the Python `to_crs`.
     to: String,
     allow_projection_with_unscaled_z: bool,
     assume_z_in_target_crs: bool,
@@ -35,8 +33,6 @@ fn reprojected_geometry_type(dtype: &DataType, to: &str) -> PolarsResult<Geo> {
     Ok(Geo::new(geo.kind, geo.dim, Arc::new(metadata)))
 }
 
-/// For [`to_crs`]: the same geometry, but the
-/// metadata now names the target CRS, so the dtype is a different one.
 fn kernel_output_type_to_crs(input_fields: &[Field], kwargs: ToCrsKwargs) -> PolarsResult<Field> {
     let field = &input_fields[0];
     // Built here as well as in the kernel, so a CRS PROJ cannot use fails while the plan is built.
@@ -102,7 +98,7 @@ fn transformation_from_template(key: &(String, String)) -> PolarsResult<Transfor
     )
 }
 
-/// Whether the `z` of `dtype` goes through PROJ, as in the table of `to_crs` in `geo/crs.py`.
+/// Whether the `z` of `dtype` goes through PROJ, as in the table of the Python `to_crs`.
 /// Errors where that table needs a flag that is not set.
 fn reprojects_z(
     dtype: &DataType,
@@ -143,59 +139,6 @@ fn reprojects_z(
     }
 }
 
-/// One chunk of `kind` geometries, reprojected by `transformation`.
-/// See [`geopolars_compute::proj`] for `z`.
-fn chunk_reprojected(
-    chunk: &dyn Array,
-    kind: Kind,
-    transformation: &Transformation,
-    z: bool,
-) -> PolarsResult<Box<dyn Array>> {
-    let err = |e: GeoComputeError| polars_err!(ComputeError: "{e}");
-    Ok(match kind {
-        Kind::Point => {
-            let coords = reproject_coords(transformation, &Coords::new(chunk)?, z).map_err(err)?;
-            PointArray::new(coords).into_struct_array().boxed()
-        }
-        Kind::LineString => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            let coords = reproject_valid_coords(transformation, &array.coords, z).map_err(err)?;
-            LineStringArray::from_parts(array.rows, coords)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiPoint => {
-            let array = MultiPointArray::new(downcast(chunk, "a list of coordinates")?)?;
-            let coords = reproject_valid_coords(transformation, &array.coords, z).map_err(err)?;
-            MultiPointArray::from_parts(array.rows, coords)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::Polygon => {
-            let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
-            let coords = reproject_valid_coords(transformation, &array.coords, z).map_err(err)?;
-            PolygonArray::from_parts(array.rows, array.rings, coords)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiLineString => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            let coords = reproject_valid_coords(transformation, &array.coords, z).map_err(err)?;
-            MultiLineStringArray::from_parts(array.rows, array.lines, coords)
-                .into_list_array()
-                .boxed()
-        }
-        Kind::MultiPolygon => {
-            let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
-            let coords = reproject_valid_coords(transformation, &array.coords, z).map_err(err)?;
-            MultiPolygonArray::from_parts(array.rows, array.polygons, array.rings, coords)
-                .into_list_array()
-                .boxed()
-        }
-    })
-}
-
-/// See `to_crs`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_to_crs)]
 fn to_crs(inputs: &[Series], kwargs: ToCrsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
@@ -206,13 +149,8 @@ fn to_crs(inputs: &[Series], kwargs: ToCrsKwargs) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| chunk_reprojected(chunk.as_ref(), geo.kind, &cached.transformation, z))
+        .map(|chunk| reproject(chunk.as_ref(), geo.kind, &cached.transformation, z))
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: the geometries keep their kind and dimension, so this is still the storage.
-    let out = unsafe {
-        Series::from_chunks_and_dtype_unchecked(storage.name().clone(), chunks, storage.dtype())
-    };
-
-    let typ = reprojected_geometry_type(inputs[0].dtype(), &kwargs.to)?.instance();
-    Ok(out.into_extension(typ))
+    let reprojected = reprojected_geometry_type(inputs[0].dtype(), &kwargs.to)?;
+    geometry_series(storage.name().clone(), reprojected, chunks)
 }

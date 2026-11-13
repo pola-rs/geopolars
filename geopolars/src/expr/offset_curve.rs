@@ -1,63 +1,48 @@
 //! The offset curve of a linestring or multilinestring, forwarded to GEOS.
+//! Implements the Python `offset_curve`.
 
-use geopolars_compute::geos::{
-    offset_curves_into_line_strings, offset_curves_into_multi_line_strings, BufferDistance,
-    JoinStyle, OffsetCurveStyle,
-};
-use geopolars_core::{downcast, GeoDimension, LineStringArray, MultiLineStringArray};
+use geopolars_compute::geos::{JoinStyle, OffsetCurveStyle};
+use geopolars_core::{offset_curves, LineKind};
+use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
-use polars_arrow::array::{Array, ListArray};
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::buffer::{chunks_by_distance, JoinStyleDef};
-use super::IntoPolarsResult;
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// Python refuses any other kind, so it never gets here.
-fn not_a_line(dtype: &DataType) -> PolarsError {
-    polars_err!(
-        SchemaMismatch:
-        "offset_curve expects a linestring or multilinestring column, got: {}",
-        dtype
-    )
-}
-
-/// A multilinestring for a multilinestring, or with `allow_splitting`.
-/// Otherwise a linestring.
-/// It is XY, with the input's metadata.
-/// Also the kind of the input, and whether the output is a multilinestring.
+/// The type of the offset curves of a `dtype` column, as the Python `offset_curve` gives it.
+/// Also gives the input's kind, and whether the curves are multilinestrings.
 fn offset_curve_type(
     dtype: &DataType,
     kwargs: &OffsetCurveKwargs,
-) -> PolarsResult<(DataType, Kind, bool)> {
+) -> PolarsResult<(Geo, LineKind, bool)> {
+    // non-string kinds should already be refused in python,
+    // but second check never hurt nobody.
     let geo = describe(dtype)?;
-    let into_multi = match geo.kind {
-        Kind::LineString => kwargs.allow_splitting,
-        Kind::MultiLineString => true,
-        Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon => {
-            return Err(not_a_line(dtype))
-        }
+    let line_kind = LineKind::new("offset_curve", geo.kind)?;
+    let into_multi = match line_kind {
+        LineKind::LineString => kwargs.allow_splitting,
+        LineKind::MultiLineString => true,
     };
     let kind = if into_multi {
         Kind::MultiLineString
     } else {
         Kind::LineString
     };
-    let dtype = Geo::new(kind, GeoDimension::XY, geo.metadata.clone()).dtype();
-    Ok((dtype, geo.kind, into_multi))
+    let curve = Geo::new(kind, GeoDimension::XY, geo.metadata.clone());
+    Ok((curve, line_kind, into_multi))
 }
 
-/// For [`offset_curve`].
 fn kernel_output_type_offset_curve(
     input_fields: &[Field],
     kwargs: OffsetCurveKwargs,
 ) -> PolarsResult<Field> {
-    let (dtype, _, _) = offset_curve_type(input_fields[0].dtype(), &kwargs)?;
-    Ok(Field::new(input_fields[0].name().clone(), dtype))
+    let (curve, _, _) = offset_curve_type(input_fields[0].dtype(), &kwargs)?;
+    Ok(Field::new(input_fields[0].name().clone(), curve.dtype()))
 }
 
-/// See python docs for details.
+/// The keyword arguments of the Python `offset_curve`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OffsetCurveKwargs {
@@ -72,64 +57,33 @@ pub struct OffsetCurveKwargs {
     early_finite_check: bool,
 }
 
-/// The offset curves of one chunk of `kind` geometries.
-/// If `into_multi=true`, as multilinestrings; otherwise as linestrings.
-fn chunk_offset_curves(
-    chunk: &dyn Array,
-    kind: Kind,
-    into_multi: bool,
-    distance: BufferDistance,
-    kwargs: &OffsetCurveKwargs,
-) -> PolarsResult<ListArray<i64>> {
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_offset_curve)]
+fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Series> {
+    let (curve, kind, into_multi) = offset_curve_type(inputs[0].dtype(), &kwargs)?;
     let OffsetCurveKwargs {
-        distance: _,
+        distance,
         quadrant_segments,
         join_style,
         mitre_limit,
         allow_splitting: _,
         ignore_per_row_errors,
         early_finite_check,
-    } = *kwargs;
+    } = kwargs;
     let style = &OffsetCurveStyle {
         quadrant_segments,
         join_style,
         mitre_limit,
     };
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-    match (kind, into_multi) {
-        (Kind::LineString, false) => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            offset_curves_into_line_strings(&array, distance, style, ignore, early)
-                .map(LineStringArray::into_list_array)
-        }
-        (Kind::LineString, true) => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            offset_curves_into_multi_line_strings(&array, distance, style, ignore, early)
-                .map(MultiLineStringArray::into_list_array)
-        }
-        (Kind::MultiLineString, _) => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            offset_curves_into_multi_line_strings(&array, distance, style, ignore, early)
-                .map(MultiLineStringArray::into_list_array)
-        }
-        (Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon, _) => {
-            unreachable!("refused by `offset_curve_type`")
-        }
-    }
-    .into_polars()
-}
-
-/// See `offset_curve`.
-#[polars_expr(output_type_func_with_kwargs=kernel_output_type_offset_curve)]
-fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Series> {
-    let (dtype, kind, into_multi) = offset_curve_type(inputs[0].dtype(), &kwargs)?;
-    let chunks = chunks_by_distance(inputs, kwargs.distance, |rows, distance| {
-        chunk_offset_curves(rows, kind, into_multi, distance, &kwargs)
+    let chunks = chunks_by_distance(inputs, distance, |rows, distance| {
+        offset_curves(
+            rows,
+            kind,
+            into_multi,
+            distance,
+            style,
+            ignore_per_row_errors,
+            early_finite_check,
+        )
     })?;
-    // SAFETY: the offset curves are XY linestrings or multilinestrings, as `dtype` says.
-    Ok(
-        unsafe {
-            Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &dtype)
-        },
-    )
+    geometry_series(inputs[0].name().clone(), curve, chunks)
 }

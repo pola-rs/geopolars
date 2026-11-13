@@ -87,6 +87,9 @@ unless every hole of it is empty too (the empty polygon).""",
     "constructed_geoarrow_valid": """\
 Every geometry this functions builds is valid by `is_valid_geoarrow`,
 but it might not be valid by `is_valid_ogc`, nor simple (see `is_simple`).""",
+    "null_inside_row": """\
+A null anywhere inside a row (such as a null vertex, or a null coordinate value)
+makes the whole row null, as GeoArrow only allows nulls at the outermost level.""",
     "empty_and_null": """\
 An empty geometry gives an empty {output}, and a null one a null {output}.""",
     "keeps_type_dimension_and_crs": """\
@@ -172,6 +175,10 @@ a multi-geometry has a centroid per part rather than one,
 and a point would stay where it is.
 A geometry without a centroid (null, empty, a line without length,
 or a polygon that encloses nothing) comes out null.""",
+    # TODO: Describe in the constructors' docstrings how `crs` labels the result:
+    # it sets a CRS where none is declared,
+    # and refuses a different declared one rather than reprojecting (`MetadataKwargs::apply`).
+    # Only `polygons_from_rings_in_separate_columns` describes it now.
     "decode_into_dtype": """\
 {encoding} can mix geometries row by row, but a Polars column has one dtype,
 so `dtype` names the concrete type to decode into, e.g. `PolygonXY`.
@@ -183,6 +190,7 @@ The metadata of a `{encoding_dtype}` column is carried over, and `crs` labels th
 the same way it does for the constructors.""",
     "box_of_coordinates": """\
 The bounds are the minimum and maximum of the stored coordinates.
+A NaN is skipped.
 z and m are bounded like x and y.""",
     "box_around_the_globe": """\
 With a geographic CRS, `x` is then brought back into `[-180, 180]`

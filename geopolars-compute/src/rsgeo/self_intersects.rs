@@ -5,7 +5,7 @@ use std::convert::Infallible;
 
 use ::rsgeo::algorithm::sweep::Cross;
 use ::rsgeo::{Coord, Intersections, Line, LineIntersection, PreparedGeometry, Relate};
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray, ScalarLineString,
     ScalarPolygon,
 };
@@ -72,7 +72,7 @@ fn self_intersect(n: usize, vertex: impl Fn(usize) -> Coord<f64>) -> bool {
 }
 
 /// Whether the line through `vertices` crosses or touches itself.
-/// See [self_intersect].
+/// See `self_intersect`.
 pub fn vertices_self_intersect(vertices: &[Coord<f64>]) -> bool {
     self_intersect(vertices.len(), |i| vertices[i])
 }
@@ -146,7 +146,7 @@ pub fn multi_line_strings_self_intersect(array: &MultiLineStringArray) -> ListAr
     out
 }
 
-/// Whether each polygon [intersects itself](polygon_self_intersects).
+/// Whether each polygon intersects itself (see `polygon_self_intersects`).
 /// If `ignore_per_row_errors=true`, a polygon with a ring that is not one is null;
 /// otherwise that is the error.
 pub fn polygons_self_intersect(

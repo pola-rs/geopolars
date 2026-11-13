@@ -1,6 +1,4 @@
-//! Topology checks used in `is_valid_ogc`, as predicates on one polygon or multipolygon.
-//! Answers how the rings of a polygon, and the parts of a multipolygon, fit together in x and y.
-//! See `is_valid_ogc` in Python for the rules.
+//! The topology checks of the Python `is_valid_ogc`, as predicates on one polygon or multipolygon.
 //!
 //! Every polygon is assumed to have a valid shape already (all rings empty, or all of them rings).
 //! The typed views of [crate::ogc_validity] stand for that.
@@ -10,7 +8,7 @@ use ::rsgeo::coordinate_position::CoordPos;
 use ::rsgeo::dimensions::Dimensions;
 use ::rsgeo::relate::IntersectionMatrix;
 use ::rsgeo::{Polygon, PreparedGeometry, Relate};
-use geopolars_core::{ScalarLineString, ScalarMultiPolygon, ScalarPolygon};
+use geopolars_views::{ScalarLineString, ScalarMultiPolygon, ScalarPolygon};
 
 use super::rings_overlap::overlap;
 use super::self_intersects::finite_line_self_intersects;
@@ -52,7 +50,7 @@ fn parts_do_not_overlap(parts: &[Polygon<f64>]) -> bool {
     })
 }
 
-/// The topology checks to run on a polygon. See `is_valid_ogc` in Python.
+/// The topology checks of the Python `is_valid_ogc` that apply to a polygon.
 #[derive(Debug, Clone, Copy)]
 pub struct PolygonTopologyChecks {
     pub check_ring_self_intersect: bool,
@@ -65,7 +63,7 @@ impl PolygonTopologyChecks {
     }
 }
 
-/// The topology checks to run on a multipolygon. See `is_valid_ogc` in Python.
+/// The topology checks of the Python `is_valid_ogc`.
 #[derive(Debug, Clone, Copy)]
 pub struct MultiPolygonTopologyChecks {
     /// What every part is checked for.

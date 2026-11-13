@@ -58,22 +58,23 @@ def simplify(
     so it is returned as it is, m included.
     {ignores_empty_and_invalid}
     A linestring always keeps its endpoints.
+    An empty part of a multilinestring is dropped.
 
     By default this uses Douglas-Peucker simplification,
     which might break topology.
 
-    If `preserve_topology=false`:
+    If `preserve_topology=False`:
     - a polygon smaller than `tolerance` becomes empty;
-    - a hole, or a part of a multipolygon, smaller than `tolerance` is dropped,
-      as is an empty part of a multilinestring;
+    - a hole, or a part of a multipolygon, smaller than `tolerance` is dropped;
     - a polygon whose simplified rings cross is repaired,
       which can split it into more polygons.
       For a multipolygon those are more parts,
       but a polygon can't hold them, so that polygon fails
       (`preserve_topology=True` never splits it).
 
-    With `preserve_topology=true`, GEOS's topology-preserving simplifier is used instead.
+    With `preserve_topology=True`, GEOS's topology-preserving simplifier is used instead.
     This is slower, but never lets rings cross each other or polygons collapse.
+    No linestring or ring then crosses itself or another, and every part and ring is kept.
 
     {geos_errors}
     The same goes for a polygon it splits.

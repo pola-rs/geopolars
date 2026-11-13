@@ -8,6 +8,7 @@ use std::borrow::Cow;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
+use geopolars_views::{GeoDimension, Kind};
 use polars_core::datatypes::extension::{
     ExtensionTypeFactory, ExtensionTypeImpl, ExtensionTypeInstance,
 };
@@ -15,7 +16,6 @@ use polars_core::prelude::DataType;
 
 use super::coord::dimension_of_storage;
 use super::crs::ExtensionMetadata;
-use super::{GeoDimension, Kind};
 
 /// A GeoArrow geometry column's type:
 /// which geometry, over which coordinates.

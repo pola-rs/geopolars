@@ -1,15 +1,14 @@
-//! How far apart points are.
-//! Uses [DistanceMetric] to choose the how to measure distance (Planar/geodesic etc)
-//! Wraps functions from [geopolars_compute::native::distance]
-//!
+//! How far apart two points are.
+//! Implements the Python `distance`.
+//! Also holds the [`geodesic_metric`] cache, which `area` and `length` measure with too.
 
 use std::fmt::Display;
 use std::rc::Rc;
 
 use geopolars_compute::native::DistanceMetric;
-use geopolars_compute::with_const_flags;
 use geopolars_compute::{GeodesicMetric, Planar};
-use geopolars_core::{Coords, PointArray};
+use geopolars_core::{distances_to_one, pairwise_distances};
+use geopolars_views::Kind;
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
@@ -18,7 +17,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::cache::ThreadCache;
-use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs_unless_bare, GeometryPairs, Kind};
+use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs_unless_bare, GeometryPairs};
 use crate::proj::GeodeticCrs;
 
 thread_local! {
@@ -33,6 +32,17 @@ pub fn geodesic_metric(crs: &str) -> PolarsResult<Rc<GeodesicMetric>> {
     METRICS.with(|metrics| metrics.get_or_build(crs, || build(crs)))
 }
 
+/// The [`geodesic_metric`] for the CRS a geometry `field` declares.
+/// A field that declares no CRS is refused, as there is no ellipsoid to measure on.
+pub(crate) fn geodesic_metric_of(field: &Field) -> PolarsResult<Rc<GeodesicMetric>> {
+    let geo = describe(field.dtype())?;
+    polars_ensure!(
+        geo.metadata.declares_crs(),
+        SchemaMismatch: "the geometry declares no CRS, so there is no ellipsoid to measure on"
+    );
+    geodesic_metric(geo.metadata.crs()?)
+}
+
 fn build(crs: &str) -> PolarsResult<GeodesicMetric> {
     let geodetic = GeodeticCrs::of(crs)?;
     let to_lonlat = Proj::new_known_crs(crs, &geodetic.definition, None).map_err(
@@ -45,7 +55,7 @@ fn build(crs: &str) -> PolarsResult<GeodesicMetric> {
     ))
 }
 
-/// How `distance` measures, as passed from Python.
+/// The `method` of the Python `distance` and `length`, which the Python side always resolves.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum DistanceMethod {
@@ -55,6 +65,7 @@ pub(crate) enum DistanceMethod {
     Geodesic,
 }
 
+/// The keyword arguments of the Python `distance`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DistanceKwargs {
@@ -99,7 +110,6 @@ fn geodesic_crs(fields: &[Field]) -> PolarsResult<String> {
     })
 }
 
-/// Distance is returned as `f64`, named after the first point.
 fn kernel_output_type_distance(
     input_fields: &[Field],
     kwargs: DistanceKwargs,
@@ -119,69 +129,30 @@ fn kernel_output_type_distance(
     ))
 }
 
-/// [geopolars_compute::native::pairwise], into a polars array.
-fn pairwise<const Z: bool>(
-    metric: &impl DistanceMetric<Error: Display>,
-    a: &PointArray,
-    b: &PointArray,
-) -> PolarsResult<PrimitiveArray<f64>> {
-    geopolars_compute::native::pairwise::<Z, true, _>(metric, a, b)
-        .map_err(|e| polars_err!(ComputeError: "{e}"))
-}
-
-/// [geopolars_compute::native::against_one], into a polars array.
-fn against_one<const Z: bool>(
-    metric: &impl DistanceMetric<Error: Display>,
-    one: [f64; 3],
-    many: &PointArray,
-) -> PolarsResult<PrimitiveArray<f64>> {
-    geopolars_compute::native::against_one::<Z, true, _>(metric, one, many)
-        .map_err(|e| polars_err!(ComputeError: "{e}"))
-}
-
-fn points(chunk: &ArrayRef) -> PolarsResult<PointArray> {
-    Ok(PointArray::new(Coords::new(chunk.as_ref())?))
-}
-
-fn measure_chunks<const Z: bool>(
-    metric: &impl DistanceMetric<Error: Display>,
-    a: &Series,
-    b: &Series,
-) -> PolarsResult<Vec<PrimitiveArray<f64>>> {
-    Ok(match aligned_pairs(a, b)? {
-        GeometryPairs::Pairwise(pairs) => pairs
-            .iter()
-            .map(|(a, b)| pairwise::<Z>(metric, &points(a)?, &points(b)?))
-            .collect::<PolarsResult<Vec<_>>>()?,
-        // Distance goes both ways, so it does not matter which side `one` came from.
-        GeometryPairs::OneAgainstMany { a: one, b: many }
-        | GeometryPairs::ManyAgainstOne { a: many, b: one } => {
-            let one = points(&one)?
-                .get(0)
-                .position::<false, Z>()
-                .expect("`NULLS=false` always gives one");
-            many.iter()
-                .map(|many| against_one::<Z>(metric, one, &points(many)?))
-                .collect::<PolarsResult<Vec<_>>>()?
-        }
-        GeometryPairs::AllNull(lengths) => lengths
-            .iter()
-            .map(|&rows| PrimitiveArray::new_null(ArrowDataType::Float64, rows))
-            .collect(),
-    })
-}
-
-/// The distance between the points of `inputs[0]` and `inputs[1]`, measured with `metric`.
+/// Measures the distance between the points of `inputs[0]` and `inputs[1]` with `metric`.
 fn measure(
     metric: &impl DistanceMetric<Error: Display>,
     inputs: &[Series],
 ) -> PolarsResult<Series> {
-    let z = describe(inputs[0].dtype())?.dim.has_z() && describe(inputs[1].dtype())?.dim.has_z();
-    let chunks = with_const_flags!(Z = z; measure_chunks::<Z>(metric, &inputs[0], &inputs[1]))?;
+    let chunks = match aligned_pairs(&inputs[0], &inputs[1])? {
+        GeometryPairs::Pairwise(pairs) => pairs
+            .iter()
+            .map(|(a, b)| pairwise_distances(a.as_ref(), b.as_ref(), metric))
+            .collect::<PolarsResult<Vec<_>>>()?,
+        // Distance goes both ways, so it does not matter which side `one` came from.
+        GeometryPairs::OneAgainstMany { a: one, b: many }
+        | GeometryPairs::ManyAgainstOne { a: many, b: one } => many
+            .iter()
+            .map(|many| distances_to_one(one.as_ref(), many.as_ref(), metric))
+            .collect::<PolarsResult<Vec<_>>>()?,
+        GeometryPairs::AllNull(lengths) => lengths
+            .iter()
+            .map(|&rows| PrimitiveArray::new_null(ArrowDataType::Float64, rows))
+            .collect(),
+    };
     Ok(Float64Chunked::from_chunk_iter(inputs[0].name().clone(), chunks).into_series())
 }
 
-/// See `distance`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_distance)]
 fn distance(inputs: &[Series], kwargs: DistanceKwargs) -> PolarsResult<Series> {
     let fields = [

@@ -1,17 +1,18 @@
-//! Whether two rings overlap, which is when the areas they enclose share area.
+//! Whether two rings overlap.
+//! Implements the Python `rings_overlap`.
 //!
 //! # Const generic flags
 //!
 //! ## `TOUCHING`
 //!
-//! Every function here that relates two rings is generic over `TOUCHING`.
-//! If `TOUCHING=true`, rings that only touch overlap too.
+//! Every function here that relates two rings is generic over `TOUCHING`,
+//! the Python `include_touching`.
 
 use ::rsgeo::coordinate_position::CoordPos;
 use ::rsgeo::dimensions::Dimensions;
 use ::rsgeo::relate::IntersectionMatrix;
 use ::rsgeo::{Polygon, PreparedGeometry, Relate};
-use geopolars_core::{LineStringArray, ScalarLineString};
+use geopolars_views::{LineStringArray, ScalarLineString};
 use polars_arrow::array::BooleanArray;
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::datatypes::ArrowDataType;
@@ -51,10 +52,9 @@ fn ring_pair_overlaps<const TOUCHING: bool>(
     Ok(Some(overlap::<TOUCHING>(&a.relate(&b))))
 }
 
-/// Whether the rings of `a` and `b`, which have the same length, overlap row by row.
-/// A row is null where either ring is, or where one of them is not finite in x or y.
-/// If `ignore_per_row_errors=true`, a row where one of them is not a ring is null too;
-/// otherwise that is the error.
+/// Whether the rings of `a` and `b` overlap, row by row.
+///
+/// `a` and `b` must have the same length.
 pub fn rings_overlap_pairwise<const TOUCHING: bool>(
     a: &LineStringArray,
     b: &LineStringArray,
@@ -74,10 +74,8 @@ pub fn rings_overlap_pairwise<const TOUCHING: bool>(
 }
 
 /// Whether the single ring `one` overlaps each ring of `many`.
-/// Overlap goes both ways, so this serves a single ring on either side.
+/// Overlap goes both ways, so this serves a single ring on either side of [rings_overlap_pairwise].
 /// `one` is copied for rsgeo and prepared once, rather than on every row.
-/// See [rings_overlap_pairwise] for `ignore_per_row_errors`, and what is null.
-/// Every row is null where `one` would make it so.
 pub fn rings_overlap_against_one<const TOUCHING: bool>(
     one: &ScalarLineString,
     many: &LineStringArray,

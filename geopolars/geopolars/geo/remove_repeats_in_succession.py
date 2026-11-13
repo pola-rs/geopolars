@@ -44,7 +44,7 @@ def remove_repeats_in_succession(
     | geometry | removed |
     | - | - |
     | `PointXY[ZM]` | nothing, returns the input |
-    | `LineStringXY[ZM]`, `MultiPointXY[ZM]` | coincidence in direct succeccesion |
+    | `LineStringXY[ZM]`, `MultiPointXY[ZM]` | coincidence in direct succession |
     | `PolygonXY[ZM]` | the same, per ring |
     | `MultiLineStringXY[ZM]`, `MultiPolygonXY[ZM]` | the same, per part |
 

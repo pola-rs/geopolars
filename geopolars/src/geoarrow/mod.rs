@@ -1,8 +1,9 @@
-//! Glue for the GeoArrow data types, and dispatching to it.
+//! Glue for the GeoArrow data types, and lining up the chunks of two geometry columns.
 //!
-//! Expressions never name a concrete geometry:
-//! They ask [`describe`] what a column holds and dispatch on the [`Kind`] and [`Dimension`] it reports,
-//! so adding a geometry does not touch `crate::expr`.
+//! Expressions never name a concrete geometry.
+//! Instead, they ask [`describe`] what a column holds,
+//! and hand the [`Kind`] and [`GeoDimension`] it reports to `geopolars_core`,
+//! which picks the kernel.
 
 pub mod bbox;
 pub mod coord;
@@ -10,25 +11,17 @@ pub mod crs;
 pub mod decode;
 pub mod encoded;
 mod geo;
-mod kind;
 mod pairs;
 
 pub use geo::Geo;
-pub use geopolars_core::GeoDimension;
-pub use kind::Kind;
 pub use pairs::{aligned_pairs, single_chunk_masked_pairs, GeometryPairs};
 
 use std::any::Any;
 use std::sync::Arc;
 
+use geopolars_views::{GeoDimension, GeometryArray, Kind};
 use polars::prelude::*;
-use polars_arrow::array::{Array, ListArray};
 use polars_core::datatypes::extension::{register_extension_type, ExtensionTypeInstance};
-
-use geopolars_core::{
-    downcast, Coords, Geometry, GeometryArray, LineStringArray, MultiLineStringArray,
-    MultiPointArray, MultiPolygonArray, PointArray, PolygonArray,
-};
 
 use bbox::BoxFactory;
 use crs::ExtensionMetadata;
@@ -93,6 +86,67 @@ pub fn describe(dtype: &DataType) -> PolarsResult<GeoColumn<'_>> {
     )
 }
 
+impl GeoColumn<'_> {
+    pub fn geo(&self) -> Geo {
+        Geo::new(self.kind, self.dim, self.metadata.clone())
+    }
+}
+
+/// Turns the chunks a kernel gave back into a `geo` column.
+/// Errors if a chunk is of another kind or dimension than `geo`.
+/// Such an error is a bug, as the output type function and the kernel then disagree.
+pub fn geometry_series(
+    name: PlSmallStr,
+    geo: Geo,
+    chunks: Vec<GeometryArray>,
+) -> PolarsResult<Series> {
+    let chunks = chunks
+        .into_iter()
+        .map(|chunk| {
+            polars_ensure!(
+                (chunk.kind(), chunk.dim()) == (geo.kind(), geo.dim()),
+                ComputeError: "the kernel gave `{}[{}]`, but `{}[{}]` was planned",
+                chunk.kind().display(), chunk.dim().tag(), geo.kind().display(), geo.dim().tag()
+            );
+            Ok(chunk.into_storage())
+        })
+        .collect::<PolarsResult<Vec<_>>>()?;
+    // SAFETY: every chunk is of `geo`'s kind and dimension,
+    // and `into_storage` gives exactly the storage of those.
+    Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, &geo.dtype()) })
+}
+
+/// Turns the chunks of storage a kernel gave back into a `dtype` column,
+/// for output that is not a geometry, such as boxes or lists of geometries.
+/// Errors if a chunk is not `dtype`'s storage.
+/// Such an error is a bug, as the output type function and the kernel then disagree.
+pub fn storage_series(
+    name: PlSmallStr,
+    chunks: Vec<ArrayRef>,
+    dtype: &DataType,
+) -> PolarsResult<Series> {
+    let storage = storage_of(dtype);
+    for chunk in &chunks {
+        let given = DataType::from_arrow_dtype(chunk.dtype());
+        polars_ensure!(
+            given == storage,
+            ComputeError: "the kernel gave `{given}`, but `{storage}` was planned"
+        );
+    }
+    // SAFETY: every chunk is the storage of `dtype`.
+    Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, chunks, dtype) })
+}
+
+/// `dtype` with every extension type replaced by its storage.
+/// Unlike [`DataType::to_storage`], this also replaces one inside a list.
+fn storage_of(dtype: &DataType) -> DataType {
+    match dtype {
+        DataType::Extension(_, storage) => storage_of(storage),
+        DataType::List(inner) => DataType::List(Box::new(storage_of(inner))),
+        _ => dtype.clone(),
+    }
+}
+
 /// The [Kind] of a geometry column, see [describe].
 pub fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
     Ok(describe(geometries.dtype())?.kind)
@@ -101,21 +155,6 @@ pub fn kind_of(geometries: &Series) -> PolarsResult<Kind> {
 /// The storage of a geometry column, rechunked into a single chunk.
 fn storage_as_single_chunk(geometries: &Series) -> PolarsResult<ArrayRef> {
     Ok(geometries.ext()?.storage().rechunk().chunks()[0].clone())
-}
-
-/// Wraps a chunk of a `kind` column's storage, for kernels that take any kind of geometry.
-pub fn geometry_array(chunk: &dyn Array, kind: Kind) -> PolarsResult<GeometryArray> {
-    let rows = |chunk| downcast::<ListArray<i64>>(chunk, "a list of parts");
-    Ok(match kind {
-        Kind::Point => GeometryArray::Point(PointArray::new(Coords::new(chunk)?)),
-        Kind::MultiPoint => GeometryArray::MultiPoint(MultiPointArray::new(rows(chunk)?)?),
-        Kind::LineString => GeometryArray::LineString(LineStringArray::new(rows(chunk)?)?),
-        Kind::MultiLineString => {
-            GeometryArray::MultiLineString(MultiLineStringArray::new(rows(chunk)?)?)
-        }
-        Kind::Polygon => GeometryArray::Polygon(PolygonArray::new(rows(chunk)?)?),
-        Kind::MultiPolygon => GeometryArray::MultiPolygon(MultiPolygonArray::new(rows(chunk)?)?),
-    })
 }
 
 /// Errors unless `a` and `b` declare the same CRS, or neither declares one.
@@ -153,50 +192,5 @@ pub fn ensure_same_crs_unless_bare(
             SchemaMismatch: "only one of the {name_a} and the {name_b} declares a CRS; \
             declare the same one on both"
         ),
-    }
-}
-
-/// Calls `f` with `row(i)` for every row `i` of `chunk`, or `None` where it is null.
-fn rows<'a>(
-    chunk: &dyn Array,
-    f: &mut impl FnMut(Option<Geometry<'a>>) -> PolarsResult<()>,
-    row: impl Fn(usize) -> Geometry<'a>,
-) -> PolarsResult<()> {
-    (0..chunk.len()).try_for_each(|i| f((!chunk.is_null(i)).then(|| row(i))))
-}
-
-/// Calls `f` with every row of `chunk`, a chunk of a `kind` column's storage:
-/// the geometry, or `None` for a null.
-/// For the `wkb` and `wkt` writers, which take geometries through geo-traits.
-pub fn for_each_geometry(
-    chunk: &dyn Array,
-    kind: Kind,
-    mut f: impl FnMut(Option<Geometry<'_>>) -> PolarsResult<()>,
-) -> PolarsResult<()> {
-    match kind {
-        Kind::Point => {
-            let array = PointArray::new(Coords::new(chunk)?);
-            rows(chunk, &mut f, |i| Geometry::Point(array.get(i)))
-        }
-        Kind::LineString => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            rows(chunk, &mut f, |i| Geometry::LineString(array.get(i)))
-        }
-        Kind::MultiPoint => {
-            let array = MultiPointArray::new(downcast(chunk, "a list of coordinates")?)?;
-            rows(chunk, &mut f, |i| Geometry::MultiPoint(array.get(i)))
-        }
-        Kind::Polygon => {
-            let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
-            rows(chunk, &mut f, |i| Geometry::Polygon(array.get(i)))
-        }
-        Kind::MultiLineString => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            rows(chunk, &mut f, |i| Geometry::MultiLineString(array.get(i)))
-        }
-        Kind::MultiPolygon => {
-            let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
-            rows(chunk, &mut f, |i| Geometry::MultiPolygon(array.get(i)))
-        }
     }
 }

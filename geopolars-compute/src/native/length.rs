@@ -1,4 +1,5 @@
 //! How long a linestring is, as a [LengthMetric] measures it.
+//! Implements the Python `length`.
 //!
 //! # Const generic flags
 //!
@@ -12,7 +13,7 @@
 //! Every function here is generic over `IGNORE_NAN`.
 //! If `IGNORE_NAN=true`, a vertex with a NaN is skipped, so the line runs on to the next one.
 
-use geopolars_core::{LineStringArray, MultiLineStringArray, ScalarLineString};
+use geopolars_views::{LineStringArray, MultiLineStringArray, ScalarLineString};
 use polars_arrow::array::PrimitiveArray;
 
 use super::DistanceMetric;
@@ -26,7 +27,6 @@ impl LengthMetric for Planar {}
 
 impl LengthMetric for GeodesicMetric {}
 
-/// The length of `line`: fewer than two vertices have a length of `0.0`.
 #[inline(always)]
 fn line_length<const Z: bool, const IGNORE_NAN: bool, M: LengthMetric>(
     metric: &M,
@@ -58,7 +58,7 @@ pub fn line_string_lengths<const Z: bool, const IGNORE_NAN: bool, M: LengthMetri
     })
 }
 
-/// The length of every multilinestring of a chunk, as the sum of its parts.
+/// The length of every multilinestring of a chunk.
 pub fn multi_line_string_lengths<const Z: bool, const IGNORE_NAN: bool, M: LengthMetric>(
     metric: &M,
     array: &MultiLineStringArray,

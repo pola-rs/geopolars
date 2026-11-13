@@ -21,7 +21,7 @@ Functions that wrap these should be `kernel_output_type_wrapper_*`
 
 Kernels used to work directly on Polars' Arrow arrays.
 We are moving them to the `../geopolars-compute` crate.
-They take the views of `../geopolars-core`.
+They take the views of `../geopolars-views`.
 That way, the 'geo' logic is separated from the Polars plugin layer.
 Write new kernels there.
 Some kernels still live in `src/expr/` until they are migrated.
@@ -29,13 +29,13 @@ See [its README](../geopolars-compute/README.md) for how to write a kernel.
 
 What remains in the plugin is a thin layer per expression in `src/expr/`.
 
-- It checks the input's dtype with `describe`, and picks a kernel per `Kind`.
-- It wraps each chunk of the storage in the views from `geopolars-core`
-  (`List`, `ValidCoords`, ...).
-- It calls the kernel, which returns a Polars array.
-- It turns kernel errors into a `PolarsError`.
-
-`src/expr/is_ccw.rs` is a simple example.
+- It checks the input's dtype with `describe`.
+  An expression that only takes some kinds narrows the `Kind` (e.g. to a `LineKind`) at plan time,
+  which refuses any other kind.
+- It hands every chunk of the storage (plus its kind) to the function for the expression in `../geopolars-core`.
+  That function wraps the chunk in the views from `geopolars-views` (`List`, `ValidCoords`, ...),
+  and calls the kernel for that kind.
+- It turns the chunks it gets back into a `Series` of the output type.
 
 ## Implementation tiers
 

@@ -1,37 +1,29 @@
-use geopolars_compute::geos::{
-    interpolate_line_strings, interpolate_multi_line_strings, BufferDistance, InterpolateMode,
-};
-use geopolars_core::{downcast, LineStringArray, MultiLineStringArray, PointArray};
+//! The point at a distance along a line, forwarded to GEOS.
+//! Implements the Python `line_interpolate_point`.
+
+use geopolars_compute::geos::InterpolateMode;
+use geopolars_core::{interpolated_points, LineKind};
+use geopolars_views::Kind;
 use polars::prelude::*;
-use polars_arrow::array::{Array, StructArray};
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::buffer::chunks_by_distance;
-use super::IntoPolarsResult;
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// A point with the input's dimension and metadata.
+/// The type of the points of a `dtype` column, as the Python `line_interpolate_point` gives it.
 /// Also the kind of the input.
-fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(DataType, Kind)> {
+fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(Geo, LineKind)> {
     let geo = describe(dtype)?;
-    match geo.kind {
-        Kind::LineString | Kind::MultiLineString => {}
-        // Python refuses any other kind, so it never gets here.
-        Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon => polars_bail!(
-            SchemaMismatch:
-            "line_interpolate_point expects a linestring or multilinestring column, got: {}",
-            dtype
-        ),
-    }
-    let dtype = Geo::new(Kind::Point, geo.dim, geo.metadata.clone()).dtype();
-    Ok((dtype, geo.kind))
+    // Python already refuses any other kind before it reaches the plugin.
+    let kind = LineKind::new("line_interpolate_point", geo.kind)?;
+    let point = Geo::new(Kind::Point, geo.dim, geo.metadata.clone());
+    Ok((point, kind))
 }
 
-/// For [`line_interpolate_point`].
 fn kernel_output_type_line_interpolate_point(input_fields: &[Field]) -> PolarsResult<Field> {
-    let (dtype, _) = line_interpolate_point_type(input_fields[0].dtype())?;
-    Ok(Field::new(input_fields[0].name().clone(), dtype))
+    let (point, _) = line_interpolate_point_type(input_fields[0].dtype())?;
+    Ok(Field::new(input_fields[0].name().clone(), point.dtype()))
 }
 
 #[derive(Deserialize)]
@@ -41,7 +33,7 @@ enum InterpolateModeDef {
     Normalized,
 }
 
-/// See python docs for details.
+/// The keyword arguments of the Python `line_interpolate_point`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LineInterpolatePointKwargs {
@@ -53,51 +45,27 @@ pub struct LineInterpolatePointKwargs {
     early_finite_check: bool,
 }
 
-/// The interpolated points of one chunk of `kind` geometries.
-fn chunk_interpolated(
-    chunk: &dyn Array,
-    kind: Kind,
-    distance: BufferDistance,
-    kwargs: &LineInterpolatePointKwargs,
-) -> PolarsResult<StructArray> {
-    let LineInterpolatePointKwargs {
-        distance: _,
-        mode,
-        ignore_per_row_errors,
-        early_finite_check,
-    } = *kwargs;
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-    match kind {
-        Kind::LineString => {
-            let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            interpolate_line_strings(&array, distance, mode, ignore, early)
-        }
-        Kind::MultiLineString => {
-            let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            interpolate_multi_line_strings(&array, distance, mode, ignore, early)
-        }
-        Kind::Point | Kind::Polygon | Kind::MultiPoint | Kind::MultiPolygon => {
-            unreachable!("refused by `line_interpolate_point_type`")
-        }
-    }
-    .map(PointArray::into_struct_array)
-    .into_polars()
-}
-
-/// See `line_interpolate_point`.
 #[polars_expr(output_type_func=kernel_output_type_line_interpolate_point)]
 fn line_interpolate_point(
     inputs: &[Series],
     kwargs: LineInterpolatePointKwargs,
 ) -> PolarsResult<Series> {
-    let (dtype, kind) = line_interpolate_point_type(inputs[0].dtype())?;
-    let chunks = chunks_by_distance(inputs, kwargs.distance, |rows, distance| {
-        chunk_interpolated(rows, kind, distance, &kwargs)
+    let (point, kind) = line_interpolate_point_type(inputs[0].dtype())?;
+    let LineInterpolatePointKwargs {
+        distance,
+        mode,
+        ignore_per_row_errors,
+        early_finite_check,
+    } = kwargs;
+    let chunks = chunks_by_distance(inputs, distance, |rows, distance| {
+        interpolated_points(
+            rows,
+            kind,
+            distance,
+            mode,
+            ignore_per_row_errors,
+            early_finite_check,
+        )
     })?;
-    // SAFETY: the points have the input's dimension, as `dtype` says.
-    Ok(
-        unsafe {
-            Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &dtype)
-        },
-    )
+    geometry_series(inputs[0].name().clone(), point, chunks)
 }

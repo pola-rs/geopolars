@@ -2,8 +2,8 @@
 //!
 //! GEOS measures in x and y only, so every output is a `LineStringXY`.
 
-use geopolars_core::output::SizeHint;
-use geopolars_core::{GeometryArray, LineStringArray};
+use geopolars_views::output::SizeHint;
+use geopolars_views::{GeometryArray, LineStringArray};
 use geos::{Geom, Geometry};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::{combine_validities_and, combine_validities_and_not};
@@ -60,9 +60,7 @@ fn is_valid(validity: Option<&Bitmap>, i: usize) -> bool {
 }
 
 /// Gets the shortest line from `a` to `b`, row by row.
-/// See Python `shortest_line_between`
-/// A row that is null or empty on either side does not go to GEOS,
-/// so the other side cannot fail there.
+/// Implements the Python `shortest_line_between`.
 ///
 /// `a` and `b` must have the same length.
 pub fn shortest_lines_pairwise(
@@ -99,7 +97,6 @@ pub fn shortest_lines_pairwise(
 
 /// Gets the shortest line between a single geometry and every row of `many`,
 /// as [shortest_lines_pairwise] does for a `one` repeated on every row.
-/// If `one` is null or empty, `many` does not go to GEOS at all.
 ///
 /// `one` must hold a single row.
 pub fn shortest_lines_against_one(

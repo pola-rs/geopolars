@@ -15,7 +15,7 @@ rsgeo = ["dep:rsgeo"]
 
 [dependencies]
 # The views and output arrays the kernels are written against.
-geopolars-core = { path = "../geopolars-core" }
+geopolars-views = { path = "../geopolars-views" }
 polars-arrow = { workspace = true }
 # PROJ, to bring coordinates to longitude/latitude for `GeodesicMetric`.
 # geopolars turns on `bundled_proj`; must match the version geopolars pins.

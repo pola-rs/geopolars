@@ -9,7 +9,7 @@
 //! The public functions take `early_finite_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
-use geopolars_core::{GeometryArray, MultiPolygonArray, PolygonArray};
+use geopolars_views::{GeometryArray, MultiPolygonArray, PolygonArray};
 use geos::{BufferParams, Geom, Geometry, GeometryTypes};
 pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
@@ -72,9 +72,9 @@ pub fn buffer_into_polygons(
     .into_polygon_array(false, ignore_per_row_errors, ccw_outer)
 }
 
-/// Like [`buffer_into_polygons`], as a multipolygon, for any kind.
-/// Parts whose buffers overlap are merged into one.
-/// A row that GEOS buffers into several polygons gets them all as parts.
+/// Like [`buffer_into_polygons`], but into a multipolygon, for any kind.
+/// Implements the Python `buffer` where it gives a multipolygon.
+/// A row that GEOS splits into several polygons gets them all as parts.
 pub fn buffer_into_multi_polygons(
     array: &GeometryArray,
     distance: BufferDistance,

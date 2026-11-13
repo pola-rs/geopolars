@@ -1,44 +1,26 @@
 //! Building a geometry out of the parts it is made of.
+//! Implements the Python constructors, each kernel naming the one it implements.
 
 use std::sync::Arc;
 
 use polars::prelude::*;
-use polars_arrow::array::{Array, ListArray};
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
-use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, Geo, GeoDimension, Kind};
-use geopolars_compute::inner_nulls::{
-    multi_line_strings_with_null_parts_marked, multi_points_with_null_parts_marked,
-    multi_polygons_with_null_parts_marked, propagate_inner_nulls_of_line_strings,
-    propagate_inner_nulls_of_multi_line_strings, propagate_inner_nulls_of_multi_points,
-    propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_points,
-    propagate_inner_nulls_of_polygons, MaskedParts,
-};
-use geopolars_compute::native::{
-    close_open_rings, multi_polygons_have_only_rings, polygons_have_only_rings,
-    polygons_with_added_holes,
-};
-use geopolars_compute::with_const_flags;
+use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 use geopolars_core::{
-    LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
-    PolygonArray, UncheckedStorage, ValidCoords, ValidList,
+    assembled_multi_polygons, assembled_polygons, validated_storage, NestedKind, NullParts,
 };
-use polars_arrow::bitmap::Bitmap;
-use polars_arrow::compute::utils::combine_validities_and;
-use polars_arrow::offset::Offsets;
+use geopolars_views::{GeoDimension, Kind};
 
-/// The keyword arguments of the constructors that build polygons:
-/// [`MetadataKwargs`], plus whether and how to close open rings.
-/// These have to be mirrored on the Python side.
+/// The keyword arguments of the Python constructors that build polygons:
+/// [`MetadataKwargs`], plus `close`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PolygonKwargs {
-    /// The CRS the coordinates are in, in any form PROJ accepts.
     pub crs: Option<String>,
-    /// How to close every open ring, as `close_rings` does.
     pub close: Option<CloseRingsKwargs>,
 }
 
@@ -181,100 +163,20 @@ fn kernel_output_type_multipolygon(
     )
 }
 
-/// See [`close_open_rings`].
-/// The rings and their coordinates, or `None` if no ring changed.
-pub(super) fn closed_rings(
-    rings: &ValidList,
-    coords: &ValidCoords,
-    closing: CloseRingsKwargs,
-) -> Option<(ValidList, ValidCoords)> {
-    let CloseRingsKwargs { snap_z, snap_m } = closing;
-    let z = coords.dim().has_z();
-    let closed = with_const_flags!(Z = z; close_open_rings::<Z>(rings, coords, snap_z, snap_m))?;
-    Some((closed.rows.ignoring_validity().clone(), closed.coords))
-}
-
-/// `array` with its open rings closed first if there is a `close`,
-/// and null where it does not have only rings (see [polygons_have_only_rings]).
-pub(super) fn validated_polygons(
-    mut array: PolygonArray,
+/// Runs [validated_storage] on every chunk of `storage`, and gives the result as a `geo` column.
+fn validated(
+    storage: &Series,
+    geo: Geo,
+    kind: NestedKind,
     close: Option<CloseRingsKwargs>,
-) -> Box<dyn Array> {
-    if let Some((rings, coords)) =
-        close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
-    {
-        array = PolygonArray::from_parts(array.rows, rings, coords);
-    }
-    // A null row is `false` in the values too.
-    let z = array.coords.dim().has_z();
-    let valid = with_const_flags!(Z = z; polygons_have_only_rings::<Z>(&array))
-        .values()
-        .clone();
-    PolygonArray::from_parts(
-        array.rows.with_validity(Some(valid)),
-        array.rings,
-        array.coords,
-    )
-    .into_list_array()
-    .boxed()
-}
-
-/// One chunk of the storage of a `kind`, with every null value below a row moved out to it.
-/// A polygon is also null where it does not have only rings (see [polygons_have_only_rings]).
-/// With a `close`, the open rings of a polygon are closed first.
-fn validated_chunk(
-    chunk: &dyn Array,
-    kind: Kind,
-    close: Option<CloseRingsKwargs>,
-) -> PolarsResult<Box<dyn Array>> {
-    let storage = UncheckedStorage::new(chunk)?;
-    Ok(match kind {
-        Kind::Point => unreachable!("constructors always gather into lists"),
-        Kind::LineString => propagate_inner_nulls_of_line_strings(storage)
-            .into_list_array()
-            .boxed(),
-        Kind::MultiPoint => propagate_inner_nulls_of_multi_points(storage)
-            .into_list_array()
-            .boxed(),
-        Kind::MultiLineString => propagate_inner_nulls_of_multi_line_strings(storage)
-            .into_list_array()
-            .boxed(),
-        Kind::Polygon => validated_polygons(propagate_inner_nulls_of_polygons(storage), close),
-        Kind::MultiPolygon => {
-            let mut array = propagate_inner_nulls_of_multi_polygons(storage);
-            if let Some((rings, coords)) =
-                close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
-            {
-                array = MultiPolygonArray::from_parts(array.rows, array.polygons, rings, coords);
-            }
-            // A null row is `false` in the values too.
-            let z = array.coords.dim().has_z();
-            let valid = with_const_flags!(Z = z; multi_polygons_have_only_rings::<Z>(&array))
-                .values()
-                .clone();
-            MultiPolygonArray::from_parts(
-                array.rows.with_validity(Some(valid)),
-                array.polygons,
-                array.rings,
-                array.coords,
-            )
-            .into_list_array()
-            .boxed()
-        }
-    })
-}
-
-/// [validated_chunk] for every chunk of `storage`.
-fn validated(storage: Series, kind: Kind, close: Option<CloseRingsKwargs>) -> PolarsResult<Series> {
+) -> PolarsResult<Series> {
+    let close = close.map(Into::into);
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| validated_chunk(chunk.as_ref(), kind, close))
+        .map(|chunk| validated_storage(chunk.as_ref(), kind, close))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: the kind and dimension stay the same, so every chunk is still the storage.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(storage.name().clone(), chunks, storage.dtype())
-    })
+    geometry_series(storage.name().clone(), geo, chunks)
 }
 
 /// Gather a list of `part`s into one geometry of `kind` per row.
@@ -283,10 +185,10 @@ fn gather(
     parts: &Series,
     kwargs: &MetadataKwargs,
     close: Option<CloseRingsKwargs>,
-    kind: Kind,
+    kind: NestedKind,
     part: Kind,
 ) -> PolarsResult<Series> {
-    let geo = gathered(parts.dtype(), kwargs, kind, part)?;
+    let geo = gathered(parts.dtype(), kwargs, kind.kind(), part)?;
     // This only changes dtype, nothing on the data.
     let storage = parts.list()?.apply_to_inner(&|part| {
         Ok(match part.dtype() {
@@ -295,10 +197,10 @@ fn gather(
         })
     })?;
 
-    Ok(validated(storage.into_series(), kind, close)?.into_extension(geo.instance()))
+    validated(&storage.into_series(), geo, kind, close)
 }
 
-/// See `linestring_from_vertices`.
+/// Implements the Python `line_string_from_vertices`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_linestring)]
 fn linestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     let vertices = &inputs[0];
@@ -310,49 +212,55 @@ fn linestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series>
             .storage()
             .clone()
             .into_extension(geo.instance())),
-        _ => gather(vertices, &kwargs, None, Kind::LineString, Kind::Point),
+        _ => gather(vertices, &kwargs, None, NestedKind::LineString, Kind::Point),
     }
 }
 
-/// See `polygons_from_rings_in_single_column`.
+/// Implements the Python `polygons_from_rings_in_single_column`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon)]
 fn polygon(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     gather(
         &inputs[0],
         &kwargs.metadata(),
         kwargs.close,
-        Kind::Polygon,
+        NestedKind::Polygon,
         Kind::LineString,
     )
 }
 
-/// See `multipoint_from_points`.
+/// Implements the Python `multi_point_from_points`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipoint)]
 fn multipoint(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     // Note that this is basically the same as linestring, but just a different [Kind].
-    gather(&inputs[0], &kwargs, None, Kind::MultiPoint, Kind::Point)
+    gather(
+        &inputs[0],
+        &kwargs,
+        None,
+        NestedKind::MultiPoint,
+        Kind::Point,
+    )
 }
 
-/// See `multilinestring_from_linestrings`.
+/// Implements the Python `multi_line_string_from_line_strings`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multilinestring)]
 fn multilinestring(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
     gather(
         &inputs[0],
         &kwargs,
         None,
-        Kind::MultiLineString,
+        NestedKind::MultiLineString,
         Kind::LineString,
     )
 }
 
-/// See `multipolygon_from_polygons`.
+/// Implements the Python `multi_polygons_from_polygons`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipolygon)]
 fn multipolygon(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     gather(
         &inputs[0],
         &kwargs.metadata(),
         kwargs.close,
-        Kind::MultiPolygon,
+        NestedKind::MultiPolygon,
         Kind::Polygon,
     )
 }
@@ -478,7 +386,7 @@ fn kernel_output_type_multipolygon_nested_coords(
 /// Interleave columns that each nest their coordinate `nesting` `List` layers
 /// deep into one `List`-of-that-depth of coordinate structs.
 ///
-/// Only the first column's offsets survive; the callers checks the rest carry the same ones.
+/// Only the first column's offsets survive; the caller checks the rest carry the same ones.
 fn interleave(columns: &[Series], nesting: u8) -> PolarsResult<Series> {
     if nesting == 0 {
         let coordinates = columns
@@ -513,11 +421,11 @@ fn zip(
     inputs: &[Series],
     kwargs: &MetadataKwargs,
     close: Option<CloseRingsKwargs>,
-    kind: Kind,
+    kind: NestedKind,
 ) -> PolarsResult<Series> {
-    let geo = zipped(&fields_of(inputs), kwargs, kind)?;
-    let storage = interleaved_columns(inputs, kind.nesting())?;
-    Ok(validated(storage, kind, close)?.into_extension(geo.instance()))
+    let geo = zipped(&fields_of(inputs), kwargs, kind.kind())?;
+    let storage = interleaved_columns(inputs, kind.kind().nesting())?;
+    validated(&storage, geo, kind, close)
 }
 
 /// The storage one coordinate column per axis zips into,
@@ -549,13 +457,13 @@ fn interleaved_columns(inputs: &[Series], nesting: u8) -> PolarsResult<Series> {
     interleave(&columns, nesting)
 }
 
-/// See `linestring_from_columns`.
+/// Implements the Python `line_string_from_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_linestring_coords)]
 fn linestring_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs, None, Kind::LineString)
+    zip(inputs, &kwargs, None, NestedKind::LineString)
 }
 
-/// See `polygons_from_coordinates`.
+/// Implements the Python `polygons_from_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon_coords)]
 fn polygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     let geo = zipped_exteriors(&fields_of(inputs), &kwargs.metadata(), Kind::Polygon)?;
@@ -563,70 +471,56 @@ fn polygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Seri
     let chunks = exteriors
         .chunks()
         .iter()
-        .map(|chunk| assembled_polygons(chunk.as_ref(), None, kwargs.close))
+        .map(|chunk| assembled_polygons(chunk.as_ref(), None, kwargs.close.map(Into::into)))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: every chunk is the storage of a polygon of `geo`'s dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(exteriors.name().clone(), chunks, &geo.dtype())
-    })
+    geometry_series(exteriors.name().clone(), geo, chunks)
 }
 
-/// See `polygons_from_nested_coordinates`.
+/// Implements the Python `polygons_from_nested_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon_nested_coords)]
 fn polygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs.metadata(), kwargs.close, Kind::Polygon)
-}
-
-/// See `multipoint_from_columns`.
-#[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipoint_coords)]
-fn multipoint_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs, None, Kind::MultiPoint)
-}
-
-/// See `multilinestring_from_columns`.
-#[polars_expr(output_type_func_with_kwargs=kernel_output_type_multilinestring_coords)]
-fn multilinestring_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs, None, Kind::MultiLineString)
-}
-
-/// `rows` of rings, as the rows of polygons of one ring each.
-fn one_ring_per_polygon(rows: &ListArray<i64>) -> ListArray<i64> {
-    let rings = rows.values().clone();
-    let lengths = std::iter::repeat_n(1, rings.len());
-    let offsets = Offsets::<i64>::try_from_lengths(lengths).expect("one per polygon");
-    let polygon_dtype = ListArray::<i64>::default_datatype(rings.dtype().clone());
-    let polygons = ListArray::new(polygon_dtype.clone(), offsets.into(), rings, None);
-    ListArray::new(
-        ListArray::<i64>::default_datatype(polygon_dtype),
-        rows.offsets().clone(),
-        polygons.boxed(),
-        rows.validity().cloned(),
+    zip(
+        inputs,
+        &kwargs.metadata(),
+        kwargs.close,
+        NestedKind::Polygon,
     )
 }
 
-/// See `multi_polygons_from_coordinates`.
+/// Implements the Python `multi_point_from_columns`.
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipoint_coords)]
+fn multipoint_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
+    zip(inputs, &kwargs, None, NestedKind::MultiPoint)
+}
+
+/// Implements the Python `multi_line_string_from_columns`.
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_multilinestring_coords)]
+fn multilinestring_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsResult<Series> {
+    zip(inputs, &kwargs, None, NestedKind::MultiLineString)
+}
+
+/// Implements the Python `multi_polygons_from_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipolygon_coords)]
 fn multipolygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     let geo = zipped_exteriors(&fields_of(inputs), &kwargs.metadata(), Kind::MultiPolygon)?;
     let exteriors = interleaved_columns(inputs, Kind::MultiLineString.nesting())?;
     let chunks = exteriors
-        .list()?
-        .downcast_iter()
-        .map(|chunk| {
-            let multi_polygons = one_ring_per_polygon(chunk);
-            validated_chunk(&multi_polygons, Kind::MultiPolygon, kwargs.close)
-        })
+        .chunks()
+        .iter()
+        .map(|chunk| assembled_multi_polygons(chunk.as_ref(), kwargs.close.map(Into::into)))
         .collect::<PolarsResult<Vec<_>>>()?;
-    // SAFETY: every chunk is the storage of a multipolygon of `geo`'s dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(exteriors.name().clone(), chunks, &geo.dtype())
-    })
+    geometry_series(exteriors.name().clone(), geo, chunks)
 }
 
-/// See `multi_polygons_from_nested_coordinates`.
+/// Implements the Python `multi_polygons_from_nested_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipolygon_nested_coords)]
 fn multipolygon_nested_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
-    zip(inputs, &kwargs.metadata(), kwargs.close, Kind::MultiPolygon)
+    zip(
+        inputs,
+        &kwargs.metadata(),
+        kwargs.close,
+        NestedKind::MultiPolygon,
+    )
 }
 
 /// The single and the multi kind of the family `kind` is in.
@@ -739,14 +633,14 @@ pub(super) fn listed_parts(
     Ok((layout.listed, layout.metadata))
 }
 
-/// [`PolygonKwargs`], plus what a null hole does.
+/// The keyword arguments of the Python `polygons_from_rings_in_separate_columns`:
+/// [`PolygonKwargs`], plus `null_parts`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SeparateRingsKwargs {
-    /// The CRS the coordinates are in, in any form PROJ accepts.
     pub crs: Option<String>,
-    /// How to close every open ring, as `close_rings` does.
     pub close: Option<CloseRingsKwargs>,
+    #[serde(with = "NullPartsDef")]
     null_parts: NullParts,
 }
 
@@ -850,138 +744,14 @@ pub(super) fn parts_storage(
     }
 }
 
-fn one_per_row(len: usize, validity: Option<&Bitmap>) -> List {
-    let lengths = std::iter::repeat_n(1, len);
-    let offsets = Offsets::try_from_lengths(lengths).expect("one per row");
-    List::from_offsets(offsets.into(), validity.cloned())
-}
-
-fn one_ring_per_row(exteriors: LineStringArray) -> PolygonArray {
-    PolygonArray::from_parts(
-        one_per_row(exteriors.rows.len(), exteriors.rows.validity()),
-        exteriors.rows.ignoring_validity().clone(),
-        exteriors.coords,
-    )
-}
-
-pub(super) fn one_point_per_row(points: PointArray) -> MultiPointArray {
-    MultiPointArray::from_parts(
-        one_per_row(points.coords.len(), points.coords.validity()),
-        points.coords.ignoring_validity().clone(),
-    )
-}
-
-pub(super) fn one_line_per_row(lines: LineStringArray) -> MultiLineStringArray {
-    MultiLineStringArray::from_parts(
-        one_per_row(lines.rows.len(), lines.rows.validity()),
-        lines.rows.ignoring_validity().clone(),
-        lines.coords,
-    )
-}
-
-pub(super) fn one_polygon_per_row(polygons: PolygonArray) -> MultiPolygonArray {
-    MultiPolygonArray::from_parts(
-        one_per_row(polygons.rows.len(), polygons.rows.validity()),
-        polygons.rows.ignoring_validity().clone(),
-        polygons.rings,
-        polygons.coords,
-    )
-}
-
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(super) enum NullParts {
-    /// The null part is left out.
+#[derive(Deserialize)]
+#[serde(remote = "NullParts", rename_all = "snake_case")]
+pub(super) enum NullPartsDef {
     Drop,
-    /// The null part makes the result null.
-    #[default]
     Null,
 }
 
-/// Combines the validity of `base` and `parts` into that of a result built out of them.
-/// A null row of `parts` only makes the result null with [NullParts::Null].
-pub(super) fn rows_validity(base: &List, parts: &List, null_parts: NullParts) -> Option<Bitmap> {
-    match null_parts {
-        NullParts::Drop => base.validity().cloned(),
-        NullParts::Null => combine_validities_and(base.validity(), parts.validity()),
-    }
-}
-
-/// Reads a chunk of linestrings as multilinestrings.
-/// `chunk` only holds a single linestring per row if `listed=false`.
-/// A linestring holding a null value makes its row null.
-/// In a list of linestrings, [NullParts::Drop] unsets it in the mask instead.
-pub(super) fn lines_per_row(
-    chunk: &dyn Array,
-    listed: bool,
-    null_parts: NullParts,
-) -> PolarsResult<MaskedParts<MultiLineStringArray>> {
-    let storage = UncheckedStorage::new(chunk)?;
-    Ok(match (listed, null_parts) {
-        (false, _) => one_line_per_row(propagate_inner_nulls_of_line_strings(storage)).into(),
-        (true, NullParts::Drop) => multi_line_strings_with_null_parts_marked(storage),
-        (true, NullParts::Null) => propagate_inner_nulls_of_multi_line_strings(storage).into(),
-    })
-}
-
-/// [lines_per_row], for points.
-pub(super) fn points_per_row(
-    chunk: &dyn Array,
-    listed: bool,
-    null_parts: NullParts,
-) -> PolarsResult<MaskedParts<MultiPointArray>> {
-    let storage = UncheckedStorage::new(chunk)?;
-    Ok(match (listed, null_parts) {
-        (false, _) => one_point_per_row(propagate_inner_nulls_of_points(storage)).into(),
-        (true, NullParts::Drop) => multi_points_with_null_parts_marked(storage),
-        (true, NullParts::Null) => propagate_inner_nulls_of_multi_points(storage).into(),
-    })
-}
-
-/// [lines_per_row], for polygons.
-pub(super) fn polygons_per_row(
-    chunk: &dyn Array,
-    listed: bool,
-    null_parts: NullParts,
-) -> PolarsResult<MaskedParts<MultiPolygonArray>> {
-    let storage = UncheckedStorage::new(chunk)?;
-    Ok(match (listed, null_parts) {
-        (false, _) => one_polygon_per_row(propagate_inner_nulls_of_polygons(storage)).into(),
-        (true, NullParts::Drop) => multi_polygons_with_null_parts_marked(storage),
-        (true, NullParts::Null) => propagate_inner_nulls_of_multi_polygons(storage).into(),
-    })
-}
-
-/// Assembles one chunk of polygons from one chunk of exterior rings and one of holes.
-/// The holes only hold a single ring per row if `listed=false`.
-/// See `polygons_from_rings_in_separate_columns` for the null values.
-fn assembled_polygons(
-    exteriors: &dyn Array,
-    holes: Option<(&dyn Array, bool, NullParts)>,
-    close: Option<CloseRingsKwargs>,
-) -> PolarsResult<Box<dyn Array>> {
-    let exteriors = one_ring_per_row(propagate_inner_nulls_of_line_strings(
-        UncheckedStorage::new(exteriors)?,
-    ));
-    let Some((holes, listed, null_parts)) = holes else {
-        // FIXME: this copies every coordinate into new buffers for nothing.
-        // `exteriors` already is a trimmed polygon of one ring per row, without a copy,
-        // so this can be `return Ok(validated_polygons(exteriors, close))`.
-        // `polygons_with_added_holes` can then take `holes` without the `Option`.
-        // This affects `polygons_from_coordinates`,
-        // and `polygons_from_rings_in_separate_columns` without holes.
-        let validity = exteriors.rows.validity().cloned();
-        let polygons = polygons_with_added_holes(&exteriors, None, validity);
-        return Ok(validated_polygons(polygons, close));
-    };
-
-    let holes = lines_per_row(holes, listed, null_parts)?;
-    let validity = rows_validity(&exteriors.rows, holes.rows(), null_parts);
-    let polygons = polygons_with_added_holes(&exteriors, Some(&holes), validity);
-    Ok(validated_polygons(polygons, close))
-}
-
-/// See `polygons_from_rings_in_separate_columns`.
+/// Implements the Python `polygons_from_rings_in_separate_columns`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_polygon_rings_in_separate_columns)]
 fn polygon_rings_in_separate_columns(
     inputs: &[Series],
@@ -989,17 +759,15 @@ fn polygon_rings_in_separate_columns(
 ) -> PolarsResult<Series> {
     let (geo, listed) = separate_rings(&fields_of(inputs), &kwargs.metadata())?;
     let exteriors = storage_of(&inputs[0])?;
+    let close = kwargs.close.map(Into::into);
     let chunk = match inputs.get(1) {
         Some(holes) => {
             let holes = parts_storage(holes, Kind::MultiLineString, geo.dim())?;
             let (exteriors, holes) = paired_rows(&exteriors, &holes, ("exteriors", "holes"))?;
             let holes = (holes.chunks()[0].as_ref(), listed, kwargs.null_parts);
-            assembled_polygons(exteriors.chunks()[0].as_ref(), Some(holes), kwargs.close)?
+            assembled_polygons(exteriors.chunks()[0].as_ref(), Some(holes), close)?
         }
-        None => assembled_polygons(exteriors.rechunk().chunks()[0].as_ref(), None, kwargs.close)?,
+        None => assembled_polygons(exteriors.rechunk().chunks()[0].as_ref(), None, close)?,
     };
-    // SAFETY: the chunk is the storage of a polygon of `geo`'s dimension.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), vec![chunk], &geo.dtype())
-    })
+    geometry_series(inputs[0].name().clone(), geo, vec![chunk])
 }

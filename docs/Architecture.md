@@ -32,10 +32,10 @@ wrapped in a `List` per level of nesting (a point has 0, a linestring 1, a polyg
 
 | What | Python | Rust |
 | - | - | - |
-| List of geometries | `GEOMETRY_DTYPES` in `datatypes/registry.py` | `Kind::ALL` in `src/geoarrow/kind.rs` |
+| List of geometries | `GEOMETRY_DTYPES` in `datatypes/registry.py` | `Kind::ALL` in `geopolars-views/src/kind.rs` |
 | Common base type | `GeoArrowType` in `datatypes/base.py` | `Geo` in `src/geoarrow/geo.rs` |
 | One geometry | `datatypes/point.py`, `polygon.py`, ... | a `Kind` variant |
-| Dimension (`xy`, `xyzm`) | `datatypes/dimension.py` | `src/geoarrow/dimension.rs` |
+| Dimension (`xy`, `xyzm`) | `datatypes/dimension.py` | `GeoDimension` in `geopolars-views/src/dimension.rs` |
 | CRS metadata | goes through `extension_metadata` (Rust) | `src/geoarrow/crs.rs` |
 
 Two things work differently on the two sides:
@@ -62,8 +62,9 @@ so, like WKB and WKT, it is not a `Kind`, and it is not accepted by most operati
 
 Rust expressions never name a concrete geometry.
 They call `geoarrow::describe(dtype)` to get a `GeoColumn` (kind and dimension),
-then either ignore it (`coords::map_coords`) or match exhaustively on `Kind`.
-That way, adding a geometry only touches `src/geoarrow/` and doesn't affect `src/expr/`.
+then either ignore it (`coords::map_coords`) or hand its `Kind` to `geopolars-core`.
+That crate matches on the `Kind` exhaustively, wraps the storage in the view of that kind,
+and calls the kernel for it.
 
 ### Extension registries
 
@@ -91,9 +92,11 @@ expr (namespaces) →  geo (functional) →  datatypes.
 ```
 
 On the Rust side, `src/expr/` mirrors `geo/` module by module (`area.rs`, `affine.rs`, `crs.rs`, ...),
-and `src/geoarrow/` is the shared glue: dtypes and dispatch.
+and `src/geoarrow/` is the shared glue: dtypes, and lining up the chunks of two geometry columns.
 `src/proj.rs` asks PROJ about a CRS.
-Reading the Arrow storage in a kernel goes through the views of `geopolars-core`.
+Picking the kernel for each kind of geometry happens in `geopolars-core`.
+The kernels that are dispatched to live in `geopolars-compute`,
+and read the Arrow storage through the views of `geopolars-views`.
 
 ## Type checker
 

@@ -1,8 +1,6 @@
-//! How far apart points are, as a [DistanceMetric] measures them.
-//! Functionality for:
-//! - distance between arrays of two points
-//! - distance between one fixed and an array of others
-//! - n*n distances (between each and all other)
+//! How far apart points are, as a [DistanceMetric] measures them,
+//! either row by row ([pairwise]) or from one fixed point ([against_one]).
+//! Implements the Python `distance`.
 //!
 //! # Const generic flags
 //!
@@ -26,8 +24,8 @@
 
 use std::convert::Infallible;
 
-use geopolars_core::output::{f64_array, f64_array_masked};
-use geopolars_core::PointArray;
+use geopolars_views::output::{f64_array, f64_array_masked};
+use geopolars_views::PointArray;
 use polars_arrow::array::PrimitiveArray;
 
 use crate::{BaseMetric, GeoComputeError, GeodesicMetric, Planar, WithHeight};

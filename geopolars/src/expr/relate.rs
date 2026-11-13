@@ -1,19 +1,17 @@
 //! The DE-9IM matrix of two geometries
-//! (see [`geopolars_compute::geos::RelatePairs`]).
+//! Implements the Python `relate`.
 
-use geopolars_compute::geos::RelatePairs;
 use polars::prelude::*;
 use polars_arrow::array::Utf8ViewArray;
 use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, GeometryPairs,
+    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, GeometryPairs,
 };
 
-/// See python
+/// The keyword arguments of the Python `relate`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RelateKwargs {
@@ -21,9 +19,6 @@ pub struct RelateKwargs {
     early_finite_check: bool,
 }
 
-/// For [`relate`]: a `String`, named after the first geometry.
-///
-/// Both can be of any kind and dimension, in the same CRS (or neither declaring one).
 fn kernel_output_type_relate(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "relate takes two geometries, got {} inputs", input_fields.len());
@@ -32,7 +27,6 @@ fn kernel_output_type_relate(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(a.name().clone(), DataType::String))
 }
 
-/// See `relate`.
 #[polars_expr(output_type_func=kernel_output_type_relate)]
 fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
@@ -53,15 +47,7 @@ fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
     let chunks = chunk_pairs
         .iter()
-        .map(|(a, b)| {
-            let (a, b) = (
-                geometry_array(a.as_ref(), a_kind)?,
-                geometry_array(b.as_ref(), b_kind)?,
-            );
-            RelatePairs::new(&a, &b, ignore, early)
-                .and_then(|pairs| pairs.to_strings())
-                .into_polars()
-        })
+        .map(|(a, b)| geopolars_core::relate(a.as_ref(), a_kind, b.as_ref(), b_kind, ignore, early))
         .collect::<PolarsResult<Vec<_>>>()?;
     Ok(StringChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
 }

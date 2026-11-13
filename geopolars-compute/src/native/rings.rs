@@ -1,8 +1,6 @@
-//! The rings of a polygon:
-//! - its exterior is its first ring, as a linestring,
-//! - its interior is the rest (its holes), as a multilinestring.
-//!
-//! A multipolygon gets a list of them, one per polygon.
+//! The rings of a polygon: its exterior (its first ring), and its interior (the rest).
+//! Implements the Python `exterior` and `interior`,
+//! and the handling of rings for `close_rings` and `add_holes`.
 //!
 //! # Const generic flags
 //!
@@ -18,8 +16,8 @@
 
 use std::ops::Range;
 
-use geopolars_core::output::list_array;
-use geopolars_core::{
+use geopolars_views::output::list_array;
+use geopolars_views::{
     same_place, LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PolygonArray,
     Untrimmed, ValidCoords, ValidList,
 };
@@ -229,17 +227,8 @@ fn closed_axis(
     closed
 }
 
-/// Closes every open ring of `rings`, so that its last vertex lies at the same place as its first.
-/// `None` if no ring changes.
-/// An empty ring is left empty.
-///
-/// A ring whose ends differ in x or y gets its first vertex repeated at its end.
-/// So does a ring whose ends differ in z, unless `snap_z=true`.
-/// If `snap_z=true`, its last vertex is moved onto the first one's z instead.
-/// If `snap_m=true`, a ring whose ends differ in m gets its last vertex moved onto the first one's m,
-/// unless its first vertex is repeated anyway.
-/// If `snap_m=false`, m is not looked at.
-/// A flag for an axis `coords` does not have does nothing.
+/// Closes every open ring of `rings`, or gives `None` if no ring changes.
+/// See the Python `close_rings` for how a ring is closed, and for `snap_z` and `snap_m`.
 pub fn close_open_rings<const Z: bool>(
     rings: &ValidList,
     coords: &ValidCoords,
@@ -287,8 +276,8 @@ pub fn polygons_with_added_holes(
     PolygonArray::from_parts(rows, rings, coords)
 }
 
-/// Marks which polygons can take the holes on the same row of `holes`.
-/// A polygon with an empty exterior cannot take a hole with vertices.
+/// Marks which polygons can take the holes on the same row of `holes`,
+/// as `empty_exterior` of the Python `add_holes` describes.
 /// Only the holes set in the mask of `holes` count towards this.
 pub fn have_room_for_holes(
     polygons: &PolygonArray,

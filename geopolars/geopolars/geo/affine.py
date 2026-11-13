@@ -43,16 +43,7 @@ _IDENTITY = [
 
 def _affine(column: pl.Expr, matrix: Sequence[float]) -> pl.Expr:
     """Transform every position (`x`, `y`, `z`) of a geometry by an affine matrix,
-    given row by row as the twelve numbers of
-
-    ```text
-    | x' |   | a  b  c  xoff |   | x |
-    | y' | = | d  e  f  yoff | · | y |
-    | z' |   | g  h  i  zoff |   | z |
-                                 | 1 |
-    ```
-
-    A geometry without a `z` reads it as 0 and has no `z'`.
+    given row by row as twelve numbers (see `AffineMatrix` in geopolars-compute).
     """
     return register_plugin_function(
         plugin_path=LIB,

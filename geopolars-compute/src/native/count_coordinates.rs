@@ -1,5 +1,5 @@
 //! How many coordinates a geometry is made of.
-//! See `count_coordinates` in Python for the rules.
+//! Implements the Python `count_coordinates`.
 //!
 //! # Const generic flags
 //!
@@ -11,7 +11,7 @@
 
 use std::ops::Range;
 
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, ScalarPolygon, Untrimmed, ValidCoords,
 };

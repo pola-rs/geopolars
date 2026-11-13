@@ -1,12 +1,12 @@
-//! Clamping the coordinates outside the CRS's bounds, for `fix_out_of_bounds`.
-//! See `fix_out_of_bounds` in Python for the rules.
+//! Clamping the coordinates outside the CRS's bounds.
+//! Implements the Python `fix_out_of_bounds` with `action="clamp"`.
 //!
 //! Every kernel only rewrites x and y, and keeps every offset.
 //! The other actions select the coordinates outside the bounds
 //! ([CoordinateSelection::bounds](super::CoordinateSelection::bounds)),
 //! then act on them as in [super::selected_coords](mod@super::selected_coords).
 
-use geopolars_core::{
+use geopolars_views::{
     Coords, LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, ValidCoords,
 };
@@ -35,7 +35,7 @@ impl OutOfBoundsAction {
     }
 }
 
-/// `coords`, with x and y clamped into `bounds`. NaN stays NaN; z and m are shared.
+/// `coords`, with x and y clamped into `bounds`, sharing z and m.
 fn clamped(coords: &ValidCoords, bounds: &Bounds) -> ValidCoords {
     let [xmin, ymin, xmax, ymax] = *bounds;
     let clamp = |axis: &[f64], min: f64, max: f64| -> Vec<f64> {

@@ -1,19 +1,18 @@
-//! Whether two geometries are topologically equal
-//! (see [`geopolars_compute::geos::topologically_equal`]).
+//! Whether two geometries are topologically equal, forwarded to GEOS.
+//! Implements the Python `is_topologically_equal`.
 
-use geopolars_compute::geos::topologically_equal;
+use geopolars_core::are_topologically_equal;
 use polars::prelude::*;
 use polars_arrow::array::BooleanArray;
 use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::IntoPolarsResult;
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_array, kind_of, single_chunk_masked_pairs, GeometryPairs,
+    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, GeometryPairs,
 };
 
-/// See python
+/// The keyword arguments of the Python `is_topologically_equal`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct IsTopologicallyEqualKwargs {
@@ -21,9 +20,6 @@ pub struct IsTopologicallyEqualKwargs {
     early_finite_check: bool,
 }
 
-/// For [`is_topologically_equal`]: a `bool`, named after the first geometry.
-///
-/// Both can be of any kind and dimension, in the same CRS (or neither declaring one).
 fn kernel_output_type_is_topologically_equal(input_fields: &[Field]) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "is_topologically_equal takes two geometries, got {} inputs", input_fields.len());
@@ -32,7 +28,6 @@ fn kernel_output_type_is_topologically_equal(input_fields: &[Field]) -> PolarsRe
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-/// See `is_topologically_equal`.
 #[polars_expr(output_type_func=kernel_output_type_is_topologically_equal)]
 fn is_topologically_equal(
     inputs: &[Series],
@@ -55,11 +50,7 @@ fn is_topologically_equal(
     let chunks = chunk_pairs
         .iter()
         .map(|(a, b)| {
-            let (a, b) = (
-                geometry_array(a.as_ref(), a_kind)?,
-                geometry_array(b.as_ref(), b_kind)?,
-            );
-            topologically_equal(&a, &b, ignore, early).into_polars()
+            are_topologically_equal(a.as_ref(), a_kind, b.as_ref(), b_kind, ignore, early)
         })
         .collect::<PolarsResult<Vec<_>>>()?;
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())

@@ -62,7 +62,7 @@ pub struct LineStringArray {
 }
 
 impl LineStringArray {
-    /// The view of `rows`, trimmed (see the README on trimming).
+    /// The view of `rows`, trimmed (see "Trimming" in docs/View Types.md).
     pub fn new(rows: &ListArray<i64>) -> PolarsResult<Self> {
         Ok(Self::new_untrimmed(rows)?.trimmed())
     }
@@ -75,7 +75,7 @@ impl LineStringArray {
         }))
     }
 
-    /// The view of these parts, which have to be trimmed (see the README on trimming).
+    /// The view of these parts, which have to be trimmed (see "Trimming" in docs/View Types.md).
     pub fn from_parts(rows: List, coords: ValidCoords) -> Self {
         let array = Self { rows, coords };
         debug_assert!(array.is_trimmed(), "the parts of a view have to be trimmed");
@@ -83,7 +83,7 @@ impl LineStringArray {
     }
 
     /// Whether every list and coordinate this holds belongs to one of its rows.
-    /// A chunk sliced from a larger array is not: see the README on trimming.
+    /// A chunk sliced from a larger array is not: see "Trimming" in docs/View Types.md.
     pub(crate) fn is_trimmed(&self) -> bool {
         self.rows
             .ignoring_validity()

@@ -1,9 +1,12 @@
 //! The area a polygon encloses, as an [AreaMetric] measures it.
+//! Implements the Python `area_planar` and `area_geodesic`.
 
 use std::convert::Infallible;
 
 use geographiclib_rs::{PolygonArea, Winding};
-use geopolars_core::{MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed};
+use geopolars_views::{
+    MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed,
+};
 use polars_arrow::array::PrimitiveArray;
 
 use crate::per_row::per_row;
@@ -65,8 +68,6 @@ impl AreaMetric for GeodesicMetric {
     }
 }
 
-/// The area of `polygon`: its exterior ring, less the holes inside it.
-/// No rings at all is an empty polygon, which encloses nothing.
 #[inline(always)]
 fn polygon_area<M: AreaMetric>(metric: &M, polygon: &ScalarPolygon) -> Result<f64, M::Error> {
     let mut rings = polygon.rings();
@@ -88,7 +89,7 @@ pub fn polygon_areas<M: AreaMetric>(
     per_row(array.rows(), |i| polygon_area(metric, &array.get(i)))
 }
 
-/// The area of every multipolygon of a chunk, as the sum of its parts.
+/// The area of every multipolygon of a chunk.
 pub fn multi_polygon_areas<M: AreaMetric>(
     metric: &M,
     array: &Untrimmed<MultiPolygonArray>,

@@ -83,6 +83,7 @@ def area_planar(
     The area is computed with the shoelace formula, in the unit of the coordinates squared.
     Only a polygon actually encloses something.
     This also considers its holes.
+    Which way a ring winds does not matter: a hole is always subtracted from the exterior.
     A multipolygon gets the sum of the areas of its polygons.
     Only the two-dimensional part is considered: 'z' and 'm' are ignored.
     For a 3D polygon that gives the area of its footprint

@@ -1,0 +1,11 @@
+[package]
+name = "geopolars-views"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+polars-core = { workspace = true, features = ["dtype-struct"] }
+polars-arrow = { workspace = true }
+polars-buffer = { workspace = true }
+geo-traits = "0.3.0"

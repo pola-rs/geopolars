@@ -1,9 +1,8 @@
-//! The bounding box of a geometry: the minimum and maximum of every axis.
-//! See `bounds` in Python for the rules.
+//! The bounding box of a geometry,
+//! as an [Extent] over its coordinates that [BoxOptions::finish] turns into a box.
+//! Implements the Python `bounds` and `total_bounds`.
 //!
-//! Only dependent on the points.
-//! Done as an [Extent] over that run, turned into a box by [BoxOptions::finish].
-//! We still expose nice wrappers for all data types for consistency.
+//! Only the coordinates matter, but every kind still gets its own wrapper, for consistency.
 //!
 //! # Const generic flags
 //!
@@ -26,8 +25,8 @@
 use std::convert::Infallible;
 use std::ops::Range;
 
-use geopolars_core::output::{box_struct, list_array};
-use geopolars_core::{
+use geopolars_views::output::{box_struct, list_array};
+use geopolars_views::{
     GeoDimension, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PointArray, PolygonArray, Untrimmed, ValidCoords,
 };
@@ -81,7 +80,7 @@ impl<const Z: bool, const M: bool> Default for Extent<Z, M> {
     }
 }
 
-/// How an [Extent] becomes a box. See `bounds` in Python.
+/// How an [Extent] becomes a box, as the Python `bounds` describes.
 #[derive(Clone, Copy, Debug)]
 pub struct BoxOptions {
     pub margin_x: f64,
@@ -92,9 +91,8 @@ pub struct BoxOptions {
 }
 
 impl BoxOptions {
-    /// The box around `extent`: widened by the margins,
-    /// with x brought back around the globe if there is a `turn`.
-    /// An empty range comes out as `inf` to `-inf`.
+    /// Turns `extent` into a box.
+    /// It is widened by the margins, with x brought back around the globe if there is a `turn`.
     #[inline(always)]
     pub fn finish<const Z: bool, const M: bool>(&self, extent: &Extent<Z, M>) -> Extent<Z, M> {
         let mut bounds = *extent;
@@ -119,9 +117,7 @@ impl BoxOptions {
     }
 }
 
-/// A longitude range brought back to start in `[-turn / 2, turn / 2)`.
-/// A range that went past the antimeridian ends up with `low > high`,
-/// the way a box crosses it. One spanning a full turn or more covers the globe.
+/// Brings the longitude range `low..high` back to start in `[-turn / 2, turn / 2)`
 #[inline(always)]
 fn around_the_globe(low: f64, high: f64, turn: f64) -> (f64, f64) {
     let start = -turn / 2.0;

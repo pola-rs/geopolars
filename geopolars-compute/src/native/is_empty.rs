@@ -1,19 +1,18 @@
 //! Whether a geometry is empty.
-//! See `is_empty` in Python for the rules.
+//! Implements the Python `is_empty`.
 //!
 //! # Const generic flags
 //!
 //! ## `CHECK_NESTED`
 //!
-//! Every kernel but the one of points is generic over `CHECK_NESTED`.
-//! If `CHECK_NESTED=false`, a geometry is empty when it has no vertices.
-//! This only reads the offsets.
-//! If `CHECK_NESTED=true`, it is also empty when every vertex is the [empty point](is_empty_point).
-//! This reads every vertex, so it is much more expensive.
+//! Every kernel but the one of points is generic over `CHECK_NESTED`, the Python `check_nested`.
+//! With `CHECK_NESTED=false`, a kernel only reads the offsets.
+//! With `CHECK_NESTED=true`, it also reads every vertex,
+//! to see whether it is the [empty point](is_empty_point).
 
 use std::ops::Range;
 
-use geopolars_core::{
+use geopolars_views::{
     LineStringArray, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, Untrimmed, ValidCoords,
 };

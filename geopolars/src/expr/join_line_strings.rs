@@ -1,32 +1,25 @@
-//! Joining a list of linestrings, or the parts of a multilinestring, into one linestring per row,
-//! or with `gaps="split"` into one multilinestring split at each gap,
-//! through `geopolars_compute::native::multi_line_strings_joined`
-//! and `geopolars_compute::native::multi_line_strings_split_at_gaps`.
-//! See `join_line_strings` in Python for the rules.
+//! Joining the linestrings of each row into one.
+//! Implements the Python `join_line_strings`.
 
-use geopolars_compute::inner_nulls::propagate_inner_nulls_of_multi_line_strings;
-use geopolars_compute::native::{
-    multi_line_strings_joined, multi_line_strings_split_at_gaps, Coincidence, Gaps,
-};
-use geopolars_core::UncheckedStorage;
+use geopolars_compute::native::Coincidence;
+use geopolars_core::JoinGaps;
+use geopolars_views::Kind;
 use polars::prelude::*;
-use polars_arrow::array::Array;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::construct::storage_of;
-use crate::geoarrow::{describe, Geo, Kind};
+use crate::geoarrow::{describe, geometry_series, Geo};
 
-/// `gaps` of `join_line_strings`.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum GapsKwarg {
+#[derive(Deserialize)]
+#[serde(remote = "JoinGaps", rename_all = "snake_case")]
+enum JoinGapsDef {
     Null,
     Bridge,
     Split,
 }
 
-/// See python
+/// The keyword arguments of the Python `join_line_strings`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JoinLineStringsKwargs {
@@ -34,7 +27,8 @@ pub struct JoinLineStringsKwargs {
     rel_tol: Option<f64>,
     unique_z: bool,
     unique_m: bool,
-    gaps: GapsKwarg,
+    #[serde(with = "JoinGapsDef")]
+    gaps: JoinGaps,
     drop_repeated_joins: bool,
 }
 
@@ -54,8 +48,8 @@ fn joined_type(dtype: &DataType, kwargs: &JoinLineStringsKwargs) -> PolarsResult
         );
     };
     let kind = match kwargs.gaps {
-        GapsKwarg::Split => Kind::MultiLineString,
-        GapsKwarg::Null | GapsKwarg::Bridge => Kind::LineString,
+        JoinGaps::Split => Kind::MultiLineString,
+        JoinGaps::Null | JoinGaps::Bridge => Kind::LineString,
     };
     Ok(Geo::new(kind, parts.dim, parts.metadata.clone()))
 }
@@ -68,39 +62,23 @@ fn kernel_output_type_join_line_strings(
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-/// [`join_line_strings`] for one chunk of the input's storage.
-fn chunk_join_line_strings(
-    chunk: &dyn Array,
-    kwargs: &JoinLineStringsKwargs,
-) -> PolarsResult<Box<dyn Array>> {
-    let array = propagate_inner_nulls_of_multi_line_strings(UncheckedStorage::new(chunk)?);
-    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol);
-    let (unique_z, unique_m, drop) = (kwargs.unique_z, kwargs.unique_m, kwargs.drop_repeated_joins);
-    let joined =
-        |gaps| multi_line_strings_joined(&array, coincidence, unique_z, unique_m, gaps, drop);
-    Ok(match kwargs.gaps {
-        GapsKwarg::Null => joined(Gaps::Null).into_list_array().boxed(),
-        GapsKwarg::Bridge => joined(Gaps::Bridge).into_list_array().boxed(),
-        GapsKwarg::Split => {
-            multi_line_strings_split_at_gaps(&array, coincidence, unique_z, unique_m, drop)
-                .into_list_array()
-                .boxed()
-        }
-    })
-}
-
-/// See `join_line_strings` in Python.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_join_line_strings)]
 fn join_line_strings(inputs: &[Series], kwargs: JoinLineStringsKwargs) -> PolarsResult<Series> {
     let geo = joined_type(inputs[0].dtype(), &kwargs)?;
+    let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol);
     let chunks = storage_of(&inputs[0])?
         .chunks()
         .iter()
-        .map(|chunk| chunk_join_line_strings(chunk.as_ref(), &kwargs))
+        .map(|chunk| {
+            geopolars_core::join_line_strings(
+                chunk.as_ref(),
+                coincidence,
+                kwargs.unique_z,
+                kwargs.unique_m,
+                kwargs.gaps,
+                kwargs.drop_repeated_joins,
+            )
+        })
         .collect::<PolarsResult<_>>()?;
-    // SAFETY: `joined_type` and `chunk_join_line_strings` both pick the kind from `kwargs.gaps`,
-    // and the kernels keep the input's coordinates, so each chunk is the storage of `geo`.
-    Ok(unsafe {
-        Series::from_chunks_and_dtype_unchecked(inputs[0].name().clone(), chunks, &geo.dtype())
-    })
+    geometry_series(inputs[0].name().clone(), geo, chunks)
 }

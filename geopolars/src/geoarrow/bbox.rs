@@ -6,13 +6,13 @@ use std::borrow::Cow;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
+use geopolars_views::GeoDimension;
 use polars_core::datatypes::extension::{
     ExtensionTypeFactory, ExtensionTypeImpl, ExtensionTypeInstance,
 };
 use polars_core::prelude::DataType;
 
 use super::crs::ExtensionMetadata;
-use super::GeoDimension;
 
 /// The `ARROW:extension:name` a box is registered under.
 /// The Python side must spell the same name.
@@ -21,7 +21,7 @@ pub const NAME: &str = "geoarrow.box";
 /// A `geoarrow.box` column's type.
 ///
 /// Its storage is a flat struct of bounds rather than nested coordinates,
-/// so it is deliberately not a [`Kind`](super::Kind):
+/// so it is deliberately not a [`Kind`](geopolars_views::Kind):
 /// [`describe`](super::describe) refuses it, and so does every expression.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GeoBox {
