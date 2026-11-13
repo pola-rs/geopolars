@@ -4,7 +4,7 @@
 
 use geopolars_compute::native::{Bounds, CoordinateSelection, NonFinite};
 use geopolars_compute::ogc_validity::{MultiPolygonTopologyChecks, PolygonTopologyChecks};
-use geopolars_core::Validity;
+use geopolars_core::{are_valid, Validity};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
@@ -66,16 +66,17 @@ impl IsValidOgcKwargs {
     }
 }
 
-fn are_valid(
+fn are_valid_per_chunk(
     geometries: &Series,
     check_null_coordinates: bool,
     validity: &Validity,
 ) -> PolarsResult<BooleanChunked> {
     let kind = describe(geometries.dtype())?.kind;
     let storage = geometries.ext()?.storage();
-    let chunks = storage.chunks().iter().map(|chunk| {
-        geopolars_core::are_valid(chunk.as_ref(), kind, check_null_coordinates, validity)
-    });
+    let chunks = storage
+        .chunks()
+        .iter()
+        .map(|chunk| are_valid(chunk.as_ref(), kind, check_null_coordinates, validity));
     BooleanChunked::try_from_chunk_iter(geometries.name().clone(), chunks)
 }
 
@@ -93,7 +94,7 @@ fn are_valid_geoarrow(
         non_finite: kwargs.check_finite_coordinates.then_some(non_finite),
         bounds: kwargs.bounds,
     };
-    are_valid(
+    are_valid_per_chunk(
         geometries,
         kwargs.check_null_coordinates,
         &Validity::GeoArrow(selection),
@@ -105,7 +106,7 @@ fn are_valid_ogc(geometries: &Series, kwargs: &IsValidOgcKwargs) -> PolarsResult
         bounds: kwargs.bounds,
         topology: kwargs.topology(),
     };
-    are_valid(geometries, kwargs.check_null_coordinates, &validity)
+    are_valid_per_chunk(geometries, kwargs.check_null_coordinates, &validity)
 }
 
 /// For [`is_valid_geoarrow`] and [`is_valid_ogc`]: a `bool` per geometry.
