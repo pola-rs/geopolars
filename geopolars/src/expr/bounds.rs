@@ -1,12 +1,8 @@
 //! The bounding box of a geometry.
 
-use geopolars_compute::native::{box_array, BoxOptions, Extent};
-use geopolars_compute::with_const_flags;
-use geopolars_core::column_extent;
-use geopolars_views::{GeoDimension, Kind};
+use geopolars_compute::native::BoxOptions;
+use geopolars_views::Kind;
 use polars::prelude::*;
-use polars_arrow::array::Array;
-use polars_arrow::bitmap::Bitmap;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -89,26 +85,6 @@ fn kernel_output_type_total_bounds(input_fields: &[Field]) -> PolarsResult<Field
     Ok(Field::new(field.name().clone(), dtype))
 }
 
-/// The box around every chunk of `storage`, as a column of one row.
-fn total_box<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
-    storage: &Series,
-    kind: Kind,
-    dim: GeoDimension,
-    options: &BoxOptions,
-) -> PolarsResult<Box<dyn Array>> {
-    let mut total = Some(Extent::<Z, M>::EMPTY);
-    for chunk in storage.chunks() {
-        let extent = column_extent::<Z, M, IGNORE_NULLS>(chunk.as_ref(), kind)?;
-        total = total.zip(extent).map(|(mut total, extent)| {
-            total.merge(&extent);
-            total
-        });
-    }
-    let validity = total.is_none().then(|| Bitmap::new_zeroed(1));
-    let total = options.finish(&total.unwrap_or(Extent::EMPTY));
-    Ok(box_array(dim, &[total], validity).boxed())
-}
-
 /// See python `total_bounds`.
 #[polars_expr(output_type_func=kernel_output_type_total_bounds)]
 fn total_bounds(inputs: &[Series], kwargs: TotalBoundsKwargs) -> PolarsResult<Series> {
@@ -126,10 +102,8 @@ fn total_bounds(inputs: &[Series], kwargs: TotalBoundsKwargs) -> PolarsResult<Se
         turn: kwargs.turn,
     };
     let storage = inputs[0].ext()?.storage();
-    let chunk = with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m(), IGNORE_NULLS = kwargs.ignore_nulls;
-        total_box::<Z, M, IGNORE_NULLS>(storage, kind, dim, &options)
-    )?;
+    let chunk =
+        geopolars_core::total_bounds(storage.chunks(), kind, dim, kwargs.ignore_nulls, &options)?;
     // SAFETY: the chunk is the storage of `dtype`.
     Ok(unsafe { Series::from_chunks_and_dtype_unchecked(name, vec![chunk], &dtype) })
 }
