@@ -1,7 +1,7 @@
 //! The centroid of a linestring or polygon, or their multi-variants, in one pass over the storage.
 //! Implements the Python `centroid`, which documents how every kind is weighted.
-//! A polygon uses the shoelace formula.
-//! A multi-geometry's running sum just goes on over its parts.
+//! - polygon uses the shoelace formula.
+//! - multi-geometry's running sum just goes on over its parts.
 //!
 //! # Const generic flags
 //!

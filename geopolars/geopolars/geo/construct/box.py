@@ -37,6 +37,7 @@ def box(
 
     The bounds are taken as given: `xmin > xmax` is a box that crosses the antimeridian,
     and a range from `inf` to `-inf` is empty.
+    A null bound makes the whole box null.
 
     ```python
     df.select(geo.box("west", "south", "east", "north", crs="EPSG:4326"))

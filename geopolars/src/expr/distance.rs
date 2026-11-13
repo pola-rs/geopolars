@@ -32,6 +32,17 @@ pub fn geodesic_metric(crs: &str) -> PolarsResult<Rc<GeodesicMetric>> {
     METRICS.with(|metrics| metrics.get_or_build(crs, || build(crs)))
 }
 
+/// The [`geodesic_metric`] for the CRS a geometry `field` declares.
+/// A field that declares no CRS is refused, as there is no ellipsoid to measure on.
+pub(crate) fn geodesic_metric_of(field: &Field) -> PolarsResult<Rc<GeodesicMetric>> {
+    let geo = describe(field.dtype())?;
+    polars_ensure!(
+        geo.metadata.declares_crs(),
+        SchemaMismatch: "the geometry declares no CRS, so there is no ellipsoid to measure on"
+    );
+    geodesic_metric(geo.metadata.crs()?)
+}
+
 fn build(crs: &str) -> PolarsResult<GeodesicMetric> {
     let geodetic = GeodeticCrs::of(crs)?;
     let to_lonlat = Proj::new_known_crs(crs, &geodetic.definition, None).map_err(

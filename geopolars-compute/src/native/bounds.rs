@@ -91,8 +91,8 @@ pub struct BoxOptions {
 }
 
 impl BoxOptions {
-    /// Turns `extent` into a box:
-    /// widened by the margins, with x brought back around the globe if there is a `turn`.
+    /// Turns `extent` into a box.
+    /// It is widened by the margins, with x brought back around the globe if there is a `turn`.
     #[inline(always)]
     pub fn finish<const Z: bool, const M: bool>(&self, extent: &Extent<Z, M>) -> Extent<Z, M> {
         let mut bounds = *extent;
@@ -117,8 +117,7 @@ impl BoxOptions {
     }
 }
 
-/// Brings the longitude range `low..high` back to start in `[-turn / 2, turn / 2)`,
-/// as the Python `bounds` describes.
+/// Brings the longitude range `low..high` back to start in `[-turn / 2, turn / 2)`
 #[inline(always)]
 fn around_the_globe(low: f64, high: f64, turn: f64) -> (f64, f64) {
     let start = -turn / 2.0;

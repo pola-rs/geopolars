@@ -1,7 +1,8 @@
 //! GeoArrow geometries are not implemented as concrete rust types,
 //! but as enums ([Kind]) so that dispatching follows the way Polars does it.
 
-/// A GeoArrow native geometry type, apart from its [`GeoDimension`](crate::GeoDimension).
+/// A GeoArrow native geometry type,
+/// separated from its [`GeoDimension`](crate::GeoDimension).
 /// Used for dispatching.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {

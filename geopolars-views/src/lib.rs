@@ -1,7 +1,5 @@
 //! Views over the Polars storage of GeoArrow geometries,
 //! and the arrays kernels build their output in.
-//!
-//! See the README.
 
 mod coords;
 mod decode;
