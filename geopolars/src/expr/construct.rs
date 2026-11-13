@@ -3,7 +3,6 @@
 use std::sync::Arc;
 
 use polars::prelude::*;
-use polars_arrow::array::ListArray;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -12,9 +11,10 @@ use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
 use crate::geoarrow::{
     coord, describe, ensure_same_crs_unless_bare, geometry_series, Geo, GeoDimension,
 };
-use geopolars_core::{assembled_polygons, validated_storage, NestedKind, NullParts};
+use geopolars_core::{
+    assembled_multi_polygons, assembled_polygons, validated_storage, NestedKind, NullParts,
+};
 use geopolars_views::Kind;
-use polars_arrow::offset::Offsets;
 
 /// The keyword arguments of the constructors that build polygons:
 /// [`MetadataKwargs`], plus whether and how to close open rings.
@@ -503,37 +503,15 @@ fn multilinestring_coords(inputs: &[Series], kwargs: MetadataKwargs) -> PolarsRe
     zip(inputs, &kwargs, None, NestedKind::MultiLineString)
 }
 
-/// `rows` of rings, as the rows of polygons of one ring each.
-fn one_ring_per_polygon(rows: &ListArray<i64>) -> ListArray<i64> {
-    let rings = rows.values().clone();
-    let lengths = std::iter::repeat_n(1, rings.len());
-    let offsets = Offsets::<i64>::try_from_lengths(lengths).expect("one per polygon");
-    let polygon_dtype = ListArray::<i64>::default_datatype(rings.dtype().clone());
-    let polygons = ListArray::new(polygon_dtype.clone(), offsets.into(), rings, None);
-    ListArray::new(
-        ListArray::<i64>::default_datatype(polygon_dtype),
-        rows.offsets().clone(),
-        polygons.boxed(),
-        rows.validity().cloned(),
-    )
-}
-
 /// See `multi_polygons_from_coordinates`.
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_multipolygon_coords)]
 fn multipolygon_coords(inputs: &[Series], kwargs: PolygonKwargs) -> PolarsResult<Series> {
     let geo = zipped_exteriors(&fields_of(inputs), &kwargs.metadata(), Kind::MultiPolygon)?;
     let exteriors = interleaved_columns(inputs, Kind::MultiLineString.nesting())?;
     let chunks = exteriors
-        .list()?
-        .downcast_iter()
-        .map(|chunk| {
-            let multi_polygons = one_ring_per_polygon(chunk);
-            validated_storage(
-                &multi_polygons,
-                NestedKind::MultiPolygon,
-                kwargs.close.map(Into::into),
-            )
-        })
+        .chunks()
+        .iter()
+        .map(|chunk| assembled_multi_polygons(chunk.as_ref(), kwargs.close.map(Into::into)))
         .collect::<PolarsResult<Vec<_>>>()?;
     geometry_series(exteriors.name().clone(), geo, chunks)
 }

@@ -52,7 +52,7 @@ pub use bounds::{bounds, total_bounds};
 pub use buffer::buffers;
 pub use centroid::centroids;
 pub use close_rings::close_rings;
-pub use construct::{assembled_polygons, validated_storage};
+pub use construct::{assembled_multi_polygons, assembled_polygons, validated_storage};
 pub use convex_hull::convex_hulls;
 pub use count_coordinates::coordinate_counts;
 pub use crs::reproject;

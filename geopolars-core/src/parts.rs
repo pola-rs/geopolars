@@ -5,7 +5,9 @@ use geopolars_compute::inner_nulls::{
     propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_points,
     propagate_inner_nulls_of_polygons, MaskedParts,
 };
-use geopolars_compute::native::{close_open_rings, polygons_have_only_rings};
+use geopolars_compute::native::{
+    close_open_rings, multi_polygons_have_only_rings, polygons_have_only_rings,
+};
 use geopolars_compute::with_const_flags;
 use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
@@ -70,6 +72,29 @@ pub(crate) fn validated_polygons(
     )
 }
 
+/// See [validated_polygons].
+pub(crate) fn validated_multi_polygons(
+    mut array: MultiPolygonArray,
+    close: Option<CloseRings>,
+) -> MultiPolygonArray {
+    if let Some((rings, coords)) =
+        close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
+    {
+        array = MultiPolygonArray::from_parts(array.rows, array.polygons, rings, coords);
+    }
+    // A null row is `false` in the values too.
+    let z = array.coords.dim().has_z();
+    let valid = with_const_flags!(Z = z; multi_polygons_have_only_rings::<Z>(&array))
+        .values()
+        .clone();
+    MultiPolygonArray::from_parts(
+        array.rows.with_validity(Some(valid)),
+        array.polygons,
+        array.rings,
+        array.coords,
+    )
+}
+
 fn one_per_row(len: usize, validity: Option<&Bitmap>) -> List {
     let lengths = std::iter::repeat_n(1, len);
     let offsets = Offsets::try_from_lengths(lengths).expect("one per row");
@@ -80,6 +105,17 @@ pub(crate) fn one_ring_per_row(exteriors: LineStringArray) -> PolygonArray {
     PolygonArray::from_parts(
         one_per_row(exteriors.rows.len(), exteriors.rows.validity()),
         exteriors.rows.ignoring_validity().clone(),
+        exteriors.coords,
+    )
+}
+
+pub(crate) fn one_ring_per_polygon(exteriors: MultiLineStringArray) -> MultiPolygonArray {
+    MultiPolygonArray::from_parts(
+        exteriors.rows,
+        one_per_row(exteriors.lines.len(), None)
+            .ignoring_validity()
+            .clone(),
+        exteriors.lines,
         exteriors.coords,
     )
 }

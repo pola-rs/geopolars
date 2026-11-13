@@ -3,15 +3,14 @@ use geopolars_compute::inner_nulls::{
     propagate_inner_nulls_of_multi_points, propagate_inner_nulls_of_multi_polygons,
     propagate_inner_nulls_of_polygons,
 };
-use geopolars_compute::native::{multi_polygons_have_only_rings, polygons_with_added_holes};
-use geopolars_compute::with_const_flags;
-use geopolars_views::{GeometryArray, MultiPolygonArray, UncheckedStorage};
+use geopolars_compute::native::polygons_with_added_holes;
+use geopolars_views::{GeometryArray, UncheckedStorage};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
 
 use crate::parts::{
-    closed_rings, lines_per_row, one_ring_per_row, rows_validity, validated_polygons, CloseRings,
-    NullParts,
+    lines_per_row, one_ring_per_polygon, one_ring_per_row, rows_validity, validated_multi_polygons,
+    validated_polygons, CloseRings, NullParts,
 };
 use crate::NestedKind;
 
@@ -39,25 +38,10 @@ pub fn validated_storage(
             propagate_inner_nulls_of_polygons(storage),
             close,
         )),
-        NestedKind::MultiPolygon => {
-            let mut array = propagate_inner_nulls_of_multi_polygons(storage);
-            if let Some((rings, coords)) =
-                close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
-            {
-                array = MultiPolygonArray::from_parts(array.rows, array.polygons, rings, coords);
-            }
-            // A null row is `false` in the values too.
-            let z = array.coords.dim().has_z();
-            let valid = with_const_flags!(Z = z; multi_polygons_have_only_rings::<Z>(&array))
-                .values()
-                .clone();
-            GeometryArray::MultiPolygon(MultiPolygonArray::from_parts(
-                array.rows.with_validity(Some(valid)),
-                array.polygons,
-                array.rings,
-                array.coords,
-            ))
-        }
+        NestedKind::MultiPolygon => GeometryArray::MultiPolygon(validated_multi_polygons(
+            propagate_inner_nulls_of_multi_polygons(storage),
+            close,
+        )),
     })
 }
 
@@ -89,4 +73,19 @@ pub fn assembled_polygons(
     let validity = rows_validity(&exteriors.rows, holes.rows(), null_parts);
     let polygons = polygons_with_added_holes(&exteriors, Some(&holes), validity);
     Ok(GeometryArray::Polygon(validated_polygons(polygons, close)))
+}
+
+/// Assembles one chunk of multipolygons from one chunk of rows of exterior rings,
+/// with a polygon per ring.
+/// Implements the Python `multi_polygons_from_coordinates`.
+pub fn assembled_multi_polygons(
+    exteriors: &dyn Array,
+    close: Option<CloseRings>,
+) -> PolarsResult<GeometryArray> {
+    let exteriors = one_ring_per_polygon(propagate_inner_nulls_of_multi_line_strings(
+        UncheckedStorage::new(exteriors)?,
+    ));
+    Ok(GeometryArray::MultiPolygon(validated_multi_polygons(
+        exteriors, close,
+    )))
 }
