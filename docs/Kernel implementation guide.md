@@ -34,6 +34,13 @@ Prefer working directly on the array data.
 For nested types, we'd have to start saving the offsets and nestings, which is all extra overhead.
 That way we only need to have helpers on one side too :)
 
+## Use view types
+
+Write kernels to take in view types, and output view types,
+rather than using type-erased ones like `Box<dyn Array>`.
+This makes it clear what type of data the kernel expects,
+which functions both in documenting the code as well as reducing the chance to introduce bugs.
+
 ## Error handling
 
 How to handle errors depends on where they are raised.
