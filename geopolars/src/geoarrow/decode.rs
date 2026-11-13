@@ -3,12 +3,12 @@
 
 use std::sync::Arc;
 
-use geopolars_views::Kind;
+use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
 use serde::Deserialize;
 
 use super::crs::{ExtensionMetadata, MetadataKwargs};
-use super::{Geo, GeoDimension};
+use super::Geo;
 
 /// The geometry an encoding is decoded into.
 /// Mirrors what `from_wkb` / `from_wkt` pass on the Python side.

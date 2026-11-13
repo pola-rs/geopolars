@@ -3,14 +3,14 @@
 
 use geopolars_compute::geos::Overlay;
 use geopolars_core::OverlayOptions;
-use geopolars_views::Kind;
+use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::geoarrow::{
     describe, ensure_same_crs, geometry_series, kind_of, single_chunk_masked_pairs, Geo, GeoColumn,
-    GeoDimension, GeometryPairs,
+    GeometryPairs,
 };
 
 /// The topological dimension of an input, or of the parts an intersection keeps.

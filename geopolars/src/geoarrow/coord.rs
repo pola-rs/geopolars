@@ -2,9 +2,8 @@
 //! This module contains functionality for this inner type that is used
 //! by all of the other geometry types.
 
+use geopolars_views::GeoDimension;
 use polars_core::prelude::DataType;
-
-use super::GeoDimension;
 
 /// Reads the dimension off a separated-coordinate storage type.
 /// `None` if this is not a layout we recognise.

@@ -8,13 +8,11 @@ use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
-use crate::geoarrow::{
-    coord, describe, ensure_same_crs_unless_bare, geometry_series, Geo, GeoDimension,
-};
+use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 use geopolars_core::{
     assembled_multi_polygons, assembled_polygons, validated_storage, NestedKind, NullParts,
 };
-use geopolars_views::Kind;
+use geopolars_views::{GeoDimension, Kind};
 
 /// The keyword arguments of the constructors that build polygons:
 /// [`MetadataKwargs`], plus whether and how to close open rings.
