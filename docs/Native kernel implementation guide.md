@@ -1,49 +1,133 @@
 # Native kernel implementation guide
 
-This document extends the [[Kernel implementation guide]].
+This document extends the [Kernel implementation guide](<Kernel implementation guide.md>),
+for kernels in `native` that compute their result themselves.
 
-## Keep branching out of the hot path
+## Shapes
 
-Try to keep branching outside of the core loop of a kernel.
-Branch prediction can be pretty good, but it's even nicer if we don't have to!
-Stuff like 'do we have to check for NaNs?' will have the same answer for every item,
-so we can write that as a generic function instead, and dispatch to its specific versions.
-The `with_const_flags!` macro is very useful here.
-Be careful you don't blow it up with combinatorics though.
+A native kernel has one of the shapes below.
 
-Describe each flag once, in a ``## `FLAG` `` sub-section under `# Const generic flags` in the module doc (see `native/count_coordinates.rs`).
-A runtime `bool` that dispatches to it has the same name in lowercase, so it needs no doc of its own.
+### Measuring or testing each row
 
-### Branching based on arguments
+One value per row, such as an area, a count or a `bool`.
+A private `#[inline(always)]` function computes it for one item,
+and a loop runs it over the rows through the helpers in `per_row`
+(`per_row`, `per_row_count`, `per_row_bool`, `per_row_optional_bool`, …),
+which take care of the null rows.
 
-Most kernels take some arguments that determine how something should be done,
-or if an optional step should be included.
-Ideally, these would *also* be kept outside of the loop.
-Some cannot, as they depend on the content of the row.
-In such a case, you have no choice but to do the branching inside of the loop.
+```rust
+#[inline(always)]
+fn count_polygon_vertices<const INCLUDE_EMPTY: bool>(polygon: &ScalarPolygon) -> u32 { … }
 
-Cross-reference this with [the common arguments doc]("../docs/Common arguments.md").
+pub fn polygon_coordinate_counts(
+    array: &Untrimmed<PolygonArray>,
+    include_empty: bool,
+) -> PrimitiveArray<u32> {
+    with_const_flags!(
+        INCLUDE_EMPTY = include_empty;
+        polygon_coordinate_counts_with::<INCLUDE_EMPTY>(array)
+    )
+}
 
-## `compare_z` and `compare_m`
+fn polygon_coordinate_counts_with<const INCLUDE_EMPTY: bool>(
+    array: &Untrimmed<PolygonArray>,
+) -> PrimitiveArray<u32> {
+    per_row_count(array.rows(), |i| {
+        count_polygon_vertices::<INCLUDE_EMPTY>(&array.get(i))
+    })
+}
+```
 
-If the z and/or m values are dropped, you can simply re-interpret the data as a type without those dimensions.
-This is preferable over dispatching this as a const generic bool,
-though in some cases that is a valid approach too.
-Whatever you do though, you should not do a first pass to simply change the type.
+### Modifying the underlying coordinates
 
-## Branching on errors, empties, or invalid states
+Stuff like clamping, snapping or reprojecting.
+For this, a private function rewrites all the coordinates at once (using a bulk operation if possible).
+As it walks every coordinate, it takes trimmed views.
 
-Some argument say what to do on hitting an empty geometry, running into an error,
-or running into an invalid state.
-These are the exception, not the rule. Hence, they can take the penalty of runtime checking
-(rather than blowing up the binary size).
-These should *not* be dispatched using const generics.
+```rust
+fn clamped(coords: &ValidCoords, bounds: &Bounds) -> ValidCoords { … }
 
-Examples are `on_row_error`, `short_lines`, `empty_polygon_exterior`.
+pub fn polygons_with_clamped_coords(array: &PolygonArray, bounds: &Bounds) -> PolygonArray {
+    PolygonArray::from_parts(
+        array.rows.clone(),
+        array.rings.clone(),
+        clamped(&array.coords, bounds),
+    )
+}
 
-Note that this does not include functions on *checking for errors* in the first place, such as `early_coord_check`.
-`null_parts` should also be dispatched statically.
-If those are gated behind an argument, then that should still be dispatched in a const generic way.
+pub fn points_with_clamped_coords(array: &PointArray, bounds: &Bounds) -> PointArray {
+    PointArray::new(Coords::from_valid(
+        clamped(array.coords.ignoring_validity(), bounds),
+        array.coords.validity().cloned(),
+    ))
+}
+```
+
+### Marking coordinates, then folding them up to the rows
+
+One `bool` per row that depends on its coordinates, such as whether it has repeated points.
+One pass marks the coordinates (or segments) in a bitmap, without looking at the rows.
+`valid_rows_passing` in `passing` then folds that bitmap up, level by level, to the rows.
+
+```rust
+pub fn polygons_have_repeats_in_succession(
+    array: &PolygonArray,
+    include_z: bool,
+    include_m: bool,
+) -> BooleanArray {
+    with_const_flags!(
+        INCLUDE_Z = include_z, INCLUDE_M = include_m;
+        polygons_have_repeats_in_succession_with::<INCLUDE_Z, INCLUDE_M>(array)
+    )
+}
+
+fn polygons_have_repeats_in_succession_with<const INCLUDE_Z: bool, const INCLUDE_M: bool>(
+    array: &PolygonArray,
+) -> BooleanArray {
+    let repeated: Bitmap = repeats_in_succession::<INCLUDE_Z, INCLUDE_M>(&array.rings, &array.coords);
+    let passing = valid_rows_passing(&array.rows, &[&array.rings], Some(!&repeated));
+    …
+}
+```
+
+## Points and nested kinds
+
+A kernel that works on both a nested geometry type
+and a flat one (points) writes the work once,
+as an `#[inline(always)]` function on `&ValidCoords` and a range of coordinates.
+Note that `ValidCoords` does not have null information. That is added afterwards.
+Each public function then calls it the way its view needs:
+
+For **Points**, this is as `array.coords.ignoring_validity()`,
+after which the output gets `array.coords.validity()`.
+If the work is not harmless under a null (see [Nulls](#nulls) below),
+only do this when there are no nulls, and check `array.coords.is_valid(i)` otherwise.
+
+For **Nested kinds**, this is using `array.coords`, with the range of each row (through `per_row`).
+No need to null check here because of geoarrow validity spec.
+
+```rust
+#[inline(always)]
+fn count_vertices<const INCLUDE_EMPTY: bool>(coords: &ValidCoords, vertices: Range<usize>) -> u32 { … }
+
+pub fn point_coordinate_counts(array: &PointArray, …) -> PrimitiveArray<u32> {
+    let coords = array.coords.ignoring_validity();
+    let counts = (0..coords.len())
+        .map(|i| count_vertices::<INCLUDE_EMPTY>(coords, i..i + 1))
+        .collect();
+    PrimitiveArray::from_vec(counts).with_validity(array.coords.validity().cloned())
+}
+
+pub fn line_string_coordinate_counts(array: &Untrimmed<LineStringArray>, …) -> PrimitiveArray<u32> {
+    per_row_count(array.rows(), |i| {
+        count_vertices::<INCLUDE_EMPTY>(array.coords(), array.rows().range(i))
+    })
+}
+```
+
+Do not turn points into one-coordinate lists to reuse the loop of the nested kinds.
+That costs an offsets buffer for nothing,
+and moves the nulls of the points to a level where they do not live.
 
 ## Vectorising simple kernels
 
@@ -58,12 +142,11 @@ and mask those results afterwards.
 Compute over `coords.ignoring_validity()`, and give the output the validity of the input
 (`combine_validities_and` for several inputs).
 See `points_with_clamped_coords` in `native/fix_out_of_bounds.rs`.
-The values under a null are arbitrary,
-so this only works if the computation is harmless on any value!
-It should not panic, no errors, no indexing with it.
-If it is not, only take the branchless route when there are no nulls.
-You can do this with a const generic `NO_NULLS: bool`
-(see `pairwise` in `native/distance.rs`).
+This is only allowed when the computation is harmless on any value
+(see "Values under a null" in the [Kernel implementation guide](<Kernel implementation guide.md#nulls>)).
+If it is not, only take the branchless route when there are no nulls,
+with an `ALL_VALID` const generic
+(see `pairwise` in `native/distance.rs`, where it is still called `NULLS`).
 
 ### Empties
 
@@ -75,3 +158,8 @@ and use it to fix up the output afterwards (e.g. by masking them out of the vali
 This only pays off if the rest of the loop is branch-free.
 If the work per row branches anyway (e.g. looping over the parts of a nested geometry),
 keep the check for nulls and empties in the loop instead.
+
+## `early_coord_check`
+
+A native kernel defaults to `early_coord_check="finite"`.
+The check runs as a pass of its own, before the loop.

@@ -2,6 +2,8 @@
 
 There are a few arguments that show up in many expressions.
 Rather than repeating them everywhere (and risking doc drift), they are all described here.
+An expression uses these where they fit,
+rather than defining a new argument for the same thing in slightly different words.
 
 The sections describe the target API.
 A *Legacy* note names the argument a section replaces (from the old/current design).
@@ -254,6 +256,24 @@ The unit of an angle: degrees or radians.
 > [!NOTE]
 > Legacy: this replaces `unit: Literal["deg", "pi"] = "deg"`,
 > where `"pi"` meant multiples of π radians rather than radians.
+
+## Arguments that come together
+
+Some arguments make another one necessary.
+
+- An expression that can remove points takes `short_lines`,
+  as dropping coordinates or parts can make rings and linestrings too short.
+  So one that takes `null_parts` takes `short_lines` too.
+- An expression that takes polygons (or multipolygons) and `short_lines`
+  takes `empty_polygon_exterior` too,
+  as removing points from a ring can otherwise invalidate a polygon.
+- An expression that takes `new_ring_orientation` and can give polygons takes `new_holes` too.
+- An expression that takes `promote_to_multi` takes `on_row_error` too,
+  as with `"never"`, a result in several parts is an error.
+- An expression that takes `early_coord_check` takes `on_row_error` too,
+  as the check hands what it finds to it.
+- An expression that takes `empty_polygon_exterior` takes `on_row_error` too,
+  as `empty_polygon_exterior="error"` hands the error to it.
 
 ## Shared by two or three expressions
 

@@ -22,4 +22,4 @@ The crate holds:
   `inner_nulls` and the validity kernels use it.
 - the helpers that kernels share in `utils`.
 
-See the [docs](../docs/Kernel implementation guide.md) for more details.
+See the [Kernel implementation guide](<../docs/Kernel implementation guide.md>) for more details.
