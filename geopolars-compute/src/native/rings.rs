@@ -277,6 +277,29 @@ pub fn polygons_with_added_holes(
     PolygonArray::from_parts(rows, rings, coords)
 }
 
+/// `polygons`, with an empty exterior for each polygon without rings set in `marked`,
+/// so that the holes it is given next stay holes.
+pub fn polygons_with_empty_exteriors(polygons: &PolygonArray, marked: &Bitmap) -> PolygonArray {
+    let (rows, rings) = (&polygons.rows, &polygons.rings);
+    let gets_exterior =
+        |i: usize| marked.get_bit(i) && rows.is_valid(i) && rows.range(i).is_empty();
+    let ring_counts = (0..rows.len()).map(|i| match gets_exterior(i) {
+        true => 1,
+        false => rows.range(i).len(),
+    });
+    let ring_lengths = (0..rows.len()).flat_map(|i| {
+        let exterior = gets_exterior(i).then_some(0);
+        exterior
+            .into_iter()
+            .chain(rows.range(i).map(|j| rings.range(j).len()))
+    });
+    PolygonArray::from_parts(
+        List::from_offsets(offsets_of(ring_counts), rows.validity().cloned()),
+        ValidList::from_offsets(offsets_of(ring_lengths)),
+        polygons.coords.clone(),
+    )
+}
+
 /// Marks which polygons can take the holes on the same row of `holes`,
 /// as `empty_polygon_exterior` of the Python `add_holes` describes.
 /// Only the holes set in the mask of `holes` count towards this.

@@ -256,6 +256,12 @@ def test_an_empty_exterior_can_keep_its_holes() -> None:
     assert out.ext.storage().to_list() == [[[], _HOLE]]
 
 
+def test_a_polygon_without_rings_keeps_its_holes_behind_an_empty_exterior() -> None:
+    out = _added(_polygons([]), _lines(_HOLE), empty_polygon_exterior="keep")
+
+    assert out.ext.storage().to_list() == [[[], _HOLE]]
+
+
 def test_an_empty_exterior_with_a_hole_can_raise() -> None:
     polygons, holes = _polygons([[]]), _lines(_HOLE)
     with pytest.raises(ComputeError, match="empty exterior cannot take a hole"):

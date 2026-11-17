@@ -1,4 +1,6 @@
-use geopolars_compute::native::{have_room_for_holes, polygons_with_added_holes};
+use geopolars_compute::native::{
+    have_room_for_holes, polygons_with_added_holes, polygons_with_empty_exteriors,
+};
 use geopolars_compute::{EmptyPolygonExterior, GeoComputeError, OnRowError};
 use geopolars_views::{downcast, GeometryArray, PolygonArray};
 use polars_arrow::array::Array;
@@ -28,6 +30,14 @@ pub fn add_holes(
     let polygons = PolygonArray::new(downcast(polygons, "a list of rings")?)?;
     let holes = lines_per_row(holes, listed, null_parts)?;
     let validity = rows_validity(&polygons.rows, holes.rows(), null_parts);
+    let polygons = match empty_polygon_exterior {
+        // A polygon without rings would take its first hole as its exterior.
+        EmptyPolygonExterior::Keep => {
+            let room = have_room_for_holes(&polygons, &holes);
+            polygons_with_empty_exteriors(&polygons, &!&room)
+        }
+        _ => polygons,
+    };
     let (holes, validity) = match empty_polygon_exterior {
         EmptyPolygonExterior::Keep => (holes, validity),
         EmptyPolygonExterior::Empty => {
