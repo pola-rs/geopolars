@@ -24,7 +24,7 @@ pub fn buffers(
     early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
     let early = early_coord_check;
-    let array = &GeometryArray::new(chunk, kind)?;
+    let array = GeometryArray::new(chunk, kind)?;
     if into_multi {
         buffer_into_multi_polygons(
             array,

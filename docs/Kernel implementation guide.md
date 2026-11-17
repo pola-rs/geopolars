@@ -155,16 +155,20 @@ Where a helper goes depends on what it costs:
   (accessors, ranges, spans, O(1) checks such as `is_ring`).
   Building a view (constructors, trimming) belongs there too
   See [View Types](<View Types.md#methods-on-the-views>).
-- `utils` in `geopolars-compute` holds every other helper that is shared,
-  by native kernels, GEOS kernels or both,
+- `utils` in `geopolars-compute` holds every other helper that kernels share
+  and that any backend could use, as it only needs the views,
   directly in that module, without sub-modules.
   This includes filters, and anything that loops over the coordinates, allocates or writes,
   such as `with_ranges_reversed`, `copy_ranges`, `gathered` and `with_null_at`.
+  A helper that only one backend can use (e.g. one that needs a GEOS type)
+  goes in the root module of that backend instead
+  (`native/mod.rs`, `geos/mod.rs`, `rsgeo/mod.rs` or `proj.rs`).
 - The shared infrastructure that kernels are built on is located in the root modules.
   A small helper in one of those modules that is not part of its infrastructure belongs in `utils`.
 - A kernel module only holds helpers for that kernel alone.
 
-The same logic in two modules is one helper in `utils`.
+The same logic in two modules is one helper,
+in `utils`, or in the root module of the backend that alone can use it.
 Functions that do similar things in a different way and differ on purpose must say why in a doc comment
 (e.g. the empty point is x and y NaN for GEOS, but NaN on every axis for native).
 

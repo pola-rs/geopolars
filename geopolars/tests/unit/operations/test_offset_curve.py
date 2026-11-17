@@ -150,6 +150,14 @@ def test_a_null_or_empty_geometry_stays_so(
     assert _offset(_column(dtype, None, empty), 1.0) == [None, []]
 
 
+def test_a_null_distance_nulls_a_row_that_is_not_finite() -> None:
+    df = _column(LineStringXY, _line((0, 0), (1, math.nan)), _SEGMENT).with_columns(
+        d=pl.Series([None, 1.0], dtype=pl.Float64)
+    )
+
+    assert _offset(df, "d")[0] is None
+
+
 def test_a_line_without_length_gives_an_empty_linestring() -> None:
     assert _offset(_column(LineStringXY, _line((1, 1), (1, 1))), 1.0) == [[]]
 

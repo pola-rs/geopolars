@@ -9,11 +9,11 @@
 //! The public functions take `early_coord_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
-use geopolars_views::{LineStringArray, MultiLineStringArray};
+use geopolars_views::{GeometryArray, LineStringArray, MultiLineStringArray};
 use geos::{Geom, GeometryTypes, JoinStyle};
 
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
-use super::{unless_split, GeosGeometries, ToGeosRows};
+use super::{unless_split, validity_with_distances, GeosGeometries, ToGeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// The parameters GEOS's offset curve takes, besides the distance.
@@ -31,12 +31,14 @@ pub struct OffsetCurveStyle {
 /// A row that GEOS splits into several linestrings therefore fails with [`crate::GeoComputeError::Split`].
 /// [`offset_curves_into_multi_line_strings`] keeps them instead.
 pub fn offset_curves_into_line_strings(
-    array: &LineStringArray,
+    mut array: LineStringArray,
     distance: BufferDistance,
     style: &OffsetCurveStyle,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
+    let validity = validity_with_distances(array.rows.validity(), distance);
+    array.rows = array.rows.with_validity(validity);
     offset_curves_via_geos(
         array.to_geos_rows(on_row_error, early_coord_check)?,
         distance,
@@ -52,14 +54,17 @@ pub fn offset_curves_into_line_strings(
 /// Implements the Python `offset_curve` where it gives a multilinestring.
 /// A row that GEOS splits into several linestrings gets them all as parts.
 pub fn offset_curves_into_multi_line_strings(
-    array: &impl ToGeosRows,
+    array: GeometryArray,
     distance: BufferDistance,
     style: &OffsetCurveStyle,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiLineStringArray> {
+    let validity = validity_with_distances(array.validity(), distance);
     offset_curves_via_geos(
-        array.to_geos_rows(on_row_error, early_coord_check)?,
+        array
+            .with_validity(validity)
+            .to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
         on_row_error,

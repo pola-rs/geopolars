@@ -87,6 +87,7 @@ use geopolars_views::{
 };
 use geos::{CoordSeq, CoordType, Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
+use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
 use crate::{
@@ -483,19 +484,6 @@ impl GeosRows {
         self.rows.push(row.unwrap_or(GeosRow::Empty));
     }
 
-    /// Makes every row null that is null in `validity`, freeing its GEOS geometry.
-    fn set_nulls_from(&mut self, validity: Option<&Bitmap>) {
-        let Some(validity) = validity else {
-            return;
-        };
-        for (i, is_valid) in validity.iter().enumerate() {
-            if !is_valid {
-                self.rows[i] = GeosRow::Empty;
-                self.validity.set_null(i);
-            }
-        }
-    }
-
     /// Replaces every GEOS geometry with what `op` makes of it, given its row index.
     /// Null and empty rows are left as they are.
     /// If `on_row_error=`[OnRowError::Null], a row `op` fails on becomes null;
@@ -548,6 +536,16 @@ fn reversed_rings(new_ring_orientation: NewRingOrientation, new_holes: NewHoles)
         NewRingOrientation::Keep => (false, false),
         NewRingOrientation::Ccw => (true, new_holes == NewHoles::Opposite),
         NewRingOrientation::Cw => (false, new_holes == NewHoles::Same),
+    }
+}
+
+/// Which rows have a result: a row is null if its geometry or its distance is null.
+/// Put on the input before converting it to GEOS,
+/// so that a row with a null distance is never checked or converted.
+fn validity_with_distances(validity: Option<&Bitmap>, distance: BufferDistance) -> Option<Bitmap> {
+    match distance {
+        BufferDistance::Constant(_) => validity.cloned(),
+        BufferDistance::PerRow(distances) => combine_validities_and(validity, distances.validity()),
     }
 }
 

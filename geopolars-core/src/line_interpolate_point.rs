@@ -23,11 +23,11 @@ pub fn interpolated_points(
     match kind {
         LineKind::LineString => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            interpolate_line_strings(&array, distance, mode, on_row_error, early)
+            interpolate_line_strings(array, distance, mode, on_row_error, early)
         }
         LineKind::MultiLineString => {
             let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            interpolate_multi_line_strings(&array, distance, mode, on_row_error, early)
+            interpolate_multi_line_strings(array, distance, mode, on_row_error, early)
         }
     }
     .map(GeometryArray::Point)

@@ -181,6 +181,26 @@ def test_an_empty_geometry_with_a_null_distance_gives_null() -> None:
 
 
 @pytest.mark.parametrize(
+    ("dtype", "not_finite", "finite"),
+    [
+        (LineStringXY, _line((0, 0), (1, math.nan)), _SEGMENT),
+        (MultiLineStringXY, [_line((0, 0), (1, math.nan))], [_SEGMENT]),
+    ],
+)
+def test_a_null_distance_nulls_a_row_that_is_not_finite(
+    dtype: type[GeoArrowType], not_finite: object, finite: object
+) -> None:
+    df = _column(dtype, not_finite, finite).with_columns(
+        d=pl.Series([None, 1.0], dtype=pl.Float64)
+    )
+
+    [null, point] = _interpolate(df, "d")
+
+    assert null is None
+    assert point == _point(1, 0)
+
+
+@pytest.mark.parametrize(
     ("dtype", "geometry", "line"),
     [
         (LineStringXY, _line((1, 1)), _SEGMENT),

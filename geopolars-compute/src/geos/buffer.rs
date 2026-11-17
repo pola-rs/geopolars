@@ -14,7 +14,7 @@ use geos::{BufferParams, Geom, Geometry, GeometryTypes};
 pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
-use super::{unless_split, GeosGeometries, ToGeosRows};
+use super::{unless_split, validity_with_distances, GeosGeometries, ToGeosRows};
 use crate::{
     EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
 };
@@ -57,7 +57,7 @@ pub struct BufferStyle {
 /// A row that GEOS splits into several polygons therefore fails with [`GeoComputeError::Split`].
 /// [`buffer_into_multi_polygons`] keeps them instead.
 pub fn buffer_into_polygons(
-    array: &GeometryArray,
+    array: GeometryArray,
     distance: BufferDistance,
     style: &BufferStyle,
     new_ring_orientation: NewRingOrientation,
@@ -65,8 +65,11 @@ pub fn buffer_into_polygons(
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
+    let validity = validity_with_distances(array.validity(), distance);
     buffer_via_geos(
-        array.to_geos_rows(on_row_error, early_coord_check)?,
+        array
+            .with_validity(validity)
+            .to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
         on_row_error,
@@ -79,7 +82,7 @@ pub fn buffer_into_polygons(
 /// Implements the Python `buffer` where it gives a multipolygon.
 /// A row that GEOS splits into several polygons gets them all as parts.
 pub fn buffer_into_multi_polygons(
-    array: &GeometryArray,
+    array: GeometryArray,
     distance: BufferDistance,
     style: &BufferStyle,
     new_ring_orientation: NewRingOrientation,
@@ -87,8 +90,11 @@ pub fn buffer_into_multi_polygons(
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiPolygonArray> {
+    let validity = validity_with_distances(array.validity(), distance);
     buffer_via_geos(
-        array.to_geos_rows(on_row_error, early_coord_check)?,
+        array
+            .with_validity(validity)
+            .to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
         on_row_error,
@@ -133,6 +139,7 @@ fn buffer_via_geos(
 }
 
 /// Every geometry passed to `op` with its distance, forwarded to GEOS.
+/// A row with a null distance is already null in `geometries` ([validity_with_distances]).
 /// `geos_distance` checks a distance, and gives it as `op` takes it.
 /// If `on_row_error=`[OnRowError::Null], a geometry that fails becomes null;
 /// otherwise its error is returned.
@@ -154,7 +161,6 @@ pub(super) fn by_distance_via_geos(
         }
         BufferDistance::PerRow(distances) => {
             debug_assert_eq!(distances.len(), rows.len());
-            rows.set_nulls_from(distances.validity());
             rows.replace_geometries(on_row_error, |i, input| {
                 op(input, geos_distance(distances.value(i))?)
             })?;

@@ -27,17 +27,19 @@ pub fn offset_curves(
     match (kind, into_multi) {
         (LineKind::LineString, false) => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            offset_curves_into_line_strings(&array, distance, style, on_row_error, early)
+            offset_curves_into_line_strings(array, distance, style, on_row_error, early)
                 .map(GeometryArray::LineString)
         }
         (LineKind::LineString, true) => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            offset_curves_into_multi_line_strings(&array, distance, style, on_row_error, early)
+            let array = GeometryArray::LineString(array);
+            offset_curves_into_multi_line_strings(array, distance, style, on_row_error, early)
                 .map(GeometryArray::MultiLineString)
         }
         (LineKind::MultiLineString, _) => {
             let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            offset_curves_into_multi_line_strings(&array, distance, style, on_row_error, early)
+            let array = GeometryArray::MultiLineString(array);
+            offset_curves_into_multi_line_strings(array, distance, style, on_row_error, early)
                 .map(GeometryArray::MultiLineString)
         }
     }

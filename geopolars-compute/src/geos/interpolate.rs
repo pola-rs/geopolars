@@ -14,7 +14,7 @@ use geos::Geom;
 
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
 use super::linestrings::multi_line_strings_to_geos_rows;
-use super::{GeosGeometries, ToGeosRows};
+use super::{validity_with_distances, GeosGeometries, ToGeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// What the distance along the line is measured in.
@@ -29,12 +29,14 @@ pub enum InterpolateMode {
 /// Gets the point at `distance` along every linestring through GEOS.
 /// Implements the Python `line_interpolate_point` for linestrings, which documents its behaviour.
 pub fn interpolate_line_strings(
-    array: &LineStringArray,
+    mut array: LineStringArray,
     distance: BufferDistance,
     mode: InterpolateMode,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PointArray> {
+    let validity = validity_with_distances(array.rows.validity(), distance);
+    array.rows = array.rows.with_validity(validity);
     interpolate_via_geos(
         array.to_geos_rows(on_row_error, early_coord_check)?,
         distance,
@@ -46,16 +48,18 @@ pub fn interpolate_line_strings(
 
 /// Like [`interpolate_line_strings`], for multilinestrings, walking the parts one after the other.
 pub fn interpolate_multi_line_strings(
-    array: &MultiLineStringArray,
+    mut array: MultiLineStringArray,
     distance: BufferDistance,
     mode: InterpolateMode,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PointArray> {
+    let validity = validity_with_distances(array.rows.validity(), distance);
+    array.rows = array.rows.with_validity(validity);
     // An empty part is skipped,
     // as GEOS reads a vertex of every part it walks, beyond the end of an empty one.
     interpolate_via_geos(
-        multi_line_strings_to_geos_rows(array, true, None, on_row_error, early_coord_check)?,
+        multi_line_strings_to_geos_rows(&array, true, None, on_row_error, early_coord_check)?,
         distance,
         mode,
         on_row_error,
