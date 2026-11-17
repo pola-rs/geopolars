@@ -267,18 +267,20 @@ def test_finite_still_refuses_a_vertex_with_one_nan_axis() -> None:
         _lines(_HALF_NAN).select(geo.convex_hull("polygon", early_coord_check="finite"))
 
 
-def test_a_geometry_geos_fails_on_raises_by_default() -> None:
+def test_a_geometry_geos_fails_on_raises() -> None:
     df = _lines(_HALF_NAN, _line((0, 0), (4, 0), (4, 4), (0, 4)))
 
-    with pytest.raises(ComputeError, match="NaN"):
-        df.select(geo.convex_hull("polygon"))
+    with pytest.raises(ComputeError, match="NaN/Inf"):
+        df.select(geo.convex_hull("polygon", early_coord_check="off"))
 
 
 def test_on_row_error_null_gives_a_null_hull() -> None:
     df = _lines(_HALF_NAN, _line((0, 0), (4, 0), (4, 4), (0, 4)))
 
     hulls = (
-        df.select(geo.convex_hull("polygon", on_row_error="null"))
+        df.select(
+            geo.convex_hull("polygon", early_coord_check="off", on_row_error="null")
+        )
         .to_series()
         .ext.storage()
         .to_list()

@@ -283,7 +283,10 @@ def test_geos_raises_on_a_line_that_is_not_finite() -> None:
 
 
 def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
-    assert _not_finite_lines(on_row_error="null") == [None, True]
+    assert _not_finite_lines(early_coord_check="off", on_row_error="null") == [
+        None,
+        True,
+    ]
 
 
 @pytest.mark.parametrize("early_coord_check", ["finite", "finite_and_empty"])
