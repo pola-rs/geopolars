@@ -15,7 +15,7 @@ use polars_arrow::bitmap::Bitmap;
 
 use super::{
     axes, coord_seq, reversed_rings, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries,
-    GeosRow, OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
+    GeosRow, GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
 };
 use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
@@ -195,14 +195,19 @@ fn into_multi_polygon_array_with<
     geometries: GeosGeometries,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<MultiPolygonArray> {
-    let mut validity = ValidityBuilder::with_capacity(geometries.geometries.len());
-    let mut coords = CoordsBuilder::with_capacity(Z, geometries.size_hint.coords);
-    let mut rings = OffsetsBuilder::with_capacity(geometries.size_hint.parts[0]);
-    let mut polygons = OffsetsBuilder::with_capacity(geometries.size_hint.parts[1]);
-    let mut rows = OffsetsBuilder::with_capacity(geometries.geometries.len());
-    for geometry in geometries.geometries {
+    let GeosGeometries {
+        geometries: GeosRows {
+            rows: geometries,
+            mut validity,
+        },
+        size_hint,
+    } = geometries;
+    let mut coords = CoordsBuilder::with_capacity(Z, size_hint.coords);
+    let mut rings = OffsetsBuilder::with_capacity(size_hint.parts[0]);
+    let mut polygons = OffsetsBuilder::with_capacity(size_hint.parts[1]);
+    let mut rows = OffsetsBuilder::with_capacity(geometries.len());
+    for (i, geometry) in geometries.into_iter().enumerate() {
         let is_valid = match geometry {
-            GeosRow::Null => false,
             GeosRow::Empty => true,
             GeosRow::Geometry(geometry) => {
                 push_multi_polygon::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(
@@ -221,7 +226,9 @@ fn into_multi_polygon_array_with<
                 on_row_error,
             )?,
         };
-        validity.push(is_valid);
+        if !is_valid {
+            validity.set_null(i);
+        }
         rows.push(polygons.len());
     }
     Ok(MultiPolygonArray::from_parts(
@@ -241,13 +248,18 @@ fn into_polygon_array_with<
     geometries: GeosGeometries,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PolygonArray> {
-    let mut validity = ValidityBuilder::with_capacity(geometries.geometries.len());
-    let mut coords = CoordsBuilder::with_capacity(Z, geometries.size_hint.coords);
-    let mut rings = OffsetsBuilder::with_capacity(geometries.size_hint.parts[0]);
-    let mut rows = OffsetsBuilder::with_capacity(geometries.geometries.len());
-    for geometry in geometries.geometries {
+    let GeosGeometries {
+        geometries: GeosRows {
+            rows: geometries,
+            mut validity,
+        },
+        size_hint,
+    } = geometries;
+    let mut coords = CoordsBuilder::with_capacity(Z, size_hint.coords);
+    let mut rings = OffsetsBuilder::with_capacity(size_hint.parts[0]);
+    let mut rows = OffsetsBuilder::with_capacity(geometries.len());
+    for (i, geometry) in geometries.into_iter().enumerate() {
         let is_valid = match geometry {
-            GeosRow::Null => false,
             GeosRow::Empty => true,
             GeosRow::Geometry(polygon) => push_polygon::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(
                 &mut coords,
@@ -259,7 +271,9 @@ fn into_polygon_array_with<
                 push_polygon::<Z, false, false>(&mut coords, &mut rings, &polygon, on_row_error)?
             }
         };
-        validity.push(is_valid);
+        if !is_valid {
+            validity.set_null(i);
+        }
         rows.push(rings.len());
     }
     Ok(PolygonArray::from_parts(

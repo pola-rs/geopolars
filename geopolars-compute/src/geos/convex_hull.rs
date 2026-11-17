@@ -49,7 +49,7 @@ use geopolars_views::{
 };
 use geos::{CoordSeq, Geom, Geometry, GeometryTypes};
 
-use super::{axes, xy_is_finite_or_error, GeosGeometries, GeosRow};
+use super::{axes, xy_is_finite_or_error, GeosGeometries, GeosRow, GeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
 // TODO: a geometry crossing the antimeridian is hulled the long way round.
@@ -224,11 +224,11 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_FINITE_CHECK: bo
         Ok(Some(hull))
     };
 
-    let mut hulls = Vec::with_capacity(rows.len());
+    let mut hulls = GeosRows::with_capacity(rows.len());
     for i in 0..rows.len() {
         // A null row's offsets point anywhere, so it is not converted.
         if !ALL_VALID && !rows.is_valid(i) {
-            hulls.push(GeosRow::Null);
+            hulls.push(None);
             continue;
         }
         ranges.clear();
@@ -245,13 +245,13 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_FINITE_CHECK: bo
         }
         hulls.push(match row_x.len() {
             // An empty row has an empty hull, without a trip to GEOS.
-            0 => GeosRow::Empty,
+            0 => Some(GeosRow::Empty),
             // A single coordinate encloses nothing, and GEOS can't build a linestring of it.
-            1 => GeosRow::Null,
+            1 => None,
             _ => match hull(&row_x, &row_y, &row_z) {
-                Ok(hull) => hull.into(),
+                Ok(hull) => hull.map(GeosRow::Geometry),
                 Err(e) if on_row_error == OnRowError::Raise => return Err(e),
-                Err(_) => GeosRow::Null,
+                Err(_) => None,
             },
         });
     }

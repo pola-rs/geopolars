@@ -4,7 +4,7 @@ use geopolars_views::output::SizeHint;
 use geopolars_views::GeometryArray;
 use polars_arrow::bitmap::Bitmap;
 
-use super::{rows_without_vertices, GeosGeometries, GeosRow, ToGeosRows};
+use super::{rows_without_vertices, GeosGeometries, GeosRow, GeosRows, ToGeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// Two arrays of geometries converted to GEOS, with their rows paired up.
@@ -88,7 +88,8 @@ impl GeosPairs {
         Ok(Self { a, b, rows })
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = (&GeosRow, &GeosRow)> {
+    /// `None` for a null row.
+    pub(super) fn iter(&self) -> impl Iterator<Item = (Option<&GeosRow>, Option<&GeosRow>)> {
         broadcast(&self.a.geometries, self.rows).zip(broadcast(&self.b.geometries, self.rows))
     }
 
@@ -133,6 +134,6 @@ fn paired_with(partner_marked: &Bitmap, len: usize) -> Bitmap {
 /// Gives `len` rows, repeating `rows` if it holds a single one.
 ///
 /// `rows` must hold `len` rows, or a single one.
-fn broadcast(rows: &[GeosRow], len: usize) -> impl Iterator<Item = &GeosRow> {
+fn broadcast(rows: &GeosRows, len: usize) -> impl Iterator<Item = Option<&GeosRow>> {
     rows.iter().cycle().take(len)
 }

@@ -9,7 +9,7 @@ use geopolars_views::{
 use geos::{CoordType, Geom, Geometry, GeometryTypes};
 
 use super::pairs::GeosPairs;
-use super::{GeosGeometries, GeosRow};
+use super::{GeosGeometries, GeosRow, GeosRows};
 use crate::{
     row_or_null, EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation,
     OnRowError,
@@ -159,11 +159,10 @@ impl OverlayPairs {
         kept_dimension: TopologicalDimension,
         multi: bool,
     ) -> GeoComputeResult<GeosGeometries> {
-        let geometries = self
-            .pairs
-            .iter()
-            .map(|(a, b)| self.row(a, b, kept_dimension, multi))
-            .collect::<GeoComputeResult<Vec<_>>>()?;
+        let mut geometries = GeosRows::with_capacity(self.pairs.len());
+        for (a, b) in self.pairs.iter() {
+            geometries.push(self.row(a, b, kept_dimension, multi)?);
+        }
         Ok(GeosGeometries {
             geometries,
             size_hint: summed_size_hint(self.pairs.size_hints()),
@@ -174,11 +173,11 @@ impl OverlayPairs {
     #[inline(always)]
     fn row(
         &self,
-        a: &GeosRow,
-        b: &GeosRow,
+        a: Option<&GeosRow>,
+        b: Option<&GeosRow>,
         kept_dimension: TopologicalDimension,
         multi: bool,
-    ) -> GeoComputeResult<GeosRow> {
+    ) -> GeoComputeResult<Option<GeosRow>> {
         let (on_row_error, early) = (self.on_row_error, self.early_coord_check);
         match self.overlay {
             Overlay::Intersection => intersect_rows(a, b, kept_dimension, multi, on_row_error),
@@ -200,18 +199,20 @@ fn summed_size_hint((a, b): (SizeHint<2>, SizeHint<2>)) -> SizeHint<2> {
 
 #[inline(always)]
 fn intersect_rows(
-    a: &GeosRow,
-    b: &GeosRow,
+    a: Option<&GeosRow>,
+    b: Option<&GeosRow>,
     kept_dimension: TopologicalDimension,
     multi: bool,
     on_row_error: OnRowError,
-) -> GeoComputeResult<GeosRow> {
+) -> GeoComputeResult<Option<GeosRow>> {
+    let (Some(a), Some(b)) = (a, b) else {
+        return Ok(None);
+    };
     let intersection = match (a, b) {
-        (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(GeosRow::Null),
         // A row is also `Empty` when its partner is
         // (see `GeosPairs::new_skipping_partners_of_empty`).
         // Either way, their intersection is empty.
-        (GeosRow::Empty, _) | (_, GeosRow::Empty) => return Ok(GeosRow::Empty),
+        (GeosRow::Empty, _) | (_, GeosRow::Empty) => return Ok(Some(GeosRow::Empty)),
         (
             GeosRow::Geometry(a) | GeosRow::Unchanged(a),
             GeosRow::Geometry(b) | GeosRow::Unchanged(b),
@@ -220,22 +221,24 @@ fn intersect_rows(
             .map_err(GeoComputeError::from)
             .and_then(|intersection| kept_parts(intersection, kept_dimension, multi)),
     };
-    Ok(row_or_null(intersection.map(Some), on_row_error)?.unwrap_or(GeosRow::Null))
+    row_or_null(intersection.map(Some), on_row_error)
 }
 
 #[inline(always)]
 fn difference_rows(
-    a: &GeosRow,
-    b: &GeosRow,
+    a: Option<&GeosRow>,
+    b: Option<&GeosRow>,
     kept_dimension: TopologicalDimension,
     multi: bool,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
-) -> GeoComputeResult<GeosRow> {
+) -> GeoComputeResult<Option<GeosRow>> {
+    let (Some(a), Some(b)) = (a, b) else {
+        return Ok(None);
+    };
     let difference = match (a, b) {
-        (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(GeosRow::Null),
-        (GeosRow::Empty, _) => return Ok(GeosRow::Empty),
-        // The arms above handle a null or empty `a`,
+        (GeosRow::Empty, _) => return Ok(Some(GeosRow::Empty)),
+        // The `else` and the arm above handle a null or empty `a`,
         // which are the only other reasons to take `b` as empty
         // (see `GeosPairs::new_skipping_partners_of_empty_a`).
         // This `b` is therefore empty itself, and takes nothing away.
@@ -266,7 +269,7 @@ fn difference_rows(
             .map_err(GeoComputeError::from)
             .and_then(|difference| kept_parts(difference, kept_dimension, multi)),
     };
-    Ok(row_or_null(difference.map(Some), on_row_error)?.unwrap_or(GeosRow::Null))
+    row_or_null(difference.map(Some), on_row_error)
 }
 
 fn difference_rows_xy_is_finite_or_error(geometry: &impl Geom) -> GeoComputeResult<()> {

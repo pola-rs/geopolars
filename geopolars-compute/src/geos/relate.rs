@@ -67,7 +67,11 @@ impl RelatePairs {
     }
 
     #[inline(always)]
-    fn relate_rows(&self, a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Option<De9im>> {
+    fn relate_rows(
+        &self,
+        a: Option<&GeosRow>,
+        b: Option<&GeosRow>,
+    ) -> GeoComputeResult<Option<De9im>> {
         let (Some(a), Some(b)) = (self.relate_rows_geometry(a), self.relate_rows_geometry(b))
         else {
             return Ok(None);
@@ -76,9 +80,8 @@ impl RelatePairs {
     }
 
     #[inline(always)]
-    fn relate_rows_geometry<'a>(&'a self, row: &'a GeosRow) -> Option<&'a Geometry> {
-        match row {
-            GeosRow::Null => None,
+    fn relate_rows_geometry<'a>(&'a self, row: Option<&'a GeosRow>) -> Option<&'a Geometry> {
+        match row? {
             GeosRow::Empty => Some(&self.empty),
             GeosRow::Geometry(geometry) | GeosRow::Unchanged(geometry) => Some(geometry),
         }

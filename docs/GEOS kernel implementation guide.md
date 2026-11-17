@@ -47,17 +47,13 @@ fn simplify_via_geos(
 }
 
 fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
-    geometries: &mut [GeosRow],
+    geometries: &mut GeosRows,
     tolerance: f64,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<()> {
-    for geometry in geometries {
-        let GeosRow::Geometry(input) = geometry else {
-            continue;
-        };
-        *geometry = … // GEOS on `input`, with an error going through `on_row_error`
-    }
-    Ok(())
+    geometries.replace_geometries(on_row_error, |_, input| {
+        … // GEOS on `input`
+    })
 }
 ```
 
@@ -108,7 +104,7 @@ for a binary operation that gives one of its inputs back as it is.
 
 Converting a geometry to GEOS and calling GEOS on it is expensive.
 A kernel that can tell the result of a row without GEOS gives it before converting.
-Null and empty rows become `GeosRow::Null` and `GeosRow::Empty`.
+Null rows are unset in the validity of `GeosRows`, and empty rows become `GeosRow::Empty`.
 These are much cheaper to create,
 and let us switch what we do without inspecting the GEOS data.
 

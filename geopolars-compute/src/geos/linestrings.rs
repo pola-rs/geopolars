@@ -15,7 +15,7 @@ use polars_arrow::bitmap::Bitmap;
 
 use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
-    OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
+    GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
 };
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
@@ -144,12 +144,14 @@ impl GeosGeometries {
         self,
         on_row_error: OnRowError,
     ) -> GeoComputeResult<LineStringArray> {
-        let mut validity = ValidityBuilder::with_capacity(self.geometries.len());
+        let GeosRows {
+            rows: geometries,
+            mut validity,
+        } = self.geometries;
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
-        let mut rows = OffsetsBuilder::with_capacity(self.geometries.len());
-        for geometry in self.geometries {
+        let mut rows = OffsetsBuilder::with_capacity(geometries.len());
+        for (i, geometry) in geometries.into_iter().enumerate() {
             let is_valid = match geometry {
-                GeosRow::Null => false,
                 GeosRow::Empty => true,
                 GeosRow::Geometry(line_string) | GeosRow::Unchanged(line_string) => {
                     match line_string.geometry_type()? {
@@ -161,7 +163,9 @@ impl GeosGeometries {
                     }
                 }
             };
-            validity.push(is_valid);
+            if !is_valid {
+                validity.set_null(i);
+            }
             rows.push(coords.len());
         }
         Ok(LineStringArray::from_parts(
@@ -178,13 +182,15 @@ impl GeosGeometries {
         self,
         on_row_error: OnRowError,
     ) -> GeoComputeResult<MultiLineStringArray> {
-        let mut validity = ValidityBuilder::with_capacity(self.geometries.len());
+        let GeosRows {
+            rows: geometries,
+            mut validity,
+        } = self.geometries;
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
         let mut lines = OffsetsBuilder::with_capacity(self.size_hint.parts[0]);
-        let mut rows = OffsetsBuilder::with_capacity(self.geometries.len());
-        for geometry in self.geometries {
+        let mut rows = OffsetsBuilder::with_capacity(geometries.len());
+        for (i, geometry) in geometries.into_iter().enumerate() {
             let is_valid = match geometry {
-                GeosRow::Null => false,
                 GeosRow::Empty => true,
                 GeosRow::Geometry(geometry) | GeosRow::Unchanged(geometry) => {
                     match geometry.geometry_type()? {
@@ -205,7 +211,9 @@ impl GeosGeometries {
                     }
                 }
             };
-            validity.push(is_valid);
+            if !is_valid {
+                validity.set_null(i);
+            }
             rows.push(lines.len());
         }
         Ok(MultiLineStringArray::from_parts(

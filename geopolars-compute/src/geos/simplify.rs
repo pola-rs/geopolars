@@ -18,7 +18,7 @@
 
 use geopolars_views::{LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray};
 
-use super::{GeosGeometries, GeosRow, ToGeosRows};
+use super::{GeosGeometries, GeosRows, ToGeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
 /// Simplifies every linestring to within `tolerance` through GEOS.
@@ -132,25 +132,17 @@ fn simplify_via_geos(
 /// See [`simplify_via_geos`].
 /// Errors are the exception, so `on_row_error` is checked per row rather than made const.
 fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
-    geometries: &mut [GeosRow],
+    geometries: &mut GeosRows,
     tolerance: f64,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<()> {
-    for geometry in geometries {
-        let (GeosRow::Geometry(input) | GeosRow::Unchanged(input)) = geometry else {
-            continue;
-        };
+    geometries.replace_geometries(on_row_error, |_, input| {
         let simplified = if PRESERVE_TOPOLOGY {
             input.topology_preserve_simplify(tolerance)
         } else {
             // TODO: GEOS keeps m here, but the `into_*_array` conversions drop it.
             input.simplify(tolerance)
         };
-        *geometry = match simplified {
-            Ok(simple) => GeosRow::Geometry(simple),
-            Err(e) if on_row_error == OnRowError::Raise => return Err(e.into()),
-            Err(_) => GeosRow::Null,
-        };
-    }
-    Ok(())
+        Ok(simplified?)
+    })
 }

@@ -11,9 +11,14 @@ use crate::per_row::optional_bool_array;
 use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 #[inline(always)]
-fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Option<bool>> {
+fn rows_are_topologically_equal(
+    a: Option<&GeosRow>,
+    b: Option<&GeosRow>,
+) -> GeoComputeResult<Option<bool>> {
+    let (Some(a), Some(b)) = (a, b) else {
+        return Ok(None);
+    };
     Ok(Some(match (a, b) {
-        (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(None),
         (GeosRow::Empty, GeosRow::Empty) => true,
         // An empty row never went to GEOS, so it can't be compared there.
         (GeosRow::Empty, GeosRow::Geometry(other) | GeosRow::Unchanged(other))

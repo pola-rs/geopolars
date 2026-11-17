@@ -103,7 +103,7 @@ pub trait ToGeos {
 }
 
 /// Converts an array into one [`GeosRow`] per row.
-/// A null row is `Null`.
+/// A null row is null in [`GeosRows`].
 /// A row without parts is `Empty`, so it never goes to GEOS.
 /// The size hint is the size of the array itself.
 /// If `on_row_error=`[OnRowError::Null], a row GEOS fails to build is null too;
@@ -207,19 +207,19 @@ fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
     coords: &Coords,
     as_empty: Option<&Bitmap>,
     on_row_error: OnRowError,
-) -> GeoComputeResult<Vec<GeosRow>> {
+) -> GeoComputeResult<GeosRows> {
     // GEOS has no batch constructor, so only the per-column work is shared.
     let dim = coords.dim();
     let len = dim.field_names().len();
     let coord_type = coord_type(dim);
-    let mut geometries = Vec::with_capacity(coords.len());
+    let mut geometries = GeosRows::with_capacity(coords.len());
     for i in 0..coords.len() {
         if is_taken_as_empty(as_empty, i) && coords.is_valid(i) {
-            geometries.push(GeosRow::Empty);
+            geometries.push(Some(GeosRow::Empty));
             continue;
         }
         let point = point_to_geos::<EARLY_FINITE_CHECK>(coords, i, len, coord_type);
-        geometries.push(row_or_null(point, on_row_error)?.into());
+        geometries.push(row_or_null(point, on_row_error)?.map(GeosRow::Geometry));
     }
     Ok(geometries)
 }
@@ -351,7 +351,7 @@ fn rows_to_geos(
     early_coord_check: EarlyCoordCheck,
     span: impl Fn(Range<usize>) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
-) -> GeoComputeResult<Vec<GeosRow>> {
+) -> GeoComputeResult<GeosRows> {
     with_const_flags!(
         ALL_VALID = rows.is_all_valid(), EARLY_FINITE_CHECK = early_coord_check != EarlyCoordCheck::Off;
         rows_to_geos_with::<ALL_VALID, EARLY_FINITE_CHECK>(
@@ -374,18 +374,18 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
     on_row_error: OnRowError,
     span: impl Fn(Range<usize>) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
-) -> GeoComputeResult<Vec<GeosRow>> {
+) -> GeoComputeResult<GeosRows> {
     let (x, y, _, _) = axes;
-    let mut geometries = Vec::with_capacity(rows.len());
+    let mut geometries = GeosRows::with_capacity(rows.len());
     for i in 0..rows.len() {
         // A null row's offsets point anywhere, so it is not converted.
         if !ALL_VALID && !rows.is_valid(i) {
-            geometries.push(GeosRow::Null);
+            geometries.push(None);
             continue;
         }
         let parts = rows.range(i);
         geometries.push(if parts.is_empty() || is_taken_as_empty(as_empty, i) {
-            GeosRow::Empty
+            Some(GeosRow::Empty)
         } else {
             let geometry = if EARLY_FINITE_CHECK {
                 let coords = span(parts.clone());
@@ -393,7 +393,7 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
             } else {
                 to_geos(parts)
             };
-            row_or_null(geometry.map(Some), on_row_error)?.into()
+            row_or_null(geometry.map(Some), on_row_error)?.map(GeosRow::Geometry)
         });
     }
     Ok(geometries)
@@ -451,17 +451,86 @@ fn coord_seq(axes: &Axes, vertices: Range<usize>) -> GeoComputeResult<CoordSeq> 
 /// GEOS geometries of any kind, one per row,
 /// to copy into one of our arrays with an `into_*_array` conversion.
 pub struct GeosGeometries {
-    // FIXME: Use a Polars collection type with a validity mask here,
-    // so that we don't have to have a 'null' variant
-    pub geometries: Vec<GeosRow>,
+    pub geometries: GeosRows,
     /// Sized for the deepest kind, a multipolygon:
     /// rings (or lines), then polygons.
     pub size_hint: SizeHint<2>,
 }
 
-/// One row of [`GeosGeometries`].
+/// One [`GeosRow`] per row, and which rows are null.
+/// A null row holds `Empty`, so that a conversion copies nothing for it.
+pub struct GeosRows {
+    rows: Vec<GeosRow>,
+    validity: ValidityBuilder,
+}
+
+impl GeosRows {
+    fn with_capacity(rows: usize) -> Self {
+        Self {
+            rows: Vec::with_capacity(rows),
+            validity: ValidityBuilder::with_capacity(rows),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    /// `None` is a null row.
+    #[inline(always)]
+    fn push(&mut self, row: Option<GeosRow>) {
+        self.validity.push(row.is_some());
+        self.rows.push(row.unwrap_or(GeosRow::Empty));
+    }
+
+    /// Makes every row null that is null in `validity`, freeing its GEOS geometry.
+    fn set_nulls_from(&mut self, validity: Option<&Bitmap>) {
+        let Some(validity) = validity else {
+            return;
+        };
+        for (i, is_valid) in validity.iter().enumerate() {
+            if !is_valid {
+                self.rows[i] = GeosRow::Empty;
+                self.validity.set_null(i);
+            }
+        }
+    }
+
+    /// Replaces every GEOS geometry with what `op` makes of it, given its row index.
+    /// Null and empty rows are left as they are.
+    /// If `on_row_error=`[OnRowError::Null], a row `op` fails on becomes null;
+    /// otherwise its error is returned.
+    #[inline(always)]
+    fn replace_geometries(
+        &mut self,
+        on_row_error: OnRowError,
+        mut op: impl FnMut(usize, &Geometry) -> GeoComputeResult<Geometry>,
+    ) -> GeoComputeResult<()> {
+        for (i, row) in self.rows.iter_mut().enumerate() {
+            let (GeosRow::Geometry(input) | GeosRow::Unchanged(input)) = row else {
+                continue;
+            };
+            match row_or_null(op(i, input).map(Some), on_row_error)? {
+                Some(output) => *row = GeosRow::Geometry(output),
+                None => {
+                    *row = GeosRow::Empty;
+                    self.validity.set_null(i);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// `None` for a null row.
+    fn iter(&self) -> impl ExactSizeIterator<Item = Option<&GeosRow>> + Clone {
+        let validity = &self.validity;
+        let valid = move |(i, row)| validity.is_valid(i).then_some(row);
+        self.rows.iter().enumerate().map(valid)
+    }
+}
+
+/// One row of [`GeosRows`].
 pub enum GeosRow {
-    Null,
     /// Empty, without a GEOS geometry. Valid for every kind.
     Empty,
     Geometry(Geometry),
@@ -469,13 +538,6 @@ pub enum GeosRow {
     // FIXME: add two arms: 'LeftUnchanged' and 'RightUnchanged',
     // which copy straight from the input arrays rather than out of a GEOS copy.
     Unchanged(Geometry),
-}
-
-/// `None` is a null row.
-impl From<Option<Geometry>> for GeosRow {
-    fn from(geometry: Option<Geometry>) -> Self {
-        geometry.map_or(GeosRow::Null, GeosRow::Geometry)
-    }
 }
 
 /// Whether to reverse the exterior and the holes of a polygon GEOS built.
@@ -543,6 +605,21 @@ impl ValidityBuilder {
                 self.bitmap = Some(bitmap);
             }
         }
+    }
+
+    /// Row `i` must have been pushed already.
+    fn set_null(&mut self, i: usize) {
+        let bitmap = self.bitmap.get_or_insert_with(|| {
+            let mut bitmap = MutableBitmap::with_capacity(self.rows);
+            bitmap.extend_constant(self.valid, true);
+            bitmap
+        });
+        bitmap.set(i, false);
+    }
+
+    #[inline(always)]
+    fn is_valid(&self, i: usize) -> bool {
+        self.bitmap.as_ref().is_none_or(|bitmap| bitmap.get(i))
     }
 
     /// `None` when every row is there.

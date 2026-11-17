@@ -14,7 +14,7 @@ use geos::{BufferParams, Geom, Geometry, GeometryTypes};
 pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
-use super::{unless_split, GeosGeometries, GeosRow, ToGeosRows};
+use super::{unless_split, GeosGeometries, ToGeosRows};
 use crate::{
     EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
 };
@@ -146,38 +146,18 @@ pub(super) fn by_distance_via_geos(
     geos_distance: impl Fn(f64) -> GeoComputeResult<f64>,
     op: impl Fn(&Geometry, f64) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<GeosGeometries> {
-    let apply = |input: &Geometry, geos_distance: f64| -> GeoComputeResult<GeosRow> {
-        match op(input, geos_distance) {
-            Ok(output) => Ok(GeosRow::Geometry(output)),
-            Err(e) if on_row_error == OnRowError::Raise => Err(e),
-            Err(_) => Ok(GeosRow::Null),
-        }
-    };
+    let rows = &mut geometries.geometries;
     match distance {
         BufferDistance::Constant(distance) => {
             let distance = geos_distance(distance)?;
-            for geometry in &mut geometries.geometries {
-                if let GeosRow::Geometry(input) | GeosRow::Unchanged(input) = geometry {
-                    *geometry = apply(input, distance)?;
-                }
-            }
+            rows.replace_geometries(on_row_error, |_, input| op(input, distance))?;
         }
         BufferDistance::PerRow(distances) => {
-            debug_assert_eq!(distances.len(), geometries.geometries.len());
-            for (geometry, distance) in geometries.geometries.iter_mut().zip(distances.iter()) {
-                let Some(&distance) = distance else {
-                    *geometry = GeosRow::Null;
-                    continue;
-                };
-                let (GeosRow::Geometry(input) | GeosRow::Unchanged(input)) = geometry else {
-                    continue;
-                };
-                *geometry = match geos_distance(distance) {
-                    Ok(distance) => apply(input, distance)?,
-                    Err(e) if on_row_error == OnRowError::Raise => return Err(e),
-                    Err(_) => GeosRow::Null,
-                };
-            }
+            debug_assert_eq!(distances.len(), rows.len());
+            rows.set_nulls_from(distances.validity());
+            rows.replace_geometries(on_row_error, |i, input| {
+                op(input, geos_distance(distances.value(i))?)
+            })?;
         }
     }
     Ok(geometries)
