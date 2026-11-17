@@ -10,6 +10,7 @@
 #[macro_use]
 mod const_generic_dispatch;
 
+mod early_coord_check;
 mod error;
 #[cfg(feature = "native")]
 pub mod geoarrow_validity;
@@ -34,6 +35,7 @@ pub mod proj;
 #[cfg(feature = "rsgeo")]
 pub mod rsgeo;
 
+pub use early_coord_check::EarlyCoordCheck;
 #[cfg(any(feature = "geos", feature = "rsgeo"))]
 use error::row_or_null;
 pub use error::{GeoComputeError, GeoComputeResult};
