@@ -1,5 +1,6 @@
 //! Kernels of our own, working straight off the GeoArrow buffers.
 
+mod add_holes;
 mod add_parts;
 mod affine;
 mod area;
@@ -28,6 +29,7 @@ mod selected_coords;
 mod snap_to_grid;
 mod sort_parts;
 
+pub use add_holes::holes_added_to_polygons;
 pub use add_parts::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
     multi_polygons_with_added_parts, WithoutEmptyParts,
@@ -100,8 +102,8 @@ pub use reverse::{
     reverse_polygons,
 };
 pub use rings::{
-    close_open_rings, have_room_for_holes, multi_polygon_exteriors, multi_polygon_interiors,
-    polygon_exteriors, polygon_interiors, polygons_with_added_holes, polygons_with_empty_exteriors,
+    close_open_rings, multi_polygon_exteriors, multi_polygon_interiors, polygon_exteriors,
+    polygon_interiors, polygons_with_added_holes,
 };
 pub use selected_coords::{
     line_strings_with_selected, multi_line_strings_with_selected, multi_points_with_selected,

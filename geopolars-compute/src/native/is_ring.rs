@@ -13,7 +13,6 @@ use geopolars_views::{
 use polars_arrow::array::BooleanArray;
 
 use crate::per_row::per_row_bool;
-use crate::EmptyPolygonExterior;
 
 pub fn line_strings_are_rings<const Z: bool>(array: &Untrimmed<LineStringArray>) -> BooleanArray {
     per_row_bool(array.rows(), |i| {
@@ -53,12 +52,9 @@ pub fn multi_line_strings_are_rings<const Z: bool>(
 // Mark the rings that are rings or empty in a mask,
 // and fold it with `rows_passing` (see the TODO at `polygon_shape_is_valid`).
 #[inline(always)]
-fn has_only_rings<const Z: bool>(
-    polygon: &ScalarPolygon,
-    empty_polygon_exterior: EmptyPolygonExterior,
-) -> bool {
+fn has_only_rings<const Z: bool>(polygon: &ScalarPolygon, holes_in_empty_exterior: bool) -> bool {
     if polygon.has_empty_exterior() {
-        if empty_polygon_exterior == EmptyPolygonExterior::Keep {
+        if holes_in_empty_exterior {
             return polygon
                 .rings()
                 .skip(1)
@@ -72,14 +68,14 @@ fn has_only_rings<const Z: bool>(
 }
 
 /// Whether every ring of each polygon is a ring, or every one is empty (the empty polygon).
-/// With `empty_polygon_exterior=`[EmptyPolygonExterior::Keep],
+/// With `holes_in_empty_exterior=true`,
 /// an empty exterior may also have holes that are rings or empty.
 pub fn polygons_have_only_rings<const Z: bool>(
     array: &PolygonArray,
-    empty_polygon_exterior: EmptyPolygonExterior,
+    holes_in_empty_exterior: bool,
 ) -> BooleanArray {
     per_row_bool(&array.rows, |i| {
-        has_only_rings::<Z>(&array.get(i), empty_polygon_exterior)
+        has_only_rings::<Z>(&array.get(i), holes_in_empty_exterior)
     })
 }
 
@@ -89,6 +85,6 @@ pub fn multi_polygons_have_only_rings<const Z: bool>(array: &MultiPolygonArray) 
         array
             .get(i)
             .polygons()
-            .all(|polygon| has_only_rings::<Z>(&polygon, EmptyPolygonExterior::Null))
+            .all(|polygon| has_only_rings::<Z>(&polygon, false))
     })
 }
