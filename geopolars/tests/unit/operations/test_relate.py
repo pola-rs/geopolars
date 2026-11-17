@@ -92,9 +92,7 @@ def test_z_and_m_are_not_compared() -> None:
     line = "LINESTRING M (0 0 1, 1 1 2)"
 
     assert _relate((PolygonXYZ(), [a]), (PolygonXY(), [_SQUARE])) == ["2FFF1FFF2"]
-    assert _relate((LineStringXYM(), [line]), (PolygonXY(), [_SQUARE])) == [
-        "1FFF0F212"
-    ]
+    assert _relate((LineStringXYM(), [line]), (PolygonXY(), [_SQUARE])) == ["1FFF0F212"]
 
 
 @pytest.mark.parametrize(
@@ -214,14 +212,14 @@ def test_geos_raises_on_a_line_that_is_not_finite() -> None:
         _not_finite_lines()
 
 
-def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
-    assert _not_finite_lines(ignore_per_row_errors=True) == [None, "1FFF0FFF2"]
+def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
+    assert _not_finite_lines(on_row_error="null") == [None, "1FFF0FFF2"]
 
 
 def test_the_early_finite_check_raises_before_geos() -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         _not_finite_lines(early_finite_check=True)
-    assert _not_finite_lines(early_finite_check=True, ignore_per_row_errors=True) == [
+    assert _not_finite_lines(early_finite_check=True, on_row_error="null") == [
         None,
         "1FFF0FFF2",
     ]
@@ -233,7 +231,7 @@ def test_the_namespace_method_passes_its_options_on() -> None:
         [_series("a", LineStringXY(), rows), _series("b", LineStringXY(), rows)]
     )
 
-    out = df.select(pl.col("a").geo.relate("b", ignore_per_row_errors=True))
+    out = df.select(pl.col("a").geo.relate("b", on_row_error="null"))
 
     assert out["a"].to_list() == [None, "1FFF0FFF2"]
 

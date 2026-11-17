@@ -4,7 +4,7 @@ use geos::{Geom, GeometryTypes};
 use super::{
     coord_type, wrong_kind, CoordsBuilder, GeosGeometries, GeosRow, OffsetsBuilder, ValidityBuilder,
 };
-use crate::GeoComputeResult;
+use crate::{GeoComputeResult, OnRowError};
 
 impl GeosGeometries {
     /// Every GEOS geometry is freed once it is copied.
@@ -72,10 +72,10 @@ impl GeosGeometries {
     /// As GEOS gives a multipoint of one part as a plain point,
     /// a point is read as a single part, or as none if it is empty.
     /// A geometry that is not a point or multipoint is an error.
-    /// If `ignore_per_row_errors=true`, its row is null instead.
+    /// If `on_row_error=`[OnRowError::Null], its row is null instead.
     pub fn into_multi_point_array<const Z: bool>(
         self,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
     ) -> GeoComputeResult<MultiPointArray> {
         let mut validity = ValidityBuilder::with_capacity(self.geometries.len());
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
@@ -96,7 +96,7 @@ impl GeosGeometries {
                         }
                         true
                     }
-                    other => wrong_kind("multipoint", other, ignore_per_row_errors)?,
+                    other => wrong_kind("multipoint", other, on_row_error)?,
                 },
             };
             validity.push(is_valid);

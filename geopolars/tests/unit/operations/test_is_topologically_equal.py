@@ -277,14 +277,14 @@ def test_geos_raises_on_a_line_that_is_not_finite() -> None:
         _not_finite_lines()
 
 
-def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
-    assert _not_finite_lines(ignore_per_row_errors=True) == [None, True]
+def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
+    assert _not_finite_lines(on_row_error="null") == [None, True]
 
 
 def test_the_early_finite_check_raises_before_geos() -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         _not_finite_lines(early_finite_check=True)
-    assert _not_finite_lines(early_finite_check=True, ignore_per_row_errors=True) == [
+    assert _not_finite_lines(early_finite_check=True, on_row_error="null") == [
         None,
         True,
     ]
@@ -298,9 +298,7 @@ def test_the_namespace_method_passes_its_options_on() -> None:
         ]
     )
 
-    out = df.select(
-        pl.col("a").geo.is_topologically_equal("b", ignore_per_row_errors=True)
-    )
+    out = df.select(pl.col("a").geo.is_topologically_equal("b", on_row_error="null"))
 
     assert out["a"].to_list() == [None, True]
 

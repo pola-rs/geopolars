@@ -38,7 +38,7 @@ use std::ops::Range;
 
 use super::is_valid::is_closed_or_empty;
 use super::rings::offsets_of;
-use crate::{GeoComputeError, GeoComputeResult};
+use crate::{GeoComputeError, GeoComputeResult, OnRowError};
 use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
     ScalarLineString, ScalarMultiLineString, ScalarMultiPoint, ScalarMultiPolygon, ScalarPolygon,
@@ -616,7 +616,7 @@ pub struct SortOptions {
     pub descending: bool,
     /// `rings="rotate"` in Python.
     pub rotate_rings: bool,
-    pub ignore_per_row_errors: bool,
+    pub on_row_error: OnRowError,
 }
 
 /// The order map of every row, with `push_row` pushing that of a row that is not null.
@@ -660,18 +660,18 @@ fn lists_in_order<E: RingEntry>(
 }
 
 /// `rows`, with a row null where one of its rings (from `rings_of`) fails [is_closed_or_empty].
-/// Unless `ignore_per_row_errors=true`, the first such ring is returned as an error instead.
+/// With `on_row_error=`[OnRowError::Raise], the first such ring is returned as an error instead.
 fn rows_null_where_not_closed<const Z: bool, L: Iterator<Item = Range<usize>>>(
     rows: &List,
     coords: &ValidCoords,
     rings_of: impl Fn(usize) -> L,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<List> {
     let mut failed = Vec::new();
     for i in (0..rows.len()).filter(|&i| rows.is_valid(i)) {
         let not_closed = rings_of(i).find(|ring| !is_closed_or_empty::<Z>(coords, ring.clone()));
         if let Some(ring) = not_closed {
-            if !ignore_per_row_errors {
+            if on_row_error == OnRowError::Raise {
                 return Err(GeoComputeError::NotClosed {
                     vertices: ring.len(),
                 });
@@ -699,15 +699,11 @@ fn multi_points_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool
 
 fn line_strings_with_rings_rotated_with<const Z: bool, const M: bool>(
     array: &LineStringArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<LineStringArray> {
     let rings_of = |i| std::iter::once(array.rows.range(i));
-    let rows = rows_null_where_not_closed::<Z, _>(
-        &array.rows,
-        &array.coords,
-        rings_of,
-        ignore_per_row_errors,
-    )?;
+    let rows =
+        rows_null_where_not_closed::<Z, _>(&array.rows, &array.coords, rings_of, on_row_error)?;
     let mut sorter = PartSorter::default();
     let order: Vec<RingStart> = (0..rows.len())
         .map(|i| RingStart {
@@ -737,7 +733,7 @@ fn multi_line_strings_sorted_with<
     const ROTATE_RINGS: bool,
 >(
     array: &MultiLineStringArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<MultiLineStringArray>
 where
     Rings<ROTATE_RINGS>: RingEntryOf,
@@ -745,12 +741,7 @@ where
     let lines = &array.lines;
     let rows = if ROTATE_RINGS {
         let rings_of = |i| array.rows.range(i).map(|j| lines.range(j));
-        rows_null_where_not_closed::<Z, _>(
-            &array.rows,
-            &array.coords,
-            rings_of,
-            ignore_per_row_errors,
-        )?
+        rows_null_where_not_closed::<Z, _>(&array.rows, &array.coords, rings_of, on_row_error)?
     } else {
         array.rows.clone()
     };
@@ -777,19 +768,14 @@ fn polygons_with_holes_sorted_with<
     const ROTATE_RINGS: bool,
 >(
     array: &PolygonArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<PolygonArray>
 where
     Rings<ROTATE_RINGS>: RingEntryOf,
 {
     let rows = if ROTATE_RINGS {
         let rings_of = |i| array.rows.range(i).map(|j| array.rings.range(j));
-        rows_null_where_not_closed::<Z, _>(
-            &array.rows,
-            &array.coords,
-            rings_of,
-            ignore_per_row_errors,
-        )?
+        rows_null_where_not_closed::<Z, _>(&array.rows, &array.coords, rings_of, on_row_error)?
     } else {
         array.rows.clone()
     };
@@ -812,7 +798,7 @@ fn multi_polygons_sorted_with<
     const ROTATE_RINGS: bool,
 >(
     array: &MultiPolygonArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<MultiPolygonArray>
 where
     Rings<ROTATE_RINGS>: RingEntryOf,
@@ -820,7 +806,7 @@ where
     let (polygons, rings, coords) = (&array.polygons, &array.rings, &array.coords);
     let rows = if ROTATE_RINGS {
         let rings_of = |i| polygons.span(array.rows.range(i)).map(|j| rings.range(j));
-        rows_null_where_not_closed::<Z, _>(&array.rows, coords, rings_of, ignore_per_row_errors)?
+        rows_null_where_not_closed::<Z, _>(&array.rows, coords, rings_of, on_row_error)?
     } else {
         array.rows.clone()
     };
@@ -885,12 +871,12 @@ pub fn multi_points_sorted(array: &MultiPointArray, descending: bool) -> MultiPo
 /// Every linestring has to be closed or empty, as for [SortOptions::rotate_rings].
 pub fn line_strings_with_rings_rotated(
     array: &LineStringArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<LineStringArray> {
     let (z, m) = (array.coords.z().is_some(), array.coords.m().is_some());
     with_const_flags!(
         Z = z, M = m;
-        line_strings_with_rings_rotated_with::<Z, M>(array, ignore_per_row_errors)
+        line_strings_with_rings_rotated_with::<Z, M>(array, on_row_error)
     )
 }
 
@@ -903,7 +889,7 @@ pub fn multi_line_strings_sorted(
         Z = z, M = m, DESCENDING = options.descending, ROTATE_RINGS = options.rotate_rings;
         multi_line_strings_sorted_with::<Z, M, DESCENDING, ROTATE_RINGS>(
             array,
-            options.ignore_per_row_errors,
+            options.on_row_error,
         )
     )
 }
@@ -918,7 +904,7 @@ pub fn polygons_with_holes_sorted(
         Z = z, M = m, DESCENDING = options.descending, ROTATE_RINGS = options.rotate_rings;
         polygons_with_holes_sorted_with::<Z, M, DESCENDING, ROTATE_RINGS>(
             array,
-            options.ignore_per_row_errors,
+            options.on_row_error,
         )
     )
 }
@@ -934,7 +920,7 @@ pub fn multi_polygons_sorted(
         Z = z, M = m, DESCENDING = options.descending, ROTATE_RINGS = options.rotate_rings;
         multi_polygons_sorted_with::<Z, M, DESCENDING, ROTATE_RINGS>(
             array,
-            options.ignore_per_row_errors,
+            options.on_row_error,
         )
     )
 }

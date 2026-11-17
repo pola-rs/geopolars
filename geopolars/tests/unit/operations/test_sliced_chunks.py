@@ -96,15 +96,15 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
     "is_ccw": (lambda g: geo.is_ccw(g), {MultiPointXY}),
     "is_equal": (lambda g: geo.is_equal(g, g), set()),
     "is_topologically_equal": (
-        lambda g: geo.is_topologically_equal(g, g, ignore_per_row_errors=True),
+        lambda g: geo.is_topologically_equal(g, g, on_row_error="null"),
         set(),
     ),
     "relate": (
-        lambda g: geo.relate(g, g, ignore_per_row_errors=True),
+        lambda g: geo.relate(g, g, on_row_error="null"),
         set(),
     ),
     "shortest_line_between": (
-        lambda g: geo.shortest_line_between(g, g, ignore_per_row_errors=True),
+        lambda g: geo.shortest_line_between(g, g, on_row_error="null"),
         set(),
     ),
     "rings_overlap": (
@@ -112,9 +112,7 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         {MultiPointXY, PolygonXY, MultiLineStringXY, MultiPolygonXY},
     ),
     "intersection": (
-        lambda g: geo.intersection(
-            g, g, allow_splitting=True, ignore_per_row_errors=True
-        ),
+        lambda g: geo.intersection(g, g, allow_splitting=True, on_row_error="null"),
         set(),
     ),
     "difference": (
@@ -123,18 +121,16 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
             g,
             geo.translate(g, (0.5, 0.0)),
             allow_splitting=True,
-            ignore_per_row_errors=True,
+            on_row_error="null",
         ),
         set(),
     ),
     "hausdorff_line_between": (
-        lambda g: geo.hausdorff_line_between(g, g, ignore_per_row_errors=True),
+        lambda g: geo.hausdorff_line_between(g, g, on_row_error="null"),
         set(),
     ),
     "hausdorff_line_between against one": (
-        lambda g: geo.hausdorff_line_between(
-            g, pl.col(g).last(), ignore_per_row_errors=True
-        ),
+        lambda g: geo.hausdorff_line_between(g, pl.col(g).last(), on_row_error="null"),
         set(),
     ),
     "exterior": (

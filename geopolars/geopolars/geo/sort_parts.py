@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Literal, get_args
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, PointType
 from geopolars.geo._dispatch import on_geometry
 
@@ -27,7 +28,7 @@ def _sort_parts(
     *,
     descending: bool,
     rings: Rings,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> pl.Expr:
     if isinstance(geometry, PointType) or (
         isinstance(geometry, LineStringType) and rings == "keep"
@@ -40,7 +41,7 @@ def _sort_parts(
         kwargs={
             "descending": descending,
             "rings": rings,
-            "ignore_per_row_errors": ignore_per_row_errors,
+            "on_row_error": on_row_error,
         },
         is_elementwise=True,
     )
@@ -52,7 +53,7 @@ def sort_parts(
     *,
     descending: bool = False,
     rings: Rings = "keep",
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """The geometry with its parts sorted.
     {keeps_type_dimension_and_crs}
@@ -92,8 +93,8 @@ def sort_parts(
 
     With `rings="rotate"`, every ring has to be closed (see `close_rings`), or empty.
     Otherwise this raises.
-    TODO: reusable doc comment for ignore_per_row_errors
-    With `ignore_per_row_errors=True`, such a row gives a null geometry instead.
+    TODO: reusable doc comment for on_row_error
+    With `on_row_error="null"`, such a row gives a null geometry instead.
     The linestrings that the table says are rotated count as rings too.
     They are not checked for being a ring first,
     so an open one is not left as it is, but treated the same way.
@@ -107,6 +108,7 @@ def sort_parts(
     df.select(geo.sort_parts("islands", rings="rotate"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     if rings not in get_args(Rings):
         msg = f"`rings` must be one of {list(get_args(Rings))}, got {rings!r}"
         raise ValueError(msg)
@@ -116,6 +118,6 @@ def sort_parts(
             _sort_parts,
             descending=descending,
             rings=rings,
-            ignore_per_row_errors=ignore_per_row_errors,
+            on_row_error=on_row_error,
         ),
     )

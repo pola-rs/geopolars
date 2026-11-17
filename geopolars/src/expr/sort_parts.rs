@@ -1,7 +1,9 @@
 //! Sorting the parts of a geometry.
 //! Implements the Python `sort_parts`.
 
+use crate::common_arguments::OnRowErrorDef;
 use geopolars_compute::native::SortOptions;
+use geopolars_compute::OnRowError;
 use geopolars_core::NestedKind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
@@ -23,7 +25,8 @@ enum RingsKwarg {
 pub struct SortPartsKwargs {
     descending: bool,
     rings: RingsKwarg,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
 fn kernel_output_type_sort_parts(input_fields: &[Field]) -> PolarsResult<Field> {
@@ -38,7 +41,7 @@ fn sort_parts(inputs: &[Series], kwargs: SortPartsKwargs) -> PolarsResult<Series
     let options = SortOptions {
         descending: kwargs.descending,
         rotate_rings: kwargs.rings == RingsKwarg::Rotate,
-        ignore_per_row_errors: kwargs.ignore_per_row_errors,
+        on_row_error: kwargs.on_row_error,
     };
     let storage = inputs[0].ext()?.storage();
     let chunks = storage

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use geopolars_compute::native::{against_one, pairwise, DistanceMetric};
-use geopolars_compute::with_const_flags;
+use geopolars_compute::{with_const_flags, OnRowError};
 use geopolars_views::{Coords, PointArray};
 use polars_arrow::array::{Array, PrimitiveArray};
 use polars_core::prelude::{polars_err, PolarsResult};
@@ -25,7 +25,7 @@ pub fn pairwise_distances(
     metric: &impl DistanceMetric<Error: Display>,
 ) -> PolarsResult<PrimitiveArray<f64>> {
     let (a, b) = (points(a)?, points(b)?);
-    with_const_flags!(Z = both_have_z(&a, &b); pairwise::<Z, true, _>(metric, &a, &b))
+    with_const_flags!(Z = both_have_z(&a, &b); pairwise::<Z, _>(metric, &a, &b, OnRowError::Raise))
         .map_err(|e| polars_err!(ComputeError: "{e}"))
 }
 
@@ -45,7 +45,7 @@ pub fn distances_to_one(
             .get(0)
             .position::<false, Z>()
             .expect("`NULLS=false` always gives one");
-        against_one::<Z, true, _>(metric, one, &many)
+        against_one::<Z, _>(metric, one, &many, OnRowError::Raise)
     })
     .map_err(|e| polars_err!(ComputeError: "{e}"))
 }

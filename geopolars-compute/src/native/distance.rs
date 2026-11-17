@@ -9,13 +9,6 @@
 //! Every function here is generic over `Z`.
 //! If `Z=true`, the difference in z counts towards the distance.
 //!
-//! ## `STOP_ON_ERROR`
-//!
-//! Every function here is generic over `STOP_ON_ERROR`.
-//! If `STOP_ON_ERROR=true`, it stops at the first error and returns it.
-//! If `STOP_ON_ERROR=false`, it marks that row null and carries on, so it never fails.
-//! For [against_one], an error on `one` marks every row null.
-//!
 //! ## `NULLS`
 //!
 //! `pairwise_values` and `against_one_values` are generic over `NULLS`.
@@ -28,7 +21,7 @@ use geopolars_views::output::{f64_array, f64_array_masked};
 use geopolars_views::PointArray;
 use polars_arrow::array::PrimitiveArray;
 
-use crate::{BaseMetric, GeoComputeError, GeodesicMetric, Planar, WithHeight};
+use crate::{BaseMetric, GeoComputeError, GeodesicMetric, OnRowError, Planar, WithHeight};
 
 /// How a segment is measured: on the plane, or along an ellipsoid.
 /// Generic, so every metric and dimension gets a loop of its own.
@@ -102,10 +95,11 @@ impl DistanceMetric for GeodesicMetric {
 }
 
 /// The distance between the points of `a` and `b`, which are the same length.
-pub fn pairwise<const Z: bool, const STOP_ON_ERROR: bool, M: DistanceMetric>(
+pub fn pairwise<const Z: bool, M: DistanceMetric>(
     metric: &M,
     a: &PointArray,
     b: &PointArray,
+    on_row_error: OnRowError,
 ) -> Result<PrimitiveArray<f64>, M::Error> {
     debug_assert!(
         a.coords.len() == b.coords.len(),
@@ -119,7 +113,7 @@ pub fn pairwise<const Z: bool, const STOP_ON_ERROR: bool, M: DistanceMetric>(
         M::MEASURES_NULL_SLOTS || (a.coords.is_all_valid() && b.coords.is_all_valid());
     let (values, failed) = with_const_flags!(
         NULLS = !measure_null_points_anyway;
-        pairwise_values::<NULLS, Z, STOP_ON_ERROR, _>(metric, a, b)
+        pairwise_values::<NULLS, Z, _>(metric, a, b, on_row_error)
     )?;
     Ok(f64_array_masked(
         values,
@@ -132,10 +126,11 @@ pub fn pairwise<const Z: bool, const STOP_ON_ERROR: bool, M: DistanceMetric>(
 /// [pairwise]'s distances, and the rows that failed.
 /// A null point's distance is masked by the validity afterwards.
 #[inline(always)]
-fn pairwise_values<const NULLS: bool, const Z: bool, const STOP_ON_ERROR: bool, M>(
+fn pairwise_values<const NULLS: bool, const Z: bool, M>(
     metric: &M,
     a: &PointArray,
     b: &PointArray,
+    on_row_error: OnRowError,
 ) -> Result<(Vec<f64>, Vec<usize>), M::Error>
 where
     M: DistanceMetric,
@@ -157,7 +152,7 @@ where
                 .and_then(|here| Ok(metric.segment::<Z>(here, metric.vertex(there)?)));
             match distance {
                 Ok(distance) => *value = distance,
-                Err(e) if STOP_ON_ERROR => return Err(e),
+                Err(e) if on_row_error == OnRowError::Raise => return Err(e),
                 Err(_) => failed.push(i),
             }
         }
@@ -168,10 +163,12 @@ where
 
 /// The distance between the single point at `one` and every point of `many`.
 /// `one` is prepared (reprojected) once, rather than on every row.
-pub fn against_one<const Z: bool, const STOP_ON_ERROR: bool, M: DistanceMetric>(
+/// With `on_row_error=`[OnRowError::Null], an error on `one` makes every row null.
+pub fn against_one<const Z: bool, M: DistanceMetric>(
     metric: &M,
     one: [f64; 3],
     many: &PointArray,
+    on_row_error: OnRowError,
 ) -> Result<PrimitiveArray<f64>, M::Error> {
     // If any of the 'one' is NaN, then everything will become NaN anyway,
     // so we might as well exit early.
@@ -187,7 +184,7 @@ pub fn against_one<const Z: bool, const STOP_ON_ERROR: bool, M: DistanceMetric>(
     }
     let one = match metric.vertex(one) {
         Ok(one) => one,
-        Err(e) if STOP_ON_ERROR => return Err(e),
+        Err(e) if on_row_error == OnRowError::Raise => return Err(e),
         Err(_) => {
             let every_row = (0..many.coords.len()).collect::<Vec<_>>();
             return Ok(f64_array_masked(
@@ -201,7 +198,7 @@ pub fn against_one<const Z: bool, const STOP_ON_ERROR: bool, M: DistanceMetric>(
     let measure_null_points_anyway = M::MEASURES_NULL_SLOTS || many.coords.is_all_valid();
     let (values, failed) = with_const_flags!(
         NULLS = !measure_null_points_anyway;
-        against_one_values::<NULLS, Z, STOP_ON_ERROR, _>(metric, one, many)
+        against_one_values::<NULLS, Z, _>(metric, one, many, on_row_error)
     )?;
     Ok(f64_array_masked(
         values,
@@ -214,10 +211,11 @@ pub fn against_one<const Z: bool, const STOP_ON_ERROR: bool, M: DistanceMetric>(
 /// [against_one]'s distances, and the rows that failed.
 /// A null point's distance is masked by the validity afterwards.
 #[inline(always)]
-fn against_one_values<const NULLS: bool, const Z: bool, const STOP_ON_ERROR: bool, M>(
+fn against_one_values<const NULLS: bool, const Z: bool, M>(
     metric: &M,
     one: M::Vertex,
     many: &PointArray,
+    on_row_error: OnRowError,
 ) -> Result<(Vec<f64>, Vec<usize>), M::Error>
 where
     M: DistanceMetric,
@@ -231,7 +229,7 @@ where
         if let Some(there) = many.get(i).position::<NULLS, Z>() {
             match metric.vertex(there) {
                 Ok(there) => *value = metric.segment::<Z>(one, there),
-                Err(e) if STOP_ON_ERROR => return Err(e),
+                Err(e) if on_row_error == OnRowError::Raise => return Err(e),
                 Err(_) => failed.push(i),
             }
         }

@@ -272,7 +272,7 @@ _NO_SPLITS = {
 
 
 @pytest.mark.parametrize("dimension", _SPLITS)
-def test_a_split_gives_null_with_ignore_per_row_errors(dimension: str) -> None:
+def test_a_split_gives_null_with_on_row_error_null(dimension: str) -> None:
     a, b, keep, _ = _SPLITS[dimension]
     a_whole, b_whole, whole = _NO_SPLITS[dimension]
 
@@ -280,7 +280,7 @@ def test_a_split_gives_null_with_ignore_per_row_errors(dimension: str) -> None:
         (a[0], [a[1], a_whole]),
         (b[0], [b[1], b_whole]),
         keep=keep,
-        ignore_per_row_errors=True,
+        on_row_error="null",
     )
 
     _assert_geometries(out, [None, whole])
@@ -333,7 +333,7 @@ def test_crossing_lines_give_their_crossings_when_points_are_kept() -> None:
     b = (LineStringXY(), ["LINESTRING (0 4, 4 0)", _TOUCHING_TWICE])
 
     assert _to_wkt(_intersection(a, b)) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
-    out = _intersection(a, b, keep="points", ignore_per_row_errors=True)
+    out = _intersection(a, b, keep="points", on_row_error="null")
     assert out.dtype == PointXY()
     _assert_geometries(out, ["POINT (2 2)", None])
     out = _intersection(a, b, keep="points", allow_splitting=True)
@@ -738,8 +738,8 @@ def test_geos_raises_on_a_line_that_is_not_finite() -> None:
         _not_finite_lines()
 
 
-def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
-    out = _not_finite_lines(ignore_per_row_errors=True)
+def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
+    out = _not_finite_lines(on_row_error="null")
 
     _assert_geometries(out, [None, "LINESTRING (0 0, 1 0, 1 1)"])
 
@@ -747,26 +747,26 @@ def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
 def test_the_early_finite_check_raises_before_geos() -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         _not_finite_lines(early_finite_check=True)
-    out = _not_finite_lines(early_finite_check=True, ignore_per_row_errors=True)
+    out = _not_finite_lines(early_finite_check=True, on_row_error="null")
     _assert_geometries(out, [None, "LINESTRING (0 0, 1 0, 1 1)"])
 
 
 @pytest.mark.parametrize("single_first", [True, False])
-def test_ignore_per_row_errors_with_a_single_geometry(single_first: bool) -> None:
+def test_on_row_error_null_with_a_single_geometry(single_first: bool) -> None:
     def run(one: pl.Series, many: pl.Series, **kwargs: bool) -> pl.Series:
         a, b = (one, "many") if single_first else ("many", one)
         return pl.DataFrame(many).select(geo.intersection(a, b, **kwargs)).to_series()
 
     big = _wkt("one", PolygonXY(), ["POLYGON ((-1 -1, 3 -1, 3 3, -1 3, -1 -1))"])
     lines = _series("many", LineStringXY(), [_NOT_FINITE_LINE, _FINITE_LINE])
-    out = run(big, lines, ignore_per_row_errors=True)
+    out = run(big, lines, on_row_error="null")
     _assert_geometries(out, [None, "LINESTRING (0 0, 1 0, 1 1)"])
 
     bad = _series("one", LineStringXY(), [_NOT_FINITE_LINE])
     squares = _wkt("many", PolygonXY(), [_SQUARE, _SQUARE])
     with pytest.raises(ComputeError, match="NaN/Inf"):
         run(bad, squares)
-    assert run(bad, squares, ignore_per_row_errors=True).to_list() == [None, None]
+    assert run(bad, squares, on_row_error="null").to_list() == [None, None]
 
 
 def test_the_namespace_method_passes_its_options_on() -> None:
@@ -774,7 +774,7 @@ def test_the_namespace_method_passes_its_options_on() -> None:
         [_wkt("a", PolygonXY(), [_U]), _wkt("b", PolygonXY(), [_ACROSS_THE_ARMS])]
     )
 
-    out = df.select(pl.col("a").geo.intersection("b", ignore_per_row_errors=True))
+    out = df.select(pl.col("a").geo.intersection("b", on_row_error="null"))
     assert out["a"].to_list() == [None]
     out = df.select(
         pl.col("a").geo.intersection(
@@ -895,7 +895,7 @@ def test_matches_shapely(a_kind: str, b_kind: str, keep: str | None) -> None:
 
     def intersections(**kwargs: bool) -> pl.Series:
         out = df.select(
-            geo.intersection("a", "b", keep=keep, ignore_per_row_errors=True, **kwargs)
+            geo.intersection("a", "b", keep=keep, on_row_error="null", **kwargs)
         )
         return out["a"]
 

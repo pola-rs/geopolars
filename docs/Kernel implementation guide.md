@@ -19,7 +19,6 @@ Read them as follows:
 
 | In the code | In these guides |
 | - | - |
-| `ignore_per_row_errors: bool`, `STOP_ON_ERROR` | `on_row_error` (`OnRowError`) |
 | `early_finite_check: bool`, `EARLY_FINITE_CHECK` | `early_coord_check` |
 | `too_short`, `TooShort` | `short_lines` |
 | `empty_exterior`, `EmptyExterior` | `empty_polygon_exterior` |

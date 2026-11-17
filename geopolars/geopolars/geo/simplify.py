@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import MultiPointType, PointType
 from geopolars.geo._dispatch import on_geometry
 
@@ -28,7 +29,7 @@ def simplify(
     tolerance: float,
     *,
     preserve_topology: bool = False,
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """Every geometry with fewer vertices,
@@ -89,6 +90,7 @@ def simplify(
     df.select(geo.simplify("parcel", 0.5))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     if not tolerance >= 0:
         msg = f"simplify expects a tolerance of at least 0, got: {tolerance!r}"
         raise ValueError(msg)
@@ -103,7 +105,7 @@ def simplify(
             kwargs={
                 "tolerance": float(tolerance),
                 "preserve_topology": preserve_topology,
-                "ignore_per_row_errors": ignore_per_row_errors,
+                "on_row_error": on_row_error,
                 "early_finite_check": early_finite_check,
             },
             is_elementwise=True,

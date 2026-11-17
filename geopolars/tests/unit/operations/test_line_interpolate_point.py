@@ -196,7 +196,7 @@ def test_a_geometry_geos_fails_on_raises_or_is_null(
     with pytest.raises(ComputeError, match="point array"):
         _interpolate(df, 1.0)
 
-    assert _interpolate(df, 1.0, ignore_per_row_errors=True) == [None, _point(1, 0)]
+    assert _interpolate(df, 1.0, on_row_error="null") == [None, _point(1, 0)]
 
 
 def test_a_multilinestring_of_empty_parts_gives_an_empty_point() -> None:
@@ -239,7 +239,7 @@ def test_a_non_finite_row_distance_raises_or_is_null(distance: float) -> None:
     with pytest.raises(ComputeError, match="finite"):
         _interpolate(df, "d")
 
-    assert _interpolate(df, "d", ignore_per_row_errors=True) == [None, _point(1, 0)]
+    assert _interpolate(df, "d", on_row_error="null") == [None, _point(1, 0)]
 
 
 def test_a_distance_series_of_one_value_is_broadcast() -> None:
@@ -292,9 +292,10 @@ def test_a_non_finite_vertex_goes_to_geos_or_is_caught_early() -> None:
     assert _interpolate(df, 0.5) == [_point(4, 0), _point(0.5, 0)]
     with pytest.raises(ComputeError, match="finite"):
         _interpolate(df, 1.0, early_finite_check=True)
-    assert _interpolate(
-        df, 1.0, early_finite_check=True, ignore_per_row_errors=True
-    ) == [None, _point(1, 0)]
+    assert _interpolate(df, 1.0, early_finite_check=True, on_row_error="null") == [
+        None,
+        _point(1, 0),
+    ]
 
 
 def test_the_namespace_forwards() -> None:

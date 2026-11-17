@@ -224,13 +224,13 @@ def test_a_split_raises_without_allow_splitting(dimension: str) -> None:
 
 
 @pytest.mark.parametrize("dimension", _SPLITS)
-def test_a_split_gives_null_with_ignore_per_row_errors(dimension: str) -> None:
+def test_a_split_gives_null_with_on_row_error_null(dimension: str) -> None:
     a, b, _, _ = _SPLITS[dimension]
 
     out = _difference(
         (a[0], [a[1], a[1]]),
         (b[0], [b[1], _FAR]),
-        ignore_per_row_errors=True,
+        on_row_error="null",
     )
 
     _assert_geometries(out, [None, a[1]])
@@ -885,8 +885,8 @@ def test_geos_raises_on_a_line_that_is_not_finite() -> None:
         _not_finite_lines()
 
 
-def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
-    out = _not_finite_lines(ignore_per_row_errors=True)
+def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
+    out = _not_finite_lines(on_row_error="null")
 
     _assert_geometries(out, [None, "LINESTRING EMPTY"])
 
@@ -894,7 +894,7 @@ def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
 def test_the_early_finite_check_raises_before_geos() -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         _not_finite_lines(early_finite_check=True)
-    out = _not_finite_lines(early_finite_check=True, ignore_per_row_errors=True)
+    out = _not_finite_lines(early_finite_check=True, on_row_error="null")
     _assert_geometries(out, [None, "LINESTRING EMPTY"])
 
 
@@ -922,25 +922,25 @@ def test_an_empty_b_still_fails_on_an_a_that_is_not_finite(
 
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         run()
-    assert _storage(run(ignore_per_row_errors=True)) == [_storage(a)[0], None]
+    assert _storage(run(on_row_error="null")) == [_storage(a)[0], None]
 
 
 @pytest.mark.parametrize("single_first", [True, False])
-def test_ignore_per_row_errors_with_a_single_geometry(single_first: bool) -> None:
+def test_on_row_error_null_with_a_single_geometry(single_first: bool) -> None:
     def run(one: pl.Series, many: pl.Series, **kwargs: bool) -> pl.Series:
         a, b = (one, "many") if single_first else ("many", one)
         return pl.DataFrame(many).select(geo.difference(a, b, **kwargs)).to_series()
 
     around = _wkt("one", PolygonXY(), [_AROUND])
     lines = _series("many", LineStringXY(), [_NOT_FINITE_LINE, _FINITE_LINE])
-    out = run(around, lines, ignore_per_row_errors=True)
+    out = run(around, lines, on_row_error="null")
     _assert_geometries(out, [None, _AROUND if single_first else "LINESTRING EMPTY"])
 
     bad = _series("one", LineStringXY(), [_NOT_FINITE_LINE])
     squares = _wkt("many", PolygonXY(), [_SQUARE, _SQUARE])
     with pytest.raises(ComputeError, match="NaN/Inf"):
         run(bad, squares)
-    assert run(bad, squares, ignore_per_row_errors=True).to_list() == [None, None]
+    assert run(bad, squares, on_row_error="null").to_list() == [None, None]
 
 
 def test_the_namespace_method_passes_its_options_on() -> None:
@@ -948,7 +948,7 @@ def test_the_namespace_method_passes_its_options_on() -> None:
         [_wkt("a", PolygonXY(), [_WIDE]), _wkt("b", PolygonXY(), [_STRIP])]
     )
 
-    out = df.select(pl.col("a").geo.difference("b", ignore_per_row_errors=True))
+    out = df.select(pl.col("a").geo.difference("b", on_row_error="null"))
     assert out["a"].to_list() == [None]
     out = df.select(
         pl.col("a").geo.difference(
@@ -1060,7 +1060,7 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
     kept = [_kept_parts(shapely.difference(x, y), dimension) for x, y in zip(a, b)]
 
     def differences(**kwargs: bool) -> pl.Series:
-        out = df.select(geo.difference("a", "b", ignore_per_row_errors=True, **kwargs))
+        out = df.select(geo.difference("a", "b", on_row_error="null", **kwargs))
         return out["a"]
 
     every_part = differences(allow_splitting=True)

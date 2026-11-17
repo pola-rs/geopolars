@@ -134,14 +134,14 @@ This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",
     "geos_errors": """\
 A geometry GEOS fails on raises GEOS's error, failing the query.
-With `ignore_per_row_errors=True`, it gives a null {output} instead.""",
+With `on_row_error="null"`, it gives a null {output} instead.""",
     "geos_non_finite": """\
 GEOS supports neither empty points inside a geometry (a vertex with NaN on every axis)
 nor any other NaN or infinite x or y.
 By default they go to GEOS as they are.""",
     "early_finite_check": """\
 With `early_finite_check=True`, a geometry with such a vertex is caught before it reaches GEOS.
-It then raises, or gives a null {output} with `ignore_per_row_errors=True`.
+It then raises, or gives a null {output} with `on_row_error="null"`.
 This only adds a short path.
 It pays off when you expect many non-finite coordinates in your data.""",
     "ccw_outer": """\

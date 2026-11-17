@@ -17,7 +17,7 @@ use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
     OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
 };
-use crate::GeoComputeResult;
+use crate::{GeoComputeResult, OnRowError};
 
 impl ToGeos for ScalarLineString<'_> {
     type Geos = Geometry;
@@ -31,7 +31,7 @@ impl ToGeosRows for LineStringArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
@@ -43,7 +43,7 @@ impl ToGeosRows for LineStringArray {
             &self.rows,
             &axes,
             as_empty,
-            ignore_per_row_errors,
+            on_row_error,
             early_finite_check,
             |vertices| vertices,
             |vertices| line_string_to_geos(&axes, vertices),
@@ -67,11 +67,11 @@ impl ToGeosRows for MultiLineStringArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
-        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-        multi_line_strings_to_geos_rows(self, false, as_empty, ignore, early)
+        let early = early_finite_check;
+        multi_line_strings_to_geos_rows(self, false, as_empty, on_row_error, early)
     }
 }
 
@@ -81,7 +81,7 @@ pub(super) fn multi_line_strings_to_geos_rows(
     array: &MultiLineStringArray,
     drop_empty_parts: bool,
     as_empty: Option<&Bitmap>,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     early_finite_check: bool,
 ) -> GeoComputeResult<GeosGeometries> {
     let axes = axes(&array.coords);
@@ -93,7 +93,7 @@ pub(super) fn multi_line_strings_to_geos_rows(
         &array.rows,
         &axes,
         as_empty,
-        ignore_per_row_errors,
+        on_row_error,
         early_finite_check,
         |parts| array.lines.span(parts),
         |parts| multi_line_string_to_geos(&axes, &array.lines, parts, drop_empty_parts),
@@ -139,10 +139,10 @@ impl GeosGeometries {
     /// Our linestring array of the geometries, one row each.
     /// Every GEOS geometry is freed once it is copied.
     /// A geometry that is not a linestring is an error.
-    /// If `ignore_per_row_errors=true`, its row is null instead.
+    /// If `on_row_error=`[OnRowError::Null], its row is null instead.
     pub fn into_line_string_array<const Z: bool>(
         self,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
     ) -> GeoComputeResult<LineStringArray> {
         let mut validity = ValidityBuilder::with_capacity(self.geometries.len());
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
@@ -156,7 +156,7 @@ impl GeosGeometries {
                         coords.push::<Z, false>(&line_string)?;
                         true
                     }
-                    other => wrong_kind("linestring", other, ignore_per_row_errors)?,
+                    other => wrong_kind("linestring", other, on_row_error)?,
                 },
             };
             validity.push(is_valid);
@@ -174,7 +174,7 @@ impl GeosGeometries {
     /// A geometry that is not a linestring or multilinestring fails the same way.
     pub fn into_multi_line_string_array<const Z: bool>(
         self,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
     ) -> GeoComputeResult<MultiLineStringArray> {
         let mut validity = ValidityBuilder::with_capacity(self.geometries.len());
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
@@ -198,7 +198,7 @@ impl GeosGeometries {
                         }
                         true
                     }
-                    other => wrong_kind("multilinestring", other, ignore_per_row_errors)?,
+                    other => wrong_kind("multilinestring", other, on_row_error)?,
                 },
             };
             validity.push(is_valid);

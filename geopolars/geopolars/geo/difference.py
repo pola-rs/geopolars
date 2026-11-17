@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
 if TYPE_CHECKING:
@@ -24,7 +25,7 @@ def difference(
     *,
     allow_splitting: bool = False,
     ccw_outer: bool = False,
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """The geometry you get when you subtract `b` from `a`.
@@ -74,7 +75,7 @@ def difference(
     {early_finite_check}
     A row where `b` is empty does not go to GEOS,
     but raises on such a vertex in `a` whatever `early_finite_check` is
-    (or gives a null {output} with `ignore_per_row_errors=True`).
+    (or gives a null {output} with `on_row_error="null"`).
     GEOS itself does not raise on every such vertex,
     so this row can be stricter than one that GEOS computes.
 
@@ -91,10 +92,11 @@ def difference(
     df.select(geo.difference("trail", "private_land", allow_splitting=True))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     kwargs = {
         "allow_splitting": allow_splitting,
         "ccw_outer": ccw_outer,
-        "ignore_per_row_errors": ignore_per_row_errors,
+        "on_row_error": on_row_error,
         "early_finite_check": early_finite_check,
     }
 

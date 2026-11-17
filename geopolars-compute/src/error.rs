@@ -3,6 +3,8 @@ use std::fmt;
 use geopolars_views::MIN_RING_VERTICES;
 use proj::ProjError;
 
+use crate::OnRowError;
+
 /// An error from one of the kernels of this crate.
 #[derive(Debug)]
 pub enum GeoComputeError {
@@ -42,15 +44,15 @@ pub enum GeoComputeError {
 
 pub type GeoComputeResult<T> = Result<T, GeoComputeError>;
 
-/// The result of one row, or `None` if it failed and `ignore_per_row_errors=true`.
+/// The result of one row, or `None` if it failed and `on_row_error=`[OnRowError::Null].
 #[cfg(any(feature = "geos", feature = "rsgeo"))]
 #[inline(always)]
 pub(crate) fn row_or_null<T>(
     result: GeoComputeResult<Option<T>>,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<Option<T>> {
     match result {
-        Err(_) if ignore_per_row_errors => Ok(None),
+        Err(_) if on_row_error == OnRowError::Null => Ok(None),
         result => result,
     }
 }

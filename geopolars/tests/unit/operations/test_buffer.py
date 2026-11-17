@@ -89,7 +89,7 @@ def test_the_output_is_xy_polygons_or_multipolygons(
         (dimension.multilinestrings(ring_coords), MultiPolygonXY()),
         (dimension.multipolygons(multipolygon_coords), MultiPolygonXY()),
     ):
-        out = df.select(geo.buffer(df.columns[0], 1.0, ignore_per_row_errors=True))
+        out = df.select(geo.buffer(df.columns[0], 1.0, on_row_error="null"))
 
         assert out.schema[df.columns[0]] == expected
 
@@ -116,7 +116,7 @@ def test_allow_splitting_gives_multipolygons_for_a_negative_distance(
         (dimension.multipolygons(multipolygon_coords), MultiPolygonXY()),
     ):
         buffered = geo.buffer(
-            df.columns[0], distance, allow_splitting=True, ignore_per_row_errors=True
+            df.columns[0], distance, allow_splitting=True, on_row_error="null"
         )
 
         assert df.select(buffered).schema[df.columns[0]] == expected
@@ -186,7 +186,7 @@ def test_a_polygon_split_in_two_raises() -> None:
 def test_a_polygon_split_in_two_is_null_when_ignoring_errors() -> None:
     df = _column(PolygonXY, [_DUMBBELL], [_SQUARE])
 
-    [split, square] = _buffered(df, -0.5, ignore_per_row_errors=True)
+    [split, square] = _buffered(df, -0.5, on_row_error="null")
 
     assert split is None
     assert len(square) == 1
@@ -289,9 +289,7 @@ def test_a_non_finite_vertex_is_caught_early() -> None:
     with pytest.raises(ComputeError, match="finite"):
         _buffered(df, 1.0, early_finite_check=True)
 
-    [caught, line] = _buffered(
-        df, 1.0, early_finite_check=True, ignore_per_row_errors=True
-    )
+    [caught, line] = _buffered(df, 1.0, early_finite_check=True, on_row_error="null")
     assert caught is None
     assert line is not None
 
@@ -419,7 +417,7 @@ def test_an_invalid_row_distance_raises_or_is_null(
     with pytest.raises(ComputeError, match=match):
         df.select(geo.buffer("geom", "d", **kwargs))  # type: ignore[arg-type]
 
-    out = df.select(geo.buffer("geom", "d", ignore_per_row_errors=True, **kwargs))  # type: ignore[arg-type]
+    out = df.select(geo.buffer("geom", "d", on_row_error="null", **kwargs))  # type: ignore[arg-type]
     [invalid, valid] = out.to_series().ext.storage().to_list()
     assert invalid is None
     assert valid is not None

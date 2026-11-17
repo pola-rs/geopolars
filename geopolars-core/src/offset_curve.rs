@@ -2,6 +2,7 @@ use geopolars_compute::geos::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, BufferDistance,
     OffsetCurveStyle,
 };
+use geopolars_compute::OnRowError;
 use geopolars_views::{downcast, GeometryArray, LineStringArray, MultiLineStringArray};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -19,24 +20,24 @@ pub fn offset_curves(
     into_multi: bool,
     distance: BufferDistance,
     style: &OffsetCurveStyle,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     early_finite_check: bool,
 ) -> PolarsResult<GeometryArray> {
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+    let early = early_finite_check;
     match (kind, into_multi) {
         (LineKind::LineString, false) => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            offset_curves_into_line_strings(&array, distance, style, ignore, early)
+            offset_curves_into_line_strings(&array, distance, style, on_row_error, early)
                 .map(GeometryArray::LineString)
         }
         (LineKind::LineString, true) => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            offset_curves_into_multi_line_strings(&array, distance, style, ignore, early)
+            offset_curves_into_multi_line_strings(&array, distance, style, on_row_error, early)
                 .map(GeometryArray::MultiLineString)
         }
         (LineKind::MultiLineString, _) => {
             let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            offset_curves_into_multi_line_strings(&array, distance, style, ignore, early)
+            offset_curves_into_multi_line_strings(&array, distance, style, on_row_error, early)
                 .map(GeometryArray::MultiLineString)
         }
     }

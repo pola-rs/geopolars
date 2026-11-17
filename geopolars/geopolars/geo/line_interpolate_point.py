@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType
 from geopolars.geo._dispatch import on_geometry
 from geopolars.geo.buffer import _check_one_of, _distances_of
@@ -31,7 +32,7 @@ def line_interpolate_point(
     distance: float | IntoExprColumn,
     *,
     mode: Literal["absolute", "normalized"] = "absolute",
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """
@@ -46,7 +47,7 @@ def line_interpolate_point(
     or a column (or expression) with one distance per geometry.
     A null distance gives a null point, also for an empty geometry.
     A NaN or infinite distance in a column raises.
-    With `ignore_per_row_errors=True`, such a row gives a null point instead.
+    With `on_row_error="null"`, such a row gives a null point instead.
     A linestring without vertices or a multilinestring without parts
     still gives an empty point for such a distance.
 
@@ -70,6 +71,7 @@ def line_interpolate_point(
     df.select(geo.line_interpolate_point("road", 0.5, mode="normalized"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     constant = isinstance(distance, int | float)
     if constant and not math.isfinite(distance):
         msg = f"line_interpolate_point expects a finite distance, got: {distance!r}"
@@ -92,7 +94,7 @@ def line_interpolate_point(
                 # `None` when the distances are the second argument.
                 "distance": float(distance) if constant else None,
                 "mode": mode,
-                "ignore_per_row_errors": ignore_per_row_errors,
+                "on_row_error": on_row_error,
                 "early_finite_check": early_finite_check,
             },
             is_elementwise=True,

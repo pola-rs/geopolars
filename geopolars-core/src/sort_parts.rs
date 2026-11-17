@@ -29,8 +29,7 @@ pub fn sort_parts(
         NestedKind::LineString => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
             GeometryArray::LineString(
-                line_strings_with_rings_rotated(&array, options.ignore_per_row_errors)
-                    .into_polars()?,
+                line_strings_with_rings_rotated(&array, options.on_row_error).into_polars()?,
             )
         }
         NestedKind::MultiPoint => {

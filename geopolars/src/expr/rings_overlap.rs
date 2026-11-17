@@ -1,6 +1,8 @@
 //! Whether two rings overlap.
 //! Implements the Python `rings_overlap`.
 
+use crate::common_arguments::OnRowErrorDef;
+use geopolars_compute::OnRowError;
 use geopolars_core::{pairwise_rings_overlap, rings_overlap_one};
 use geopolars_views::Kind;
 use polars::prelude::*;
@@ -16,7 +18,8 @@ use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs};
 #[serde(default, deny_unknown_fields)]
 pub struct RingsOverlapKwargs {
     include_touching: bool,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
 fn kernel_output_type_rings_overlap(input_fields: &[Field]) -> PolarsResult<Field> {
@@ -38,7 +41,7 @@ fn kernel_output_type_rings_overlap(input_fields: &[Field]) -> PolarsResult<Fiel
 #[polars_expr(output_type_func=kernel_output_type_rings_overlap)]
 fn rings_overlap(inputs: &[Series], kwargs: RingsOverlapKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let (touching, ignore) = (kwargs.include_touching, kwargs.ignore_per_row_errors);
+    let (touching, ignore) = (kwargs.include_touching, kwargs.on_row_error);
     let chunks = match aligned_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()

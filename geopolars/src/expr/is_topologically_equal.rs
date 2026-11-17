@@ -1,6 +1,8 @@
 //! Whether two geometries are topologically equal, forwarded to GEOS.
 //! Implements the Python `is_topologically_equal`.
 
+use crate::common_arguments::OnRowErrorDef;
+use geopolars_compute::OnRowError;
 use geopolars_core::are_topologically_equal;
 use polars::prelude::*;
 use polars_arrow::array::BooleanArray;
@@ -16,7 +18,8 @@ use crate::geoarrow::{
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct IsTopologicallyEqualKwargs {
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
     early_finite_check: bool,
 }
 
@@ -34,7 +37,7 @@ fn is_topologically_equal(
     kwargs: IsTopologicallyEqualKwargs,
 ) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
+    let (ignore, early) = (kwargs.on_row_error, kwargs.early_finite_check);
     let chunk_pairs = match single_chunk_masked_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs,
         GeometryPairs::OneAgainstMany { a, b } => b.into_iter().map(|b| (a.clone(), b)).collect(),

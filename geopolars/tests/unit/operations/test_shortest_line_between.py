@@ -290,7 +290,7 @@ def test_a_row_paired_with_parts_without_vertices_never_reaches_geos(
     assert _as_wkt(out["a"]) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
 
 
-def test_an_empty_geometry_against_a_failing_one_is_empty_with_ignore_per_row_errors() -> (
+def test_an_empty_geometry_against_a_failing_one_is_empty_with_on_row_error_null() -> (
     None
 ):
     df = pl.DataFrame(
@@ -300,7 +300,7 @@ def test_an_empty_geometry_against_a_failing_one_is_empty_with_ignore_per_row_er
         ]
     )
 
-    out = df.select(geo.shortest_line_between("a", "b", ignore_per_row_errors=True))
+    out = df.select(geo.shortest_line_between("a", "b", on_row_error="null"))
 
     assert _as_wkt(out["a"]) == ["LINESTRING EMPTY"]
 
@@ -322,7 +322,7 @@ def test_the_early_finite_check_raises_before_geos() -> None:
 
 
 @pytest.mark.parametrize("early_finite_check", [False, True])
-def test_a_failing_row_gives_null_with_ignore_per_row_errors(
+def test_a_failing_row_gives_null_with_on_row_error_null(
     early_finite_check: bool,
 ) -> None:
     a = pl.concat([_NOT_FINITE_POINT, _wkt("a", PointXY(), ["POINT (3 0)"])])
@@ -331,7 +331,7 @@ def test_a_failing_row_gives_null_with_ignore_per_row_errors(
     out = df.select(
         pl.col("a").geo.shortest_line_between(
             "b",
-            ignore_per_row_errors=True,
+            on_row_error="null",
             early_finite_check=early_finite_check,
         )
     )
@@ -340,13 +340,13 @@ def test_a_failing_row_gives_null_with_ignore_per_row_errors(
 
 
 @pytest.mark.parametrize("early_finite_check", [False, True])
-def test_against_a_single_geometry_a_failing_row_gives_null_with_ignore_per_row_errors(
+def test_against_a_single_geometry_a_failing_row_gives_null_with_on_row_error_null(
     early_finite_check: bool,
 ) -> None:
     many = pl.concat([_NOT_FINITE_POINT, _wkt("a", PointXY(), ["POINT (3 0)"])])
     df = pl.DataFrame(many.alias("many"))
     one = _wkt("one", PolygonXY(), [_SQUARE])
-    kwargs = {"ignore_per_row_errors": True, "early_finite_check": early_finite_check}
+    kwargs = {"on_row_error": "null", "early_finite_check": early_finite_check}
 
     out = df.select(geo.shortest_line_between(one, "many", **kwargs))
     assert _as_wkt(out.to_series()) == [None, "LINESTRING(1 0,3 0)"]

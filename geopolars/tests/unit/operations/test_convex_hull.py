@@ -250,11 +250,11 @@ def test_a_geometry_geos_fails_on_raises_by_default() -> None:
         df.select(geo.convex_hull("polygon"))
 
 
-def test_ignore_per_row_errors_gives_a_null_hull() -> None:
+def test_on_row_error_null_gives_a_null_hull() -> None:
     df = _lines(_HALF_NAN, _line((0, 0), (4, 0), (4, 4), (0, 4)))
 
     hulls = (
-        df.select(geo.convex_hull("polygon", ignore_per_row_errors=True))
+        df.select(geo.convex_hull("polygon", on_row_error="null"))
         .to_series()
         .ext.storage()
         .to_list()
@@ -298,9 +298,9 @@ def test_the_namespace_forwards_ccw_outer() -> None:
     )
 
 
-def test_the_namespace_forwards_ignore_per_row_errors() -> None:
+def test_the_namespace_forwards_on_row_error() -> None:
     df = _lines(_HALF_NAN)
 
-    assert df.select(
-        pl.col("polygon").geo.convex_hull(ignore_per_row_errors=True)
-    ).equals(df.select(geo.convex_hull("polygon", ignore_per_row_errors=True)))
+    assert df.select(pl.col("polygon").geo.convex_hull(on_row_error="null")).equals(
+        df.select(geo.convex_hull("polygon", on_row_error="null"))
+    )

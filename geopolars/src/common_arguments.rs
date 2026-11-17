@@ -5,7 +5,6 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 #[serde(remote = "OnRowError", rename_all = "snake_case")]
-#[expect(dead_code, reason = "no expression takes `on_row_error` yet")]
 pub(crate) enum OnRowErrorDef {
     Null,
     Raise,

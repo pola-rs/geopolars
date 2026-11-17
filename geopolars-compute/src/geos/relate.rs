@@ -7,7 +7,7 @@ use polars_arrow::array::{MutableBinaryViewArray, Utf8ViewArray};
 
 use super::pairs::GeosPairs;
 use super::GeosRow;
-use crate::{row_or_null, GeoComputeResult};
+use crate::{row_or_null, GeoComputeResult, OnRowError};
 
 /// A DE-9IM matrix, as GEOS writes it.
 /// The Python `relate` documents its rows, columns, and cells.
@@ -36,26 +36,26 @@ pub struct RelatePairs {
     pairs: GeosPairs,
     /// Stands in for a row without parts, which never went to GEOS.
     empty: Geometry,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 }
 
 impl RelatePairs {
     /// Each side is converted to GEOS in full, so a row paired with a null can still fail.
-    /// A row that fails here or in [`RelatePairs::matrices`] is null if `ignore_per_row_errors=true`.
+    /// A row that fails here or in [`RelatePairs::matrices`] is null if `on_row_error=`[OnRowError::Null].
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
     pub fn new(
         a: &GeometryArray,
         b: &GeometryArray,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<Self> {
         // The matrix against an empty geometry still depends on its partner,
         // so unlike for `intersection`, that partner goes to GEOS too.
         Ok(Self {
-            pairs: GeosPairs::new(a, b, ignore_per_row_errors, early_finite_check)?,
+            pairs: GeosPairs::new(a, b, on_row_error, early_finite_check)?,
             empty: Geometry::create_empty_point()?,
-            ignore_per_row_errors,
+            on_row_error,
         })
     }
 
@@ -63,7 +63,7 @@ impl RelatePairs {
     pub fn matrices(&self) -> impl Iterator<Item = GeoComputeResult<Option<De9im>>> + '_ {
         self.pairs
             .iter()
-            .map(|(a, b)| row_or_null(self.relate_rows(a, b), self.ignore_per_row_errors))
+            .map(|(a, b)| row_or_null(self.relate_rows(a, b), self.on_row_error))
     }
 
     #[inline(always)]

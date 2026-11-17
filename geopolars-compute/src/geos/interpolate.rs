@@ -15,7 +15,7 @@ use geos::Geom;
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
 use super::linestrings::multi_line_strings_to_geos_rows;
 use super::{GeosGeometries, ToGeosRows};
-use crate::GeoComputeResult;
+use crate::{GeoComputeResult, OnRowError};
 
 /// What the distance along the line is measured in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,14 +32,14 @@ pub fn interpolate_line_strings(
     array: &LineStringArray,
     distance: BufferDistance,
     mode: InterpolateMode,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     early_finite_check: bool,
 ) -> GeoComputeResult<PointArray> {
     interpolate_via_geos(
-        array.to_geos_rows(ignore_per_row_errors, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_finite_check)?,
         distance,
         mode,
-        ignore_per_row_errors,
+        on_row_error,
     )?
     .into_point_array(array.coords.dim())
 }
@@ -49,22 +49,16 @@ pub fn interpolate_multi_line_strings(
     array: &MultiLineStringArray,
     distance: BufferDistance,
     mode: InterpolateMode,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     early_finite_check: bool,
 ) -> GeoComputeResult<PointArray> {
     // An empty part is skipped,
     // as GEOS reads a vertex of every part it walks, beyond the end of an empty one.
     interpolate_via_geos(
-        multi_line_strings_to_geos_rows(
-            array,
-            true,
-            None,
-            ignore_per_row_errors,
-            early_finite_check,
-        )?,
+        multi_line_strings_to_geos_rows(array, true, None, on_row_error, early_finite_check)?,
         distance,
         mode,
-        ignore_per_row_errors,
+        on_row_error,
     )?
     .into_point_array(array.coords.dim())
 }
@@ -74,20 +68,20 @@ fn interpolate_via_geos(
     geometries: GeosGeometries,
     distance: BufferDistance,
     mode: InterpolateMode,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<GeosGeometries> {
     match mode {
         InterpolateMode::Absolute => by_distance_via_geos(
             geometries,
             distance,
-            ignore_per_row_errors,
+            on_row_error,
             finite_distance,
             |input, distance| Ok(input.interpolate(distance)?),
         ),
         InterpolateMode::Normalized => by_distance_via_geos(
             geometries,
             distance,
-            ignore_per_row_errors,
+            on_row_error,
             finite_distance,
             |input, fraction| Ok(input.interpolate_normalized(fraction)?),
         ),

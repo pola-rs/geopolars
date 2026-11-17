@@ -1,7 +1,9 @@
 //! The line spanning the Hausdorff distance between two geometries.
 //! Implements the Python `hausdorff_line_between`.
 
+use crate::common_arguments::OnRowErrorDef;
 use geopolars_compute::native::NonFinite;
+use geopolars_compute::OnRowError;
 use geopolars_core::{hausdorff_lines_to_one, pairwise_hausdorff_lines};
 use geopolars_views::Kind;
 use polars::prelude::*;
@@ -23,7 +25,8 @@ pub struct HausdorffLineBetweenKwargs {
     select_empty: bool,
     ignore_z: bool,
     ignore_m: bool,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
 impl HausdorffLineBetweenKwargs {
@@ -63,7 +66,7 @@ fn hausdorff_line_between(
     let lines = hausdorff_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (failing, ignore) = (kwargs.failing(), kwargs.ignore_per_row_errors);
+    let (failing, ignore) = (kwargs.failing(), kwargs.on_row_error);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
             many.iter()

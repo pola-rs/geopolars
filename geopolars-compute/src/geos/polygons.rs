@@ -17,7 +17,7 @@ use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
     OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
 };
-use crate::GeoComputeResult;
+use crate::{GeoComputeResult, OnRowError};
 
 impl ToGeos for ScalarPolygon<'_> {
     type Geos = Geometry;
@@ -31,7 +31,7 @@ impl ToGeosRows for PolygonArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
@@ -43,7 +43,7 @@ impl ToGeosRows for PolygonArray {
             &self.rows,
             &axes,
             as_empty,
-            ignore_per_row_errors,
+            on_row_error,
             early_finite_check,
             |parts| self.rings.span(parts),
             |parts| polygon_to_geos(&axes, &self.rings, parts),
@@ -72,7 +72,7 @@ impl ToGeosRows for MultiPolygonArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
@@ -84,7 +84,7 @@ impl ToGeosRows for MultiPolygonArray {
             &self.rows,
             &axes,
             as_empty,
-            ignore_per_row_errors,
+            on_row_error,
             early_finite_check,
             |parts| self.rings.span(self.polygons.span(parts)),
             |parts| multi_polygon_to_geos(&axes, &self.polygons, &self.rings, parts),
@@ -152,16 +152,16 @@ impl GeosGeometries {
     /// Our polygon array of the geometries, one row each.
     /// Every GEOS geometry is freed once it is copied.
     /// A geometry that is not a polygon is an error.
-    /// If `ignore_per_row_errors=true`, its row is null instead.
+    /// If `on_row_error=`[OnRowError::Null], its row is null instead.
     pub fn into_polygon_array(
         self,
         z: bool,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         reversed: bool,
     ) -> GeoComputeResult<PolygonArray> {
         with_const_flags!(
             Z = z, REVERSED = reversed;
-            into_polygon_array_with::<Z, REVERSED>(self, ignore_per_row_errors)
+            into_polygon_array_with::<Z, REVERSED>(self, on_row_error)
         )
     }
 
@@ -172,12 +172,12 @@ impl GeosGeometries {
     pub fn into_multi_polygon_array(
         self,
         z: bool,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         reversed: bool,
     ) -> GeoComputeResult<MultiPolygonArray> {
         with_const_flags!(
             Z = z, REVERSED = reversed;
-            into_multi_polygon_array_with::<Z, REVERSED>(self, ignore_per_row_errors)
+            into_multi_polygon_array_with::<Z, REVERSED>(self, on_row_error)
         )
     }
 }
@@ -185,7 +185,7 @@ impl GeosGeometries {
 /// See [`GeosGeometries::into_multi_polygon_array`].
 fn into_multi_polygon_array_with<const Z: bool, const REVERSED: bool>(
     geometries: GeosGeometries,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<MultiPolygonArray> {
     let mut validity = ValidityBuilder::with_capacity(geometries.geometries.len());
     let mut coords = CoordsBuilder::with_capacity(Z, geometries.size_hint.coords);
@@ -214,7 +214,7 @@ fn into_multi_polygon_array_with<const Z: bool, const REVERSED: bool>(
                     }
                     true
                 }
-                other => wrong_kind("multipolygon", other, ignore_per_row_errors)?,
+                other => wrong_kind("multipolygon", other, on_row_error)?,
             },
         };
         validity.push(is_valid);
@@ -231,7 +231,7 @@ fn into_multi_polygon_array_with<const Z: bool, const REVERSED: bool>(
 /// See [`GeosGeometries::into_polygon_array`].
 fn into_polygon_array_with<const Z: bool, const REVERSED: bool>(
     geometries: GeosGeometries,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<PolygonArray> {
     let mut validity = ValidityBuilder::with_capacity(geometries.geometries.len());
     let mut coords = CoordsBuilder::with_capacity(Z, geometries.size_hint.coords);
@@ -246,7 +246,7 @@ fn into_polygon_array_with<const Z: bool, const REVERSED: bool>(
                     push_rings::<Z, REVERSED>(&mut coords, &mut rings, &polygon)?;
                     true
                 }
-                other => wrong_kind("polygon", other, ignore_per_row_errors)?,
+                other => wrong_kind("polygon", other, on_row_error)?,
             },
         };
         validity.push(is_valid);

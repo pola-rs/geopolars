@@ -1,5 +1,5 @@
 use geopolars_compute::geos::{rings_overlap_against_one, rings_overlap_pairwise};
-use geopolars_compute::with_const_flags;
+use geopolars_compute::{with_const_flags, OnRowError};
 use geopolars_views::{downcast, LineStringArray};
 use polars_arrow::array::{Array, BooleanArray};
 use polars_core::prelude::{polars_err, PolarsError, PolarsResult};
@@ -21,12 +21,12 @@ pub fn pairwise_rings_overlap(
     a: &dyn Array,
     b: &dyn Array,
     include_touching: bool,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> PolarsResult<BooleanArray> {
     let (a, b) = (rings(a)?, rings(b)?);
     with_const_flags!(
         TOUCHING = include_touching;
-        rings_overlap_pairwise::<TOUCHING>(&a, &b, ignore_per_row_errors)
+        rings_overlap_pairwise::<TOUCHING>(&a, &b, on_row_error)
     )
     .map_err(compute_err)
 }
@@ -40,12 +40,12 @@ pub fn rings_overlap_one(
     one: &dyn Array,
     many: &dyn Array,
     include_touching: bool,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> PolarsResult<BooleanArray> {
     let (one, many) = (rings(one)?, rings(many)?);
     with_const_flags!(
         TOUCHING = include_touching;
-        rings_overlap_against_one::<TOUCHING>(&one.get(0), &many, ignore_per_row_errors)
+        rings_overlap_against_one::<TOUCHING>(&one.get(0), &many, on_row_error)
     )
     .map_err(compute_err)
 }

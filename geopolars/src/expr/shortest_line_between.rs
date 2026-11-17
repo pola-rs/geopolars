@@ -1,6 +1,8 @@
 //! The shortest line between two geometries.
 //! Implements the Python `shortest_line_between`.
 
+use crate::common_arguments::OnRowErrorDef;
+use geopolars_compute::OnRowError;
 use geopolars_core::{pairwise_shortest_lines, shortest_lines_to_one};
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -16,7 +18,8 @@ use crate::geoarrow::{
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ShortestLineBetweenKwargs {
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
     early_finite_check: bool,
 }
 
@@ -49,7 +52,7 @@ fn shortest_line_between(
     let lines = shortest_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
+    let (ignore, early) = (kwargs.on_row_error, kwargs.early_finite_check);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
             many.iter()

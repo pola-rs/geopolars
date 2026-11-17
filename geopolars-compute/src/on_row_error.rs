@@ -6,8 +6,10 @@ const_enum!(
     /// Dropping rows changes the length of the column,
     /// which breaks `with_columns`, broadcasting a single geometry against a column,
     /// and pairing with other columns of the same frame.
+    #[derive(Default)]
     pub enum OnRowError {
         Null,
+        #[default]
         Raise,
     }
 );

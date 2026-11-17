@@ -11,7 +11,7 @@
 //! Converting rows to GEOS, and the convex hulls, are generic over `EARLY_FINITE_CHECK`.
 //! [`ToGeosRows`] takes it as `early_finite_check`.
 //! If `EARLY_FINITE_CHECK=true`, a row with a NaN or infinite x or y never goes to GEOS.
-//! It is an error instead, which `ignore_per_row_errors` treats like a GEOS error.
+//! It is an error instead, which `on_row_error` treats like a GEOS error.
 //! For a point, the empty point (x and y NaN) is the exception.
 //! If `EARLY_FINITE_CHECK=false`, those coordinates go to GEOS as they are.
 //! See `early_finite_check` in Python for what GEOS makes of them.
@@ -87,7 +87,7 @@ use geos::{CoordSeq, CoordType, Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
-use crate::{row_or_null, GeoComputeError, GeoComputeResult};
+use crate::{row_or_null, GeoComputeError, GeoComputeResult, OnRowError};
 
 /// Converts a single geometry into a GEOS geometry.
 /// For an array, see [`ToGeosRows`].
@@ -101,15 +101,15 @@ pub trait ToGeos {
 /// A null row is `Null`.
 /// A row without parts is `Empty`, so it never goes to GEOS.
 /// The size hint is the size of the array itself.
-/// If `ignore_per_row_errors=true`, a row GEOS fails to build is null too;
+/// If `on_row_error=`[OnRowError::Null], a row GEOS fails to build is null too;
 /// otherwise its error is returned.
 pub trait ToGeosRows {
     fn to_geos_rows(
         &self,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
-        self.to_geos_rows_taking_as_empty(None, ignore_per_row_errors, early_finite_check)
+        self.to_geos_rows_taking_as_empty(None, on_row_error, early_finite_check)
     }
 
     /// See [`ToGeosRows::to_geos_rows`].
@@ -117,7 +117,7 @@ pub trait ToGeosRows {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries>;
 }
@@ -126,28 +126,28 @@ impl ToGeosRows for GeometryArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
-        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+        let early = early_finite_check;
         match self {
             GeometryArray::Point(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
             }
             GeometryArray::LineString(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
             }
             GeometryArray::Polygon(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
             }
             GeometryArray::MultiPoint(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
             }
             GeometryArray::MultiLineString(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
             }
             GeometryArray::MultiPolygon(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, ignore, early)
+                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
             }
         }
     }
@@ -181,12 +181,12 @@ impl ToGeosRows for PointArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let geometries = with_const_flags!(
             EARLY_FINITE_CHECK = early_finite_check;
-            points_to_geos::<EARLY_FINITE_CHECK>(&self.coords, as_empty, ignore_per_row_errors)
+            points_to_geos::<EARLY_FINITE_CHECK>(&self.coords, as_empty, on_row_error)
         )?;
         Ok(GeosGeometries {
             geometries,
@@ -201,7 +201,7 @@ impl ToGeosRows for PointArray {
 fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
     coords: &Coords,
     as_empty: Option<&Bitmap>,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<Vec<GeosRow>> {
     // GEOS has no batch constructor, so only the per-column work is shared.
     let dim = coords.dim();
@@ -214,7 +214,7 @@ fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
             continue;
         }
         let point = point_to_geos::<EARLY_FINITE_CHECK>(coords, i, len, coord_type);
-        geometries.push(row_or_null(point, ignore_per_row_errors)?.into());
+        geometries.push(row_or_null(point, on_row_error)?.into());
     }
     Ok(geometries)
 }
@@ -223,7 +223,7 @@ impl ToGeosRows for MultiPointArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
         early_finite_check: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
@@ -235,7 +235,7 @@ impl ToGeosRows for MultiPointArray {
             &self.rows,
             &axes,
             as_empty,
-            ignore_per_row_errors,
+            on_row_error,
             early_finite_check,
             |vertices| vertices,
             |vertices| multi_point_to_geos(&axes, vertices),
@@ -342,7 +342,7 @@ fn rows_to_geos(
     rows: &List,
     axes: &Axes,
     as_empty: Option<&Bitmap>,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     early_finite_check: bool,
     span: impl Fn(Range<usize>) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
@@ -353,7 +353,7 @@ fn rows_to_geos(
             rows,
             axes,
             as_empty,
-            ignore_per_row_errors,
+            on_row_error,
             span,
             to_geos,
         )
@@ -361,12 +361,12 @@ fn rows_to_geos(
 }
 
 /// See [`rows_to_geos`].
-/// Errors are the exception, so `ignore_per_row_errors` is checked per row rather than made const.
+/// Errors are the exception, so `on_row_error` is checked per row rather than made const.
 fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
     rows: &List,
     axes: &Axes,
     as_empty: Option<&Bitmap>,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     span: impl Fn(Range<usize>) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<Vec<GeosRow>> {
@@ -388,7 +388,7 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
             } else {
                 to_geos(parts)
             };
-            row_or_null(geometry.map(Some), ignore_per_row_errors)?.into()
+            row_or_null(geometry.map(Some), on_row_error)?.into()
         });
     }
     Ok(geometries)
@@ -471,13 +471,13 @@ impl From<Option<Geometry>> for GeosRow {
 }
 
 /// For a conversion getting a geometry of a kind it can't hold:
-/// `false` (its row is null) if `ignore_per_row_errors=true`, otherwise an error.
+/// `false` (its row is null) if `on_row_error=`[OnRowError::Null], otherwise an error.
 fn wrong_kind(
     expected: &str,
     found: GeometryTypes,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<bool> {
-    if ignore_per_row_errors {
+    if on_row_error == OnRowError::Null {
         return Ok(false);
     }
     Err(geos::Error::ConversionError(format!("expected a {expected}, got a {found:?}")).into())

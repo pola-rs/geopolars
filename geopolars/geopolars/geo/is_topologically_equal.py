@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
 if TYPE_CHECKING:
@@ -22,7 +23,7 @@ def is_topologically_equal(
     a: IntoExprColumn,
     b: IntoExprColumn,
     *,
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """Whether two geometries cover the same points in x and y, row by row, as a `bool`.
@@ -52,8 +53,9 @@ def is_topologically_equal(
     df.filter(geo.is_topologically_equal("parcel", "surveyed"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     kwargs = {
-        "ignore_per_row_errors": ignore_per_row_errors,
+        "on_row_error": on_row_error,
         "early_finite_check": early_finite_check,
     }
 

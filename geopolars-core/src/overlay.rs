@@ -1,4 +1,5 @@
 use geopolars_compute::geos::{Overlay, OverlayPairs};
+use geopolars_compute::OnRowError;
 use geopolars_views::{GeometryArray, Kind};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -9,7 +10,7 @@ use crate::IntoPolarsResult;
 #[derive(Debug, Clone, Copy)]
 pub struct OverlayOptions {
     pub ccw_outer: bool,
-    pub ignore_per_row_errors: bool,
+    pub on_row_error: OnRowError,
     pub early_finite_check: bool,
 }
 
@@ -35,11 +36,11 @@ pub fn overlay(
     );
     let OverlayOptions {
         ccw_outer,
-        ignore_per_row_errors,
+        on_row_error,
         early_finite_check,
     } = options;
-    let pairs = OverlayPairs::new(&a, &b, overlay, ignore_per_row_errors, early_finite_check)
-        .into_polars()?;
+    let pairs =
+        OverlayPairs::new(&a, &b, overlay, on_row_error, early_finite_check).into_polars()?;
     match output_kind {
         Kind::Point => pairs.into_points(z).map(GeometryArray::Point),
         Kind::MultiPoint => pairs.into_multi_points(z).map(GeometryArray::MultiPoint),

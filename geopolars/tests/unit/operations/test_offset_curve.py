@@ -62,7 +62,7 @@ def test_the_output_is_xy_linestrings_or_multilinestrings(
             df.columns[0],
             1.0,
             allow_splitting=allow_splitting,
-            ignore_per_row_errors=True,
+            on_row_error="null",
         )
 
         assert df.select(curve).schema[df.columns[0]] == expected
@@ -120,7 +120,7 @@ def test_a_split_line_raises() -> None:
 def test_a_split_line_is_null_when_ignoring_errors() -> None:
     df = _column(LineStringXY, _CROSSING, _SEGMENT)
 
-    [split, segment] = _offset(df, -1.0, ignore_per_row_errors=True)
+    [split, segment] = _offset(df, -1.0, on_row_error="null")
 
     assert split is None
     assert segment is not None
@@ -174,7 +174,7 @@ def test_a_non_finite_row_distance_raises_or_is_null() -> None:
     with pytest.raises(ComputeError, match="finite"):
         _offset(df, "d")
 
-    [invalid, valid] = _offset(df, "d", ignore_per_row_errors=True)
+    [invalid, valid] = _offset(df, "d", on_row_error="null")
     assert invalid is None
     assert valid is not None
 

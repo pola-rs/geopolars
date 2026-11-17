@@ -17,7 +17,7 @@ use polars_arrow::datatypes::ArrowDataType;
 use super::polygons::polygon_enclosed_by_ring_to_geos;
 use super::{axes, xy_is_finite_or_error};
 use crate::per_row::per_row_optional_bool;
-use crate::{row_or_null, GeoComputeError, GeoComputeResult};
+use crate::{row_or_null, GeoComputeError, GeoComputeResult, OnRowError};
 
 /// Their interiors share no area.
 const INTERIORS_DISJOINT: &str = "F********";
@@ -85,7 +85,7 @@ fn ring_pair_overlaps<const TOUCHING: bool>(
 pub fn rings_overlap_pairwise<const TOUCHING: bool>(
     a: &LineStringArray,
     b: &LineStringArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<BooleanArray> {
     debug_assert_eq!(a.rows.len(), b.rows.len(), "Chunks must be the same size");
     let rows = a
@@ -95,7 +95,7 @@ pub fn rings_overlap_pairwise<const TOUCHING: bool>(
     per_row_optional_bool(&rows, |i| {
         row_or_null(
             ring_pair_overlaps::<TOUCHING>(&a.get(i), &b.get(i)),
-            ignore_per_row_errors,
+            on_row_error,
         )
     })
 }
@@ -106,10 +106,9 @@ pub fn rings_overlap_pairwise<const TOUCHING: bool>(
 pub fn rings_overlap_against_one<const TOUCHING: bool>(
     one: &ScalarLineString,
     many: &LineStringArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<BooleanArray> {
-    let Some(one) = row_or_null(polygon_enclosed_by_finite_ring(one), ignore_per_row_errors)?
-    else {
+    let Some(one) = row_or_null(polygon_enclosed_by_finite_ring(one), on_row_error)? else {
         return Ok(BooleanArray::new_null(
             ArrowDataType::Boolean,
             many.rows.len(),
@@ -117,10 +116,7 @@ pub fn rings_overlap_against_one<const TOUCHING: bool>(
     };
     let one = PreparedGeometry::new(&one)?;
     per_row_optional_bool(&many.rows, |i| {
-        let ring = row_or_null(
-            polygon_enclosed_by_finite_ring(&many.get(i)),
-            ignore_per_row_errors,
-        )?;
+        let ring = row_or_null(polygon_enclosed_by_finite_ring(&many.get(i)), on_row_error)?;
         ring.map(|ring| enclosed_areas_overlap::<TOUCHING>(&one, &ring))
             .transpose()
     })

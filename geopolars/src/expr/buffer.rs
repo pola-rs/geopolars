@@ -1,7 +1,9 @@
 //! The buffer of any geometry, forwarded to GEOS.
 //! Implements the Python `buffer`.
 
+use crate::common_arguments::OnRowErrorDef;
 use geopolars_compute::geos::{BufferDistance, BufferStyle, CapStyle, JoinStyle, Side};
+use geopolars_compute::OnRowError;
 use geopolars_core::buffers;
 use geopolars_views::{GeoDimension, GeometryArray, Kind};
 use polars::prelude::*;
@@ -76,7 +78,8 @@ pub struct BufferKwargs {
     side: Side,
     allow_splitting: bool,
     ccw_outer: bool,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
     early_finite_check: bool,
 }
 
@@ -92,7 +95,7 @@ fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
         side,
         allow_splitting: _,
         ccw_outer,
-        ignore_per_row_errors,
+        on_row_error,
         early_finite_check,
     } = kwargs;
     let style = &BufferStyle {
@@ -110,7 +113,7 @@ fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
             distance,
             style,
             ccw_outer,
-            ignore_per_row_errors,
+            on_row_error,
             early_finite_check,
         )
     })?;

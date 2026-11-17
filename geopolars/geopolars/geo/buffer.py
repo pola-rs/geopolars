@@ -12,7 +12,8 @@ import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType, PointType
 from geopolars.geo._dispatch import _to_expr, on_geometry
 
@@ -57,7 +58,7 @@ def buffer(
     side: Literal["both", "left", "right"] = "both",
     allow_splitting: bool = False,
     ccw_outer: bool = False,
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """Draws a 'buffer' around the geometry.
@@ -69,7 +70,7 @@ def buffer(
     or a column (or expression) with one distance per geometry.
     A null distance gives a null polygon.
     A NaN or infinite distance in a column raises, as does a negative one with `side`.
-    With `ignore_per_row_errors=True`, such a row gives a null polygon instead.
+    With `on_row_error="null"`, such a row gives a null polygon instead.
 
     A point, linestring or polygon gives a polygon.
     Their multi-variants give a multipolygon,
@@ -139,6 +140,7 @@ def buffer(
     df.select(geo.buffer("road", 5.0, cap_style="flat"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
 
     # TODO: we could add some image examples here?
     # - a normal outset
@@ -191,7 +193,7 @@ def buffer(
                 "side": side,
                 "allow_splitting": allow_splitting,
                 "ccw_outer": ccw_outer,
-                "ignore_per_row_errors": ignore_per_row_errors,
+                "on_row_error": on_row_error,
                 "early_finite_check": early_finite_check,
             },
             is_elementwise=True,

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal, get_args
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import (
     LineStringType,
@@ -43,7 +44,7 @@ def intersection(
     keep: Keep | None = None,
     allow_splitting: bool = False,
     ccw_outer: bool = False,
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
     early_finite_check: bool = False,
 ) -> pl.Expr:
     """The part two geometries have in common, row by row.
@@ -118,13 +119,14 @@ def intersection(
     df.select(geo.intersection("road", "river", keep="points", allow_splitting=True))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     if keep is not None:
         validate_one_of("keep", keep, Keep)
     kwargs = {
         "keep": keep,
         "allow_splitting": allow_splitting,
         "ccw_outer": ccw_outer,
-        "ignore_per_row_errors": ignore_per_row_errors,
+        "on_row_error": on_row_error,
         "early_finite_check": early_finite_check,
     }
 

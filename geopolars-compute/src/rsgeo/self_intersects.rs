@@ -15,7 +15,7 @@ use super::rings_overlap::overlap;
 use super::{
     per_part_optional_bool, per_row_optional_bool, ring_is_finite, to_rsgeo_ring, xy_is_finite,
 };
-use crate::{row_or_null, GeoComputeResult};
+use crate::{row_or_null, GeoComputeResult, OnRowError};
 
 /// One segment of a linestring
 #[derive(Clone, Copy)]
@@ -147,25 +147,22 @@ pub fn multi_line_strings_self_intersect(array: &MultiLineStringArray) -> ListAr
 }
 
 /// Whether each polygon intersects itself (see `polygon_self_intersects`).
-/// If `ignore_per_row_errors=true`, a polygon with a ring that is not one is null;
+/// If `on_row_error=`[OnRowError::Null], a polygon with a ring that is not one is null;
 /// otherwise that is the error.
 pub fn polygons_self_intersect(
     array: &PolygonArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<BooleanArray> {
     per_row_optional_bool(&array.rows, |i| {
-        row_or_null(
-            polygon_self_intersects(&array.get(i)),
-            ignore_per_row_errors,
-        )
+        row_or_null(polygon_self_intersects(&array.get(i)), on_row_error)
     })
 }
 
 /// [polygons_self_intersect], as a list per row of a chunk, one per part.
-/// If `ignore_per_row_errors=true`, only the part with a ring that is not one is null.
+/// If `on_row_error=`[OnRowError::Null], only the part with a ring that is not one is null.
 pub fn multi_polygons_self_intersect(
     array: &MultiPolygonArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<ListArray<i64>> {
     per_part_optional_bool(&array.rows, &array.polygons, |part| {
         let polygon = ScalarPolygon {
@@ -173,6 +170,6 @@ pub fn multi_polygons_self_intersect(
             coords: &array.coords,
             parts: array.polygons.range(part),
         };
-        row_or_null(polygon_self_intersects(&polygon), ignore_per_row_errors)
+        row_or_null(polygon_self_intersects(&polygon), on_row_error)
     })
 }

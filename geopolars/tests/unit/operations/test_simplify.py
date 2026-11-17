@@ -140,7 +140,7 @@ def test_a_polygon_cut_in_two_raises() -> None:
 def test_a_polygon_cut_in_two_is_null_when_ignoring_errors() -> None:
     df = _column(PolygonXY, [_CUT_BY_NOTCH], [_DENTED])
 
-    simplified = _simplified(df, 1.0, ignore_per_row_errors=True)
+    simplified = _simplified(df, 1.0, on_row_error="null")
 
     assert simplified == [None, [_SQUARE]]
 
@@ -254,7 +254,7 @@ def test_a_geometry_geos_fails_on_raises() -> None:
 def test_a_geometry_geos_fails_on_is_null_when_ignoring_errors() -> None:
     df = _column(LineStringXY, _line((1, 1)), _ZIGZAG)
 
-    assert _simplified(df, 0.5, ignore_per_row_errors=True) == [None, _STRAIGHT]
+    assert _simplified(df, 0.5, on_row_error="null") == [None, _STRAIGHT]
 
 
 @pytest.mark.parametrize("tolerance", [-1.0, math.nan])
@@ -271,11 +271,11 @@ def test_the_namespace_forwards_preserve_topology() -> None:
     )
 
 
-def test_the_namespace_forwards_ignore_per_row_errors() -> None:
+def test_the_namespace_forwards_on_row_error() -> None:
     df = _column(PolygonXY, [_CUT_BY_NOTCH])
 
     with pytest.raises(ComputeError, match="MultiPolygon"):
         df.select(pl.col("geom").geo.simplify(1.0))
-    assert df.select(
-        pl.col("geom").geo.simplify(1.0, ignore_per_row_errors=True)
-    ).equals(df.select(geo.simplify("geom", 1.0, ignore_per_row_errors=True)))
+    assert df.select(pl.col("geom").geo.simplify(1.0, on_row_error="null")).equals(
+        df.select(geo.simplify("geom", 1.0, on_row_error="null"))
+    )

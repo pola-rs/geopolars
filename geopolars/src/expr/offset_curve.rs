@@ -1,7 +1,9 @@
 //! The offset curve of a linestring or multilinestring, forwarded to GEOS.
 //! Implements the Python `offset_curve`.
 
+use crate::common_arguments::OnRowErrorDef;
 use geopolars_compute::geos::{JoinStyle, OffsetCurveStyle};
+use geopolars_compute::OnRowError;
 use geopolars_core::{offset_curves, LineKind};
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -53,7 +55,8 @@ pub struct OffsetCurveKwargs {
     join_style: JoinStyle,
     mitre_limit: f64,
     allow_splitting: bool,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
     early_finite_check: bool,
 }
 
@@ -66,7 +69,7 @@ fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Se
         join_style,
         mitre_limit,
         allow_splitting: _,
-        ignore_per_row_errors,
+        on_row_error,
         early_finite_check,
     } = kwargs;
     let style = &OffsetCurveStyle {
@@ -81,7 +84,7 @@ fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Se
             into_multi,
             distance,
             style,
-            ignore_per_row_errors,
+            on_row_error,
             early_finite_check,
         )
     })?;

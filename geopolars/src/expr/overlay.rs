@@ -1,7 +1,9 @@
 //! The intersection and difference of two geometries
 //! Implements the Python `intersection` and `difference`.
 
+use crate::common_arguments::OnRowErrorDef;
 use geopolars_compute::geos::Overlay;
+use geopolars_compute::OnRowError;
 use geopolars_core::OverlayOptions;
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -40,7 +42,8 @@ pub struct IntersectionKwargs {
     keep: Option<TopologicalDimension>,
     allow_splitting: bool,
     ccw_outer: bool,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
     early_finite_check: bool,
 }
 
@@ -50,7 +53,8 @@ pub struct IntersectionKwargs {
 pub struct DifferenceKwargs {
     allow_splitting: bool,
     ccw_outer: bool,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
     early_finite_check: bool,
 }
 
@@ -192,7 +196,7 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
     let geo = intersection_type(inputs[0].dtype(), inputs[1].dtype(), &kwargs)?;
     let options = OverlayOptions {
         ccw_outer: kwargs.ccw_outer,
-        ignore_per_row_errors: kwargs.ignore_per_row_errors,
+        on_row_error: kwargs.on_row_error,
         early_finite_check: kwargs.early_finite_check,
     };
     overlaid(inputs, geo, Overlay::Intersection, options)
@@ -204,7 +208,7 @@ fn difference(inputs: &[Series], kwargs: DifferenceKwargs) -> PolarsResult<Serie
     let geo = difference_type(inputs[0].dtype(), inputs[1].dtype(), &kwargs)?;
     let options = OverlayOptions {
         ccw_outer: kwargs.ccw_outer,
-        ignore_per_row_errors: kwargs.ignore_per_row_errors,
+        on_row_error: kwargs.on_row_error,
         early_finite_check: kwargs.early_finite_check,
     };
     overlaid(inputs, geo, Overlay::Difference, options)

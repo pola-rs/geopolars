@@ -15,7 +15,7 @@ pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
 use super::{unless_split, GeosGeometries, GeosRow, ToGeosRows};
-use crate::{GeoComputeError, GeoComputeResult};
+use crate::{GeoComputeError, GeoComputeResult, OnRowError};
 
 /// How far away is the buffer?
 #[derive(Clone, Copy)]
@@ -59,17 +59,17 @@ pub fn buffer_into_polygons(
     distance: BufferDistance,
     style: &BufferStyle,
     ccw_outer: bool,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     early_finite_check: bool,
 ) -> GeoComputeResult<PolygonArray> {
     buffer_via_geos(
-        array.to_geos_rows(ignore_per_row_errors, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_finite_check)?,
         distance,
         style,
-        ignore_per_row_errors,
+        on_row_error,
         false,
     )?
-    .into_polygon_array(false, ignore_per_row_errors, ccw_outer)
+    .into_polygon_array(false, on_row_error, ccw_outer)
 }
 
 /// Like [`buffer_into_polygons`], but into a multipolygon, for any kind.
@@ -80,17 +80,17 @@ pub fn buffer_into_multi_polygons(
     distance: BufferDistance,
     style: &BufferStyle,
     ccw_outer: bool,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     early_finite_check: bool,
 ) -> GeoComputeResult<MultiPolygonArray> {
     buffer_via_geos(
-        array.to_geos_rows(ignore_per_row_errors, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_finite_check)?,
         distance,
         style,
-        ignore_per_row_errors,
+        on_row_error,
         true,
     )?
-    .into_multi_polygon_array(false, ignore_per_row_errors, ccw_outer)
+    .into_multi_polygon_array(false, on_row_error, ccw_outer)
 }
 
 fn buffer_params(style: &BufferStyle) -> GeoComputeResult<BufferParams> {
@@ -109,14 +109,14 @@ fn buffer_via_geos(
     geometries: GeosGeometries,
     distance: BufferDistance,
     style: &BufferStyle,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     allow_splitting: bool,
 ) -> GeoComputeResult<GeosGeometries> {
     let params = buffer_params(style)?;
     by_distance_via_geos(
         geometries,
         distance,
-        ignore_per_row_errors,
+        on_row_error,
         |distance| geos_distance(distance, style.side),
         |input, distance| {
             let buffer = input.buffer_with_params(distance, &params)?;
@@ -130,22 +130,22 @@ fn buffer_via_geos(
 
 /// Every geometry passed to `op` with its distance, forwarded to GEOS.
 /// `geos_distance` checks a distance, and gives it as `op` takes it.
-/// If `ignore_per_row_errors=true`, a geometry that fails becomes null;
+/// If `on_row_error=`[OnRowError::Null], a geometry that fails becomes null;
 /// otherwise its error is returned.
 /// A constant distance that fails would fail every row, so its error is always returned.
 /// The size hint stays the input's: it is only a starting capacity.
-/// Errors are the exception, so `ignore_per_row_errors` is checked per row.
+/// Errors are the exception, so `on_row_error` is checked per row.
 pub(super) fn by_distance_via_geos(
     mut geometries: GeosGeometries,
     distance: BufferDistance,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     geos_distance: impl Fn(f64) -> GeoComputeResult<f64>,
     op: impl Fn(&Geometry, f64) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<GeosGeometries> {
     let apply = |input: &Geometry, geos_distance: f64| -> GeoComputeResult<GeosRow> {
         match op(input, geos_distance) {
             Ok(output) => Ok(GeosRow::Geometry(output)),
-            Err(e) if !ignore_per_row_errors => Err(e),
+            Err(e) if on_row_error == OnRowError::Raise => Err(e),
             Err(_) => Ok(GeosRow::Null),
         }
     };
@@ -170,7 +170,7 @@ pub(super) fn by_distance_via_geos(
                 };
                 *geometry = match geos_distance(distance) {
                     Ok(distance) => apply(input, distance)?,
-                    Err(e) if !ignore_per_row_errors => return Err(e),
+                    Err(e) if on_row_error == OnRowError::Raise => return Err(e),
                     Err(_) => GeosRow::Null,
                 };
             }
