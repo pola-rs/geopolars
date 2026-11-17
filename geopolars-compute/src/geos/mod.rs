@@ -32,9 +32,10 @@
 //!
 //! ## `REVERSED_EXTERIOR`, `REVERSED_HOLES`
 //!
-//! Copying a polygon out of GEOS is generic over `REVERSED_EXTERIOR` and `REVERSED_HOLES`.
-//! If set, its exterior or its holes are copied in reverse order, which flips their orientation.
-//! `reversed_rings` sets them from `new_ring_orientation` and `new_holes`.
+//! Copying a polygon out of GEOS is generic over `REVERSED_EXTERIOR` and `REVERSED_HOLES`,
+//! which `reversed_rings` sets from `new_ring_orientation` and `new_holes`.
+//! `CoordsBuilder::push` takes one of them as `REVERSED`, for the ring it copies.
+//! A reversed ring is copied in reverse order, which flips its orientation.
 
 mod buffer;
 mod convex_hull;
