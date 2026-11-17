@@ -28,7 +28,14 @@ struct SnapToGridKwargs {
     mode: RoundMode,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+fn kernel_output_type_snap_to_grid(
+    input_fields: &[Field],
+    _kwargs: SnapToGridKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_same_geometry(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_snap_to_grid)]
 fn snap_to_grid(inputs: &[Series], kwargs: SnapToGridKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let SnapToGridKwargs {

@@ -23,7 +23,10 @@ fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(Geo, LineKind)
     Ok((point, kind))
 }
 
-fn kernel_output_type_line_interpolate_point(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_line_interpolate_point(
+    input_fields: &[Field],
+    _kwargs: LineInterpolatePointKwargs,
+) -> PolarsResult<Field> {
     let (point, _) = line_interpolate_point_type(input_fields[0].dtype())?;
     Ok(Field::new(input_fields[0].name().clone(), point.dtype()))
 }
@@ -49,7 +52,7 @@ pub struct LineInterpolatePointKwargs {
     early_coord_check: EarlyCoordCheck,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_line_interpolate_point)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_line_interpolate_point)]
 fn line_interpolate_point(
     inputs: &[Series],
     kwargs: LineInterpolatePointKwargs,

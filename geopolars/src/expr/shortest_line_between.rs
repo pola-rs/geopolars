@@ -34,7 +34,10 @@ fn shortest_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<Geo> {
     ))
 }
 
-fn kernel_output_type_shortest_line_between(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_shortest_line_between(
+    input_fields: &[Field],
+    _kwargs: ShortestLineBetweenKwargs,
+) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "shortest_line_between takes two geometries, got {} inputs", input_fields.len());
     };
@@ -44,7 +47,7 @@ fn kernel_output_type_shortest_line_between(input_fields: &[Field]) -> PolarsRes
     ))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_shortest_line_between)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_shortest_line_between)]
 fn shortest_line_between(
     inputs: &[Series],
     kwargs: ShortestLineBetweenKwargs,

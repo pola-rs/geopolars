@@ -33,7 +33,14 @@ pub struct FixOutOfBoundsKwargs {
     short_lines: ShortLines,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+fn kernel_output_type_fix_out_of_bounds(
+    input_fields: &[Field],
+    _kwargs: FixOutOfBoundsKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_same_geometry(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_fix_out_of_bounds)]
 fn fix_out_of_bounds(inputs: &[Series], kwargs: FixOutOfBoundsKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let FixOutOfBoundsKwargs {

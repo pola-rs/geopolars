@@ -39,12 +39,15 @@ fn parts_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     Ok((Geo::new(multi, geo.dim, geo.metadata.clone()), listed))
 }
 
-fn kernel_output_type_add_parts(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_add_parts(
+    input_fields: &[Field],
+    _kwargs: AddPartsKwargs,
+) -> PolarsResult<Field> {
     let (geo, _) = parts_added(input_fields)?;
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_add_parts)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_add_parts)]
 fn add_parts(inputs: &[Series], kwargs: AddPartsKwargs) -> PolarsResult<Series> {
     let (geo, listed) = parts_added(&fields_of(inputs))?;
     let kind = describe(inputs[0].dtype())?.kind;

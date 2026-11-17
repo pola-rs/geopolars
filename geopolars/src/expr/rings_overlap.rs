@@ -22,7 +22,10 @@ pub struct RingsOverlapKwargs {
     on_row_error: OnRowError,
 }
 
-fn kernel_output_type_rings_overlap(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_rings_overlap(
+    input_fields: &[Field],
+    _kwargs: RingsOverlapKwargs,
+) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "rings_overlap takes two rings, got {} inputs", input_fields.len());
     };
@@ -38,7 +41,7 @@ fn kernel_output_type_rings_overlap(input_fields: &[Field]) -> PolarsResult<Fiel
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_rings_overlap)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_rings_overlap)]
 fn rings_overlap(inputs: &[Series], kwargs: RingsOverlapKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let (touching, ignore) = (kwargs.include_touching, kwargs.on_row_error);

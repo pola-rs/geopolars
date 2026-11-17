@@ -17,6 +17,9 @@ e.g. `#[polars_expr(output_type_func=kernel_output_type_area_planar)]`.
 These should always be named `kernel_output_type_*`.
 Functions that wrap these should be `kernel_output_type_wrapper_*`
 
+An expression that takes kwargs uses `output_type_func_with_kwargs`,
+so that a bad argument already fails at plan time (see Dispatch in the [Kernel implementation guide](<Kernel implementation guide.md>)).
+
 ## Kernels live in `geopolars-compute`
 
 Kernels used to work directly on Polars' Arrow arrays.

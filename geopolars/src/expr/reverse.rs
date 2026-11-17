@@ -16,13 +16,16 @@ pub struct ReverseKwargs {
     nested: bool,
 }
 
-fn kernel_output_type_reverse(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_reverse(
+    input_fields: &[Field],
+    _kwargs: ReverseKwargs,
+) -> PolarsResult<Field> {
     let field = &input_fields[0];
     NestedKind::new("reverse", describe(field.dtype())?.kind)?;
     Ok(field.clone())
 }
 
-#[polars_expr(output_type_func=kernel_output_type_reverse)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_reverse)]
 fn reverse(inputs: &[Series], kwargs: ReverseKwargs) -> PolarsResult<Series> {
     let kind = NestedKind::new("reverse", describe(inputs[0].dtype())?.kind)?;
     let storage = inputs[0].ext()?.storage();

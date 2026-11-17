@@ -27,7 +27,10 @@ fn hull_type(dtype: &DataType) -> PolarsResult<(Geo, NestedKind)> {
     Ok((hull, kind))
 }
 
-fn kernel_output_type_convex_hull(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_convex_hull(
+    input_fields: &[Field],
+    _kwargs: ConvexHullKwargs,
+) -> PolarsResult<Field> {
     let (hull, _) = hull_type(input_fields[0].dtype())?;
     Ok(Field::new(input_fields[0].name().clone(), hull.dtype()))
 }
@@ -46,7 +49,7 @@ pub struct ConvexHullKwargs {
     early_coord_check: EarlyCoordCheck,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_convex_hull)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_convex_hull)]
 fn convex_hull(inputs: &[Series], kwargs: ConvexHullKwargs) -> PolarsResult<Series> {
     let (hull, kind) = hull_type(inputs[0].dtype())?;
     let storage = inputs[0].ext()?.storage();

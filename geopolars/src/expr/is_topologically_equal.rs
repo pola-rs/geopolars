@@ -24,7 +24,10 @@ pub struct IsTopologicallyEqualKwargs {
     early_coord_check: EarlyCoordCheck,
 }
 
-fn kernel_output_type_is_topologically_equal(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_is_topologically_equal(
+    input_fields: &[Field],
+    _kwargs: IsTopologicallyEqualKwargs,
+) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "is_topologically_equal takes two geometries, got {} inputs", input_fields.len());
     };
@@ -32,7 +35,7 @@ fn kernel_output_type_is_topologically_equal(input_fields: &[Field]) -> PolarsRe
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_is_topologically_equal)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_topologically_equal)]
 fn is_topologically_equal(
     inputs: &[Series],
     kwargs: IsTopologicallyEqualKwargs,

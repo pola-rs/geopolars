@@ -48,7 +48,14 @@ impl NonFiniteKwargs {
     }
 }
 
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+fn kernel_output_type_filter_coordinates(
+    input_fields: &[Field],
+    _kwargs: NonFiniteKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_same_geometry(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_filter_coordinates)]
 fn filter_coordinates(inputs: &[Series], kwargs: NonFiniteKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let selection = kwargs.selection();

@@ -33,7 +33,14 @@ pub struct RemoveRepeatsInSuccessionKwargs {
     short_lines: ShortLines,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+fn kernel_output_type_remove_repeats_in_succession(
+    input_fields: &[Field],
+    _kwargs: RemoveRepeatsInSuccessionKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_same_geometry(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_remove_repeats_in_succession)]
 fn remove_repeats_in_succession(
     inputs: &[Series],
     kwargs: RemoveRepeatsInSuccessionKwargs,

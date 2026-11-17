@@ -15,13 +15,13 @@ pub struct ToCcwKwargs {
     holes_cw: bool,
 }
 
-fn kernel_output_type_to_ccw(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_to_ccw(input_fields: &[Field], _kwargs: ToCcwKwargs) -> PolarsResult<Field> {
     let field = &input_fields[0];
     SegmentKind::new("to_ccw", describe(field.dtype())?.kind)?;
     Ok(field.clone())
 }
 
-#[polars_expr(output_type_func=kernel_output_type_to_ccw)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_to_ccw)]
 fn to_ccw(inputs: &[Series], kwargs: ToCcwKwargs) -> PolarsResult<Series> {
     let kind = SegmentKind::new("to_ccw", describe(inputs[0].dtype())?.kind)?;
     let storage = inputs[0].ext()?.storage();

@@ -26,7 +26,10 @@ fn simplified_type(dtype: &DataType) -> PolarsResult<(Geo, SegmentKind)> {
     Ok((simplified, kind))
 }
 
-fn kernel_output_type_simplify(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_simplify(
+    input_fields: &[Field],
+    _kwargs: SimplifyKwargs,
+) -> PolarsResult<Field> {
     let (simplified, _) = simplified_type(input_fields[0].dtype())?;
     Ok(Field::new(
         input_fields[0].name().clone(),
@@ -46,7 +49,7 @@ pub struct SimplifyKwargs {
     early_coord_check: EarlyCoordCheck,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_simplify)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_simplify)]
 fn simplify(inputs: &[Series], kwargs: SimplifyKwargs) -> PolarsResult<Series> {
     let (simplified, kind) = simplified_type(inputs[0].dtype())?;
     let SimplifyKwargs {

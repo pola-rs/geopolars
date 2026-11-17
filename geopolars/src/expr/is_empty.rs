@@ -15,13 +15,16 @@ pub struct IsEmptyKwargs {
     check_nested: bool,
 }
 
-fn kernel_output_type_is_empty(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_is_empty(
+    input_fields: &[Field],
+    _kwargs: IsEmptyKwargs,
+) -> PolarsResult<Field> {
     let field = &input_fields[0];
     describe(field.dtype())?;
     Ok(Field::new(field.name().clone(), DataType::Boolean))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_is_empty)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_empty)]
 fn is_empty(inputs: &[Series], kwargs: IsEmptyKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let storage = inputs[0].ext()?.storage();

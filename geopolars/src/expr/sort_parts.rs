@@ -29,13 +29,16 @@ pub struct SortPartsKwargs {
     on_row_error: OnRowError,
 }
 
-fn kernel_output_type_sort_parts(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_sort_parts(
+    input_fields: &[Field],
+    _kwargs: SortPartsKwargs,
+) -> PolarsResult<Field> {
     let field = &input_fields[0];
     NestedKind::new("sort_parts", describe(field.dtype())?.kind)?;
     Ok(field.clone())
 }
 
-#[polars_expr(output_type_func=kernel_output_type_sort_parts)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_sort_parts)]
 fn sort_parts(inputs: &[Series], kwargs: SortPartsKwargs) -> PolarsResult<Series> {
     let kind = NestedKind::new("sort_parts", describe(inputs[0].dtype())?.kind)?;
     let options = SortOptions {

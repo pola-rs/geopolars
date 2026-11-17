@@ -45,12 +45,15 @@ fn holes_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     ))
 }
 
-fn kernel_output_type_add_holes(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_add_holes(
+    input_fields: &[Field],
+    _kwargs: AddHolesKwargs,
+) -> PolarsResult<Field> {
     let (geo, _) = holes_added(input_fields)?;
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_add_holes)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_add_holes)]
 fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> {
     let (geo, listed) = holes_added(&fields_of(inputs))?;
     let polygons = inputs[0].ext()?.storage();

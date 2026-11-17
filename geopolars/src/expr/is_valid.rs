@@ -119,12 +119,26 @@ fn kernel_output_type_is_valid(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(field.name().clone(), DataType::Boolean))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_is_valid)]
+fn kernel_output_type_is_valid_geoarrow(
+    input_fields: &[Field],
+    _kwargs: IsValidGeoArrowKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_is_valid(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_valid_geoarrow)]
 fn is_valid_geoarrow(inputs: &[Series], kwargs: IsValidGeoArrowKwargs) -> PolarsResult<Series> {
     Ok(are_valid_geoarrow(&inputs[0], &kwargs)?.into_series())
 }
 
-#[polars_expr(output_type_func=kernel_output_type_is_valid)]
+fn kernel_output_type_is_valid_ogc(
+    input_fields: &[Field],
+    _kwargs: IsValidOgcKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_is_valid(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_valid_ogc)]
 fn is_valid_ogc(inputs: &[Series], kwargs: IsValidOgcKwargs) -> PolarsResult<Series> {
     Ok(are_valid_ogc(&inputs[0], &kwargs)?.into_series())
 }
@@ -149,7 +163,14 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
     geometry_series(storage.name().clone(), geo.geo(), chunks)
 }
 
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+fn kernel_output_type_null_out_invalid_geoarrow(
+    input_fields: &[Field],
+    _kwargs: IsValidGeoArrowKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_same_geometry(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_null_out_invalid_geoarrow)]
 fn null_out_invalid_geoarrow(
     inputs: &[Series],
     kwargs: IsValidGeoArrowKwargs,
@@ -158,7 +179,14 @@ fn null_out_invalid_geoarrow(
     keep_rows(&inputs[0], &are_valid_geoarrow(&inputs[0], &kwargs)?)
 }
 
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+fn kernel_output_type_null_out_invalid_ogc(
+    input_fields: &[Field],
+    _kwargs: IsValidOgcKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_same_geometry(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_null_out_invalid_ogc)]
 fn null_out_invalid_ogc(inputs: &[Series], kwargs: IsValidOgcKwargs) -> PolarsResult<Series> {
     // A null row is `false` in the values.
     keep_rows(&inputs[0], &are_valid_ogc(&inputs[0], &kwargs)?)

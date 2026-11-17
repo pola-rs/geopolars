@@ -23,7 +23,7 @@ pub struct RelateKwargs {
     early_coord_check: EarlyCoordCheck,
 }
 
-fn kernel_output_type_relate(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_relate(input_fields: &[Field], _kwargs: RelateKwargs) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "relate takes two geometries, got {} inputs", input_fields.len());
     };
@@ -31,7 +31,7 @@ fn kernel_output_type_relate(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(a.name().clone(), DataType::String))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_relate)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_relate)]
 fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let (ignore, early) = (kwargs.on_row_error, kwargs.early_coord_check);
