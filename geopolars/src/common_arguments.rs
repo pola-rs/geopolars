@@ -1,6 +1,8 @@
 //! The serde mappings of the arguments that `docs/Common arguments.md` documents.
 
-use geopolars_compute::{EarlyCoordCheck, EmptyPolygonExterior, OnRowError, ShortLines};
+use geopolars_compute::{
+    EarlyCoordCheck, EmptyPolygonExterior, NewHoles, NewRingOrientation, OnRowError, ShortLines,
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -33,4 +35,19 @@ pub(crate) enum EmptyPolygonExteriorDef {
     Null,
     Error,
     Empty,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "NewRingOrientation", rename_all = "snake_case")]
+pub(crate) enum NewRingOrientationDef {
+    Keep,
+    Ccw,
+    Cw,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "NewHoles", rename_all = "snake_case")]
+pub(crate) enum NewHolesDef {
+    Opposite,
+    Same,
 }

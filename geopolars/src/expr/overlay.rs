@@ -1,9 +1,11 @@
 //! The intersection and difference of two geometries
 //! Implements the Python `intersection` and `difference`.
 
-use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use crate::common_arguments::{
+    EarlyCoordCheckDef, NewHolesDef, NewRingOrientationDef, OnRowErrorDef,
+};
 use geopolars_compute::geos::Overlay;
-use geopolars_compute::{EarlyCoordCheck, OnRowError};
+use geopolars_compute::{EarlyCoordCheck, NewHoles, NewRingOrientation, OnRowError};
 use geopolars_core::OverlayOptions;
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -41,7 +43,10 @@ impl TopologicalDimension {
 pub struct IntersectionKwargs {
     keep: Option<TopologicalDimension>,
     allow_splitting: bool,
-    ccw_outer: bool,
+    #[serde(with = "NewRingOrientationDef")]
+    new_ring_orientation: NewRingOrientation,
+    #[serde(with = "NewHolesDef")]
+    new_holes: NewHoles,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
     #[serde(with = "EarlyCoordCheckDef")]
@@ -53,7 +58,10 @@ pub struct IntersectionKwargs {
 #[serde(deny_unknown_fields)]
 pub struct DifferenceKwargs {
     allow_splitting: bool,
-    ccw_outer: bool,
+    #[serde(with = "NewRingOrientationDef")]
+    new_ring_orientation: NewRingOrientation,
+    #[serde(with = "NewHolesDef")]
+    new_holes: NewHoles,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
     #[serde(with = "EarlyCoordCheckDef")]
@@ -197,7 +205,8 @@ fn overlaid(
 fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<Series> {
     let geo = intersection_type(inputs[0].dtype(), inputs[1].dtype(), &kwargs)?;
     let options = OverlayOptions {
-        ccw_outer: kwargs.ccw_outer,
+        new_ring_orientation: kwargs.new_ring_orientation,
+        new_holes: kwargs.new_holes,
         on_row_error: kwargs.on_row_error,
         early_coord_check: kwargs.early_coord_check,
     };
@@ -209,7 +218,8 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
 fn difference(inputs: &[Series], kwargs: DifferenceKwargs) -> PolarsResult<Series> {
     let geo = difference_type(inputs[0].dtype(), inputs[1].dtype(), &kwargs)?;
     let options = OverlayOptions {
-        ccw_outer: kwargs.ccw_outer,
+        new_ring_orientation: kwargs.new_ring_orientation,
+        new_holes: kwargs.new_holes,
         on_row_error: kwargs.on_row_error,
         early_coord_check: kwargs.early_coord_check,
     };

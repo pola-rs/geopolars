@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import EarlyCoordCheck, OnRowError
+from geopolars._typing import (
+    EarlyCoordCheck,
+    NewHoles,
+    NewRingOrientation,
+    OnRowError,
+)
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import (
     LineStringType,
@@ -41,7 +46,8 @@ def convex_hull(
     geometry: IntoExprColumn,
     *,
     on_row_error: OnRowError = "raise",
-    ccw_outer: bool = False,
+    new_ring_orientation: NewRingOrientation = "keep",
+    new_holes: NewHoles = "opposite",
     early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """The smallest convex polygon that contains every vertex of a linestring or polygon,
@@ -84,7 +90,8 @@ def convex_hull(
     the polygon is null, or GEOS raises.
     {early_coord_check}
 
-    {ccw_outer}
+    {new_ring_orientation}
+    A hull has no holes, so `new_holes` changes nothing.
 
     ```python
     df.select(geo.convex_hull("parcel"))
@@ -92,6 +99,8 @@ def convex_hull(
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
+    validate_one_of("new_holes", new_holes, NewHoles)
 
     def build(column: pl.Expr, dtype: GeoArrowType) -> pl.Expr:
         if not isinstance(dtype, _ACCEPTED):
@@ -106,7 +115,8 @@ def convex_hull(
             function_name="convex_hull",
             kwargs={
                 "on_row_error": on_row_error,
-                "ccw_outer": ccw_outer,
+                "new_ring_orientation": new_ring_orientation,
+                "new_holes": new_holes,
                 "early_coord_check": early_coord_check,
             },
             is_elementwise=True,

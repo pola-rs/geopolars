@@ -22,6 +22,8 @@ if TYPE_CHECKING:
         EarlyCoordCheck,
         EmptyPolygonExterior,
         IntoExprColumn,
+        NewHoles,
+        NewRingOrientation,
         OnRowError,
         ShortLines,
     )
@@ -268,7 +270,8 @@ class ExprGeoNameSpace:
         self,
         *,
         on_row_error: OnRowError = "raise",
-        ccw_outer: bool = False,
+        new_ring_orientation: NewRingOrientation = "keep",
+        new_holes: NewHoles = "opposite",
         early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.convex_hull import convex_hull
@@ -276,7 +279,8 @@ class ExprGeoNameSpace:
         return convex_hull(
             self._expr,
             on_row_error=on_row_error,
-            ccw_outer=ccw_outer,
+            new_ring_orientation=new_ring_orientation,
+            new_holes=new_holes,
             early_coord_check=early_coord_check,
         )
 
@@ -290,7 +294,8 @@ class ExprGeoNameSpace:
         mitre_limit: float | None = None,
         side: Literal["both", "left", "right"] = "both",
         allow_splitting: bool = False,
-        ccw_outer: bool = False,
+        new_ring_orientation: NewRingOrientation = "keep",
+        new_holes: NewHoles = "opposite",
         on_row_error: OnRowError = "raise",
         early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
@@ -305,7 +310,8 @@ class ExprGeoNameSpace:
             mitre_limit=mitre_limit,
             side=side,
             allow_splitting=allow_splitting,
-            ccw_outer=ccw_outer,
+            new_ring_orientation=new_ring_orientation,
+            new_holes=new_holes,
             on_row_error=on_row_error,
             early_coord_check=early_coord_check,
         )
@@ -558,7 +564,8 @@ class ExprGeoNameSpace:
         *,
         keep: Keep | None = None,
         allow_splitting: bool = False,
-        ccw_outer: bool = False,
+        new_ring_orientation: NewRingOrientation = "keep",
+        new_holes: NewHoles = "opposite",
         on_row_error: OnRowError = "raise",
         early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
@@ -569,7 +576,8 @@ class ExprGeoNameSpace:
             other,
             keep=keep,
             allow_splitting=allow_splitting,
-            ccw_outer=ccw_outer,
+            new_ring_orientation=new_ring_orientation,
+            new_holes=new_holes,
             on_row_error=on_row_error,
             early_coord_check=early_coord_check,
         )
@@ -579,7 +587,8 @@ class ExprGeoNameSpace:
         other: IntoExprColumn,
         *,
         allow_splitting: bool = False,
-        ccw_outer: bool = False,
+        new_ring_orientation: NewRingOrientation = "keep",
+        new_holes: NewHoles = "opposite",
         on_row_error: OnRowError = "raise",
         early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
@@ -589,7 +598,8 @@ class ExprGeoNameSpace:
             self._expr,
             other,
             allow_splitting=allow_splitting,
-            ccw_outer=ccw_outer,
+            new_ring_orientation=new_ring_orientation,
+            new_holes=new_holes,
             on_row_error=on_row_error,
             early_coord_check=early_coord_check,
         )

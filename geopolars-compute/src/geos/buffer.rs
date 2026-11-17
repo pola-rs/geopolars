@@ -15,7 +15,9 @@ pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
 use super::{unless_split, GeosGeometries, GeosRow, ToGeosRows};
-use crate::{EarlyCoordCheck, GeoComputeError, GeoComputeResult, OnRowError};
+use crate::{
+    EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
+};
 
 /// How far away is the buffer?
 #[derive(Clone, Copy)]
@@ -58,7 +60,8 @@ pub fn buffer_into_polygons(
     array: &GeometryArray,
     distance: BufferDistance,
     style: &BufferStyle,
-    ccw_outer: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
@@ -69,7 +72,7 @@ pub fn buffer_into_polygons(
         on_row_error,
         false,
     )?
-    .into_polygon_array(false, on_row_error, ccw_outer)
+    .into_polygon_array(false, on_row_error, new_ring_orientation, new_holes)
 }
 
 /// Like [`buffer_into_polygons`], but into a multipolygon, for any kind.
@@ -79,7 +82,8 @@ pub fn buffer_into_multi_polygons(
     array: &GeometryArray,
     distance: BufferDistance,
     style: &BufferStyle,
-    ccw_outer: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiPolygonArray> {
@@ -90,7 +94,7 @@ pub fn buffer_into_multi_polygons(
         on_row_error,
         true,
     )?
-    .into_multi_polygon_array(false, on_row_error, ccw_outer)
+    .into_multi_polygon_array(false, on_row_error, new_ring_orientation, new_holes)
 }
 
 fn buffer_params(style: &BufferStyle) -> GeoComputeResult<BufferParams> {
@@ -153,7 +157,7 @@ pub(super) fn by_distance_via_geos(
         BufferDistance::Constant(distance) => {
             let distance = geos_distance(distance)?;
             for geometry in &mut geometries.geometries {
-                if let GeosRow::Geometry(input) = geometry {
+                if let GeosRow::Geometry(input) | GeosRow::Unchanged(input) = geometry {
                     *geometry = apply(input, distance)?;
                 }
             }
@@ -165,7 +169,7 @@ pub(super) fn by_distance_via_geos(
                     *geometry = GeosRow::Null;
                     continue;
                 };
-                let GeosRow::Geometry(input) = geometry else {
+                let (GeosRow::Geometry(input) | GeosRow::Unchanged(input)) = geometry else {
                     continue;
                 };
                 *geometry = match geos_distance(distance) {

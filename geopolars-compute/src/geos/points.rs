@@ -28,20 +28,22 @@ impl GeosGeometries {
                     push(&empty);
                     true
                 }
-                GeosRow::Geometry(point) => match point.geometry_type()? {
-                    GeometryTypes::Point if point.is_empty()? => {
-                        push(&empty);
-                        true
+                GeosRow::Geometry(point) | GeosRow::Unchanged(point) => {
+                    match point.geometry_type()? {
+                        GeometryTypes::Point if point.is_empty()? => {
+                            push(&empty);
+                            true
+                        }
+                        GeometryTypes::Point => {
+                            push(&point.get_coord_seq()?.as_buffer(Some(coord_type(dim)))?);
+                            true
+                        }
+                        other => {
+                            let message = format!("expected a point, got a {other:?}");
+                            return Err(geos::Error::ConversionError(message).into());
+                        }
                     }
-                    GeometryTypes::Point => {
-                        push(&point.get_coord_seq()?.as_buffer(Some(coord_type(dim)))?);
-                        true
-                    }
-                    other => {
-                        let message = format!("expected a point, got a {other:?}");
-                        return Err(geos::Error::ConversionError(message).into());
-                    }
-                },
+                }
             };
             if !is_valid {
                 // The value under a null row is never read.
@@ -84,20 +86,22 @@ impl GeosGeometries {
             let is_valid = match geometry {
                 GeosRow::Null => false,
                 GeosRow::Empty => true,
-                GeosRow::Geometry(geometry) => match geometry.geometry_type()? {
-                    // An empty point has no coordinates, so it adds no part.
-                    GeometryTypes::Point => {
-                        coords.push::<Z, false>(&geometry)?;
-                        true
-                    }
-                    GeometryTypes::MultiPoint => {
-                        for n in 0..geometry.get_num_geometries()? {
-                            coords.push::<Z, false>(&geometry.get_geometry_n(n)?)?;
+                GeosRow::Geometry(geometry) | GeosRow::Unchanged(geometry) => {
+                    match geometry.geometry_type()? {
+                        // An empty point has no coordinates, so it adds no part.
+                        GeometryTypes::Point => {
+                            coords.push::<Z, false>(&geometry)?;
+                            true
                         }
-                        true
+                        GeometryTypes::MultiPoint => {
+                            for n in 0..geometry.get_num_geometries()? {
+                                coords.push::<Z, false>(&geometry.get_geometry_n(n)?)?;
+                            }
+                            true
+                        }
+                        other => wrong_kind("multipoint", other, on_row_error)?,
                     }
-                    other => wrong_kind("multipoint", other, on_row_error)?,
-                },
+                }
             };
             validity.push(is_valid);
             rows.push(coords.len());

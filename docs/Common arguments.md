@@ -206,6 +206,7 @@ What counts as a new ring:
 
 > [!NOTE]
 > Legacy: this replaces `ccw_outer: bool = False`.
+> `ccw_outer=True` is now `new_ring_orientation="ccw"`.
 
 ### `new_holes: Literal["opposite", "same"] = "opposite"`
 

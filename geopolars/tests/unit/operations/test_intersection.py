@@ -375,7 +375,7 @@ def test_a_multipoint_keeps_the_points_inside() -> None:
     _assert_geometries(out, ["MULTIPOINT ((1 1), (0.5 0.5))", None, "MULTIPOINT EMPTY"])
 
 
-def test_the_exterior_runs_counter_clockwise_with_ccw_outer() -> None:
+def test_the_exterior_runs_counter_clockwise_with_ccw() -> None:
     a = (PolygonXY(), [_SQUARE])
     b = (PolygonXY(), ["POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))"])
 
@@ -383,16 +383,16 @@ def test_the_exterior_runs_counter_clockwise_with_ccw_outer() -> None:
         return pl.select(geo.is_ccw(out)).item()
 
     assert not is_ccw(_intersection(a, b))
-    assert is_ccw(_intersection(a, b, ccw_outer=True))
+    assert is_ccw(_intersection(a, b, new_ring_orientation="ccw"))
 
 
-def test_ccw_outer_turns_every_part_and_keeps_holes_clockwise() -> None:
+def test_ccw_turns_every_part_and_keeps_holes_clockwise() -> None:
     def is_ccw(out: pl.Series) -> bool:
         return pl.select(geo.is_ccw(out)).item()
 
     a, b = (PolygonXY(), [_U]), (PolygonXY(), [_ACROSS_THE_ARMS])
     assert not is_ccw(_intersection(a, b, allow_splitting=True))
-    split = _intersection(a, b, allow_splitting=True, ccw_outer=True)
+    split = _intersection(a, b, allow_splitting=True, new_ring_orientation="ccw")
     assert split.dtype == MultiPolygonXY()
     assert is_ccw(split)
     holed = (
@@ -401,16 +401,18 @@ def test_ccw_outer_turns_every_part_and_keeps_holes_clockwise() -> None:
     )
     big = (PolygonXY(), ["POLYGON ((-1 -1, 5 -1, 5 5, -1 5, -1 -1))"])
     assert not is_ccw(_intersection(holed, big))
-    assert is_ccw(_intersection(holed, big, ccw_outer=True))
+    assert is_ccw(_intersection(holed, big, new_ring_orientation="ccw"))
 
 
-@pytest.mark.parametrize("ccw_outer", [False, True])
-def test_a_hole_is_kept(ccw_outer: bool) -> None:
+@pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
+def test_a_hole_is_kept(new_ring_orientation: str) -> None:
     holed = "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))"
     big = "POLYGON ((-1 -1, 5 -1, 5 5, -1 5, -1 -1))"
 
     out = _intersection(
-        (PolygonXY(), [holed]), (PolygonXY(), [big]), ccw_outer=ccw_outer
+        (PolygonXY(), [holed]),
+        (PolygonXY(), [big]),
+        new_ring_orientation=new_ring_orientation,
     )
 
     _assert_geometries(out, [holed])
@@ -788,7 +790,7 @@ def test_the_namespace_method_passes_its_options_on() -> None:
     assert out["a"].to_list() == [None]
     out = df.select(
         pl.col("a").geo.intersection(
-            "b", keep="lines", allow_splitting=True, ccw_outer=True
+            "b", keep="lines", allow_splitting=True, new_ring_orientation="ccw"
         )
     )
     assert out["a"].dtype == MultiLineStringXY()

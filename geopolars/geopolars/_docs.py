@@ -150,13 +150,16 @@ An empty point on its own is not caught, as GEOS supports it.
 Turning the check off skips a pass over the coordinates,
 which can pay off on data with few non-finite coordinates.
 See `early_coord_check` on the Common arguments page (`docs/Common arguments.md`).""",
-    "ccw_outer": """\
-The exterior runs as GEOS gives it, clockwise.
-With `ccw_outer=True`, it runs counter-clockwise instead at a minimal performance cost.""",
-    "ccw_outer_skipping_geos": """\
-The orientation is only set for the rows that go through GEOS.
+    "new_ring_orientation": """\
+By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them:
+the exterior clockwise, and the holes counter-clockwise.
+With `"ccw"` or `"cw"`, the exterior runs that way instead, at a minimal performance cost.
+The holes then run against it with `new_holes="opposite"` (the default), or along it with `"same"`.
+See `new_ring_orientation` on the Common arguments page (`docs/Common arguments.md`).""",
+    "new_ring_orientation_skipping_geos": """\
+Only the rings GEOS builds are new.
 A row whose result is trivial skips GEOS, and keeps the orientation of its input,
-whatever `ccw_outer` is.""",
+whatever `new_ring_orientation` is.""",
     "overlay_splitting": """\
 A row whose result has several parts then raises.
 With `allow_splitting=True`, the result is the multi kind instead, which holds every part.""",

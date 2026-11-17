@@ -266,19 +266,23 @@ def test_one_side_of_a_point_is_its_regular_buffer() -> None:
     assert _buffered(df, 1.0, side="left") == _buffered(df, 1.0)
 
 
-def test_the_exterior_is_clockwise_unless_ccw_outer() -> None:
+def test_the_exterior_is_clockwise_unless_ccw() -> None:
     df = _column(PointXY, _ORIGIN)
 
-    for ccw_outer in (False, True):
-        out = df.select(geo.buffer("geom", 1.0, ccw_outer=ccw_outer).geo.is_ccw())
+    for new_ring_orientation in ("keep", "ccw"):
+        out = df.select(
+            geo.buffer(
+                "geom", 1.0, new_ring_orientation=new_ring_orientation
+            ).geo.is_ccw()
+        )
 
-        assert out.to_series().to_list() == [ccw_outer]
+        assert out.to_series().to_list() == [new_ring_orientation == "ccw"]
 
 
-def test_ccw_outer_turns_every_part_of_a_multipolygon() -> None:
+def test_ccw_turns_every_part_of_a_multipolygon() -> None:
     df = _column(MultiPolygonXY, [[_DUMBBELL]])
 
-    out = df.select(geo.buffer("geom", -0.5, ccw_outer=True).geo.is_ccw())
+    out = df.select(geo.buffer("geom", -0.5, new_ring_orientation="ccw").geo.is_ccw())
 
     assert out.to_series().to_list() == [True]
 
@@ -316,6 +320,14 @@ def test_invalid_options_are_refused(kwargs: dict[str, object]) -> None:
 
     with pytest.raises(ValueError, match="buffer"):
         geo.buffer("geom", distance, **kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "kwargs", [{"new_ring_orientation": "clockwise"}, {"new_holes": "against"}]
+)
+def test_an_unknown_orientation_is_refused(kwargs: dict[str, str]) -> None:
+    with pytest.raises(ValueError, match="must be one of"):
+        geo.buffer("geom", 1.0, **kwargs)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(

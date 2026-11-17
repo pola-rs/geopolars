@@ -20,7 +20,6 @@ Read them as follows:
 | In the code | In these guides |
 | - | - |
 | `EARLY_FINITE_CHECK` | `early_coord_check` |
-| `ccw_outer`, `REVERSED` | `new_ring_orientation`, `new_holes` |
 | `unique_z`, `unique_m` | `include_z`, `include_m` |
 | `NULLS` | `ALL_VALID`, which is its opposite |
 

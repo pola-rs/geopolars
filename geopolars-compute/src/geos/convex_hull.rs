@@ -50,7 +50,7 @@ use geopolars_views::{
 use geos::{CoordSeq, Geom, Geometry, GeometryTypes};
 
 use super::{axes, xy_is_finite_or_error, GeosGeometries, GeosRow};
-use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
 // TODO: a geometry crossing the antimeridian is hulled the long way round.
 // We could add a flag that checks if the input crosses it (>180°),
@@ -61,14 +61,16 @@ use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 pub fn line_string_convex_hulls(
     array: &LineStringArray,
     on_row_error: OnRowError,
-    ccw_outer: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
-        ccw_outer,
+        new_ring_orientation,
+        new_holes,
         early_coord_check,
         |vertices, ranges| ranges.push(vertices),
     )
@@ -78,14 +80,16 @@ pub fn line_string_convex_hulls(
 pub fn multi_point_convex_hulls(
     array: &MultiPointArray,
     on_row_error: OnRowError,
-    ccw_outer: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
-        ccw_outer,
+        new_ring_orientation,
+        new_holes,
         early_coord_check,
         |vertices, ranges| ranges.push(vertices),
     )
@@ -95,14 +99,16 @@ pub fn multi_point_convex_hulls(
 pub fn multi_line_string_convex_hulls(
     array: &MultiLineStringArray,
     on_row_error: OnRowError,
-    ccw_outer: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
-        ccw_outer,
+        new_ring_orientation,
+        new_holes,
         early_coord_check,
         |parts, ranges| ranges.extend(parts.map(|j| array.lines.range(j))),
     )
@@ -112,14 +118,16 @@ pub fn multi_line_string_convex_hulls(
 pub fn polygon_convex_hulls(
     array: &PolygonArray,
     on_row_error: OnRowError,
-    ccw_outer: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
-        ccw_outer,
+        new_ring_orientation,
+        new_holes,
         early_coord_check,
         |parts, ranges| {
             if !parts.is_empty() {
@@ -134,14 +142,16 @@ pub fn polygon_convex_hulls(
 pub fn multi_polygon_convex_hulls(
     array: &MultiPolygonArray,
     on_row_error: OnRowError,
-    ccw_outer: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
-        ccw_outer,
+        new_ring_orientation,
+        new_holes,
         early_coord_check,
         |parts, ranges| {
             ranges.extend(
@@ -159,7 +169,8 @@ fn hulls(
     rows: &List,
     coords: &ValidCoords,
     on_row_error: OnRowError,
-    ccw_outer: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
     early_coord_check: EarlyCoordCheck,
     coord_ranges: impl Fn(Range<usize>, &mut Vec<Range<usize>>),
 ) -> GeoComputeResult<PolygonArray> {
@@ -176,7 +187,7 @@ fn hulls(
         )
     )?;
     // GEOS gives the exterior as running clockwise.
-    hulls.into_polygon_array(has_z, on_row_error, ccw_outer)
+    hulls.into_polygon_array(has_z, on_row_error, new_ring_orientation, new_holes)
 }
 
 /// [`hulls`] as GEOS polygons.

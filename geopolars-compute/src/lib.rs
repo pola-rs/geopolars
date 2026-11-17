@@ -21,6 +21,7 @@ pub mod inner_nulls;
 mod metric;
 #[cfg(feature = "native")]
 pub mod native;
+mod new_ring_orientation;
 #[cfg(all(feature = "native", feature = "geos"))]
 pub mod ogc_validity;
 mod on_row_error;
@@ -43,5 +44,6 @@ pub use empty_polygon_exterior::EmptyPolygonExterior;
 use error::row_or_null;
 pub use error::{GeoComputeError, GeoComputeResult};
 pub use metric::{BaseMetric, GeodesicMetric, Planar, WithHeight};
+pub use new_ring_orientation::{NewHoles, NewRingOrientation};
 pub use on_row_error::OnRowError;
 pub use short_lines::ShortLines;

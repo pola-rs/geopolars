@@ -29,11 +29,11 @@
 //! Copying linestrings and polygons out of GEOS, and the convex hulls, are generic over `Z`.
 //! If `Z=true`, the z values are copied too.
 //!
-//! ## `REVERSED`
+//! ## `REVERSED_EXTERIOR`, `REVERSED_HOLES`
 //!
-//! Copying a linestring or a ring out of GEOS is generic over `REVERSED`.
-//! If `REVERSED=true`, its coordinates are copied in reverse order.
-//! For a polygon, this flips its orientation.
+//! Copying a polygon out of GEOS is generic over `REVERSED_EXTERIOR` and `REVERSED_HOLES`.
+//! If set, its exterior or its holes are copied in reverse order, which flips their orientation.
+//! `reversed_rings` sets them from `new_ring_orientation` and `new_holes`.
 
 mod buffer;
 mod convex_hull;
@@ -89,7 +89,10 @@ use geos::{CoordSeq, CoordType, Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
-use crate::{row_or_null, EarlyCoordCheck, GeoComputeError, GeoComputeResult, OnRowError};
+use crate::{
+    row_or_null, EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation,
+    OnRowError,
+};
 
 /// Converts a single geometry into a GEOS geometry.
 /// For an array, see [`ToGeosRows`].
@@ -462,13 +465,27 @@ pub enum GeosRow {
     /// Empty, without a GEOS geometry. Valid for every kind.
     Empty,
     Geometry(Geometry),
-    // FIXME: add two arms: 'LeftUnchanged' and 'RightUnchanged'
+    /// A copy of an input row, whose rings are not new, so they are never re-oriented.
+    // FIXME: add two arms: 'LeftUnchanged' and 'RightUnchanged',
+    // which copy straight from the input arrays rather than out of a GEOS copy.
+    Unchanged(Geometry),
 }
 
 /// `None` is a null row.
 impl From<Option<Geometry>> for GeosRow {
     fn from(geometry: Option<Geometry>) -> Self {
         geometry.map_or(GeosRow::Null, GeosRow::Geometry)
+    }
+}
+
+/// Whether to reverse the exterior and the holes of a polygon GEOS built.
+/// No ring needs testing, as GEOS builds a clockwise exterior with counter-clockwise holes
+/// (see "Orientation of new rings" in `docs/GEOS kernel implementation guide.md`).
+fn reversed_rings(new_ring_orientation: NewRingOrientation, new_holes: NewHoles) -> (bool, bool) {
+    match new_ring_orientation {
+        NewRingOrientation::Keep => (false, false),
+        NewRingOrientation::Ccw => (true, new_holes == NewHoles::Opposite),
+        NewRingOrientation::Cw => (false, new_holes == NewHoles::Same),
     }
 }
 

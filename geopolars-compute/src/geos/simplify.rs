@@ -19,7 +19,7 @@
 use geopolars_views::{LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray};
 
 use super::{GeosGeometries, GeosRow, ToGeosRows};
-use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
 /// Simplifies every linestring to within `tolerance` through GEOS.
 pub fn simplify_line_strings(
@@ -76,7 +76,12 @@ pub fn simplify_polygons(
         preserve_topology,
         on_row_error,
     )?
-    .into_polygon_array(array.coords.dim().has_z(), on_row_error, false)
+    .into_polygon_array(
+        array.coords.dim().has_z(),
+        on_row_error,
+        NewRingOrientation::Keep,
+        NewHoles::Opposite,
+    )
 }
 
 /// Like [`simplify_line_strings`], for multipolygons.
@@ -93,7 +98,12 @@ pub fn simplify_multi_polygons(
         preserve_topology,
         on_row_error,
     )?
-    .into_multi_polygon_array(array.coords.dim().has_z(), on_row_error, false)
+    .into_multi_polygon_array(
+        array.coords.dim().has_z(),
+        on_row_error,
+        NewRingOrientation::Keep,
+        NewHoles::Opposite,
+    )
 }
 
 /// Every geometry simplified to within `tolerance`, forwarded to GEOS.
@@ -127,7 +137,7 @@ fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
     on_row_error: OnRowError,
 ) -> GeoComputeResult<()> {
     for geometry in geometries {
-        let GeosRow::Geometry(input) = geometry else {
+        let (GeosRow::Geometry(input) | GeosRow::Unchanged(input)) = geometry else {
             continue;
         };
         let simplified = if PRESERVE_TOPOLOGY {

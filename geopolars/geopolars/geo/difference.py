@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import EarlyCoordCheck, OnRowError
+from geopolars._typing import (
+    EarlyCoordCheck,
+    NewHoles,
+    NewRingOrientation,
+    OnRowError,
+)
 from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
@@ -24,7 +29,8 @@ def difference(
     b: IntoExprColumn,
     *,
     allow_splitting: bool = False,
-    ccw_outer: bool = False,
+    new_ring_orientation: NewRingOrientation = "keep",
+    new_holes: NewHoles = "opposite",
     on_row_error: OnRowError = "raise",
     early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
@@ -80,9 +86,9 @@ def difference(
     GEOS itself does not raise on every such vertex,
     so this row can be stricter than one that GEOS computes.
 
-    {ccw_outer}
+    {new_ring_orientation}
     It only affects a Polygon or MultiPolygon result.
-    {ccw_outer_skipping_geos}
+    {new_ring_orientation_skipping_geos}
     Here, those are the rows where `b` is empty.
 
     {same_crs_pair}
@@ -95,9 +101,12 @@ def difference(
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
+    validate_one_of("new_holes", new_holes, NewHoles)
     kwargs = {
         "allow_splitting": allow_splitting,
-        "ccw_outer": ccw_outer,
+        "new_ring_orientation": new_ring_orientation,
+        "new_holes": new_holes,
         "on_row_error": on_row_error,
         "early_coord_check": early_coord_check,
     }

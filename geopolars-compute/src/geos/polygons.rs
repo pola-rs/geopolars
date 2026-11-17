@@ -2,7 +2,7 @@
 //!
 //! # Const generic flags
 //!
-//! See [super] for `Z` and `REVERSED`.
+//! See [super] for `Z`, `REVERSED_EXTERIOR` and `REVERSED_HOLES`.
 
 use std::ops::Range;
 
@@ -14,10 +14,10 @@ use geos::{Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::Bitmap;
 
 use super::{
-    axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
-    OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
+    axes, coord_seq, reversed_rings, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries,
+    GeosRow, OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
 };
-use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
 impl ToGeos for ScalarPolygon<'_> {
     type Geos = Geometry;
@@ -157,11 +157,13 @@ impl GeosGeometries {
         self,
         z: bool,
         on_row_error: OnRowError,
-        reversed: bool,
+        new_ring_orientation: NewRingOrientation,
+        new_holes: NewHoles,
     ) -> GeoComputeResult<PolygonArray> {
+        let (exterior, holes) = reversed_rings(new_ring_orientation, new_holes);
         with_const_flags!(
-            Z = z, REVERSED = reversed;
-            into_polygon_array_with::<Z, REVERSED>(self, on_row_error)
+            Z = z, REVERSED_EXTERIOR = exterior, REVERSED_HOLES = holes;
+            into_polygon_array_with::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(self, on_row_error)
         )
     }
 
@@ -173,17 +175,23 @@ impl GeosGeometries {
         self,
         z: bool,
         on_row_error: OnRowError,
-        reversed: bool,
+        new_ring_orientation: NewRingOrientation,
+        new_holes: NewHoles,
     ) -> GeoComputeResult<MultiPolygonArray> {
+        let (exterior, holes) = reversed_rings(new_ring_orientation, new_holes);
         with_const_flags!(
-            Z = z, REVERSED = reversed;
-            into_multi_polygon_array_with::<Z, REVERSED>(self, on_row_error)
+            Z = z, REVERSED_EXTERIOR = exterior, REVERSED_HOLES = holes;
+            into_multi_polygon_array_with::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(self, on_row_error)
         )
     }
 }
 
 /// See [`GeosGeometries::into_multi_polygon_array`].
-fn into_multi_polygon_array_with<const Z: bool, const REVERSED: bool>(
+fn into_multi_polygon_array_with<
+    const Z: bool,
+    const REVERSED_EXTERIOR: bool,
+    const REVERSED_HOLES: bool,
+>(
     geometries: GeosGeometries,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<MultiPolygonArray> {
@@ -196,26 +204,22 @@ fn into_multi_polygon_array_with<const Z: bool, const REVERSED: bool>(
         let is_valid = match geometry {
             GeosRow::Null => false,
             GeosRow::Empty => true,
-            GeosRow::Geometry(geometry) => match geometry.geometry_type()? {
-                GeometryTypes::Polygon if geometry.is_empty()? => true,
-                GeometryTypes::Polygon => {
-                    push_rings::<Z, REVERSED>(&mut coords, &mut rings, &geometry)?;
-                    polygons.push(rings.len());
-                    true
-                }
-                GeometryTypes::MultiPolygon => {
-                    for n in 0..geometry.get_num_geometries()? {
-                        push_rings::<Z, REVERSED>(
-                            &mut coords,
-                            &mut rings,
-                            &geometry.get_geometry_n(n)?,
-                        )?;
-                        polygons.push(rings.len());
-                    }
-                    true
-                }
-                other => wrong_kind("multipolygon", other, on_row_error)?,
-            },
+            GeosRow::Geometry(geometry) => {
+                push_multi_polygon::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(
+                    &mut coords,
+                    &mut rings,
+                    &mut polygons,
+                    &geometry,
+                    on_row_error,
+                )?
+            }
+            GeosRow::Unchanged(geometry) => push_multi_polygon::<Z, false, false>(
+                &mut coords,
+                &mut rings,
+                &mut polygons,
+                &geometry,
+                on_row_error,
+            )?,
         };
         validity.push(is_valid);
         rows.push(polygons.len());
@@ -229,7 +233,11 @@ fn into_multi_polygon_array_with<const Z: bool, const REVERSED: bool>(
 }
 
 /// See [`GeosGeometries::into_polygon_array`].
-fn into_polygon_array_with<const Z: bool, const REVERSED: bool>(
+fn into_polygon_array_with<
+    const Z: bool,
+    const REVERSED_EXTERIOR: bool,
+    const REVERSED_HOLES: bool,
+>(
     geometries: GeosGeometries,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PolygonArray> {
@@ -241,13 +249,15 @@ fn into_polygon_array_with<const Z: bool, const REVERSED: bool>(
         let is_valid = match geometry {
             GeosRow::Null => false,
             GeosRow::Empty => true,
-            GeosRow::Geometry(polygon) => match polygon.geometry_type()? {
-                GeometryTypes::Polygon => {
-                    push_rings::<Z, REVERSED>(&mut coords, &mut rings, &polygon)?;
-                    true
-                }
-                other => wrong_kind("polygon", other, on_row_error)?,
-            },
+            GeosRow::Geometry(polygon) => push_polygon::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(
+                &mut coords,
+                &mut rings,
+                &polygon,
+                on_row_error,
+            )?,
+            GeosRow::Unchanged(polygon) => {
+                push_polygon::<Z, false, false>(&mut coords, &mut rings, &polygon, on_row_error)?
+            }
         };
         validity.push(is_valid);
         rows.push(rings.len());
@@ -259,11 +269,58 @@ fn into_polygon_array_with<const Z: bool, const REVERSED: bool>(
     ))
 }
 
+/// Appends `geometry`, a polygon or a multipolygon, as the parts of one multipolygon.
+/// Gives whether its row is valid, as [wrong_kind] does for any other kind.
+#[inline(always)]
+fn push_multi_polygon<const Z: bool, const REVERSED_EXTERIOR: bool, const REVERSED_HOLES: bool>(
+    coords: &mut CoordsBuilder,
+    rings: &mut OffsetsBuilder,
+    polygons: &mut OffsetsBuilder,
+    geometry: &Geometry,
+    on_row_error: OnRowError,
+) -> GeoComputeResult<bool> {
+    match geometry.geometry_type()? {
+        GeometryTypes::Polygon if geometry.is_empty()? => Ok(true),
+        GeometryTypes::Polygon => {
+            push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(coords, rings, geometry)?;
+            polygons.push(rings.len());
+            Ok(true)
+        }
+        GeometryTypes::MultiPolygon => {
+            for n in 0..geometry.get_num_geometries()? {
+                let polygon = geometry.get_geometry_n(n)?;
+                push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(coords, rings, &polygon)?;
+                polygons.push(rings.len());
+            }
+            Ok(true)
+        }
+        other => wrong_kind("multipolygon", other, on_row_error),
+    }
+}
+
+/// Appends `geometry`, a polygon.
+/// Gives whether its row is valid, as [wrong_kind] does for any other kind.
+#[inline(always)]
+fn push_polygon<const Z: bool, const REVERSED_EXTERIOR: bool, const REVERSED_HOLES: bool>(
+    coords: &mut CoordsBuilder,
+    rings: &mut OffsetsBuilder,
+    geometry: &Geometry,
+    on_row_error: OnRowError,
+) -> GeoComputeResult<bool> {
+    match geometry.geometry_type()? {
+        GeometryTypes::Polygon => {
+            push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(coords, rings, geometry)?;
+            Ok(true)
+        }
+        other => wrong_kind("polygon", other, on_row_error),
+    }
+}
+
 /// Appends the rings of `polygon`, each ended in `rings`.
 /// The exterior comes first, then the interiors.
 /// An empty polygon has no rings.
 #[inline(always)]
-fn push_rings<const Z: bool, const REVERSED: bool>(
+fn push_rings<const Z: bool, const REVERSED_EXTERIOR: bool, const REVERSED_HOLES: bool>(
     coords: &mut CoordsBuilder,
     rings: &mut OffsetsBuilder,
     polygon: &impl Geom,
@@ -273,10 +330,10 @@ fn push_rings<const Z: bool, const REVERSED: bool>(
     if polygon.is_empty()? {
         return Ok(());
     }
-    coords.push::<Z, REVERSED>(&polygon.get_exterior_ring()?)?;
+    coords.push::<Z, REVERSED_EXTERIOR>(&polygon.get_exterior_ring()?)?;
     rings.push(coords.len());
     for n in 0..polygon.get_num_interior_rings()? {
-        coords.push::<Z, REVERSED>(&polygon.get_interior_ring_n(n)?)?;
+        coords.push::<Z, REVERSED_HOLES>(&polygon.get_interior_ring_n(n)?)?;
         rings.push(coords.len());
     }
     Ok(())

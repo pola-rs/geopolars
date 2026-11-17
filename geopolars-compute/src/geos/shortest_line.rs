@@ -20,12 +20,13 @@ fn shortest_line_between_rows(
     match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => Ok(GeosRow::Null),
         (GeosRow::Empty, _) | (_, GeosRow::Empty) => Ok(GeosRow::Empty),
-        (GeosRow::Geometry(a), GeosRow::Geometry(b)) => {
-            match shortest_line_between_geometries(a, b) {
-                Err(_) if on_row_error == OnRowError::Null => Ok(GeosRow::Null),
-                line => line,
-            }
-        }
+        (
+            GeosRow::Geometry(a) | GeosRow::Unchanged(a),
+            GeosRow::Geometry(b) | GeosRow::Unchanged(b),
+        ) => match shortest_line_between_geometries(a, b) {
+            Err(_) if on_row_error == OnRowError::Null => Ok(GeosRow::Null),
+            line => line,
+        },
     }
 }
 
@@ -118,7 +119,7 @@ pub fn shortest_lines_against_one(
             return shortest_lines_into_array(lines, on_row_error);
         }
         GeosRow::Empty => true,
-        GeosRow::Geometry(one) => one.is_empty()?,
+        GeosRow::Geometry(one) | GeosRow::Unchanged(one) => one.is_empty()?,
     };
     if one_is_empty {
         let lines = (0..many.len())

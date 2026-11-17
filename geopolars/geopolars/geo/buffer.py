@@ -12,7 +12,12 @@ import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import EarlyCoordCheck, OnRowError
+from geopolars._typing import (
+    EarlyCoordCheck,
+    NewHoles,
+    NewRingOrientation,
+    OnRowError,
+)
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType, PointType
 from geopolars.geo._dispatch import _to_expr, on_geometry
@@ -57,7 +62,8 @@ def buffer(
     mitre_limit: float | None = None,
     side: Literal["both", "left", "right"] = "both",
     allow_splitting: bool = False,
-    ccw_outer: bool = False,
+    new_ring_orientation: NewRingOrientation = "keep",
+    new_holes: NewHoles = "opposite",
     on_row_error: OnRowError = "raise",
     early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
@@ -134,7 +140,7 @@ def buffer(
     {geos_non_finite}
     {early_coord_check}
 
-    {ccw_outer}
+    {new_ring_orientation}
 
     ```python
     df.select(geo.buffer("parcel", 2.0))
@@ -143,6 +149,8 @@ def buffer(
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
+    validate_one_of("new_holes", new_holes, NewHoles)
 
     # TODO: we could add some image examples here?
     # - a normal outset
@@ -194,7 +202,8 @@ def buffer(
                 else float(mitre_limit),
                 "side": side,
                 "allow_splitting": allow_splitting,
-                "ccw_outer": ccw_outer,
+                "new_ring_orientation": new_ring_orientation,
+                "new_holes": new_holes,
                 "on_row_error": on_row_error,
                 "early_coord_check": early_coord_check,
             },

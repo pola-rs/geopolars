@@ -281,8 +281,10 @@ def test_the_exterior_runs_as_geos_gives_it_clockwise() -> None:
     assert _is_ccw(out) == [False]
 
 
-def test_ccw_outer_runs_the_exterior_counter_clockwise() -> None:
-    out = _polygons([_NOTCHED]).select(geo.convex_hull("polygon", ccw_outer=True))
+def test_ccw_runs_the_exterior_counter_clockwise() -> None:
+    out = _polygons([_NOTCHED]).select(
+        geo.convex_hull("polygon", new_ring_orientation="ccw")
+    )
 
     assert _is_ccw(out) == [True]
     assert out.to_series().ext.storage().to_list() == [
@@ -290,12 +292,12 @@ def test_ccw_outer_runs_the_exterior_counter_clockwise() -> None:
     ]
 
 
-def test_the_namespace_forwards_ccw_outer() -> None:
+def test_the_namespace_forwards_new_ring_orientation() -> None:
     df = _polygons([_NOTCHED])
 
-    assert df.select(pl.col("polygon").geo.convex_hull(ccw_outer=True)).equals(
-        df.select(geo.convex_hull("polygon", ccw_outer=True))
-    )
+    assert df.select(
+        pl.col("polygon").geo.convex_hull(new_ring_orientation="ccw")
+    ).equals(df.select(geo.convex_hull("polygon", new_ring_orientation="ccw")))
 
 
 def test_the_namespace_forwards_on_row_error() -> None:

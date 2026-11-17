@@ -80,7 +80,7 @@ impl RelatePairs {
         match row {
             GeosRow::Null => None,
             GeosRow::Empty => Some(&self.empty),
-            GeosRow::Geometry(geometry) => Some(geometry),
+            GeosRow::Geometry(geometry) | GeosRow::Unchanged(geometry) => Some(geometry),
         }
     }
 

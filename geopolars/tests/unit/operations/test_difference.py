@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 import random
 from typing import TYPE_CHECKING, Any
@@ -284,29 +285,52 @@ def test_a_multipoint_keeps_the_points_outside() -> None:
     _assert_geometries(out, ["MULTIPOINT ((5 5))", None, "MULTIPOINT EMPTY"])
 
 
-def test_the_exterior_runs_counter_clockwise_with_ccw_outer() -> None:
+def test_the_exterior_runs_counter_clockwise_with_ccw() -> None:
     a = (PolygonXY(), [_SQUARE])
     b = (PolygonXY(), [_OVERLAPPING])
 
     assert _is_ccw(_difference(a, b)) == [False]
-    assert _is_ccw(_difference(a, b, ccw_outer=True)) == [True]
+    assert _is_ccw(_difference(a, b, new_ring_orientation="ccw")) == [True]
     a, b = (PolygonXY(), [_WIDE]), (PolygonXY(), [_STRIP])
     assert _is_ccw(_difference(a, b, allow_splitting=True)) == [False]
-    split = _difference(a, b, allow_splitting=True, ccw_outer=True)
+    split = _difference(a, b, allow_splitting=True, new_ring_orientation="ccw")
     assert split.dtype == MultiPolygonXY()
     assert _is_ccw(split) == [True]
 
 
-@pytest.mark.parametrize("ccw_outer", [False, True])
-def test_a_hole_is_cut(ccw_outer: bool) -> None:
+def _rings_run_ccw(polygon: list[list[dict[str, float]]]) -> list[bool]:
+    return [
+        sum(p["x"] * q["y"] - q["x"] * p["y"] for p, q in itertools.pairwise(ring)) > 0
+        for ring in polygon
+    ]
+
+
+@pytest.mark.parametrize(
+    ("new_ring_orientation", "new_holes", "exterior_ccw", "hole_ccw"),
+    [
+        ("keep", "opposite", False, True),
+        ("ccw", "opposite", True, False),
+        ("ccw", "same", True, True),
+        ("cw", "opposite", False, True),
+        ("cw", "same", False, False),
+    ],
+)
+def test_a_hole_is_cut(
+    new_ring_orientation: str, new_holes: str, exterior_ccw: bool, hole_ccw: bool
+) -> None:
     big = "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0))"
     inner = "POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))"
 
-    out = _difference((PolygonXY(), [big]), (PolygonXY(), [inner]), ccw_outer=ccw_outer)
+    out = _difference(
+        (PolygonXY(), [big]),
+        (PolygonXY(), [inner]),
+        new_ring_orientation=new_ring_orientation,
+        new_holes=new_holes,
+    )
 
     holed = "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))"
     _assert_geometries(out, [holed])
-    assert _is_ccw(out) == [ccw_outer]
+    assert _rings_run_ccw(_storage(out)[0]) == [exterior_ccw, hole_ccw]
 
 
 def test_an_empty_a_gives_an_empty_geometry() -> None:
@@ -320,16 +344,30 @@ def test_an_empty_a_gives_an_empty_geometry() -> None:
     assert _to_wkt(df.select(geo.difference("a", "b"))["a"]) == ["POINT EMPTY"]
 
 
-@pytest.mark.parametrize("ccw_outer", [False, True])
-def test_an_empty_b_gives_a_as_it_is(ccw_outer: bool) -> None:
+@pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
+def test_an_empty_b_gives_a_as_it_is(new_ring_orientation: str) -> None:
     a = _wkt("a", PolygonXY(), [_SQUARE, _CW, _SQUARE])
     b = _wkt("b", PolygonXY(), ["POLYGON EMPTY", "POLYGON EMPTY", _OVERLAPPING])
 
-    out = pl.DataFrame([a, b]).select(geo.difference("a", "b", ccw_outer=ccw_outer))
+    out = pl.DataFrame([a, b]).select(
+        geo.difference("a", "b", new_ring_orientation=new_ring_orientation)
+    )
 
     assert _storage(out["a"])[:2] == _storage(a)[:2]
     # Only the row that went through GEOS is turned.
-    assert _is_ccw(out["a"])[2] == ccw_outer
+    assert _is_ccw(out["a"])[2] == (new_ring_orientation == "ccw")
+
+
+def test_a_copy_of_a_is_not_turned() -> None:
+    holed = "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))"
+    a = _wkt("a", PolygonXY(), [holed])
+    b = _wkt("b", PolygonXY(), ["POLYGON EMPTY"])
+
+    out = pl.DataFrame([a, b]).select(
+        geo.difference("a", "b", new_ring_orientation="ccw", new_holes="same")
+    )
+
+    assert _storage(out["a"]) == _storage(a)
 
 
 def _coords(row: Any) -> list[Coord]:
@@ -374,13 +412,13 @@ _AS_IS = {
     [(PolygonXY(), "POLYGON EMPTY"), (PolygonXYZ(), "POLYGON Z EMPTY")],
     ids=["b_xy", "z_only_on_b"],
 )
-@pytest.mark.parametrize("ccw_outer", [False, True])
+@pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
 @pytest.mark.parametrize("allow_splitting", [False, True])
 @pytest.mark.parametrize("kind", _AS_IS)
 def test_an_empty_b_gives_a_as_it_is_for_every_kind(
     kind: str,
     allow_splitting: bool,
-    ccw_outer: bool,
+    new_ring_orientation: str,
     b_dtype: GeoArrowType,
     empty: str,
 ) -> None:
@@ -389,7 +427,12 @@ def test_an_empty_b_gives_a_as_it_is_for_every_kind(
     b = _wkt("b", b_dtype, [empty] * len(wkts))
 
     out = pl.DataFrame([a, b]).select(
-        geo.difference("a", "b", allow_splitting=allow_splitting, ccw_outer=ccw_outer)
+        geo.difference(
+            "a",
+            "b",
+            allow_splitting=allow_splitting,
+            new_ring_orientation=new_ring_orientation,
+        )
     )["a"]
 
     out_kind = _expected_kind(kind, allow_splitting)
@@ -451,13 +494,15 @@ def test_an_empty_b_stores_a_part_without_vertices_without_rings() -> None:
     assert _storage(out) == [[[outer], []]]
 
 
-@pytest.mark.parametrize("ccw_outer", [False, True])
-def test_a_single_empty_b_gives_every_row_as_it_is(ccw_outer: bool) -> None:
+@pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
+def test_a_single_empty_b_gives_every_row_as_it_is(new_ring_orientation: str) -> None:
     # Both orientations, as one of them equals what GEOS gives, turned or not.
     many = _wkt("many", PolygonXY(), [_SQUARE, None, _CW, _WIDE])
     one = _wkt("one", PolygonXY(), ["POLYGON EMPTY"])
 
-    out = pl.DataFrame(many).select(geo.difference("many", one, ccw_outer=ccw_outer))
+    out = pl.DataFrame(many).select(
+        geo.difference("many", one, new_ring_orientation=new_ring_orientation)
+    )
 
     assert _storage(out["many"]) == _storage(many)
 
@@ -498,7 +543,9 @@ def test_copied_rows_line_up_with_computed_rows_in_one_chunk(
     b = _wkt("b", PolygonXY(), b_rows)
 
     out = pl.DataFrame([a, b]).select(
-        geo.difference("a", "b", allow_splitting=allow_splitting, ccw_outer=True)
+        geo.difference(
+            "a", "b", allow_splitting=allow_splitting, new_ring_orientation="ccw"
+        )
     )["a"]
 
     wrapped = allow_splitting and a_dtype == PolygonXY()
@@ -514,8 +561,10 @@ def test_copied_rows_line_up_with_computed_rows_in_one_chunk(
     assert got[8] == []
 
 
-@pytest.mark.parametrize("ccw_outer", [False, True])
-def test_a_single_a_is_copied_into_every_row_with_an_empty_b(ccw_outer: bool) -> None:
+@pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
+def test_a_single_a_is_copied_into_every_row_with_an_empty_b(
+    new_ring_orientation: str,
+) -> None:
     one = _wkt("one", PolygonXY(), [_SQUARE])
     many = _chunked(
         [
@@ -524,14 +573,16 @@ def test_a_single_a_is_copied_into_every_row_with_an_empty_b(ccw_outer: bool) ->
         ]
     )
 
-    out = pl.DataFrame(many).select(geo.difference(one, "many", ccw_outer=ccw_outer))
+    out = pl.DataFrame(many).select(
+        geo.difference(one, "many", new_ring_orientation=new_ring_orientation)
+    )
 
     [square] = _storage(one)
     got = _storage(out.to_series())
     assert got[0] == square
     assert got[2] is None
     assert got[3] == square
-    assert _is_ccw(out.to_series())[1] is ccw_outer
+    assert _is_ccw(out.to_series())[1] is (new_ring_orientation == "ccw")
 
 
 def test_a_sliced_chunk_copies_its_own_rows() -> None:
@@ -545,7 +596,7 @@ def test_a_sliced_chunk_copies_its_own_rows() -> None:
     rows_b = ["POLYGON EMPTY", _OVERLAPPING, "POLYGON EMPTY"]
     whole = frame(pad_a + rows_a + pad_a, pad_b + rows_b + pad_b)
     sliced = whole.slice(len(pad_a), len(rows_a))
-    expr = geo.difference("a", "b", ccw_outer=True)
+    expr = geo.difference("a", "b", new_ring_orientation="ccw")
 
     out = sliced.select(expr)
 
@@ -569,8 +620,8 @@ def test_the_engines_agree_on_copied_rows(engine: EngineType) -> None:
     one = _wkt("one", PolygonXY(), [_SQUARE])
 
     for expr in (
-        geo.difference("a", "b", ccw_outer=True),
-        geo.difference(one, "b", ccw_outer=True).alias("one_against_b"),
+        geo.difference("a", "b", new_ring_orientation="ccw"),
+        geo.difference(one, "b", new_ring_orientation="ccw").alias("one_against_b"),
     ):
         out = df.lazy().select(expr).collect(engine=engine)
         assert_frame_equal(out, df.select(expr))
@@ -959,7 +1010,10 @@ def test_the_namespace_method_passes_its_options_on() -> None:
     assert out["a"].to_list() == [None]
     out = df.select(
         pl.col("a").geo.difference(
-            "b", allow_splitting=True, ccw_outer=True, early_coord_check="off"
+            "b",
+            allow_splitting=True,
+            new_ring_orientation="ccw",
+            early_coord_check="off",
         )
     )
     assert out["a"].dtype == MultiPolygonXY()

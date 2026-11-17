@@ -16,10 +16,14 @@ fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Op
         (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(None),
         (GeosRow::Empty, GeosRow::Empty) => true,
         // An empty row never went to GEOS, so it can't be compared there.
-        (GeosRow::Empty, GeosRow::Geometry(other)) | (GeosRow::Geometry(other), GeosRow::Empty) => {
+        (GeosRow::Empty, GeosRow::Geometry(other) | GeosRow::Unchanged(other))
+        | (GeosRow::Geometry(other) | GeosRow::Unchanged(other), GeosRow::Empty) => {
             other.is_empty()?
         }
-        (GeosRow::Geometry(a), GeosRow::Geometry(b)) => a.equals(b)?,
+        (
+            GeosRow::Geometry(a) | GeosRow::Unchanged(a),
+            GeosRow::Geometry(b) | GeosRow::Unchanged(b),
+        ) => a.equals(b)?,
     }))
 }
 
