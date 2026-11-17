@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import ShortLines
 from geopolars._utils import LIB, validate_coincidence_tolerances, validate_one_of
 from geopolars.geo._dispatch import on_geometry
 
@@ -17,7 +18,6 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 CollapsedLines = Literal["keep_ends", "single_vertex"]
-TooShort = Literal["null", "keep", "empty"]
 
 
 @doc()
@@ -29,7 +29,7 @@ def remove_repeats_in_succession(
     unique_z: bool = True,
     unique_m: bool = False,
     collapsed_lines: CollapsedLines = "keep_ends",
-    too_short: TooShort = "null",
+    short_lines: ShortLines = "null",
 ) -> pl.Expr:
     """Removes coincident points in direct succession, leaving only one.
     If `n` repeating points are all at the same place, all but the first are removed,
@@ -61,7 +61,7 @@ def remove_repeats_in_succession(
     This argument is not considered for polygon rings.
     A ring always keeps both ends in order to stay closed (and therefore valid GeoArrow).
 
-    {too_short}
+    {short_lines}
 
     For a linestring `A A A`, `"keep_ends"` gives `[A, A]`, which is not too short.
     `"single_vertex"` gives `[A]`, which is.
@@ -74,7 +74,7 @@ def remove_repeats_in_succession(
     """
 
     validate_one_of("collapsed_lines", collapsed_lines, CollapsedLines)
-    validate_one_of("too_short", too_short, TooShort)
+    validate_one_of("short_lines", short_lines, ShortLines)
     validate_coincidence_tolerances(abs_tol, rel_tol)
 
     def build(column: pl.Expr, _geometry: GeoArrowType) -> pl.Expr:
@@ -89,7 +89,7 @@ def remove_repeats_in_succession(
                 "unique_z": unique_z,
                 "unique_m": unique_m,
                 "collapsed_lines": collapsed_lines,
-                "too_short": too_short,
+                "short_lines": short_lines,
             },
         )
 

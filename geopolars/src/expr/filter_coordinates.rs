@@ -1,14 +1,15 @@
 //! Emptying, dropping or nulling the coordinates that are not finite, or empty.
 //! Implements the Python `filter_coordinates`.
 
-use geopolars_compute::native::{CoordinateSelection, NonFinite, SelectedAction, TooShort};
+use geopolars_compute::native::{CoordinateSelection, NonFinite, SelectedAction};
+use geopolars_compute::ShortLines;
 use geopolars_core::with_selected_coords;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
-use super::remove_repeats_in_succession::TooShortDef;
+use crate::common_arguments::ShortLinesDef;
 use crate::geoarrow::{describe, geometry_series};
 
 #[derive(Deserialize)]
@@ -29,8 +30,8 @@ pub struct NonFiniteKwargs {
     pub(super) ignore_m: bool,
     #[serde(with = "SelectedActionDef")]
     pub(super) action: SelectedAction,
-    #[serde(with = "TooShortDef")]
-    pub(super) too_short: TooShort,
+    #[serde(with = "ShortLinesDef")]
+    pub(super) short_lines: ShortLines,
 }
 
 impl NonFiniteKwargs {
@@ -61,7 +62,7 @@ fn filter_coordinates(inputs: &[Series], kwargs: NonFiniteKwargs) -> PolarsResul
                 kind,
                 &selection,
                 kwargs.action,
-                kwargs.too_short,
+                kwargs.short_lines,
             )
         })
         .collect::<PolarsResult<_>>()?;

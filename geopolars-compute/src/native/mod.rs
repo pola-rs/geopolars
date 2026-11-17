@@ -27,7 +27,6 @@ mod rings;
 mod selected_coords;
 mod snap_to_grid;
 mod sort_parts;
-mod too_short;
 
 pub use add_parts::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
@@ -117,4 +116,3 @@ pub use sort_parts::{
     line_strings_with_rings_rotated, multi_line_strings_sorted, multi_points_sorted,
     multi_polygons_sorted, polygons_with_holes_sorted, PartSorter, RingStart, SortOptions,
 };
-pub use too_short::TooShort;

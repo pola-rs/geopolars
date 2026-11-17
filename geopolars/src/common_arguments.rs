@@ -1,6 +1,6 @@
 //! The serde mappings of the arguments that `docs/Common arguments.md` documents.
 
-use geopolars_compute::{EarlyCoordCheck, OnRowError};
+use geopolars_compute::{EarlyCoordCheck, OnRowError, ShortLines};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -16,4 +16,12 @@ pub(crate) enum EarlyCoordCheckDef {
     Off,
     Finite,
     FiniteAndEmpty,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "ShortLines", rename_all = "snake_case")]
+pub(crate) enum ShortLinesDef {
+    Null,
+    Keep,
+    Empty,
 }

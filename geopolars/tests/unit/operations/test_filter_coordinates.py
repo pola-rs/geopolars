@@ -179,28 +179,32 @@ def test_a_multipoint_can_lose_all_of_its_points() -> None:
 
 
 @pytest.mark.parametrize(
-    ("too_short", "short"),
+    ("short_lines", "short"),
     [("null", None), ("keep", _A), ("empty", [])],
 )
-def test_a_line_of_one_vertex_is_too_short(too_short: str, short: Line | None) -> None:
+def test_a_line_of_one_vertex_is_too_short(
+    short_lines: str, short: Line | None
+) -> None:
     out = _filter(
         LineStringXY(),
         _A + _EMPTY_POINT,
         _A,
         _EMPTY_POINT,
         _A + _B,
-        too_short=too_short,
+        short_lines=short_lines,
     )
 
     assert out == [short, short, [], _A + _B]
 
 
 @pytest.mark.parametrize(
-    ("too_short", "expected"),
+    ("short_lines", "expected"),
     [("null", None), ("keep", [_A + _B, _A]), ("empty", [_A + _B, []])],
 )
-def test_a_short_part_of_a_multilinestring(too_short: str, expected: object) -> None:
-    out = _filter(MultiLineStringXY(), [_A + _B, _A + _NOT_FINITE], too_short=too_short)
+def test_a_short_part_of_a_multilinestring(short_lines: str, expected: object) -> None:
+    out = _filter(
+        MultiLineStringXY(), [_A + _B, _A + _NOT_FINITE], short_lines=short_lines
+    )
 
     assert out == [expected]
 
@@ -210,7 +214,7 @@ _OPEN = _line((0, 0), (4, 0), (4, 4), (0, 4))
 
 
 @pytest.mark.parametrize(
-    ("too_short", "short", "open_"),
+    ("short_lines", "short", "open_"),
     [
         ("null", None, None),
         ("keep", [_A + _B + _A], [_OPEN]),
@@ -218,7 +222,7 @@ _OPEN = _line((0, 0), (4, 0), (4, 4), (0, 4))
     ],
 )
 def test_a_ring_that_is_short_or_open_is_too_short(
-    too_short: str, short: object, open_: object
+    short_lines: str, short: object, open_: object
 ) -> None:
     out = _filter(
         PolygonXY(),
@@ -227,7 +231,7 @@ def test_a_ring_that_is_short_or_open_is_too_short(
         [_A + _B + _A],
         [_EMPTY_POINT + _OPEN + _EMPTY_POINT],
         [_OPEN],
-        too_short=too_short,
+        short_lines=short_lines,
     )
 
     assert out == [[_TRIANGLE], short, short, open_, open_]
@@ -240,7 +244,7 @@ def test_a_ring_that_loses_every_vertex_becomes_empty() -> None:
 def test_a_ring_that_is_closed_in_x_and_y_but_not_z_is_too_short() -> None:
     ring = [_xyzm(0, 0, 0, 0), _xyzm(4, 0, 0, 0), _xyzm(4, 4, 0, 0), _xyzm(0, 0, 1, 0)]
 
-    assert _filter(PolygonXYZM(), [ring], too_short="empty") == [[[]]]
+    assert _filter(PolygonXYZM(), [ring], short_lines="empty") == [[[]]]
 
 
 def test_only_the_multipolygon_with_a_short_ring_becomes_null() -> None:
@@ -254,7 +258,7 @@ def test_only_the_multipolygon_with_a_short_ring_becomes_null() -> None:
 def test_a_short_hole_becomes_empty_in_place() -> None:
     hole = _line((1, 1), (2, 1), (NAN, NAN), (1, 1))
 
-    out = _filter(MultiPolygonXY(), [[_SQUARE, hole], [_SQUARE]], too_short="empty")
+    out = _filter(MultiPolygonXY(), [[_SQUARE, hole], [_SQUARE]], short_lines="empty")
 
     assert out == [[[_SQUARE, []], [_SQUARE]]]
 
@@ -280,7 +284,7 @@ def test_the_crs_is_carried_over() -> None:
 
 @pytest.mark.parametrize(
     ("kwargs", "name"),
-    [({"action": "remove"}, "action"), ({"too_short": "drop"}, "too_short")],
+    [({"action": "remove"}, "action"), ({"short_lines": "drop"}, "short_lines")],
 )
 def test_an_unknown_option_is_refused(kwargs: dict[str, str], name: str) -> None:
     with pytest.raises(ValueError, match=name):

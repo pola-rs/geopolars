@@ -43,7 +43,7 @@ pub fn without_repeats_in_succession(
             coincidence,
             unique_z,
             unique_m,
-            options.too_short,
+            options.short_lines,
         )),
         Kind::MultiLineString => {
             GeometryArray::MultiLineString(multi_line_strings_without_repeats_in_succession(
@@ -60,7 +60,7 @@ pub fn without_repeats_in_succession(
                 coincidence,
                 unique_z,
                 unique_m,
-                options.too_short,
+                options.short_lines,
             ))
         }
     })

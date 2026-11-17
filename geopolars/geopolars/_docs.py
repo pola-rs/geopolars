@@ -68,15 +68,15 @@ The empty point has NaN on every axis it has.
 A point cannot lose its coordinate, so with `"drop"` it becomes the empty point,
 just as a linestring or ring that loses every vertex becomes empty.
 With `"drop"`, a ring that is no longer closed (see `is_valid_geoarrow`) is too short as well (see below).
-With `"set_empty"` and `"set_null"`, every offset is kept, and `too_short` is ignored.
+With `"set_empty"` and `"set_null"`, every offset is kept, and `short_lines` is ignored.
 A ring whose ends are emptied is no longer closed.""",
-    "too_short": """\
+    "short_lines": """\
 This operation removes coordinates, which can leave a linestring or ring too short.
 A linestring is too short with a single vertex, and a ring with fewer than 4.
 This also holds for input that was too short already.
-What is done with these is determined by `too_short`:
+What is done with these is determined by `short_lines`:
 
-| `too_short` | a too-short linestring or ring |
+| `short_lines` | a too-short linestring or ring |
 | - | - |
 | `"null"` | makes its row null |
 | `"keep"` | stays as it is, e.g. `[A]`, or a ring `[A, B, A]` |

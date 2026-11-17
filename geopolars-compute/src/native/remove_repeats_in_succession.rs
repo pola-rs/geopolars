@@ -20,7 +20,7 @@ use super::selected_coords::{
     line_strings_without_selected, multi_line_strings_without_selected,
     multi_points_without_selected, multi_polygons_without_selected, polygons_without_selected,
 };
-use super::too_short::TooShort;
+use crate::ShortLines;
 
 /// The `collapsed_lines` of the Python `remove_repeats_in_succession`.
 #[derive(Debug, Clone, Copy)]
@@ -35,11 +35,11 @@ impl CollapsedLines {
     }
 }
 
-/// The `collapsed_lines` and `too_short` of the Python `remove_repeats_in_succession`.
+/// The `collapsed_lines` and `short_lines` of the Python `remove_repeats_in_succession`.
 #[derive(Debug, Clone, Copy)]
 pub struct LineOptions {
     pub collapsed_lines: CollapsedLines,
-    pub too_short: TooShort,
+    pub short_lines: ShortLines,
 }
 
 /// Unsets the last vertex of each of `lists` in `repeated`, so that it is kept.
@@ -77,7 +77,7 @@ pub fn line_strings_without_repeats_in_succession(
         &mut repeated,
         options.collapsed_lines.keeps_both_ends(),
     );
-    line_strings_without_selected(array, &repeated.freeze(), options.too_short)
+    line_strings_without_selected(array, &repeated.freeze(), options.short_lines)
 }
 
 /// Takes no [LineOptions],
@@ -90,7 +90,7 @@ pub fn multi_points_without_repeats_in_succession(
 ) -> MultiPointArray {
     let rows = array.rows.ignoring_validity();
     let repeated = repeats_in_succession(rows, &array.coords, coincidence, unique_z, unique_m);
-    multi_points_without_selected(array, &repeated.freeze(), TooShort::Keep)
+    multi_points_without_selected(array, &repeated.freeze(), ShortLines::Keep)
 }
 
 /// Takes no [CollapsedLines], as rings always keep both ends.
@@ -99,12 +99,12 @@ pub fn polygons_without_repeats_in_succession(
     coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> PolygonArray {
     let rings = &array.rings;
     let mut repeated = repeats_in_succession(rings, &array.coords, coincidence, unique_z, unique_m);
     keep_last_vertices(rings, &mut repeated, true);
-    polygons_without_selected(array, &repeated.freeze(), too_short, false)
+    polygons_without_selected(array, &repeated.freeze(), short_lines, false)
 }
 
 pub fn multi_line_strings_without_repeats_in_succession(
@@ -121,7 +121,7 @@ pub fn multi_line_strings_without_repeats_in_succession(
         &mut repeated,
         options.collapsed_lines.keeps_both_ends(),
     );
-    multi_line_strings_without_selected(array, &repeated.freeze(), options.too_short)
+    multi_line_strings_without_selected(array, &repeated.freeze(), options.short_lines)
 }
 
 /// Takes no [CollapsedLines], as rings always keep both ends.
@@ -130,10 +130,10 @@ pub fn multi_polygons_without_repeats_in_succession(
     coincidence: Coincidence,
     unique_z: bool,
     unique_m: bool,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> MultiPolygonArray {
     let rings = &array.rings;
     let mut repeated = repeats_in_succession(rings, &array.coords, coincidence, unique_z, unique_m);
     keep_last_vertices(rings, &mut repeated, true);
-    multi_polygons_without_selected(array, &repeated.freeze(), too_short, false)
+    multi_polygons_without_selected(array, &repeated.freeze(), short_lines, false)
 }

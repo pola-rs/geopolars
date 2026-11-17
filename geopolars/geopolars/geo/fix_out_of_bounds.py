@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import ShortLines
 from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import on_geometry
-from geopolars.geo.remove_repeats_in_succession import TooShort
 
 if TYPE_CHECKING:
     import polars as pl
@@ -44,13 +44,13 @@ class OutOfBounds:
 
     crs_bounds: CrsBounds = "crs"
     action: OutOfBoundsAction = "drop"
-    too_short: TooShort = "null"
+    short_lines: ShortLines = "null"
 
     def __post_init__(self) -> None:
         for name, allowed in [
             ("crs_bounds", CrsBounds),
             ("action", OutOfBoundsAction),
-            ("too_short", TooShort),
+            ("short_lines", ShortLines),
         ]:
             validate_one_of(name, getattr(self, name), allowed)
 
@@ -79,7 +79,7 @@ def _fix_out_of_bounds(
         kwargs={
             "bounds": bounds,
             "action": out_of_bounds.action,
-            "too_short": out_of_bounds.too_short,
+            "short_lines": out_of_bounds.short_lines,
         },
         is_elementwise=True,
     )
@@ -91,7 +91,7 @@ def fix_out_of_bounds(
     *,
     crs_bounds: CrsBounds = "crs",
     action: OutOfBoundsAction = "drop",
-    too_short: TooShort = "null",
+    short_lines: ShortLines = "null",
 ) -> pl.Expr:
     """Drops, empties, nulls or clamps the coordinates that lie outside the bounds of the CRS.
     {repairing_function}
@@ -121,12 +121,12 @@ def fix_out_of_bounds(
     {selected_coordinate_actions}
 
     `"drop"` is the default.
-    With `action="clamp"`, `x` and `y` are moved onto the nearest bound, and `too_short` is ignored.
+    With `action="clamp"`, `x` and `y` are moved onto the nearest bound, and `short_lines` is ignored.
     A ring's ends move alike, so a closed ring stays closed.
     Clamping can leave the same vertex twice in a row (see `remove_repeats_in_succession`).
     A NaN in `x` or `y` stays NaN (see `filter_coordinates`).
 
-    {too_short}
+    {short_lines}
 
     {keeps_type_dimension_and_crs}
 
@@ -135,7 +135,7 @@ def fix_out_of_bounds(
     ```
     """
     out_of_bounds = OutOfBounds(
-        crs_bounds=crs_bounds, action=action, too_short=too_short
+        crs_bounds=crs_bounds, action=action, short_lines=short_lines
     )
     return on_geometry(
         geometry, partial(_fix_out_of_bounds, out_of_bounds=out_of_bounds)

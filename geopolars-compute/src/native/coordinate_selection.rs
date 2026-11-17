@@ -13,7 +13,7 @@ use polars_arrow::bitmap::Bitmap;
 pub type Bounds = [f64; 4];
 
 /// Which coordinates to select for not being finite, or for being empty.
-/// See `NonFinite` in Python, without its `action` and `too_short`.
+/// See `NonFinite` in Python, without its `action` and `short_lines`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NonFinite {
     pub select_non_finite: bool,

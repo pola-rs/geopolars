@@ -1,13 +1,15 @@
 //! Removing the points that coincide with the one before them.
 //! Implements the Python `remove_repeats_in_succession`.
 
-use geopolars_compute::native::{Coincidence, CollapsedLines, LineOptions, TooShort};
+use geopolars_compute::native::{Coincidence, CollapsedLines, LineOptions};
+use geopolars_compute::ShortLines;
 use geopolars_core::without_repeats_in_succession;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::coords::kernel_output_type_same_geometry;
+use crate::common_arguments::ShortLinesDef;
 use crate::geoarrow::{describe, geometry_series};
 
 #[derive(Deserialize)]
@@ -15,14 +17,6 @@ use crate::geoarrow::{describe, geometry_series};
 enum CollapsedLinesDef {
     KeepEnds,
     SingleVertex,
-}
-
-#[derive(Deserialize)]
-#[serde(remote = "TooShort", rename_all = "snake_case")]
-pub(super) enum TooShortDef {
-    Null,
-    Keep,
-    Empty,
 }
 
 /// The keyword arguments of the Python `remove_repeats_in_succession`.
@@ -35,8 +29,8 @@ pub struct RemoveRepeatsInSuccessionKwargs {
     unique_m: bool,
     #[serde(with = "CollapsedLinesDef")]
     collapsed_lines: CollapsedLines,
-    #[serde(with = "TooShortDef")]
-    too_short: TooShort,
+    #[serde(with = "ShortLinesDef")]
+    short_lines: ShortLines,
 }
 
 #[polars_expr(output_type_func=kernel_output_type_same_geometry)]
@@ -48,7 +42,7 @@ fn remove_repeats_in_succession(
     let coincidence = Coincidence::new(kwargs.abs_tol, kwargs.rel_tol);
     let options = LineOptions {
         collapsed_lines: kwargs.collapsed_lines,
-        too_short: kwargs.too_short,
+        short_lines: kwargs.short_lines,
     };
     let storage = inputs[0].ext()?.storage();
     let chunks = storage

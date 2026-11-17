@@ -34,6 +34,7 @@ mod per_row;
 pub mod proj;
 #[cfg(feature = "rsgeo")]
 pub mod rsgeo;
+mod short_lines;
 
 pub use early_coord_check::EarlyCoordCheck;
 #[cfg(any(feature = "geos", feature = "rsgeo"))]
@@ -41,3 +42,4 @@ use error::row_or_null;
 pub use error::{GeoComputeError, GeoComputeResult};
 pub use metric::{BaseMetric, GeodesicMetric, Planar, WithHeight};
 pub use on_row_error::OnRowError;
+pub use short_lines::ShortLines;

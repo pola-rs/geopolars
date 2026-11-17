@@ -18,7 +18,12 @@ from geopolars.geo.construct import linestring, point, polygon
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from geopolars._typing import EarlyCoordCheck, IntoExprColumn, OnRowError
+    from geopolars._typing import (
+        EarlyCoordCheck,
+        IntoExprColumn,
+        OnRowError,
+        ShortLines,
+    )
     from geopolars.datatypes import GeoArrowType
     from geopolars.geo.close_rings import CloseRings
     from geopolars.geo.filter_coordinates import NonFiniteAction
@@ -634,7 +639,7 @@ class ExprGeoNameSpace:
         ignore_z: bool = False,
         ignore_m: bool = False,
         action: NonFiniteAction = "drop",
-        too_short: Literal["null", "keep", "empty"] = "null",
+        short_lines: ShortLines = "null",
     ) -> pl.Expr:
         from geopolars.geo.filter_coordinates import filter_coordinates
 
@@ -645,7 +650,7 @@ class ExprGeoNameSpace:
             ignore_z=ignore_z,
             ignore_m=ignore_m,
             action=action,
-            too_short=too_short,
+            short_lines=short_lines,
         )
 
     def fix_out_of_bounds(
@@ -653,12 +658,12 @@ class ExprGeoNameSpace:
         *,
         crs_bounds: CrsBounds = "crs",
         action: OutOfBoundsAction = "drop",
-        too_short: Literal["null", "keep", "empty"] = "null",
+        short_lines: ShortLines = "null",
     ) -> pl.Expr:
         from geopolars.geo.fix_out_of_bounds import fix_out_of_bounds
 
         return fix_out_of_bounds(
-            self._expr, crs_bounds=crs_bounds, action=action, too_short=too_short
+            self._expr, crs_bounds=crs_bounds, action=action, short_lines=short_lines
         )
 
     def is_valid_geoarrow(
@@ -759,7 +764,7 @@ class ExprGeoNameSpace:
         unique_z: bool = True,
         unique_m: bool = False,
         collapsed_lines: Literal["keep_ends", "single_vertex"] = "keep_ends",
-        too_short: Literal["null", "keep", "empty"] = "null",
+        short_lines: ShortLines = "null",
     ) -> pl.Expr:
         from geopolars.geo.remove_repeats_in_succession import (
             remove_repeats_in_succession,
@@ -772,7 +777,7 @@ class ExprGeoNameSpace:
             unique_z=unique_z,
             unique_m=unique_m,
             collapsed_lines=collapsed_lines,
-            too_short=too_short,
+            short_lines=short_lines,
         )
 
     def distance(
