@@ -63,6 +63,7 @@ def shortest_line_between(
     If either geometry is empty, so is the line, and that row does not go to GEOS either.
 
     {geos_errors}
+    {on_row_error}
 
     {geos_non_finite}
     GEOS then gives no meaningful answer.

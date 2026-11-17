@@ -54,6 +54,7 @@ def rings_overlap(
     at least four vertices, the last exactly at the first.
     Anything else, including an empty linestring, raises.
     With `on_row_error="null"`, it gives a null result instead.
+    {on_row_error}
     A ring that is not simple (see `is_simple`) gives no meaningful answer.
     {null_ring_input}
 

@@ -77,6 +77,7 @@ def convex_hull(
     A geometry crossing the antimeridian is hulled the long way round.
 
     {geos_errors}
+    {on_row_error}
 
     {geos_non_finite}
     Depending on where such a vertex sits, it is left out of the hull,

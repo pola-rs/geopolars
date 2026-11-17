@@ -93,8 +93,8 @@ def sort_parts(
 
     With `rings="rotate"`, every ring has to be closed (see `close_rings`), or empty.
     Otherwise this raises.
-    TODO: reusable doc comment for on_row_error
     With `on_row_error="null"`, such a row gives a null geometry instead.
+    {on_row_error}
     The linestrings that the table says are rotated count as rings too.
     They are not checked for being a ring first,
     so an open one is not left as it is, but treated the same way.

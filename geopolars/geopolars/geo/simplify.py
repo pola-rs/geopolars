@@ -79,6 +79,7 @@ def simplify(
 
     {geos_errors}
     The same goes for a polygon it splits.
+    {on_row_error}
 
     {geos_non_finite}
     With `preserve_topology=True`, GEOS then raises.

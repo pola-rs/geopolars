@@ -60,6 +60,7 @@ def line_interpolate_point(
     {empty_and_null}
 
     {geos_errors}
+    {on_row_error}
 
     {geos_non_finite}
     GEOS then does not raise, but gives a wrong point for most distances:

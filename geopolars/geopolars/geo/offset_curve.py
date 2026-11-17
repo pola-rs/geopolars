@@ -82,6 +82,7 @@ def offset_curve(
 
     {geos_errors}
     The same goes for a linestring it splits without `allow_splitting`.
+    {on_row_error}
 
     {geos_non_finite}
     {early_finite_check}

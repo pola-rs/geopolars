@@ -40,6 +40,7 @@ def is_topologically_equal(
     Computed by GEOS, without a tolerance.
 
     {geos_errors}
+    {on_row_error}
 
     {geos_non_finite}
     GEOS then gives no meaningful answer.

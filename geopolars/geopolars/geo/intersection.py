@@ -103,6 +103,7 @@ def intersection(
 
     {geos_errors}
     The same goes for a result in several parts without `allow_splitting`.
+    {on_row_error}
 
     {geos_non_finite}
     {early_finite_check}
