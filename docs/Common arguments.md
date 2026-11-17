@@ -23,11 +23,6 @@ With the `on_row_error` variable, you can set what to do if that happens.
 - `on_row_error="null"` instructs the kernel to simply mark the resulting row as null.
   The total rows coming out of the expression then does not change.
 
-Note that there is no `"drop"` option here.
-The kernels are registered with `is_elementwise=True`, and dropping rows changes the column length.
-That breaks `with_columns`, broadcasting a single geometry against a column,
-and pairing with other columns of the same frame.
-
 > [!NOTE]
 > Legacy: this replaces `ignore_per_row_errors: bool = False`.
 

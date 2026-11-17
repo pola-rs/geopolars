@@ -8,6 +8,5 @@ use serde::Deserialize;
 #[expect(dead_code, reason = "no expression takes `on_row_error` yet")]
 pub(crate) enum OnRowErrorDef {
     Null,
-    Drop,
     Raise,
 }
