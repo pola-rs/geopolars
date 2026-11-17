@@ -10,3 +10,4 @@ if TYPE_CHECKING:
 OnRowError = Literal["null", "raise"]
 EarlyCoordCheck = Literal["off", "finite", "finite_and_empty"]
 ShortLines = Literal["null", "keep", "empty"]
+EmptyPolygonExterior = Literal["keep", "null", "error", "empty"]

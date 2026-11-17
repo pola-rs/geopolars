@@ -8,7 +8,7 @@ use geopolars_compute::inner_nulls::{
 use geopolars_compute::native::{
     close_open_rings, multi_polygons_have_only_rings, polygons_have_only_rings,
 };
-use geopolars_compute::with_const_flags;
+use geopolars_compute::{with_const_flags, EmptyPolygonExterior};
 use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, UncheckedStorage, ValidCoords, ValidList,
@@ -53,6 +53,7 @@ pub(crate) fn closed_rings(
 pub(crate) fn validated_polygons(
     mut array: PolygonArray,
     close: Option<CloseRings>,
+    empty_polygon_exterior: EmptyPolygonExterior,
 ) -> PolygonArray {
     if let Some((rings, coords)) =
         close.and_then(|closing| closed_rings(&array.rings, &array.coords, closing))
@@ -61,9 +62,10 @@ pub(crate) fn validated_polygons(
     }
     // A null row is `false` in the values too.
     let z = array.coords.dim().has_z();
-    let valid = with_const_flags!(Z = z; polygons_have_only_rings::<Z>(&array))
-        .values()
-        .clone();
+    let valid =
+        with_const_flags!(Z = z; polygons_have_only_rings::<Z>(&array, empty_polygon_exterior))
+            .values()
+            .clone();
     PolygonArray::from_parts(
         array.rows.with_validity(Some(valid)),
         array.rings,

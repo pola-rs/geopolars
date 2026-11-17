@@ -44,7 +44,7 @@ mod snap_to_grid;
 mod sort_parts;
 mod to_ccw;
 
-pub use add_holes::{add_holes, EmptyExterior};
+pub use add_holes::add_holes;
 pub use add_parts::{add_parts, EmptyParts};
 pub use affine::{affine_transform, affine_transform_about, affine_transform_then_shift};
 pub use area::areas;

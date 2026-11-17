@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from geopolars._typing import (
         EarlyCoordCheck,
+        EmptyPolygonExterior,
         IntoExprColumn,
         OnRowError,
         ShortLines,
@@ -380,7 +381,8 @@ class ExprGeoNameSpace:
         *,
         close: CloseRings | None = None,
         null_parts: Literal["drop", "null"] = "null",
-        empty_exterior: Literal["null", "keep"] = "null",
+        empty_polygon_exterior: EmptyPolygonExterior = "null",
+        on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         from geopolars.geo.add_holes import add_holes
 
@@ -389,7 +391,8 @@ class ExprGeoNameSpace:
             holes,
             close=close,
             null_parts=null_parts,
-            empty_exterior=empty_exterior,
+            empty_polygon_exterior=empty_polygon_exterior,
+            on_row_error=on_row_error,
         )
 
     def add_parts(

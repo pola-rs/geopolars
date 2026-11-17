@@ -184,6 +184,7 @@ Most of the time this is not a meaningful polygon though.
 
 > [!NOTE]
 > Legacy: this replaces `empty_exterior: Literal["null", "keep"] = "null"`.
+> Its `"keep"` is now `"empty"`.
 
 ## Output geometry
 

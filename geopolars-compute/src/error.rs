@@ -38,6 +38,8 @@ pub enum GeoComputeError {
     NegativeOneSidedDistance { distance: f64 },
     /// A result in several parts, where only one fits.
     Split { parts: usize },
+    /// A hole with vertices for a polygon with an empty exterior.
+    HoleInEmptyExterior,
     #[cfg(feature = "geos")]
     Geos(geos::Error),
 }
@@ -101,6 +103,10 @@ impl fmt::Display for GeoComputeError {
                 "the result split into {parts} parts, which a single geometry cannot hold; \
                 set `allow_splitting=True` to get a multi kind"
             ),
+            Self::HoleInEmptyExterior => write!(
+                f,
+                "a polygon with an empty exterior cannot take a hole with vertices"
+            ),
             #[cfg(feature = "geos")]
             Self::Geos(source) => write!(f, "{source}"),
         }
@@ -118,7 +124,8 @@ impl std::error::Error for GeoComputeError {
             | Self::NotFiniteCoordinate { .. }
             | Self::NotFiniteDistance { .. }
             | Self::NegativeOneSidedDistance { .. }
-            | Self::Split { .. } => None,
+            | Self::Split { .. }
+            | Self::HoleInEmptyExterior => None,
             #[cfg(feature = "geos")]
             Self::Geos(source) => Some(source),
         }

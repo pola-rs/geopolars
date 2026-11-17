@@ -277,7 +277,7 @@ pub fn polygons_with_added_holes(
 }
 
 /// Marks which polygons can take the holes on the same row of `holes`,
-/// as `empty_exterior` of the Python `add_holes` describes.
+/// as `empty_polygon_exterior` of the Python `add_holes` describes.
 /// Only the holes set in the mask of `holes` count towards this.
 pub fn have_room_for_holes(
     polygons: &PolygonArray,

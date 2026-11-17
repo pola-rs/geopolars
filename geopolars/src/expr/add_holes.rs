@@ -1,7 +1,8 @@
 //! Adding holes to polygons, from another column.
 //! Implements the Python `add_holes`.
 
-use geopolars_core::{EmptyExterior, NullParts};
+use geopolars_compute::{EmptyPolygonExterior, OnRowError};
+use geopolars_core::NullParts;
 use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
@@ -9,6 +10,7 @@ use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
 use super::construct::{fields_of, listed_parts, paired_rows, parts_storage, NullPartsDef};
+use crate::common_arguments::{EmptyPolygonExteriorDef, OnRowErrorDef};
 use crate::geoarrow::{describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 
 /// The keyword arguments of the Python `add_holes`.
@@ -18,15 +20,10 @@ pub struct AddHolesKwargs {
     pub close: Option<CloseRingsKwargs>,
     #[serde(with = "NullPartsDef")]
     null_parts: NullParts,
-    #[serde(with = "EmptyExteriorDef")]
-    empty_exterior: EmptyExterior,
-}
-
-#[derive(Deserialize)]
-#[serde(remote = "EmptyExterior", rename_all = "snake_case")]
-enum EmptyExteriorDef {
-    Null,
-    Keep,
+    #[serde(with = "EmptyPolygonExteriorDef")]
+    empty_polygon_exterior: EmptyPolygonExterior,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
 /// Checks the input fields of `add_holes`.
@@ -65,7 +62,8 @@ fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> 
         holes.chunks()[0].as_ref(),
         listed,
         kwargs.null_parts,
-        kwargs.empty_exterior,
+        kwargs.empty_polygon_exterior,
+        kwargs.on_row_error,
         kwargs.close.map(Into::into),
     )?;
     geometry_series(inputs[0].name().clone(), geo, vec![chunk])

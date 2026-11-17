@@ -4,6 +4,7 @@ use geopolars_compute::inner_nulls::{
     propagate_inner_nulls_of_polygons,
 };
 use geopolars_compute::native::polygons_with_added_holes;
+use geopolars_compute::EmptyPolygonExterior;
 use geopolars_views::{GeometryArray, UncheckedStorage};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -38,6 +39,7 @@ pub fn validated_storage(
         NestedKind::Polygon => GeometryArray::Polygon(validated_polygons(
             propagate_inner_nulls_of_polygons(storage),
             close,
+            EmptyPolygonExterior::Null,
         )),
         NestedKind::MultiPolygon => GeometryArray::MultiPolygon(validated_multi_polygons(
             propagate_inner_nulls_of_multi_polygons(storage),
@@ -68,13 +70,21 @@ pub fn assembled_polygons(
         // and `polygons_from_rings_in_separate_columns` without holes.
         let validity = exteriors.rows.validity().cloned();
         let polygons = polygons_with_added_holes(&exteriors, None, validity);
-        return Ok(GeometryArray::Polygon(validated_polygons(polygons, close)));
+        return Ok(GeometryArray::Polygon(validated_polygons(
+            polygons,
+            close,
+            EmptyPolygonExterior::Null,
+        )));
     };
 
     let holes = lines_per_row(holes, listed, null_parts)?;
     let validity = rows_validity(&exteriors.rows, holes.rows(), null_parts);
     let polygons = polygons_with_added_holes(&exteriors, Some(&holes), validity);
-    Ok(GeometryArray::Polygon(validated_polygons(polygons, close)))
+    Ok(GeometryArray::Polygon(validated_polygons(
+        polygons,
+        close,
+        EmptyPolygonExterior::Null,
+    )))
 }
 
 /// Assembles one chunk of multipolygons with a polygon per exterior ring,

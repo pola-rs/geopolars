@@ -11,6 +11,7 @@
 mod const_generic_dispatch;
 
 mod early_coord_check;
+mod empty_polygon_exterior;
 mod error;
 #[cfg(feature = "native")]
 pub mod geoarrow_validity;
@@ -37,6 +38,7 @@ pub mod rsgeo;
 mod short_lines;
 
 pub use early_coord_check::EarlyCoordCheck;
+pub use empty_polygon_exterior::EmptyPolygonExterior;
 #[cfg(any(feature = "geos", feature = "rsgeo"))]
 use error::row_or_null;
 pub use error::{GeoComputeError, GeoComputeResult};
