@@ -1,9 +1,9 @@
 //! The buffer of any geometry, forwarded to GEOS.
 //! Implements the Python `buffer`.
 
-use crate::common_arguments::OnRowErrorDef;
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
 use geopolars_compute::geos::{BufferDistance, BufferStyle, CapStyle, JoinStyle, Side};
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::buffers;
 use geopolars_views::{GeoDimension, GeometryArray, Kind};
 use polars::prelude::*;
@@ -80,7 +80,8 @@ pub struct BufferKwargs {
     ccw_outer: bool,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_buffer)]
@@ -96,7 +97,7 @@ fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
         allow_splitting: _,
         ccw_outer,
         on_row_error,
-        early_finite_check,
+        early_coord_check,
     } = kwargs;
     let style = &BufferStyle {
         quadrant_segments,
@@ -114,7 +115,7 @@ fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
             style,
             ccw_outer,
             on_row_error,
-            early_finite_check,
+            early_coord_check,
         )
     })?;
     geometry_series(inputs[0].name().clone(), buffered, chunks)

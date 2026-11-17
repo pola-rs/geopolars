@@ -6,7 +6,7 @@
 //!
 //! ## `EARLY_FINITE_CHECK`
 //!
-//! The public functions take `early_finite_check`.
+//! The public functions take `early_coord_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{LineStringArray, MultiLineStringArray};
@@ -14,7 +14,7 @@ use geos::{Geom, GeometryTypes, JoinStyle};
 
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
 use super::{unless_split, GeosGeometries, ToGeosRows};
-use crate::{GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// The parameters GEOS's offset curve takes, besides the distance.
 pub struct OffsetCurveStyle {
@@ -35,10 +35,10 @@ pub fn offset_curves_into_line_strings(
     distance: BufferDistance,
     style: &OffsetCurveStyle,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
     offset_curves_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
         on_row_error,
@@ -56,10 +56,10 @@ pub fn offset_curves_into_multi_line_strings(
     distance: BufferDistance,
     style: &OffsetCurveStyle,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiLineStringArray> {
     offset_curves_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
         on_row_error,

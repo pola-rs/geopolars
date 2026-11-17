@@ -1,9 +1,9 @@
 //! The point at a distance along a line, forwarded to GEOS.
 //! Implements the Python `line_interpolate_point`.
 
-use crate::common_arguments::OnRowErrorDef;
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
 use geopolars_compute::geos::InterpolateMode;
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::{interpolated_points, LineKind};
 use geopolars_views::Kind;
 use polars::prelude::*;
@@ -45,7 +45,8 @@ pub struct LineInterpolatePointKwargs {
     mode: InterpolateMode,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
 #[polars_expr(output_type_func=kernel_output_type_line_interpolate_point)]
@@ -58,10 +59,10 @@ fn line_interpolate_point(
         distance,
         mode,
         on_row_error,
-        early_finite_check,
+        early_coord_check,
     } = kwargs;
     let chunks = chunks_by_distance(inputs, distance, |rows, distance| {
-        interpolated_points(rows, kind, distance, mode, on_row_error, early_finite_check)
+        interpolated_points(rows, kind, distance, mode, on_row_error, early_coord_check)
     })?;
     geometry_series(inputs[0].name().clone(), point, chunks)
 }

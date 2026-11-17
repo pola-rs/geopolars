@@ -1,7 +1,7 @@
 use geopolars_compute::geos::{
     simplify_line_strings, simplify_multi_line_strings, simplify_multi_polygons, simplify_polygons,
 };
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{
     downcast, GeometryArray, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
 };
@@ -20,9 +20,9 @@ pub fn simplify(
     tolerance: f64,
     preserve_topology: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
-    let early = early_finite_check;
+    let early = early_coord_check;
     match kind {
         SegmentKind::LineString => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;

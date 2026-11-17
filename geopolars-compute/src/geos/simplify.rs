@@ -13,13 +13,13 @@
 //!
 //! ## `EARLY_FINITE_CHECK`
 //!
-//! The public functions take `early_finite_check`.
+//! The public functions take `early_coord_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray};
 
 use super::{GeosGeometries, GeosRow, ToGeosRows};
-use crate::{GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// Simplifies every linestring to within `tolerance` through GEOS.
 pub fn simplify_line_strings(
@@ -27,10 +27,10 @@ pub fn simplify_line_strings(
     tolerance: f64,
     preserve_topology: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
     let geos_geometries = simplify_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         tolerance,
         preserve_topology,
         on_row_error,
@@ -47,10 +47,10 @@ pub fn simplify_multi_line_strings(
     tolerance: f64,
     preserve_topology: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiLineStringArray> {
     let geos_geometries = simplify_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         tolerance,
         preserve_topology,
         on_row_error,
@@ -68,10 +68,10 @@ pub fn simplify_polygons(
     tolerance: f64,
     preserve_topology: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     simplify_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         tolerance,
         preserve_topology,
         on_row_error,
@@ -85,10 +85,10 @@ pub fn simplify_multi_polygons(
     tolerance: f64,
     preserve_topology: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiPolygonArray> {
     simplify_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         tolerance,
         preserve_topology,
         on_row_error,

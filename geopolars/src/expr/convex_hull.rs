@@ -1,8 +1,8 @@
 //! The convex hull of a linestring or polygon, or their multi-variants, forwarded to GEOS.
 //! Implements the Python `convex_hull`.
 
-use crate::common_arguments::OnRowErrorDef;
-use geopolars_compute::OnRowError;
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::{convex_hulls, NestedKind};
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -37,7 +37,8 @@ pub struct ConvexHullKwargs {
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
     ccw_outer: bool,
-    early_finite_check: bool,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
 #[polars_expr(output_type_func=kernel_output_type_convex_hull)]
@@ -53,7 +54,7 @@ fn convex_hull(inputs: &[Series], kwargs: ConvexHullKwargs) -> PolarsResult<Seri
                 kind,
                 kwargs.on_row_error,
                 kwargs.ccw_outer,
-                kwargs.early_finite_check,
+                kwargs.early_coord_check,
             )
         })
         .collect::<PolarsResult<_>>()?;

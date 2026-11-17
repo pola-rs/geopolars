@@ -1,8 +1,8 @@
 //! The simplification of a linestring or polygon, or their multi-variants.
 //! Implements the Python `simplify`.
 
-use crate::common_arguments::OnRowErrorDef;
-use geopolars_compute::OnRowError;
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::SegmentKind;
 use geopolars_views::GeoDimension;
 use polars::prelude::*;
@@ -42,7 +42,8 @@ pub struct SimplifyKwargs {
     preserve_topology: bool,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
 #[polars_expr(output_type_func=kernel_output_type_simplify)]
@@ -52,7 +53,7 @@ fn simplify(inputs: &[Series], kwargs: SimplifyKwargs) -> PolarsResult<Series> {
         tolerance,
         preserve_topology,
         on_row_error,
-        early_finite_check,
+        early_coord_check,
     } = kwargs;
     let storage = inputs[0].ext()?.storage();
     let chunks = storage
@@ -65,7 +66,7 @@ fn simplify(inputs: &[Series], kwargs: SimplifyKwargs) -> PolarsResult<Series> {
                 tolerance,
                 preserve_topology,
                 on_row_error,
-                early_finite_check,
+                early_coord_check,
             )
         })
         .collect::<PolarsResult<_>>()?;

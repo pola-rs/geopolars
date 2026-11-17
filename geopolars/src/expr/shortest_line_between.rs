@@ -1,8 +1,8 @@
 //! The shortest line between two geometries.
 //! Implements the Python `shortest_line_between`.
 
-use crate::common_arguments::OnRowErrorDef;
-use geopolars_compute::OnRowError;
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::{pairwise_shortest_lines, shortest_lines_to_one};
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -15,12 +15,13 @@ use crate::geoarrow::{
 };
 
 /// The keyword arguments of the Python `shortest_line_between`.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ShortestLineBetweenKwargs {
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
 fn shortest_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<Geo> {
@@ -52,7 +53,7 @@ fn shortest_line_between(
     let lines = shortest_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (ignore, early) = (kwargs.on_row_error, kwargs.early_finite_check);
+    let (ignore, early) = (kwargs.on_row_error, kwargs.early_coord_check);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
             many.iter()

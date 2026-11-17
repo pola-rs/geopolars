@@ -289,10 +289,15 @@ def test_a_non_finite_vertex_goes_to_geos_or_is_caught_early() -> None:
 
     # The length GEOS walks becomes NaN, so it falls through to the end of the line,
     # even for a distance before the NaN vertex.
-    assert _interpolate(df, 0.5) == [_point(4, 0), _point(0.5, 0)]
+    assert _interpolate(df, 0.5, early_coord_check="off") == [
+        _point(4, 0),
+        _point(0.5, 0),
+    ]
     with pytest.raises(ComputeError, match="finite"):
-        _interpolate(df, 1.0, early_finite_check=True)
-    assert _interpolate(df, 1.0, early_finite_check=True, on_row_error="null") == [
+        _interpolate(df, 1.0, early_coord_check="finite_and_empty")
+    assert _interpolate(
+        df, 1.0, early_coord_check="finite_and_empty", on_row_error="null"
+    ) == [
         None,
         _point(1, 0),
     ]

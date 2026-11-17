@@ -7,7 +7,7 @@ use polars_arrow::array::{MutableBinaryViewArray, Utf8ViewArray};
 
 use super::pairs::GeosPairs;
 use super::GeosRow;
-use crate::{row_or_null, GeoComputeResult, OnRowError};
+use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// A DE-9IM matrix, as GEOS writes it.
 /// The Python `relate` documents its rows, columns, and cells.
@@ -48,12 +48,12 @@ impl RelatePairs {
         a: &GeometryArray,
         b: &GeometryArray,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<Self> {
         // The matrix against an empty geometry still depends on its partner,
         // so unlike for `intersection`, that partner goes to GEOS too.
         Ok(Self {
-            pairs: GeosPairs::new(a, b, on_row_error, early_finite_check)?,
+            pairs: GeosPairs::new(a, b, on_row_error, early_coord_check)?,
             empty: Geometry::create_empty_point()?,
             on_row_error,
         })

@@ -10,7 +10,7 @@ use geos::{CoordType, Geom, Geometry, GeometryTypes};
 
 use super::pairs::GeosPairs;
 use super::{GeosGeometries, GeosRow};
-use crate::{row_or_null, GeoComputeError, GeoComputeResult, OnRowError};
+use crate::{row_or_null, EarlyCoordCheck, GeoComputeError, GeoComputeResult, OnRowError};
 
 /// The topological dimension of the parts an overlay keeps.
 #[derive(Debug, Clone, Copy)]
@@ -53,9 +53,9 @@ impl Overlay {
         a: &GeometryArray,
         b: &GeometryArray,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosPairs> {
-        let early = early_finite_check;
+        let early = early_coord_check;
         match self {
             Self::Intersection => {
                 GeosPairs::new_skipping_partners_of_empty(a, b, on_row_error, early)
@@ -75,7 +75,7 @@ pub struct OverlayPairs {
     pairs: GeosPairs,
     overlay: Overlay,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 }
 
 impl OverlayPairs {
@@ -91,13 +91,13 @@ impl OverlayPairs {
         b: &GeometryArray,
         overlay: Overlay,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<Self> {
         Ok(Self {
-            pairs: overlay.pairs(a, b, on_row_error, early_finite_check)?,
+            pairs: overlay.pairs(a, b, on_row_error, early_coord_check)?,
             overlay,
             on_row_error,
-            early_finite_check,
+            early_coord_check,
         })
     }
 
@@ -176,7 +176,7 @@ impl OverlayPairs {
         multi: bool,
         reverse_copies_of_a: bool,
     ) -> GeoComputeResult<GeosRow> {
-        let (on_row_error, early) = (self.on_row_error, self.early_finite_check);
+        let (on_row_error, early) = (self.on_row_error, self.early_coord_check);
         match self.overlay {
             Overlay::Intersection => intersect_rows(a, b, kept_dimension, multi, on_row_error),
             Overlay::Difference => {
@@ -226,7 +226,7 @@ fn difference_rows(
     multi: bool,
     reverse_copies_of_a: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<GeosRow> {
     let difference = match (a, b) {
         (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(GeosRow::Null),
@@ -239,13 +239,13 @@ fn difference_rows(
         // The copy fits the output kind, as the `into_multi_*` methods take a single geometry as one part.
         // A copy is needed, as the pairs only lend their rows, and a single `a` is shared by every row.
         (GeosRow::Geometry(a), GeosRow::Empty) => {
-            // A copy refuses a non-finite x or y whatever `early_finite_check` is,
+            // A copy refuses a non-finite x or y whatever `early_coord_check` is,
             // so that the option never changes a copied row.
-            // With `early_finite_check=true`, converting `a` has already done so.
+            // Unless `early_coord_check=`[EarlyCoordCheck::Off], converting `a` has already done so.
             // GEOS itself does not fail on every such vertex
             // (a line minus a polygon it does not touch keeps a NaN),
             // so a copied row can be stricter than one GEOS computes.
-            let finite = if early_finite_check {
+            let finite = if early_coord_check != EarlyCoordCheck::Off {
                 Ok(())
             } else {
                 difference_rows_xy_is_finite_or_error(a)

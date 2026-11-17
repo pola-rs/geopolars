@@ -6,7 +6,7 @@
 //!
 //! ## `EARLY_FINITE_CHECK`
 //!
-//! The public functions take `early_finite_check`.
+//! The public functions take `early_coord_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{GeometryArray, MultiPolygonArray, PolygonArray};
@@ -15,7 +15,7 @@ pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
 use super::{unless_split, GeosGeometries, GeosRow, ToGeosRows};
-use crate::{GeoComputeError, GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeError, GeoComputeResult, OnRowError};
 
 /// How far away is the buffer?
 #[derive(Clone, Copy)]
@@ -60,10 +60,10 @@ pub fn buffer_into_polygons(
     style: &BufferStyle,
     ccw_outer: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     buffer_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
         on_row_error,
@@ -81,10 +81,10 @@ pub fn buffer_into_multi_polygons(
     style: &BufferStyle,
     ccw_outer: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiPolygonArray> {
     buffer_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
         on_row_error,

@@ -1,5 +1,5 @@
 use geopolars_compute::geos::RelatePairs;
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{GeometryArray, Kind};
 use polars_arrow::array::{Array, Utf8ViewArray};
 use polars_core::prelude::PolarsResult;
@@ -16,13 +16,13 @@ pub fn relate(
     b: &dyn Array,
     b_kind: Kind,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<Utf8ViewArray> {
     let (a, b) = (
         GeometryArray::new(a, a_kind)?,
         GeometryArray::new(b, b_kind)?,
     );
-    RelatePairs::new(&a, &b, on_row_error, early_finite_check)
+    RelatePairs::new(&a, &b, on_row_error, early_coord_check)
         .and_then(|pairs| pairs.to_strings())
         .into_polars()
 }

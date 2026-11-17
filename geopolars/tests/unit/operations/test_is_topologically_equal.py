@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
@@ -26,6 +26,9 @@ from geopolars.datatypes import (
     PolygonXYZ,
     PolygonXYZM,
 )
+
+if TYPE_CHECKING:
+    from geopolars._typing import EarlyCoordCheck
 
 _XY = pl.Struct({"x": pl.Float64, "y": pl.Float64})
 
@@ -61,7 +64,7 @@ def _wkt(name: str, dtype: GeoArrowType, wkts: list[str | None]) -> pl.Series:
 def _topologically_equal(
     a: tuple[GeoArrowType, list[str | None]],
     b: tuple[GeoArrowType, list[str | None]],
-    **kwargs: bool,
+    **kwargs: Any,
 ) -> list[bool | None]:
     df = pl.DataFrame([_wkt("a", *a), _wkt("b", *b)])
     out = df.select(geo.is_topologically_equal("a", "b", **kwargs))
@@ -189,8 +192,10 @@ def test_against_a_single_null_geometry_everything_is_null() -> None:
 _ONE_VERTEX_LINE = _xy((0, 0))
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
-def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -> None:
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
+def test_a_row_paired_with_a_null_never_reaches_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     failing = [_ONE_VERTEX_LINE, _NOT_FINITE_LINE]
     df = pl.DataFrame(
         [
@@ -200,20 +205,20 @@ def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -
     )
 
     out = df.select(
-        geo.is_topologically_equal("a", "b", early_finite_check=early_finite_check)
+        geo.is_topologically_equal("a", "b", early_coord_check=early_coord_check)
     )
 
     assert out["a"].to_list() == [None, None, True]
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_against_a_single_null_geometry_no_row_reaches_geos(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     many = _series("many", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE])
     one = _wkt("one", PointXY(), [None])
     df = pl.DataFrame(many)
-    kwargs = {"early_finite_check": early_finite_check}
+    kwargs = {"early_coord_check": early_coord_check}
 
     out = df.select(geo.is_topologically_equal("many", one, **kwargs))
     assert out["many"].to_list() == [None, None]
@@ -263,7 +268,7 @@ def test_m_is_not_compared() -> None:
 _NOT_FINITE_LINE = _xy((0, 0), (math.nan, 1), (2, 2))
 
 
-def _not_finite_lines(**kwargs: bool) -> list[bool | None]:
+def _not_finite_lines(**kwargs: Any) -> list[bool | None]:
     """A line that is not finite, then one that is, each compared with itself."""
     rows = [_NOT_FINITE_LINE, _FINITE_LINE]
     df = pl.DataFrame(
@@ -274,17 +279,22 @@ def _not_finite_lines(**kwargs: bool) -> list[bool | None]:
 
 def test_geos_raises_on_a_line_that_is_not_finite() -> None:
     with pytest.raises(ComputeError, match="NaN/Inf"):
-        _not_finite_lines()
+        _not_finite_lines(early_coord_check="off")
 
 
 def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
     assert _not_finite_lines(on_row_error="null") == [None, True]
 
 
-def test_the_early_finite_check_raises_before_geos() -> None:
+@pytest.mark.parametrize("early_coord_check", ["finite", "finite_and_empty"])
+def test_the_early_coord_check_raises_before_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
-        _not_finite_lines(early_finite_check=True)
-    assert _not_finite_lines(early_finite_check=True, on_row_error="null") == [
+        _not_finite_lines(early_coord_check=early_coord_check)
+    assert _not_finite_lines(
+        early_coord_check=early_coord_check, on_row_error="null"
+    ) == [
         None,
         True,
     ]

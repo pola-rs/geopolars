@@ -17,7 +17,7 @@ use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
     OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
 };
-use crate::{GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 impl ToGeos for ScalarPolygon<'_> {
     type Geos = Geometry;
@@ -32,7 +32,7 @@ impl ToGeosRows for PolygonArray {
         &self,
         as_empty: Option<&Bitmap>,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
         let size_hint = SizeHint {
@@ -44,7 +44,7 @@ impl ToGeosRows for PolygonArray {
             &axes,
             as_empty,
             on_row_error,
-            early_finite_check,
+            early_coord_check,
             |parts| self.rings.span(parts),
             |parts| polygon_to_geos(&axes, &self.rings, parts),
         )?;
@@ -73,7 +73,7 @@ impl ToGeosRows for MultiPolygonArray {
         &self,
         as_empty: Option<&Bitmap>,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
         let size_hint = SizeHint {
@@ -85,7 +85,7 @@ impl ToGeosRows for MultiPolygonArray {
             &axes,
             as_empty,
             on_row_error,
-            early_finite_check,
+            early_coord_check,
             |parts| self.rings.span(self.polygons.span(parts)),
             |parts| multi_polygon_to_geos(&axes, &self.polygons, &self.rings, parts),
         )?;

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import OnRowError
+from geopolars._typing import EarlyCoordCheck, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType
 from geopolars.geo._dispatch import on_geometry
@@ -33,7 +33,7 @@ def line_interpolate_point(
     *,
     mode: Literal["absolute", "normalized"] = "absolute",
     on_row_error: OnRowError = "raise",
-    early_finite_check: bool = False,
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """
     Creates a point at `distance` along every line, from its start.
@@ -65,7 +65,7 @@ def line_interpolate_point(
     {geos_non_finite}
     GEOS then does not raise, but gives a wrong point for most distances:
     often the end of the line, or a point with a NaN or infinite coordinate.
-    {early_finite_check}
+    {early_coord_check}
 
     ```python
     df.select(geo.line_interpolate_point("road", 100.0))
@@ -73,6 +73,7 @@ def line_interpolate_point(
     ```
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     constant = isinstance(distance, int | float)
     if constant and not math.isfinite(distance):
         msg = f"line_interpolate_point expects a finite distance, got: {distance!r}"
@@ -96,7 +97,7 @@ def line_interpolate_point(
                 "distance": float(distance) if constant else None,
                 "mode": mode,
                 "on_row_error": on_row_error,
-                "early_finite_check": early_finite_check,
+                "early_coord_check": early_coord_check,
             },
             is_elementwise=True,
         )

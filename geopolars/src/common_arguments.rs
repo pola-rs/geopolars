@@ -12,7 +12,6 @@ pub(crate) enum OnRowErrorDef {
 
 #[derive(Deserialize)]
 #[serde(remote = "EarlyCoordCheck", rename_all = "snake_case")]
-#[expect(dead_code, reason = "no expression takes `early_coord_check` yet")]
 pub(crate) enum EarlyCoordCheckDef {
     Off,
     Finite,

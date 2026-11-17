@@ -1,7 +1,7 @@
 use geopolars_compute::geos::{
     buffer_into_multi_polygons, buffer_into_polygons, BufferDistance, BufferStyle,
 };
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{GeometryArray, Kind};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -20,9 +20,9 @@ pub fn buffers(
     style: &BufferStyle,
     ccw_outer: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
-    let early = early_finite_check;
+    let early = early_coord_check;
     let array = &GeometryArray::new(chunk, kind)?;
     if into_multi {
         buffer_into_multi_polygons(array, distance, style, ccw_outer, on_row_error, early)

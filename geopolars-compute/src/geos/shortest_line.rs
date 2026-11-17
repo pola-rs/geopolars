@@ -9,7 +9,7 @@ use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::{combine_validities_and, combine_validities_and_not};
 
 use super::{rows_without_vertices, GeosGeometries, GeosRow, ToGeosRows};
-use crate::{GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 #[inline(always)]
 fn shortest_line_between_rows(
@@ -67,13 +67,13 @@ pub fn shortest_lines_pairwise(
     a: GeometryArray,
     b: GeometryArray,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
     debug_assert_eq!(a.len(), b.len(), "`a` and `b` must have the same length");
     let valid = combine_validities_and(a.validity(), b.validity());
     let empty = &rows_without_vertices(&a) | &rows_without_vertices(&b);
     let sent_to_geos = combine_validities_and_not(valid.as_ref(), Some(&empty));
-    let early = early_finite_check;
+    let early = early_coord_check;
     let a = a
         .with_validity(sent_to_geos.clone())
         .to_geos_rows(on_row_error, early)?;
@@ -106,9 +106,9 @@ pub fn shortest_lines_against_one(
     many: &GeometryArray,
     lines_start_on_one: bool,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
-    let one = one.to_geos_rows(on_row_error, early_finite_check)?;
+    let one = one.to_geos_rows(on_row_error, early_coord_check)?;
     let [one] = one.geometries.as_slice() else {
         panic!("`one` must be a single row, got {}", one.geometries.len());
     };
@@ -129,7 +129,7 @@ pub fn shortest_lines_against_one(
             .collect();
         return shortest_lines_into_array(lines, on_row_error);
     }
-    let many = many.to_geos_rows(on_row_error, early_finite_check)?;
+    let many = many.to_geos_rows(on_row_error, early_coord_check)?;
     let lines = many
         .geometries
         .iter()

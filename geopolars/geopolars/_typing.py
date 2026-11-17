@@ -8,3 +8,4 @@ if TYPE_CHECKING:
     IntoExprColumn: TypeAlias = pl.Expr | str | pl.Series
 
 OnRowError = Literal["null", "raise"]
+EarlyCoordCheck = Literal["off", "finite", "finite_and_empty"]

@@ -2,7 +2,7 @@ use geopolars_compute::geos::{
     offset_curves_into_line_strings, offset_curves_into_multi_line_strings, BufferDistance,
     OffsetCurveStyle,
 };
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{downcast, GeometryArray, LineStringArray, MultiLineStringArray};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -21,9 +21,9 @@ pub fn offset_curves(
     distance: BufferDistance,
     style: &OffsetCurveStyle,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
-    let early = early_finite_check;
+    let early = early_coord_check;
     match (kind, into_multi) {
         (LineKind::LineString, false) => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;

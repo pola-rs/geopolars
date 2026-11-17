@@ -141,12 +141,15 @@ With `on_row_error="null"`, it gives a null {output} instead.""",
     "geos_non_finite": """\
 GEOS supports neither empty points inside a geometry (a vertex with NaN on every axis)
 nor any other NaN or infinite x or y.
-By default they go to GEOS as they are.""",
-    "early_finite_check": """\
-With `early_finite_check=True`, a geometry with such a vertex is caught before it reaches GEOS.
-It then raises, or gives a null {output} with `on_row_error="null"`.
-This only adds a short path.
-It pays off when you expect many non-finite coordinates in your data.""",
+With `early_coord_check="off"`, they go to GEOS as they are.""",
+    "early_coord_check": """\
+By default (`early_coord_check="finite_and_empty"`), a geometry with such a vertex never reaches GEOS:
+it raises, or gives a null {output} with `on_row_error="null"`.
+`"finite"` does the same, as GEOS takes no empty point inside a geometry either.
+An empty point on its own is not caught, as GEOS supports it.
+Turning the check off skips a pass over the coordinates,
+which can pay off on data with few non-finite coordinates.
+See `early_coord_check` on the Common arguments page (`docs/Common arguments.md`).""",
     "ccw_outer": """\
 The exterior runs as GEOS gives it, clockwise.
 With `ccw_outer=True`, it runs counter-clockwise instead at a minimal performance cost.""",

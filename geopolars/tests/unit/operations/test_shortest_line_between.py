@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
@@ -26,6 +26,9 @@ from geopolars.datatypes import (
     PolygonXY,
 )
 
+if TYPE_CHECKING:
+    from geopolars._typing import EarlyCoordCheck
+
 
 def _wkt(name: str, dtype: GeoArrowType, wkts: list[str | None]) -> pl.Series:
     out = pl.select(geo.from_wkt(pl.Series(wkts, dtype=pl.String), type(dtype)))
@@ -45,7 +48,7 @@ def _as_wkt(lines: pl.Series) -> list[str | None]:
 def _shortest_lines(
     a: tuple[GeoArrowType, list[str | None]],
     b: tuple[GeoArrowType, list[str | None]],
-    **kwargs: bool,
+    **kwargs: Any,
 ) -> list[str | None]:
     df = pl.DataFrame([_wkt("a", *a), _wkt("b", *b)])
     return _as_wkt(df.select(geo.shortest_line_between("a", "b", **kwargs))["a"])
@@ -166,13 +169,13 @@ def _line_strings(name: str, rows: list[list[tuple[float, float]]]) -> pl.Series
 _FAILING_LINES = [[(0, 0)], [(0, 0), (math.nan, 1), (2, 2)]]
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_against_a_single_null_geometry_no_row_reaches_geos(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     one = _wkt("one", PolygonXY(), [None])
     df = pl.DataFrame(_line_strings("many", _FAILING_LINES))
-    kwargs = {"early_finite_check": early_finite_check}
+    kwargs = {"early_coord_check": early_coord_check}
 
     out = df.select(geo.shortest_line_between("many", one, **kwargs))
     assert out["many"].to_list() == [None, None]
@@ -202,8 +205,10 @@ def test_against_the_first_of_no_rows_gives_no_lines() -> None:
     assert out.height == 0
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
-def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -> None:
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
+def test_a_row_paired_with_a_null_never_reaches_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     df = pl.DataFrame(
         [
             _wkt("a", PointXY(), [None, None, "POINT (3 0)"]),
@@ -212,7 +217,7 @@ def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -
     )
 
     out = df.select(
-        geo.shortest_line_between("a", "b", early_finite_check=early_finite_check)
+        geo.shortest_line_between("a", "b", early_coord_check=early_coord_check)
     )
 
     assert _as_wkt(out["a"]) == [None, None, "LINESTRING(3 0,1 0)"]
@@ -225,12 +230,12 @@ def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -
         _wkt("one", PointXY(), ["POINT EMPTY"]),
     ],
 )
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_against_a_single_empty_geometry_no_row_reaches_geos(
-    one: pl.Series, early_finite_check: bool
+    one: pl.Series, early_coord_check: EarlyCoordCheck
 ) -> None:
     df = pl.DataFrame(_line_strings("many", _FAILING_LINES))
-    kwargs = {"early_finite_check": early_finite_check}
+    kwargs = {"early_coord_check": early_coord_check}
 
     out = df.select(geo.shortest_line_between("many", one, **kwargs))
     assert _as_wkt(out["many"]) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
@@ -238,9 +243,9 @@ def test_against_a_single_empty_geometry_no_row_reaches_geos(
     assert _as_wkt(out.to_series()) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     df = pl.DataFrame(
         [
@@ -250,7 +255,7 @@ def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
     )
 
     out = df.select(
-        geo.shortest_line_between("a", "b", early_finite_check=early_finite_check)
+        geo.shortest_line_between("a", "b", early_coord_check=early_coord_check)
     )
 
     assert _as_wkt(out["a"]) == [
@@ -278,12 +283,12 @@ def _without_vertices(name: str, dtype: GeoArrowType, row: list[Any]) -> pl.Seri
     ],
     ids=["polygon", "multilinestring", "multipolygon", "multipolygon_with_a_ring"],
 )
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_a_row_paired_with_parts_without_vertices_never_reaches_geos(
-    a: pl.Series, early_finite_check: bool
+    a: pl.Series, early_coord_check: EarlyCoordCheck
 ) -> None:
     df = pl.DataFrame([a, _line_strings("b", _FAILING_LINES)])
-    kwargs = {"early_finite_check": early_finite_check}
+    kwargs = {"early_coord_check": early_coord_check}
 
     out = df.select(geo.shortest_line_between("a", "b", **kwargs))
 
@@ -309,21 +314,28 @@ def test_geos_raises_on_a_geometry_that_is_not_finite() -> None:
     b = _wkt("b", PolygonXY(), [_SQUARE])
 
     with pytest.raises(ComputeError, match="GEOSNearestPoints_r failed"):
-        pl.select(geo.shortest_line_between(_NOT_FINITE_POINT, b))
+        pl.select(
+            geo.shortest_line_between(_NOT_FINITE_POINT, b, early_coord_check="off")
+        )
 
 
-def test_the_early_finite_check_raises_before_geos() -> None:
+@pytest.mark.parametrize("early_coord_check", ["finite", "finite_and_empty"])
+def test_the_early_coord_check_raises_before_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     b = _wkt("b", PolygonXY(), [_SQUARE])
 
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         pl.select(
-            geo.shortest_line_between(_NOT_FINITE_POINT, b, early_finite_check=True)
+            geo.shortest_line_between(
+                _NOT_FINITE_POINT, b, early_coord_check=early_coord_check
+            )
         )
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_a_failing_row_gives_null_with_on_row_error_null(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     a = pl.concat([_NOT_FINITE_POINT, _wkt("a", PointXY(), ["POINT (3 0)"])])
     df = pl.DataFrame([a, _wkt("b", PolygonXY(), [_SQUARE, _SQUARE])])
@@ -332,21 +344,21 @@ def test_a_failing_row_gives_null_with_on_row_error_null(
         pl.col("a").geo.shortest_line_between(
             "b",
             on_row_error="null",
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
     )
 
     assert _as_wkt(out["a"]) == [None, "LINESTRING(3 0,1 0)"]
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_against_a_single_geometry_a_failing_row_gives_null_with_on_row_error_null(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     many = pl.concat([_NOT_FINITE_POINT, _wkt("a", PointXY(), ["POINT (3 0)"])])
     df = pl.DataFrame(many.alias("many"))
     one = _wkt("one", PolygonXY(), [_SQUARE])
-    kwargs = {"on_row_error": "null", "early_finite_check": early_finite_check}
+    kwargs = {"on_row_error": "null", "early_coord_check": early_coord_check}
 
     out = df.select(geo.shortest_line_between(one, "many", **kwargs))
     assert _as_wkt(out.to_series()) == [None, "LINESTRING(1 0,3 0)"]

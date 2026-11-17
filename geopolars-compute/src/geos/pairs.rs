@@ -5,7 +5,7 @@ use geopolars_views::GeometryArray;
 use polars_arrow::bitmap::Bitmap;
 
 use super::{rows_without_vertices, GeosGeometries, GeosRow, ToGeosRows};
-use crate::{GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// Two arrays of geometries converted to GEOS, with their rows paired up.
 /// A single row on either side is paired with every row of the other,
@@ -26,10 +26,10 @@ impl GeosPairs {
         a: &GeometryArray,
         b: &GeometryArray,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<Self> {
-        let a = a.to_geos_rows(on_row_error, early_finite_check)?;
-        let b = b.to_geos_rows(on_row_error, early_finite_check)?;
+        let a = a.to_geos_rows(on_row_error, early_coord_check)?;
+        let b = b.to_geos_rows(on_row_error, early_coord_check)?;
         let rows = pair_count(a.geometries.len(), b.geometries.len());
         Ok(Self { a, b, rows })
     }
@@ -43,13 +43,13 @@ impl GeosPairs {
         a: &GeometryArray,
         b: &GeometryArray,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<Self> {
         let a_decides = &rows_without_vertices(a) | &null_rows(a);
         let b_decides = &rows_without_vertices(b) | &null_rows(b);
         let a_as_empty = paired_with(&b_decides, a.len());
         let b_as_empty = paired_with(&a_decides, b.len());
-        let early = early_finite_check;
+        let early = early_coord_check;
         Self::new_taking_as_empty(a, b, &a_as_empty, &b_as_empty, on_row_error, early)
     }
 
@@ -63,13 +63,13 @@ impl GeosPairs {
         a: &GeometryArray,
         b: &GeometryArray,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<Self> {
         let (a_empty, b_empty) = (rows_without_vertices(a), rows_without_vertices(b));
         let a_as_empty = &a_empty | &paired_with(&null_rows(b), a.len());
         let a_decides = &a_empty | &null_rows(a);
         let b_as_empty = &b_empty | &paired_with(&a_decides, b.len());
-        let early = early_finite_check;
+        let early = early_coord_check;
         Self::new_taking_as_empty(a, b, &a_as_empty, &b_as_empty, on_row_error, early)
     }
 
@@ -79,10 +79,10 @@ impl GeosPairs {
         a_as_empty: &Bitmap,
         b_as_empty: &Bitmap,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<Self> {
         let rows = pair_count(a_as_empty.len(), b_as_empty.len());
-        let early = early_finite_check;
+        let early = early_coord_check;
         let a = a.to_geos_rows_taking_as_empty(Some(a_as_empty), on_row_error, early)?;
         let b = b.to_geos_rows_taking_as_empty(Some(b_as_empty), on_row_error, early)?;
         Ok(Self { a, b, rows })

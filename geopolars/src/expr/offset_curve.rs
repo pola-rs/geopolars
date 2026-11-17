@@ -1,9 +1,9 @@
 //! The offset curve of a linestring or multilinestring, forwarded to GEOS.
 //! Implements the Python `offset_curve`.
 
-use crate::common_arguments::OnRowErrorDef;
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
 use geopolars_compute::geos::{JoinStyle, OffsetCurveStyle};
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::{offset_curves, LineKind};
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -57,7 +57,8 @@ pub struct OffsetCurveKwargs {
     allow_splitting: bool,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_offset_curve)]
@@ -70,7 +71,7 @@ fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Se
         mitre_limit,
         allow_splitting: _,
         on_row_error,
-        early_finite_check,
+        early_coord_check,
     } = kwargs;
     let style = &OffsetCurveStyle {
         quadrant_segments,
@@ -85,7 +86,7 @@ fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Se
             distance,
             style,
             on_row_error,
-            early_finite_check,
+            early_coord_check,
         )
     })?;
     geometry_series(inputs[0].name().clone(), curve, chunks)

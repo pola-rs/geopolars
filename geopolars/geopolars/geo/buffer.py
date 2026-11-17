@@ -12,7 +12,7 @@ import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import OnRowError
+from geopolars._typing import EarlyCoordCheck, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType, PointType
 from geopolars.geo._dispatch import _to_expr, on_geometry
@@ -59,7 +59,7 @@ def buffer(
     allow_splitting: bool = False,
     ccw_outer: bool = False,
     on_row_error: OnRowError = "raise",
-    early_finite_check: bool = False,
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """Draws a 'buffer' around the geometry.
     Think of it like an outset/inset of the original shape.
@@ -132,7 +132,7 @@ def buffer(
     {on_row_error}
 
     {geos_non_finite}
-    {early_finite_check}
+    {early_coord_check}
 
     {ccw_outer}
 
@@ -142,6 +142,7 @@ def buffer(
     ```
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
 
     # TODO: we could add some image examples here?
     # - a normal outset
@@ -195,7 +196,7 @@ def buffer(
                 "allow_splitting": allow_splitting,
                 "ccw_outer": ccw_outer,
                 "on_row_error": on_row_error,
-                "early_finite_check": early_finite_check,
+                "early_coord_check": early_coord_check,
             },
             is_elementwise=True,
         )

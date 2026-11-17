@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import OnRowError
+from geopolars._typing import EarlyCoordCheck, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
@@ -24,7 +24,7 @@ def relate(
     b: IntoExprColumn,
     *,
     on_row_error: OnRowError = "raise",
-    early_finite_check: bool = False,
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """Gets the DE-9IM matrix in a text format. This tells you how two geometries intersect.
 
@@ -52,7 +52,7 @@ def relate(
 
     {geos_non_finite}
     GEOS then gives no meaningful answer.
-    {early_finite_check}
+    {early_coord_check}
 
     {same_crs_pair}
 
@@ -61,9 +61,10 @@ def relate(
     ```
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     kwargs = {
         "on_row_error": on_row_error,
-        "early_finite_check": early_finite_check,
+        "early_coord_check": early_coord_check,
     }
 
     def build(

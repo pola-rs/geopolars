@@ -119,6 +119,9 @@ foregoing the need to convert its partner in the other column.
 
 - A GEOS kernel defaults to `early_coord_check="finite_and_empty"`.
   The check runs during the conversion to GEOS.
+- `"finite"` refuses an empty point inside a geometry too, as GEOS takes none,
+  so it behaves like `"finite_and_empty"`.
+  An empty point on its own passes with either, as GEOS supports it.
 - If the check can be turned off,
   the module documents what GEOS does with non-finite input then,
   as `geos/convex_hull.rs` does.

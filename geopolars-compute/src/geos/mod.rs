@@ -9,12 +9,14 @@
 //! ## `EARLY_FINITE_CHECK`
 //!
 //! Converting rows to GEOS, and the convex hulls, are generic over `EARLY_FINITE_CHECK`.
-//! [`ToGeosRows`] takes it as `early_finite_check`.
+//! [`ToGeosRows`] sets it from `early_coord_check`:
+//! [EarlyCoordCheck::Finite] and [EarlyCoordCheck::FiniteAndEmpty] both set it,
+//! as GEOS takes no empty point inside a geometry either.
 //! If `EARLY_FINITE_CHECK=true`, a row with a NaN or infinite x or y never goes to GEOS.
 //! It is an error instead, which `on_row_error` treats like a GEOS error.
 //! For a point, the empty point (x and y NaN) is the exception.
 //! If `EARLY_FINITE_CHECK=false`, those coordinates go to GEOS as they are.
-//! See `early_finite_check` in Python for what GEOS makes of them.
+//! See `early_coord_check` in Python for what GEOS makes of them.
 //!
 //! ## `ALL_VALID`
 //!
@@ -87,7 +89,7 @@ use geos::{CoordSeq, CoordType, Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
-use crate::{row_or_null, GeoComputeError, GeoComputeResult, OnRowError};
+use crate::{row_or_null, EarlyCoordCheck, GeoComputeError, GeoComputeResult, OnRowError};
 
 /// Converts a single geometry into a GEOS geometry.
 /// For an array, see [`ToGeosRows`].
@@ -107,9 +109,9 @@ pub trait ToGeosRows {
     fn to_geos_rows(
         &self,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
-        self.to_geos_rows_taking_as_empty(None, on_row_error, early_finite_check)
+        self.to_geos_rows_taking_as_empty(None, on_row_error, early_coord_check)
     }
 
     /// See [`ToGeosRows::to_geos_rows`].
@@ -118,7 +120,7 @@ pub trait ToGeosRows {
         &self,
         as_empty: Option<&Bitmap>,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries>;
 }
 
@@ -127,9 +129,9 @@ impl ToGeosRows for GeometryArray {
         &self,
         as_empty: Option<&Bitmap>,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
-        let early = early_finite_check;
+        let early = early_coord_check;
         match self {
             GeometryArray::Point(array) => {
                 array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
@@ -182,10 +184,10 @@ impl ToGeosRows for PointArray {
         &self,
         as_empty: Option<&Bitmap>,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let geometries = with_const_flags!(
-            EARLY_FINITE_CHECK = early_finite_check;
+            EARLY_FINITE_CHECK = early_coord_check != EarlyCoordCheck::Off;
             points_to_geos::<EARLY_FINITE_CHECK>(&self.coords, as_empty, on_row_error)
         )?;
         Ok(GeosGeometries {
@@ -224,7 +226,7 @@ impl ToGeosRows for MultiPointArray {
         &self,
         as_empty: Option<&Bitmap>,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
         let size_hint = SizeHint {
@@ -236,7 +238,7 @@ impl ToGeosRows for MultiPointArray {
             &axes,
             as_empty,
             on_row_error,
-            early_finite_check,
+            early_coord_check,
             |vertices| vertices,
             |vertices| multi_point_to_geos(&axes, vertices),
         )?;
@@ -343,12 +345,12 @@ fn rows_to_geos(
     axes: &Axes,
     as_empty: Option<&Bitmap>,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
     span: impl Fn(Range<usize>) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<Vec<GeosRow>> {
     with_const_flags!(
-        ALL_VALID = rows.is_all_valid(), EARLY_FINITE_CHECK = early_finite_check;
+        ALL_VALID = rows.is_all_valid(), EARLY_FINITE_CHECK = early_coord_check != EarlyCoordCheck::Off;
         rows_to_geos_with::<ALL_VALID, EARLY_FINITE_CHECK>(
             rows,
             axes,

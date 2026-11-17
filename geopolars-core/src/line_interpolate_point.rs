@@ -1,7 +1,7 @@
 use geopolars_compute::geos::{
     interpolate_line_strings, interpolate_multi_line_strings, BufferDistance, InterpolateMode,
 };
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{downcast, GeometryArray, LineStringArray, MultiLineStringArray};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -17,9 +17,9 @@ pub fn interpolated_points(
     distance: BufferDistance,
     mode: InterpolateMode,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
-    let early = early_finite_check;
+    let early = early_coord_check;
     match kind {
         LineKind::LineString => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;

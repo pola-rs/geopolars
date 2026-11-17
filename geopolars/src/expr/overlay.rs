@@ -1,9 +1,9 @@
 //! The intersection and difference of two geometries
 //! Implements the Python `intersection` and `difference`.
 
-use crate::common_arguments::OnRowErrorDef;
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
 use geopolars_compute::geos::Overlay;
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::OverlayOptions;
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -44,7 +44,8 @@ pub struct IntersectionKwargs {
     ccw_outer: bool,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
 /// The keyword arguments of the Python `difference`.
@@ -55,7 +56,8 @@ pub struct DifferenceKwargs {
     ccw_outer: bool,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
 fn topological_dimension(kind: Kind) -> TopologicalDimension {
@@ -197,7 +199,7 @@ fn intersection(inputs: &[Series], kwargs: IntersectionKwargs) -> PolarsResult<S
     let options = OverlayOptions {
         ccw_outer: kwargs.ccw_outer,
         on_row_error: kwargs.on_row_error,
-        early_finite_check: kwargs.early_finite_check,
+        early_coord_check: kwargs.early_coord_check,
     };
     overlaid(inputs, geo, Overlay::Intersection, options)
 }
@@ -209,7 +211,7 @@ fn difference(inputs: &[Series], kwargs: DifferenceKwargs) -> PolarsResult<Serie
     let options = OverlayOptions {
         ccw_outer: kwargs.ccw_outer,
         on_row_error: kwargs.on_row_error,
-        early_finite_check: kwargs.early_finite_check,
+        early_coord_check: kwargs.early_coord_check,
     };
     overlaid(inputs, geo, Overlay::Difference, options)
 }

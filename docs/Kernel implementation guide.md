@@ -19,7 +19,7 @@ Read them as follows:
 
 | In the code | In these guides |
 | - | - |
-| `early_finite_check: bool`, `EARLY_FINITE_CHECK` | `early_coord_check` |
+| `EARLY_FINITE_CHECK` | `early_coord_check` |
 | `too_short`, `TooShort` | `short_lines` |
 | `empty_exterior`, `EmptyExterior` | `empty_polygon_exterior` |
 | `ccw_outer`, `REVERSED` | `new_ring_orientation`, `new_holes` |

@@ -50,7 +50,7 @@ use geopolars_views::{
 use geos::{CoordSeq, Geom, Geometry, GeometryTypes};
 
 use super::{axes, xy_is_finite_or_error, GeosGeometries, GeosRow};
-use crate::{GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 // TODO: a geometry crossing the antimeridian is hulled the long way round.
 // We could add a flag that checks if the input crosses it (>180°),
@@ -62,14 +62,14 @@ pub fn line_string_convex_hulls(
     array: &LineStringArray,
     on_row_error: OnRowError,
     ccw_outer: bool,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
         ccw_outer,
-        early_finite_check,
+        early_coord_check,
         |vertices, ranges| ranges.push(vertices),
     )
 }
@@ -79,14 +79,14 @@ pub fn multi_point_convex_hulls(
     array: &MultiPointArray,
     on_row_error: OnRowError,
     ccw_outer: bool,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
         ccw_outer,
-        early_finite_check,
+        early_coord_check,
         |vertices, ranges| ranges.push(vertices),
     )
 }
@@ -96,14 +96,14 @@ pub fn multi_line_string_convex_hulls(
     array: &MultiLineStringArray,
     on_row_error: OnRowError,
     ccw_outer: bool,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
         ccw_outer,
-        early_finite_check,
+        early_coord_check,
         |parts, ranges| ranges.extend(parts.map(|j| array.lines.range(j))),
     )
 }
@@ -113,14 +113,14 @@ pub fn polygon_convex_hulls(
     array: &PolygonArray,
     on_row_error: OnRowError,
     ccw_outer: bool,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
         ccw_outer,
-        early_finite_check,
+        early_coord_check,
         |parts, ranges| {
             if !parts.is_empty() {
                 ranges.push(array.rings.range(parts.start));
@@ -135,14 +135,14 @@ pub fn multi_polygon_convex_hulls(
     array: &MultiPolygonArray,
     on_row_error: OnRowError,
     ccw_outer: bool,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
         on_row_error,
         ccw_outer,
-        early_finite_check,
+        early_coord_check,
         |parts, ranges| {
             ranges.extend(
                 parts
@@ -160,14 +160,14 @@ fn hulls(
     coords: &ValidCoords,
     on_row_error: OnRowError,
     ccw_outer: bool,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
     coord_ranges: impl Fn(Range<usize>, &mut Vec<Range<usize>>),
 ) -> GeoComputeResult<PolygonArray> {
     let has_z = coords.dim().has_z();
     let hulls = with_const_flags!(
         Z = has_z,
         ALL_VALID = rows.is_all_valid(),
-        EARLY_FINITE_CHECK = early_finite_check;
+        EARLY_FINITE_CHECK = early_coord_check != EarlyCoordCheck::Off;
         hulls_with::<Z, ALL_VALID, EARLY_FINITE_CHECK>(
             rows,
             coords,

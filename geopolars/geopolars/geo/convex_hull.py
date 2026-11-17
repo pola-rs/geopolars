@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import OnRowError
+from geopolars._typing import EarlyCoordCheck, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import (
     LineStringType,
@@ -42,7 +42,7 @@ def convex_hull(
     *,
     on_row_error: OnRowError = "raise",
     ccw_outer: bool = False,
-    early_finite_check: bool = False,
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """The smallest convex polygon that contains every vertex of a linestring or polygon,
     with its CRS.
@@ -82,7 +82,7 @@ def convex_hull(
     {geos_non_finite}
     Depending on where such a vertex sits, it is left out of the hull,
     the polygon is null, or GEOS raises.
-    {early_finite_check}
+    {early_coord_check}
 
     {ccw_outer}
 
@@ -91,6 +91,7 @@ def convex_hull(
     ```
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
 
     def build(column: pl.Expr, dtype: GeoArrowType) -> pl.Expr:
         if not isinstance(dtype, _ACCEPTED):
@@ -106,7 +107,7 @@ def convex_hull(
             kwargs={
                 "on_row_error": on_row_error,
                 "ccw_outer": ccw_outer,
-                "early_finite_check": early_finite_check,
+                "early_coord_check": early_coord_check,
             },
             is_elementwise=True,
         )

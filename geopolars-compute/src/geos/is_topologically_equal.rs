@@ -8,7 +8,7 @@ use polars_arrow::array::BooleanArray;
 use super::pairs::GeosPairs;
 use super::GeosRow;
 use crate::per_row::optional_bool_array;
-use crate::{row_or_null, GeoComputeResult, OnRowError};
+use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 #[inline(always)]
 fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Option<bool>> {
@@ -33,12 +33,12 @@ pub fn topologically_equal(
     a: &GeometryArray,
     b: &GeometryArray,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<BooleanArray> {
     // TODO: Skip the partner of an empty row, as `intersection` does,
     // with emptiness by vertices as `rows_without_vertices` gives it:
     // `MULTIPOLYGON (EMPTY)` has a part, and GEOS finds it equal to `POLYGON EMPTY`.
-    let pairs = GeosPairs::new(a, b, on_row_error, early_finite_check)?;
+    let pairs = GeosPairs::new(a, b, on_row_error, early_coord_check)?;
     let tested = pairs
         .iter()
         .map(|(a, b)| row_or_null(rows_are_topologically_equal(a, b), on_row_error))

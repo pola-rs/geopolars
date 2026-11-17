@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import OnRowError
+from geopolars._typing import EarlyCoordCheck, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 from geopolars.geo.crs import to_crs
@@ -26,7 +26,7 @@ def shortest_line_between(
     *,
     in_crs: str | None = None,
     on_row_error: OnRowError = "raise",
-    early_finite_check: bool = False,
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """The shortest line between two geometries, row by row, as a `LineStringXY`.
     It runs from the point on `a` closest to `b`, to the point on `b` closest to `a`.
@@ -68,16 +68,17 @@ def shortest_line_between(
     {geos_non_finite}
     GEOS then gives no meaningful answer.
     Depending on where the vertex is, it raises or might give a line that is not the shortest.
-    {early_finite_check}
+    {early_coord_check}
 
     ```python
     df.with_columns(geo.shortest_line_between("house", "road").alias("driveway"))
     ```
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     kwargs = {
         "on_row_error": on_row_error,
-        "early_finite_check": early_finite_check,
+        "early_coord_check": early_coord_check,
     }
 
     def build(

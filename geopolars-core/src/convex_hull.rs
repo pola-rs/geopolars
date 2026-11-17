@@ -2,7 +2,7 @@ use geopolars_compute::geos::{
     line_string_convex_hulls, multi_line_string_convex_hulls, multi_point_convex_hulls,
     multi_polygon_convex_hulls, polygon_convex_hulls,
 };
-use geopolars_compute::OnRowError;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{
     downcast, GeometryArray, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PolygonArray,
@@ -19,9 +19,9 @@ pub fn convex_hulls(
     kind: NestedKind,
     on_row_error: OnRowError,
     ccw_outer: bool,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
-    let early = early_finite_check;
+    let early = early_coord_check;
     match kind {
         NestedKind::LineString => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;

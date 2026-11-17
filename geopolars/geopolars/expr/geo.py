@@ -18,7 +18,7 @@ from geopolars.geo.construct import linestring, point, polygon
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from geopolars._typing import IntoExprColumn, OnRowError
+    from geopolars._typing import EarlyCoordCheck, IntoExprColumn, OnRowError
     from geopolars.datatypes import GeoArrowType
     from geopolars.geo.close_rings import CloseRings
     from geopolars.geo.filter_coordinates import NonFiniteAction
@@ -263,7 +263,7 @@ class ExprGeoNameSpace:
         *,
         on_row_error: OnRowError = "raise",
         ccw_outer: bool = False,
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.convex_hull import convex_hull
 
@@ -271,7 +271,7 @@ class ExprGeoNameSpace:
             self._expr,
             on_row_error=on_row_error,
             ccw_outer=ccw_outer,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def buffer(
@@ -286,7 +286,7 @@ class ExprGeoNameSpace:
         allow_splitting: bool = False,
         ccw_outer: bool = False,
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.buffer import buffer
 
@@ -301,7 +301,7 @@ class ExprGeoNameSpace:
             allow_splitting=allow_splitting,
             ccw_outer=ccw_outer,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def offset_curve(
@@ -313,7 +313,7 @@ class ExprGeoNameSpace:
         mitre_limit: float | None = None,
         allow_splitting: bool = False,
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.offset_curve import offset_curve
 
@@ -325,7 +325,7 @@ class ExprGeoNameSpace:
             mitre_limit=mitre_limit,
             allow_splitting=allow_splitting,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def line_interpolate_point(
@@ -334,7 +334,7 @@ class ExprGeoNameSpace:
         *,
         mode: Literal["absolute", "normalized"] = "absolute",
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.line_interpolate_point import line_interpolate_point
 
@@ -343,7 +343,7 @@ class ExprGeoNameSpace:
             distance,
             mode=mode,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def simplify(
@@ -352,7 +352,7 @@ class ExprGeoNameSpace:
         *,
         preserve_topology: bool = False,
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.simplify import simplify
 
@@ -361,7 +361,7 @@ class ExprGeoNameSpace:
             tolerance,
             preserve_topology=preserve_topology,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def boundary(self) -> pl.Expr:
@@ -499,7 +499,7 @@ class ExprGeoNameSpace:
         other: IntoExprColumn,
         *,
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.is_topologically_equal import is_topologically_equal
 
@@ -507,7 +507,7 @@ class ExprGeoNameSpace:
             self._expr,
             other,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def relate(
@@ -515,7 +515,7 @@ class ExprGeoNameSpace:
         other: IntoExprColumn,
         *,
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.relate import relate
 
@@ -523,7 +523,7 @@ class ExprGeoNameSpace:
             self._expr,
             other,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def shortest_line_between(
@@ -532,7 +532,7 @@ class ExprGeoNameSpace:
         *,
         in_crs: str | None = None,
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.shortest_line_between import shortest_line_between
 
@@ -541,7 +541,7 @@ class ExprGeoNameSpace:
             other,
             in_crs=in_crs,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def intersection(
@@ -552,7 +552,7 @@ class ExprGeoNameSpace:
         allow_splitting: bool = False,
         ccw_outer: bool = False,
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.intersection import intersection
 
@@ -563,7 +563,7 @@ class ExprGeoNameSpace:
             allow_splitting=allow_splitting,
             ccw_outer=ccw_outer,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def difference(
@@ -573,7 +573,7 @@ class ExprGeoNameSpace:
         allow_splitting: bool = False,
         ccw_outer: bool = False,
         on_row_error: OnRowError = "raise",
-        early_finite_check: bool = False,
+        early_coord_check: EarlyCoordCheck = "finite_and_empty",
     ) -> pl.Expr:
         from geopolars.geo.difference import difference
 
@@ -583,7 +583,7 @@ class ExprGeoNameSpace:
             allow_splitting=allow_splitting,
             ccw_outer=ccw_outer,
             on_row_error=on_row_error,
-            early_finite_check=early_finite_check,
+            early_coord_check=early_coord_check,
         )
 
     def hausdorff_line_between(

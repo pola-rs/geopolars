@@ -17,7 +17,7 @@ use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
     OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
 };
-use crate::{GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 impl ToGeos for ScalarLineString<'_> {
     type Geos = Geometry;
@@ -32,7 +32,7 @@ impl ToGeosRows for LineStringArray {
         &self,
         as_empty: Option<&Bitmap>,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
         let size_hint = SizeHint {
@@ -44,7 +44,7 @@ impl ToGeosRows for LineStringArray {
             &axes,
             as_empty,
             on_row_error,
-            early_finite_check,
+            early_coord_check,
             |vertices| vertices,
             |vertices| line_string_to_geos(&axes, vertices),
         )?;
@@ -68,9 +68,9 @@ impl ToGeosRows for MultiLineStringArray {
         &self,
         as_empty: Option<&Bitmap>,
         on_row_error: OnRowError,
-        early_finite_check: bool,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
-        let early = early_finite_check;
+        let early = early_coord_check;
         multi_line_strings_to_geos_rows(self, false, as_empty, on_row_error, early)
     }
 }
@@ -82,7 +82,7 @@ pub(super) fn multi_line_strings_to_geos_rows(
     drop_empty_parts: bool,
     as_empty: Option<&Bitmap>,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<GeosGeometries> {
     let axes = axes(&array.coords);
     let size_hint = SizeHint {
@@ -94,7 +94,7 @@ pub(super) fn multi_line_strings_to_geos_rows(
         &axes,
         as_empty,
         on_row_error,
-        early_finite_check,
+        early_coord_check,
         |parts| array.lines.span(parts),
         |parts| multi_line_string_to_geos(&axes, &array.lines, parts, drop_empty_parts),
     )?;

@@ -6,7 +6,7 @@
 //!
 //! ## `EARLY_FINITE_CHECK`
 //!
-//! The public functions take `early_finite_check`.
+//! The public functions take `early_coord_check`.
 //! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{LineStringArray, MultiLineStringArray, PointArray};
@@ -15,7 +15,7 @@ use geos::Geom;
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
 use super::linestrings::multi_line_strings_to_geos_rows;
 use super::{GeosGeometries, ToGeosRows};
-use crate::{GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// What the distance along the line is measured in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,10 +33,10 @@ pub fn interpolate_line_strings(
     distance: BufferDistance,
     mode: InterpolateMode,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PointArray> {
     interpolate_via_geos(
-        array.to_geos_rows(on_row_error, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         mode,
         on_row_error,
@@ -50,12 +50,12 @@ pub fn interpolate_multi_line_strings(
     distance: BufferDistance,
     mode: InterpolateMode,
     on_row_error: OnRowError,
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PointArray> {
     // An empty part is skipped,
     // as GEOS reads a vertex of every part it walks, beyond the end of an empty one.
     interpolate_via_geos(
-        multi_line_strings_to_geos_rows(array, true, None, on_row_error, early_finite_check)?,
+        multi_line_strings_to_geos_rows(array, true, None, on_row_error, early_coord_check)?,
         distance,
         mode,
         on_row_error,

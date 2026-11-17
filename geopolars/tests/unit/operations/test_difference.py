@@ -33,6 +33,8 @@ from geopolars.datatypes import (
 if TYPE_CHECKING:
     from polars._typing import EngineType
 
+    from geopolars._typing import EarlyCoordCheck
+
 _XY = pl.Struct({"x": pl.Float64, "y": pl.Float64})
 
 Coord = dict[str, float]
@@ -761,8 +763,10 @@ _FINITE_LINE = _xy((0, 0), (1, 0), (1, 1))
 _AROUND = "POLYGON ((-1 -1, 3 -1, 3 3, -1 3, -1 -1))"
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
-def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -> None:
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
+def test_a_row_paired_with_a_null_never_reaches_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     df = pl.DataFrame(
         [
             _wkt("a", PolygonXY(), [None, None, _AROUND]),
@@ -772,14 +776,14 @@ def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -
         ]
     )
 
-    out = df.select(geo.difference("a", "b", early_finite_check=early_finite_check))
+    out = df.select(geo.difference("a", "b", early_coord_check=early_coord_check))
 
     _assert_geometries(out["a"], [None, None, _AROUND])
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_a_row_paired_with_an_empty_a_never_reaches_geos(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     df = pl.DataFrame(
         [
@@ -797,13 +801,13 @@ def test_a_row_paired_with_an_empty_a_never_reaches_geos(
         ]
     )
 
-    out = df.select(geo.difference("a", "b", early_finite_check=early_finite_check))
+    out = df.select(geo.difference("a", "b", early_coord_check=early_coord_check))
 
     expected = ["POLYGON EMPTY", "POLYGON EMPTY", "POLYGON EMPTY", _AROUND]
     _assert_geometries(out["a"], expected)
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 @pytest.mark.parametrize(
     ("one", "empty"),
     [
@@ -813,19 +817,19 @@ def test_a_row_paired_with_an_empty_a_never_reaches_geos(
     ids=["polygon", "point"],
 )
 def test_against_a_single_empty_a_no_row_reaches_geos(
-    one: pl.Series, empty: str, early_finite_check: bool
+    one: pl.Series, empty: str, early_coord_check: EarlyCoordCheck
 ) -> None:
     many = _series("many", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE])
     df = pl.DataFrame(many)
 
     out = df.select(
-        geo.difference(one, "many", early_finite_check=early_finite_check)
+        geo.difference(one, "many", early_coord_check=early_coord_check)
     ).to_series()
 
     assert _to_wkt(out) == [empty, empty]
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 @pytest.mark.parametrize(
     ("a", "expected"),
     [
@@ -835,25 +839,25 @@ def test_against_a_single_empty_a_no_row_reaches_geos(
     ids=["null_and_empty", "null"],
 )
 def test_against_only_null_and_empty_a_a_single_b_never_reaches_geos(
-    a: list[str | None], expected: list[str | None], early_finite_check: bool
+    a: list[str | None], expected: list[str | None], early_coord_check: EarlyCoordCheck
 ) -> None:
     df = pl.DataFrame(_wkt("a", PolygonXY(), a))
     one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
 
-    out = df.select(geo.difference("a", one, early_finite_check=early_finite_check))
+    out = df.select(geo.difference("a", one, early_coord_check=early_coord_check))
 
     assert _to_wkt(out["a"]) == expected
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_against_only_null_b_a_single_a_never_reaches_geos(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     df = pl.DataFrame(_wkt("b", PolygonXY(), [None, None]))
     one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
 
     out = df.select(
-        geo.difference(one, "b", early_finite_check=early_finite_check)
+        geo.difference(one, "b", early_coord_check=early_coord_check)
     ).to_series()
 
     assert out.to_list() == [None, None]
@@ -869,7 +873,7 @@ def test_against_a_null_and_an_empty_b_a_single_a_still_fails() -> None:
         df.select(geo.difference(one, "b"))
 
 
-def _not_finite_lines(**kwargs: bool) -> pl.Series:
+def _not_finite_lines(**kwargs: Any) -> pl.Series:
     """A line that is not finite, then one that is, each minus a square around both."""
     df = pl.DataFrame(
         [
@@ -882,7 +886,7 @@ def _not_finite_lines(**kwargs: bool) -> pl.Series:
 
 def test_geos_raises_on_a_line_that_is_not_finite() -> None:
     with pytest.raises(ComputeError, match="NaN/Inf"):
-        _not_finite_lines()
+        _not_finite_lines(early_coord_check="off")
 
 
 def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
@@ -891,10 +895,13 @@ def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
     _assert_geometries(out, [None, "LINESTRING EMPTY"])
 
 
-def test_the_early_finite_check_raises_before_geos() -> None:
+@pytest.mark.parametrize("early_coord_check", ["finite", "finite_and_empty"])
+def test_the_early_coord_check_raises_before_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
-        _not_finite_lines(early_finite_check=True)
-    out = _not_finite_lines(early_finite_check=True, on_row_error="null")
+        _not_finite_lines(early_coord_check=early_coord_check)
+    out = _not_finite_lines(early_coord_check=early_coord_check, on_row_error="null")
     _assert_geometries(out, [None, "LINESTRING EMPTY"])
 
 
@@ -902,7 +909,7 @@ _OUTER = _xy((0, 0), (4, 0), (4, 4), (0, 4), (0, 0))
 _NOT_FINITE_HOLE = _xy((1, 1), (1, 2), (math.nan, 2), (2, 1), (1, 1))
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 @pytest.mark.parametrize(
     "a",
     [
@@ -912,12 +919,12 @@ _NOT_FINITE_HOLE = _xy((1, 1), (1, 2), (math.nan, 2), (2, 1), (1, 1))
     ids=["line", "hole_of_a_multipolygon"],
 )
 def test_an_empty_b_still_fails_on_an_a_that_is_not_finite(
-    a: pl.Series, early_finite_check: bool
+    a: pl.Series, early_coord_check: EarlyCoordCheck
 ) -> None:
     df = pl.DataFrame([a, _wkt("b", PolygonXY(), ["POLYGON EMPTY"] * 2)])
 
-    def run(**kwargs: bool) -> pl.Series:
-        expr = geo.difference("a", "b", early_finite_check=early_finite_check, **kwargs)
+    def run(**kwargs: Any) -> pl.Series:
+        expr = geo.difference("a", "b", early_coord_check=early_coord_check, **kwargs)
         return df.select(expr)["a"]
 
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
@@ -927,7 +934,7 @@ def test_an_empty_b_still_fails_on_an_a_that_is_not_finite(
 
 @pytest.mark.parametrize("single_first", [True, False])
 def test_on_row_error_null_with_a_single_geometry(single_first: bool) -> None:
-    def run(one: pl.Series, many: pl.Series, **kwargs: bool) -> pl.Series:
+    def run(one: pl.Series, many: pl.Series, **kwargs: Any) -> pl.Series:
         a, b = (one, "many") if single_first else ("many", one)
         return pl.DataFrame(many).select(geo.difference(a, b, **kwargs)).to_series()
 
@@ -938,7 +945,7 @@ def test_on_row_error_null_with_a_single_geometry(single_first: bool) -> None:
 
     bad = _series("one", LineStringXY(), [_NOT_FINITE_LINE])
     squares = _wkt("many", PolygonXY(), [_SQUARE, _SQUARE])
-    with pytest.raises(ComputeError, match="NaN/Inf"):
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         run(bad, squares)
     assert run(bad, squares, on_row_error="null").to_list() == [None, None]
 
@@ -952,7 +959,7 @@ def test_the_namespace_method_passes_its_options_on() -> None:
     assert out["a"].to_list() == [None]
     out = df.select(
         pl.col("a").geo.difference(
-            "b", allow_splitting=True, ccw_outer=True, early_finite_check=True
+            "b", allow_splitting=True, ccw_outer=True, early_coord_check="off"
         )
     )
     assert out["a"].dtype == MultiPolygonXY()
@@ -1059,7 +1066,7 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
     )
     kept = [_kept_parts(shapely.difference(x, y), dimension) for x, y in zip(a, b)]
 
-    def differences(**kwargs: bool) -> pl.Series:
+    def differences(**kwargs: Any) -> pl.Series:
         out = df.select(geo.difference("a", "b", on_row_error="null", **kwargs))
         return out["a"]
 

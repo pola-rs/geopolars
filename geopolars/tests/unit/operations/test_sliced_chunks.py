@@ -147,7 +147,7 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
     ),
     "centroid": (lambda g: geo.centroid(g), {MultiPointXY}),
     "line_interpolate_point": (
-        lambda g: geo.line_interpolate_point(g, 1.5),
+        lambda g: geo.line_interpolate_point(g, 1.5, on_row_error="null"),
         {MultiPointXY, PolygonXY, MultiPolygonXY},
     ),
     "bounds": (lambda g: geo.bounds(g), set()),

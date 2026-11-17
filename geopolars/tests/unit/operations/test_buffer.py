@@ -287,9 +287,11 @@ def test_a_non_finite_vertex_is_caught_early() -> None:
     df = _column(LineStringXY, _line((0, 0), (1, math.nan)), _SEGMENT)
 
     with pytest.raises(ComputeError, match="finite"):
-        _buffered(df, 1.0, early_finite_check=True)
+        _buffered(df, 1.0, early_coord_check="finite_and_empty")
 
-    [caught, line] = _buffered(df, 1.0, early_finite_check=True, on_row_error="null")
+    [caught, line] = _buffered(
+        df, 1.0, early_coord_check="finite_and_empty", on_row_error="null"
+    )
     assert caught is None
     assert line is not None
 
