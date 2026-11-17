@@ -960,14 +960,19 @@ _OUTER = _xy((0, 0), (4, 0), (4, 4), (0, 4), (0, 0))
 _NOT_FINITE_HOLE = _xy((1, 1), (1, 2), (math.nan, 2), (2, 1), (1, 1))
 
 
-@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
+_EMPTY_POINT_LINE = _xy((0, 0), (math.nan, math.nan), (2, 2))
+
+
+# `"finite"` leaves an empty point to GEOS, but a copy of `a` never goes there.
+@pytest.mark.parametrize("early_coord_check", ["off", "finite", "finite_and_empty"])
 @pytest.mark.parametrize(
     "a",
     [
         _series("a", LineStringXY(), [_FINITE_LINE, _NOT_FINITE_LINE]),
         _series("a", MultiPolygonXY(), [[[_OUTER]], [[_OUTER, _NOT_FINITE_HOLE]]]),
+        _series("a", LineStringXY(), [_FINITE_LINE, _EMPTY_POINT_LINE]),
     ],
-    ids=["line", "hole_of_a_multipolygon"],
+    ids=["line", "hole_of_a_multipolygon", "empty_point_in_a_line"],
 )
 def test_an_empty_b_still_fails_on_an_a_that_is_not_finite(
     a: pl.Series, early_coord_check: EarlyCoordCheck

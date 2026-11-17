@@ -243,6 +243,30 @@ def test_a_multipolygon_hull_carries_the_crs() -> None:
 _HALF_NAN = _line((0, 0), (4, 0), (2, float("nan")), (4, 4), (0, 4))
 
 
+_WITH_AN_EMPTY_POINT = _line((0, 0), (4, 0), (float("nan"), float("nan")), (0, 4))
+
+
+def test_finite_leaves_an_empty_point_to_geos() -> None:
+    df = _multipoints(_WITH_AN_EMPTY_POINT)
+
+    out = df.select(geo.convex_hull("polygon", early_coord_check="finite"))
+
+    triangle = _line((0, 0), (0, 4), (4, 0), (0, 0))
+    assert out.to_series().ext.storage().to_list() == [[triangle]]
+
+
+def test_finite_and_empty_refuses_an_empty_point() -> None:
+    df = _multipoints(_WITH_AN_EMPTY_POINT)
+
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
+        df.select(geo.convex_hull("polygon", early_coord_check="finite_and_empty"))
+
+
+def test_finite_still_refuses_a_vertex_with_one_nan_axis() -> None:
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
+        _lines(_HALF_NAN).select(geo.convex_hull("polygon", early_coord_check="finite"))
+
+
 def test_a_geometry_geos_fails_on_raises_by_default() -> None:
     df = _lines(_HALF_NAN, _line((0, 0), (4, 0), (4, 4), (0, 4)))
 

@@ -310,6 +310,16 @@ def test_a_non_finite_vertex_is_caught_early() -> None:
     assert line is not None
 
 
+def test_finite_leaves_an_empty_point_inside_a_geometry_to_geos() -> None:
+    df = _column(MultiPointXY, _line((0, 0), (math.nan, math.nan), (4, 0)))
+
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
+        _buffered(df, 1.0)
+    assert _areas(df, 1.0, early_coord_check="finite") == pytest.approx(
+        _areas(_column(MultiPointXY, _line((0, 0), (4, 0))), 1.0)
+    )
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

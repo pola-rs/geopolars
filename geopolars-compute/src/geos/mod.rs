@@ -6,17 +6,18 @@
 //!
 //! # Const generic flags
 //!
-//! ## `EARLY_FINITE_CHECK`
+//! ## `EARLY_COORD_CHECK`
 //!
-//! Converting rows to GEOS, and the convex hulls, are generic over `EARLY_FINITE_CHECK`.
-//! [`ToGeosRows`] sets it from `early_coord_check`:
-//! [EarlyCoordCheck::Finite] and [EarlyCoordCheck::FiniteAndEmpty] both set it,
-//! as GEOS takes no empty point inside a geometry either.
-//! If `EARLY_FINITE_CHECK=true`, a row with a NaN or infinite x or y never goes to GEOS.
+//! Converting rows to GEOS, and the convex hulls, are generic over `EARLY_COORD_CHECK`,
+//! an [EarlyCoordCheck] set from `early_coord_check`.
+//! With [EarlyCoordCheck::FiniteAndEmpty], a row with a NaN or infinite x or y never goes to GEOS.
 //! It is an error instead, which `on_row_error` treats like a GEOS error.
-//! For a point, the empty point (x and y NaN) is the exception.
-//! If `EARLY_FINITE_CHECK=false`, those coordinates go to GEOS as they are.
+//! [EarlyCoordCheck::Finite] lets an empty point (x and y NaN) through to GEOS.
+//! With [EarlyCoordCheck::Off], every coordinate goes to GEOS as it is.
 //! See `early_coord_check` in Python for what GEOS makes of them.
+//!
+//! Converting points takes a bool `EARLY_FINITE_CHECK` instead, set unless [EarlyCoordCheck::Off]:
+//! a point that is itself the empty point passes either check, as GEOS supports it.
 //!
 //! ## `ALL_VALID`
 //!
@@ -354,8 +355,8 @@ fn rows_to_geos(
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<GeosRows> {
     with_const_flags!(
-        ALL_VALID = rows.is_all_valid(), EARLY_FINITE_CHECK = early_coord_check != EarlyCoordCheck::Off;
-        rows_to_geos_with::<ALL_VALID, EARLY_FINITE_CHECK>(
+        ALL_VALID = rows.is_all_valid(), EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
+        rows_to_geos_with::<ALL_VALID, EARLY_COORD_CHECK>(
             rows,
             axes,
             as_empty,
@@ -368,7 +369,7 @@ fn rows_to_geos(
 
 /// See [`rows_to_geos`].
 /// Errors are the exception, so `on_row_error` is checked per row rather than made const.
-fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
+fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
     rows: &List,
     axes: &Axes,
     as_empty: Option<&Bitmap>,
@@ -388,12 +389,14 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
         geometries.push(if parts.is_empty() || is_taken_as_empty(as_empty, i) {
             Some(GeosRow::Empty)
         } else {
-            let geometry = if EARLY_FINITE_CHECK {
-                let coords = span(parts.clone());
-                xy_is_finite_or_error(&x[coords.clone()], &y[coords]).and_then(|()| to_geos(parts))
-            } else {
-                to_geos(parts)
-            };
+            let geometry =
+                if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
+                    to_geos(parts)
+                } else {
+                    let coords = span(parts.clone());
+                    coords_pass_early_check::<EARLY_COORD_CHECK>(&x[coords.clone()], &y[coords])
+                        .and_then(|()| to_geos(parts))
+                };
             row_or_null(geometry.map(Some), on_row_error)?.map(GeosRow::Geometry)
         });
     }
@@ -435,6 +438,37 @@ fn xy_is_finite_or_error(x: &[f64], y: &[f64]) -> GeoComputeResult<()> {
         .find(|(x, y)| !(x.is_finite() && y.is_finite()))
         .expect("a non-finite coordinate, as the check above failed");
     Err(GeoComputeError::GeosNotFinite { position })
+}
+
+/// [xy_is_finite_or_error], letting an empty point (x and y NaN) through.
+#[inline(always)]
+fn xy_is_finite_or_empty_or_error(x: &[f64], y: &[f64]) -> GeoComputeResult<()> {
+    let passes = |x: f64, y: f64| (x.is_finite() & y.is_finite()) | is_geoarrow_empty_point(x, y);
+    // Does not stop at the first that fails, so that it vectorises.
+    let every_passes = x.iter().zip(y).fold(true, |ok, (&x, &y)| ok & passes(x, y));
+    if every_passes {
+        return Ok(());
+    }
+    let position = x
+        .iter()
+        .zip(y)
+        .map(|(&x, &y)| (x, y))
+        .find(|&(x, y)| !passes(x, y))
+        .expect("a failing coordinate, as the check above failed");
+    Err(GeoComputeError::GeosNotFinite { position })
+}
+
+/// The check of `early_coord_check` on the x and y of one row.
+#[inline(always)]
+fn coords_pass_early_check<const EARLY_COORD_CHECK: u8>(
+    x: &[f64],
+    y: &[f64],
+) -> GeoComputeResult<()> {
+    match const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } {
+        EarlyCoordCheck::Off => Ok(()),
+        EarlyCoordCheck::Finite => xy_is_finite_or_empty_or_error(x, y),
+        EarlyCoordCheck::FiniteAndEmpty => xy_is_finite_or_error(x, y),
+    }
 }
 
 /// The coordinates at `vertices`, copied from `axes` in one go.

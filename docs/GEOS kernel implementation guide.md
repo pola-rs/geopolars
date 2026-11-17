@@ -115,8 +115,9 @@ foregoing the need to convert its partner in the other column.
 
 - A GEOS kernel defaults to `early_coord_check="finite_and_empty"`.
   The check runs during the conversion to GEOS.
-- `"finite"` refuses an empty point inside a geometry too, as GEOS takes none,
-  so it behaves like `"finite_and_empty"`.
+- `"finite"` lets an empty point inside a geometry through to GEOS.
+  GEOS is allowed to deal with the empty point as it normally would,
+  which in most cases means dropping it.
   An empty point on its own passes with either, as GEOS supports it.
 - If the check can be turned off,
   the module documents what GEOS does with non-finite input then,

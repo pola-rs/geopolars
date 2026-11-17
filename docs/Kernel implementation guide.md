@@ -19,7 +19,6 @@ Read them as follows:
 
 | In the code | In these guides |
 | - | - |
-| `EARLY_FINITE_CHECK` | `early_coord_check` |
 | `unique_z`, `unique_m` | `include_z`, `include_m` |
 | `NULLS` | `ALL_VALID`, which is its opposite |
 

@@ -25,8 +25,9 @@
 //!
 //! # Const generic flags
 //!
-//! See [super] for `EARLY_FINITE_CHECK`.
-//! If `EARLY_FINITE_CHECK=false`, what happens to NaN coordinates depends on where they are placed.
+//! See [super] for `EARLY_COORD_CHECK`.
+//! With [EarlyCoordCheck::Off], what happens to NaN coordinates depends on where they are placed.
+//! With [EarlyCoordCheck::Finite], the same goes for empty points, the first three cases.
 //! - only empty points (x and y NaN) -> a `POINT (NaN NaN)`, so the row is null
 //! - an empty point first, then real ones -> also a `POINT (NaN NaN)`,
 //!   so the row is silently null, even with `on_row_error=`[OnRowError::Raise];
@@ -34,7 +35,7 @@
 //! - a vertex with just one NaN axis -> an error ("orientationIndex encountered NaN/Inf numbers").
 //!   So the error is returned, or with `on_row_error=`[OnRowError::Null] the row is null.
 //!
-//! If `EARLY_FINITE_CHECK=true`, each of these rows fails the same way a GEOS error does,
+//! With [EarlyCoordCheck::FiniteAndEmpty], each of these rows fails the same way a GEOS error does,
 //! which makes this consistent.
 //!
 //!
@@ -49,7 +50,7 @@ use geopolars_views::{
 };
 use geos::{CoordSeq, Geom, Geometry, GeometryTypes};
 
-use super::{axes, xy_is_finite_or_error, GeosGeometries, GeosRow, GeosRows};
+use super::{axes, coords_pass_early_check, GeosGeometries, GeosRow, GeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
 // TODO: a geometry crossing the antimeridian is hulled the long way round.
@@ -178,8 +179,8 @@ fn hulls(
     let hulls = with_const_flags!(
         Z = has_z,
         ALL_VALID = rows.is_all_valid(),
-        EARLY_FINITE_CHECK = early_coord_check != EarlyCoordCheck::Off;
-        hulls_with::<Z, ALL_VALID, EARLY_FINITE_CHECK>(
+        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
+        hulls_with::<Z, ALL_VALID, EARLY_COORD_CHECK>(
             rows,
             coords,
             on_row_error,
@@ -194,7 +195,7 @@ fn hulls(
 /// The size hint is an upper bound:
 /// a row's hull is one ring, which closes on at most one coordinate more than the row has.
 /// Errors are the exception, so `on_row_error` is checked per row rather than made const.
-fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
+fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
     rows: &List,
     coords: &ValidCoords,
     on_row_error: OnRowError,
@@ -212,9 +213,7 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_FINITE_CHECK: bo
 
     // `None` if it is not a polygon (the hull collapsed)
     let hull = |row_x: &[f64], row_y: &[f64], row_z: &[f64]| {
-        if EARLY_FINITE_CHECK {
-            xy_is_finite_or_error(row_x, row_y)?;
-        }
+        coords_pass_early_check::<EARLY_COORD_CHECK>(row_x, row_y)?;
         let seq = CoordSeq::new_from_arrays(row_x, row_y, Z.then_some(row_z), None)?;
         let hull = Geometry::create_line_string(seq)?.convex_hull()?;
         debug_assert!(!hull.is_empty()?, "Check before offset should catch this");

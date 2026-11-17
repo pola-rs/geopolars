@@ -248,11 +248,14 @@ fn difference_rows(
         (GeosRow::Geometry(a) | GeosRow::Unchanged(a), GeosRow::Empty) => {
             // A copy refuses a non-finite x or y whatever `early_coord_check` is,
             // so that the option never changes a copied row.
-            // Unless `early_coord_check=`[EarlyCoordCheck::Off], converting `a` has already done so.
+            // With `early_coord_check=`[EarlyCoordCheck::FiniteAndEmpty],
+            // converting `a` has already done so.
+            // [EarlyCoordCheck::Finite] lets an empty point through to GEOS,
+            // but a copy never goes there, so it is refused here.
             // GEOS itself does not fail on every such vertex
             // (a line minus a polygon it does not touch keeps a NaN),
             // so a copied row can be stricter than one GEOS computes.
-            let finite = if early_coord_check != EarlyCoordCheck::Off {
+            let finite = if early_coord_check == EarlyCoordCheck::FiniteAndEmpty {
                 Ok(())
             } else {
                 difference_rows_xy_is_finite_or_error(a)
