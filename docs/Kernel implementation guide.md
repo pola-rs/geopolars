@@ -25,9 +25,6 @@ Read them as follows:
 
 The arguments are described in [Common arguments](<Common arguments.md>).
 
-The `utils` module of `geopolars-compute` does not exist yet either.
-See [Helpers](#helpers) for what goes there.
-
 ## The entry point
 
 A kernel has one public function for each geometry kind it accepts,
@@ -162,8 +159,7 @@ Where a helper goes depends on what it costs:
   by native kernels, GEOS kernels or both,
   directly in that module, without sub-modules.
   This includes filters, and anything that loops over the coordinates, allocates or writes,
-  such as `with_ranges_reversed`, `copy_ranges`, `gathered` and `with_null_at`,
-  which are in the views now.
+  such as `with_ranges_reversed`, `copy_ranges`, `gathered` and `with_null_at`.
 - The shared infrastructure that kernels are built on is located in the root modules.
   A small helper in one of those modules that is not part of its infrastructure belongs in `utils`.
 - A kernel module only holds helpers for that kernel alone.

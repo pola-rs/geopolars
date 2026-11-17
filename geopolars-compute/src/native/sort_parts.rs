@@ -38,6 +38,7 @@ use std::ops::Range;
 
 use super::is_valid::is_closed_or_empty;
 use super::rings::offsets_of;
+use crate::utils::{copy_ranges, gathered, with_null_at};
 use crate::{GeoComputeError, GeoComputeResult, OnRowError};
 use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
@@ -655,7 +656,7 @@ fn lists_in_order<E: RingEntry>(
         ValidList::from_offsets(offsets_of(
             order.clone().map(|entry| lists.range(entry.ring()).len()),
         )),
-        coords.copy_ranges(order.flat_map(|entry| entry.pieces(lists))),
+        copy_ranges(coords, order.flat_map(|entry| entry.pieces(lists))),
     )
 }
 
@@ -679,7 +680,7 @@ fn rows_null_where_not_closed<const Z: bool, L: Iterator<Item = Range<usize>>>(
             failed.push(i);
         }
     }
-    Ok(rows.clone().with_null_at(&failed))
+    Ok(with_null_at(rows.clone(), &failed))
 }
 
 fn multi_points_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool>(
@@ -692,7 +693,7 @@ fn multi_points_sorted_with<const Z: bool, const M: bool, const DESCENDING: bool
     let coords = if is_unchanged(&order) {
         array.coords.clone()
     } else {
-        array.coords.gathered(&order)
+        gathered(&array.coords, &order)
     };
     MultiPointArray::from_parts(array.rows.clone(), coords)
 }
@@ -719,9 +720,10 @@ fn line_strings_with_rings_rotated_with<const Z: bool, const M: bool>(
         array.coords.clone()
     } else {
         let lines = rows.ignoring_validity();
-        array
-            .coords
-            .copy_ranges(order.iter().flat_map(|entry| entry.pieces(lines)))
+        copy_ranges(
+            &array.coords,
+            order.iter().flat_map(|entry| entry.pieces(lines)),
+        )
     };
     Ok(LineStringArray::from_parts(rows, coords))
 }

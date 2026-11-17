@@ -39,6 +39,7 @@ use polars_arrow::offset::Offsets;
 use super::coordinate_selection::{is_empty_point, is_non_finite_value};
 use super::{selected_coords, CoordinateSelection, NonFinite};
 use crate::passing::rows_passing;
+use crate::utils::with_null_at;
 use crate::{GeoComputeError, GeoComputeResult, OnRowError};
 
 fn search_leaves_out_non_finite(failing: NonFinite) -> bool {
@@ -475,7 +476,10 @@ impl Lines {
     }
 
     fn into_array(self, validity: Option<Bitmap>) -> LineStringArray {
-        let rows = List::from_offsets(self.offsets.into(), validity).with_null_at(&self.failed);
+        let rows = with_null_at(
+            List::from_offsets(self.offsets.into(), validity),
+            &self.failed,
+        );
         LineStringArray::from_parts(
             rows,
             ValidCoords::from_axes((self.x, self.y, self.z, self.m)),

@@ -27,6 +27,7 @@ use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
 use super::concatenated::{concatenate_parts_onto_geometry, Built, Nested};
 use crate::inner_nulls::MaskedParts;
+use crate::utils::copy_ranges;
 
 /// Which of a polygon's rings `rings` to keep.
 type Keep = fn(Range<usize>) -> Range<usize>;
@@ -98,7 +99,7 @@ fn exteriors(
     let spans = kept.map(|kept| rings.span(kept));
     LineStringArray::from_parts(
         List::from_offsets(offsets_of(spans.clone().map(|span| span.len())), validity),
-        coords.copy_ranges(spans),
+        copy_ranges(coords, spans),
     )
 }
 
@@ -118,7 +119,7 @@ fn interiors(
         List::from_offsets(offsets_of(kept.clone().map(|kept| kept.len())), validity),
         ValidList::from_offsets(offsets_of(ring_lengths)),
         // Copied as in `exteriors`.
-        coords.copy_ranges(kept.map(|kept| rings.span(kept))),
+        copy_ranges(coords, kept.map(|kept| rings.span(kept))),
     )
 }
 

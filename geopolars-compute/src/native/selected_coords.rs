@@ -38,6 +38,7 @@ use polars_arrow::offset::OffsetsBuffer;
 use super::coordinate_selection::{selected_coords, which_are_not_selected, CoordinateSelection};
 use super::rings::offsets_of;
 use crate::passing::valid_rows_passing;
+use crate::utils::copy_ranges;
 use crate::ShortLines;
 
 /// See `action` of `NonFinite` and `OutOfBounds` in Python.
@@ -199,7 +200,7 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
     }
     (
         offsets_of(lengths.into_iter()),
-        coords.copy_ranges(merged_where_contiguous(runs.iter().cloned())),
+        copy_ranges(coords, merged_where_contiguous(runs.iter().cloned())),
         passing,
     )
 }

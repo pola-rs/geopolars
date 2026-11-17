@@ -26,6 +26,7 @@ use geopolars_views::{
 use polars_arrow::offset::Offsets;
 
 use super::rings::offsets_of;
+use crate::utils::{copy_ranges, with_ranges_reversed};
 
 /// `coords` with the exterior of each of `polygons` reversed,
 /// or every ring if `REVERSE_HOLES=true`.
@@ -36,12 +37,12 @@ fn reverse_rings<const REVERSE_HOLES: bool>(
     coords: &ValidCoords,
 ) -> ValidCoords {
     if REVERSE_HOLES {
-        coords.with_ranges_reversed(rings.ranges())
+        with_ranges_reversed(coords, rings.ranges())
     } else {
         let exteriors = polygons
             .filter(|polygon| !polygon.is_empty())
             .map(|polygon| rings.range(polygon.start));
-        coords.with_ranges_reversed(exteriors)
+        with_ranges_reversed(coords, exteriors)
     }
 }
 
@@ -83,20 +84,27 @@ fn polygons_in_reverse_order(array: &MultiPolygonArray) -> MultiPolygonArray {
             reordered.clone().map(|j| polygons.range(j).len()),
         )),
         ValidList::from_offsets(offsets_of(ring_lengths)),
-        array
-            .coords
-            .copy_ranges(reordered.map(|j| rings.span(polygons.range(j)))),
+        copy_ranges(
+            &array.coords,
+            reordered.map(|j| rings.span(polygons.range(j))),
+        ),
     )
 }
 
 pub fn reverse_line_strings(array: &LineStringArray) -> LineStringArray {
     let rows = array.rows.ignoring_validity().ranges();
-    LineStringArray::from_parts(array.rows.clone(), array.coords.with_ranges_reversed(rows))
+    LineStringArray::from_parts(
+        array.rows.clone(),
+        with_ranges_reversed(&array.coords, rows),
+    )
 }
 
 pub fn reverse_multi_points(array: &MultiPointArray) -> MultiPointArray {
     let rows = array.rows.ignoring_validity().ranges();
-    MultiPointArray::from_parts(array.rows.clone(), array.coords.with_ranges_reversed(rows))
+    MultiPointArray::from_parts(
+        array.rows.clone(),
+        with_ranges_reversed(&array.coords, rows),
+    )
 }
 
 pub fn reverse_polygons<const REVERSE_HOLES: bool>(array: &PolygonArray) -> PolygonArray {
@@ -117,13 +125,13 @@ pub fn reverse_multi_line_strings<const NESTED: bool>(
         MultiLineStringArray::from_parts(
             array.rows.clone(),
             parts_reversed_per_row(rows, lines),
-            array.coords.with_ranges_reversed(spans),
+            with_ranges_reversed(&array.coords, spans),
         )
     } else {
         MultiLineStringArray::from_parts(
             array.rows.clone(),
             lines.clone(),
-            array.coords.with_ranges_reversed(lines.ranges()),
+            with_ranges_reversed(&array.coords, lines.ranges()),
         )
     }
 }
