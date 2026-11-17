@@ -62,7 +62,7 @@ fn has_only_rings<const Z: bool>(
             return polygon
                 .rings()
                 .skip(1)
-                .all(|hole| is_ring::<Z>(hole.coords, hole.vertices));
+                .all(|hole| hole.vertices.is_empty() || is_ring::<Z>(hole.coords, hole.vertices));
         }
         return polygon.rings().all(|ring| ring.vertices.is_empty());
     }
@@ -73,7 +73,7 @@ fn has_only_rings<const Z: bool>(
 
 /// Whether every ring of each polygon is a ring, or every one is empty (the empty polygon).
 /// With `empty_polygon_exterior=`[EmptyPolygonExterior::Keep],
-/// an empty exterior may also have holes that are rings.
+/// an empty exterior may also have holes that are rings or empty.
 pub fn polygons_have_only_rings<const Z: bool>(
     array: &PolygonArray,
     empty_polygon_exterior: EmptyPolygonExterior,

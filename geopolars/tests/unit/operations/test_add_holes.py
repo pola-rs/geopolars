@@ -200,8 +200,15 @@ def test_a_dropped_hole_takes_no_room_in_an_empty_polygon() -> None:
     assert out.ext.storage().to_list() == [[]]
 
 
-def test_an_empty_hole_can_be_added_to_an_empty_polygon() -> None:
-    out = _added(_polygons([], [[]]), _lines([], []))
+@pytest.mark.parametrize("empty_polygon_exterior", ["null", "error", "empty", "keep"])
+def test_an_empty_hole_can_be_added_to_an_empty_polygon(
+    empty_polygon_exterior: str,
+) -> None:
+    out = _added(
+        _polygons([], [[]]),
+        _lines([], []),
+        empty_polygon_exterior=empty_polygon_exterior,
+    )
 
     assert out.ext.storage().to_list() == [[[]], [[], []]]
 
