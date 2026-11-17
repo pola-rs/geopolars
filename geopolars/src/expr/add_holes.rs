@@ -1,16 +1,15 @@
 //! Adding holes to polygons, from another column.
 //! Implements the Python `add_holes`.
 
-use geopolars_compute::{EmptyPolygonExterior, OnRowError};
-use geopolars_core::NullParts;
+use geopolars_compute::{EmptyPolygonExterior, NullParts, OnRowError};
 use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
-use super::construct::{fields_of, listed_parts, paired_rows, parts_storage, NullPartsDef};
-use crate::common_arguments::{EmptyPolygonExteriorDef, OnRowErrorDef};
+use super::construct::{fields_of, listed_parts, paired_rows, parts_storage};
+use crate::common_arguments::{EmptyPolygonExteriorDef, NullPartsDef, OnRowErrorDef};
 use crate::geoarrow::{describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 
 /// The keyword arguments of the Python `add_holes`.

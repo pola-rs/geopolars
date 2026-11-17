@@ -1,14 +1,14 @@
 use geopolars_compute::native::{
     have_room_for_holes, polygons_with_added_holes, polygons_with_empty_exteriors,
 };
-use geopolars_compute::{EmptyPolygonExterior, GeoComputeError, OnRowError};
+use geopolars_compute::{EmptyPolygonExterior, GeoComputeError, NullParts, OnRowError};
 use geopolars_views::{downcast, GeometryArray, PolygonArray};
 use polars_arrow::array::Array;
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_core::prelude::PolarsResult;
 
-use crate::parts::{lines_per_row, rows_validity, validated_polygons, CloseRings, NullParts};
+use crate::parts::{lines_per_row, rows_validity, validated_polygons, CloseRings};
 use crate::IntoPolarsResult;
 
 fn null_count(validity: &Option<Bitmap>) -> usize {

@@ -11,11 +11,10 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import EmptyPolygonExterior, OnRowError
+from geopolars._typing import EmptyPolygonExterior, NullParts, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import PolygonType
 from geopolars.geo._dispatch import _to_expr, on_geometry
-from geopolars.geo.add_parts import NullParts
 
 if TYPE_CHECKING:
     import polars as pl

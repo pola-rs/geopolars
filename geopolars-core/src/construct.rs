@@ -4,14 +4,14 @@ use geopolars_compute::inner_nulls::{
     propagate_inner_nulls_of_polygons,
 };
 use geopolars_compute::native::polygons_with_added_holes;
-use geopolars_compute::EmptyPolygonExterior;
+use geopolars_compute::{EmptyPolygonExterior, NullParts};
 use geopolars_views::{GeometryArray, UncheckedStorage};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
 
 use crate::parts::{
     lines_per_row, one_ring_per_polygon, one_ring_per_row, rows_validity, validated_multi_polygons,
-    validated_polygons, CloseRings, NullParts,
+    validated_polygons, CloseRings,
 };
 use crate::NestedKind;
 

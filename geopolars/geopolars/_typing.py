@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 OnRowError = Literal["null", "raise"]
 EarlyCoordCheck = Literal["off", "finite", "finite_and_empty"]
+NullParts = Literal["drop", "null"]
 ShortLines = Literal["null", "keep", "empty"]
 EmptyPolygonExterior = Literal["keep", "null", "error", "empty"]
 NewRingOrientation = Literal["keep", "ccw", "cw"]

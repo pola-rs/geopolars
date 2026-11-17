@@ -74,7 +74,7 @@ pub use length::lengths;
 pub use line_interpolate_point::interpolated_points;
 pub use offset_curve::offset_curves;
 pub use overlay::{overlay, OverlayOptions};
-pub use parts::{CloseRings, NullParts};
+pub use parts::CloseRings;
 pub use relate::relate;
 pub use remove_repeats_in_succession::without_repeats_in_succession;
 pub use reverse::reverse;

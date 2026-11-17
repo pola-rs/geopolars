@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import NullParts
 from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import _to_expr, on_geometry
 
@@ -16,7 +17,6 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
-NullParts = Literal["drop", "null"]
 EmptyParts = Literal["keep", "drop"]
 
 

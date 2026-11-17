@@ -1,7 +1,8 @@
 //! The serde mappings of the arguments that `docs/Common arguments.md` documents.
 
 use geopolars_compute::{
-    EarlyCoordCheck, EmptyPolygonExterior, NewHoles, NewRingOrientation, OnRowError, ShortLines,
+    EarlyCoordCheck, EmptyPolygonExterior, NewHoles, NewRingOrientation, NullParts, OnRowError,
+    ShortLines,
 };
 use serde::Deserialize;
 
@@ -18,6 +19,13 @@ pub(crate) enum EarlyCoordCheckDef {
     Off,
     Finite,
     FiniteAndEmpty,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "NullParts", rename_all = "snake_case")]
+pub(crate) enum NullPartsDef {
+    Drop,
+    Null,
 }
 
 #[derive(Deserialize)]

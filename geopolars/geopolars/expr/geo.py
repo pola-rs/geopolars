@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         IntoExprColumn,
         NewHoles,
         NewRingOrientation,
+        NullParts,
         OnRowError,
         ShortLines,
     )
@@ -66,7 +67,7 @@ class ExprGeoNameSpace:
         *,
         crs: str | None = None,
         close: CloseRings | None = None,
-        null_parts: Literal["drop", "null"] = "null",
+        null_parts: NullParts = "null",
     ) -> pl.Expr:
         return polygon.polygons_from_rings_in_separate_columns(
             self._expr, holes, crs=crs, close=close, null_parts=null_parts
@@ -386,7 +387,7 @@ class ExprGeoNameSpace:
         holes: IntoExprColumn,
         *,
         close: CloseRings | None = None,
-        null_parts: Literal["drop", "null"] = "null",
+        null_parts: NullParts = "null",
         empty_polygon_exterior: EmptyPolygonExterior = "null",
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
@@ -405,7 +406,7 @@ class ExprGeoNameSpace:
         self,
         parts: IntoExprColumn,
         *,
-        null_parts: Literal["drop", "null"] = "null",
+        null_parts: NullParts = "null",
         empty_parts: Literal["keep", "drop"] = "keep",
     ) -> pl.Expr:
         from geopolars.geo.add_parts import add_parts

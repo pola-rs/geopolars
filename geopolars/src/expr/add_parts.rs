@@ -1,14 +1,14 @@
 //! Adding parts to geometries, from another column.
 //! Implements the Python `add_parts`.
 
-use geopolars_core::{EmptyParts, NullParts};
+use geopolars_compute::NullParts;
+use geopolars_core::EmptyParts;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::construct::{
-    fields_of, listed_parts, paired_rows, part_kinds, parts_storage, NullPartsDef,
-};
+use super::construct::{fields_of, listed_parts, paired_rows, part_kinds, parts_storage};
+use crate::common_arguments::NullPartsDef;
 use crate::geoarrow::{describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 
 #[derive(Deserialize)]

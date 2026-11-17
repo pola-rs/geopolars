@@ -8,7 +8,7 @@ use geopolars_compute::inner_nulls::{
 use geopolars_compute::native::{
     close_open_rings, multi_polygons_have_only_rings, polygons_have_only_rings,
 };
-use geopolars_compute::{with_const_flags, EmptyPolygonExterior};
+use geopolars_compute::{with_const_flags, EmptyPolygonExterior, NullParts};
 use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
     PolygonArray, UncheckedStorage, ValidCoords, ValidList,
@@ -24,16 +24,6 @@ use polars_core::prelude::PolarsResult;
 pub struct CloseRings {
     pub snap_z: bool,
     pub snap_m: bool,
-}
-
-/// What a null part does to the geometry it is added to.
-#[derive(Debug, Clone, Copy, Default)]
-pub enum NullParts {
-    /// The null part is left out.
-    Drop,
-    /// The null part makes the result null.
-    #[default]
-    Null,
 }
 
 /// Closes the open `rings` like [`close_open_rings`], or gives `None` if no ring changed.
