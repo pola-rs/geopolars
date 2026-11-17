@@ -136,15 +136,14 @@ Empty and invalid geometries stay empty or invalid.""",
 This expression handles errors per row, following the `OnRowError` rules.
 See `on_row_error` on the Common arguments page (`docs/Common arguments.md`).""",
     "geos_errors": """\
-A geometry GEOS fails on raises GEOS's error, failing the query.
-With `on_row_error="null"`, it gives a null {output} instead.""",
+A geometry GEOS fails on raises GEOS's error, failing the query.""",
     "geos_non_finite": """\
 GEOS supports neither empty points inside a geometry (a vertex with NaN on every axis)
 nor any other NaN or infinite x or y.
 With `early_coord_check="off"`, they go to GEOS as they are.""",
     "early_coord_check": """\
 By default (`early_coord_check="finite_and_empty"`), a geometry with such a vertex never reaches GEOS:
-it raises, or gives a null {output} with `on_row_error="null"`.
+it raises instead.
 `"finite"` only catches the vertices with a NaN or infinite x or y that are not an empty point,
 and lets an empty point through to GEOS.
 GEOS is allowed to deal with the empty point, which in most cases means silently dropping it.

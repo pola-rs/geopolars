@@ -51,7 +51,6 @@ def offset_curve(
     or a column (or expression) with one distance per geometry.
     A null distance gives a null linestring.
     A NaN or infinite distance in a column raises.
-    With `on_row_error="null"`, such a row gives a null linestring instead.
 
     Only linestrings and multilinestrings are accepted.
     The output is always XY:

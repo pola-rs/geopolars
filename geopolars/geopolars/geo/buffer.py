@@ -76,7 +76,6 @@ def buffer(
     or a column (or expression) with one distance per geometry.
     A null distance gives a null polygon.
     A NaN or infinite distance in a column raises, as does a negative one with `side`.
-    With `on_row_error="null"`, such a row gives a null polygon instead.
 
     A point, linestring or polygon gives a polygon.
     Their multi-variants give a multipolygon,

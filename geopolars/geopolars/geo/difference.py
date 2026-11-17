@@ -81,8 +81,7 @@ def difference(
     {geos_non_finite}
     {early_coord_check}
     A row where `b` is empty does not go to GEOS,
-    but raises on such a vertex in `a` whatever `early_coord_check` is
-    (or gives a null {output} with `on_row_error="null"`).
+    but raises on such a vertex in `a` whatever `early_coord_check` is.
     GEOS itself does not raise on every such vertex,
     so this row can be stricter than one that GEOS computes.
 

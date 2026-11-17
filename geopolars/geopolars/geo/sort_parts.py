@@ -93,14 +93,13 @@ def sort_parts(
 
     With `rings="rotate"`, every ring has to be closed (see `close_rings`), or empty.
     Otherwise this raises.
-    With `on_row_error="null"`, such a row gives a null geometry instead.
-    {on_row_error}
     The linestrings that the table says are rotated count as rings too.
     They are not checked for being a ring first,
     so an open one is not left as it is, but treated the same way.
     A ring of fewer than four vertices is fine, unlike for `is_ring`.
     A ring whose first vertex has NaN in x, y, or z never counts as closed,
     as NaN does not equal itself.
+    {on_row_error}
 
     {empty_and_null}
 

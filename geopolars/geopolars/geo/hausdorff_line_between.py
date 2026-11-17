@@ -77,7 +77,6 @@ def hausdorff_line_between(
     Neither changes which vertex is the empty point.
     A point row that is the empty point is an empty geometry, not a geometry with an empty vertex.
     It therefore never raises.
-    A geometry that would raise gives a null line instead if `on_row_error="null"`.
     {on_row_error}
 
     {same_crs_pair}
