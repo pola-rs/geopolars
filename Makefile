@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: install install-release wheel docs polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet rebuild test test-rust test-python clean
+.PHONY: install install-release wheel docs polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet rebuild test test-all test-rust test-python test-python-all clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -78,16 +78,23 @@ rebuild: polars-src
 # Rust tests can be a bit slower, so only run them if we ask specifically.
 test: test-python
 
-test-all: test-rust test-python
+test-all: test-rust test-python-all
 
-## Rust unit tests. 
+## Rust unit tests.
 ## Run with --no-default-features  so pyo3's `extension-module` is dropped
 test-rust:
 	cargo test -p geopolars -p geopolars-views -p geopolars-compute -p geopolars-core --no-default-features
 
-## Python tests. Delegates to the package Makefile, which builds first.
-test-python:
-	@$(MAKE) -s -C geopolars test
+# pytest runs from the package, so that it picks up the config in its pyproject.toml.
+PYTEST := cd geopolars && $(CURDIR)/.venv/bin/pytest -n auto
+
+## Python tests, without the slow ones.
+test-python: install
+	$(PYTEST) $(PYTEST_ARGS)
+
+## All Python tests, including the slow ones.
+test-python-all: install
+	$(PYTEST) -m "slow or not slow" $(PYTEST_ARGS)
 
 ## Run the geoarrow.point proof of concept.
 run-geo: install
@@ -114,5 +121,5 @@ run-mean-coordinate-manual: install
 	uv run examples/run_mean_coordinate_manual.py
 
 clean:
-	-@rm -rf .venv target
-	-@rm -f uv.lock
+	-@rm -rf .venv target geopolars/.pytest_cache
+	-@find geopolars -type f -name '*.py[co]' -delete -or -type d -name __pycache__ -exec rm -r {} +
