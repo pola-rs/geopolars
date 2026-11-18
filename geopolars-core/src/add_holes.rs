@@ -30,10 +30,9 @@ pub fn add_holes(
         on_row_error,
     )
     .into_polars()?;
-    let holes_in_empty_exterior = empty_polygon_exterior == EmptyPolygonExterior::Keep;
     Ok(GeometryArray::Polygon(validated_polygons(
         added,
         close,
-        holes_in_empty_exterior,
+        empty_polygon_exterior,
     )))
 }

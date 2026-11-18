@@ -4,7 +4,7 @@ use geopolars_compute::inner_nulls::{
     propagate_inner_nulls_of_polygons,
 };
 use geopolars_compute::native::polygons_with_added_holes;
-use geopolars_compute::NullParts;
+use geopolars_compute::{EmptyPolygonExterior, NullParts};
 use geopolars_views::{GeometryArray, UncheckedStorage};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -39,7 +39,7 @@ pub fn validated_storage(
         NestedKind::Polygon => GeometryArray::Polygon(validated_polygons(
             propagate_inner_nulls_of_polygons(storage),
             close,
-            false,
+            EmptyPolygonExterior::Null,
         )),
         NestedKind::MultiPolygon => GeometryArray::MultiPolygon(validated_multi_polygons(
             propagate_inner_nulls_of_multi_polygons(storage),
@@ -64,14 +64,16 @@ pub fn assembled_polygons(
     let Some((holes, listed, null_parts)) = holes else {
         // FIXME: this copies every coordinate into new buffers for nothing.
         // `exteriors` already is a trimmed polygon of one ring per row, without a copy,
-        // so this can be `return Ok(GeometryArray::Polygon(validated_polygons(exteriors, close)))`.
+        // so this can be `return Ok(GeometryArray::Polygon(validated_polygons(exteriors, close, ...)))`.
         // `polygons_with_added_holes` can then take `holes` without the `Option`.
         // This affects `polygons_from_coordinates`,
         // and `polygons_from_rings_in_separate_columns` without holes.
         let validity = exteriors.rows.validity().cloned();
         let polygons = polygons_with_added_holes(&exteriors, None, validity);
         return Ok(GeometryArray::Polygon(validated_polygons(
-            polygons, close, false,
+            polygons,
+            close,
+            EmptyPolygonExterior::Null,
         )));
     };
 
@@ -79,7 +81,9 @@ pub fn assembled_polygons(
     let validity = rows_validity(&exteriors.rows, holes.rows(), null_parts);
     let polygons = polygons_with_added_holes(&exteriors, Some(&holes), validity);
     Ok(GeometryArray::Polygon(validated_polygons(
-        polygons, close, false,
+        polygons,
+        close,
+        EmptyPolygonExterior::Null,
     )))
 }
 
