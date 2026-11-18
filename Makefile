@@ -49,7 +49,9 @@ wheel: | .venv/bin/maturin
 ## Build the HTML API reference into target/docs/html.
 # Sphinx imports a copy of the package with the `@doc` docstrings filled in, as in the wheel,
 # which goes before the editable install on the path.
+# The docs tooling is not a default group, so `install` leaves it out
 docs: install
+	uv sync --inexact --only-group docs
 	rm -rf $(DOCS_PKG) && mkdir -p $(DOCS_PKG)
 	cp -r geopolars/geopolars $(DOCS_PKG)/
 	.venv/bin/python scripts/expand_docstrings.py $(DOCS_PKG)/geopolars
