@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: install install-release wheel docs polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet rebuild test test-all test-rust test-python test-python-all clean
+.PHONY: install install-release wheel docs polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet test test-all test-rust test-python test-python-all clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -66,10 +66,6 @@ $(POLARS_STAMP):
 	git -C $(POLARS_DIR) checkout -q --force FETCH_HEAD
 	@rm -f $(POLARS_DIR)/.rev-*
 	@touch $(POLARS_DIR)/.reinstall $@
-
-## Force a rebuild of just the plugin, ignoring uv's cache.
-rebuild: polars-src
-	uv sync --reinstall-package geopolars
 
 # Rust tests can be a bit slower, so only run them if we ask specifically.
 test: test-python
