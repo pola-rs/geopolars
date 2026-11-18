@@ -31,7 +31,7 @@
 //! ## `REVERSED_EXTERIOR`, `REVERSED_HOLES`
 //!
 //! Copying a polygon out of GEOS is generic over `REVERSED_EXTERIOR` and `REVERSED_HOLES`,
-//! which `reversed_rings` sets from `new_ring_orientation` and `new_holes`.
+//! which `reversed_rings` sets from the column's `orientation`, `new_ring_orientation` and `new_holes`.
 //! `CoordsBuilder::push` takes one of them as `REVERSED`, for the ring it copies.
 //! A reversed ring is copied in reverse order, which flips its orientation.
 //!
@@ -529,7 +529,7 @@ impl GeometryOrientation {
         holes: Orientation::Unknown,
     };
 
-    /// The orientation of the rings GEOS builds itself
+    /// A clockwise exterior with counter-clockwise holes, as GEOS gives most rings it builds itself.
     /// (see "Orientation of new rings" in `docs/GEOS kernel implementation guide.md`).
     pub const GEOS_BUILT: Self = Self {
         outer: Orientation::Cw,
