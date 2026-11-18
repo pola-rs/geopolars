@@ -40,6 +40,7 @@
 //! `CHECK_FLAGGED_ORIENTATION=true` unless `new_ring_orientation="keep"`.
 //! If set, every ring of a row with `maybe_wrong_orientation` is checked,
 //! and reversed if it runs the wrong way.
+//! If the entire column is [Orientation::Unknown], every row is checked.
 //! If `CHECK_FLAGGED_ORIENTATION=false`, this check is omitted,
 //! and orientations can be whatever.
 
@@ -639,7 +640,8 @@ fn target_orientation(
 
 /// Whether to reverse the exterior and the holes of a polygon in a column of `orientation`,
 /// for them to run as `target`.
-/// A ring of [`Orientation::Unknown`] is never reversed.
+/// A ring of [`Orientation::Unknown`] is never reversed here,
+/// as every row of such a column has its rings checked instead.
 fn reversed_rings(orientation: GeometryOrientation, target: GeometryOrientation) -> (bool, bool) {
     let differs = |current, target| current != Orientation::Unknown && current != target;
     (

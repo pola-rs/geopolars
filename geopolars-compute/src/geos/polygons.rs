@@ -156,10 +156,10 @@ impl GeosGeometries {
     /// Every GEOS geometry is freed once it is copied.
     /// A geometry that is not a polygon goes to `on_row_error`.
     /// The rings are oriented as `new_ring_orientation` and `new_holes` ask.
-    /// In a row with `maybe_wrong_orientation`, each ring is checked,
-    /// and only reversed if it has to be.
+    /// In a row with `maybe_wrong_orientation`, or any row of a column of unknown `orientation`,
+    /// each ring is checked, and only reversed if it has to be.
     pub fn into_polygon_array(
-        self,
+        mut self,
         z: bool,
         on_row_error: OnRowError,
         new_ring_orientation: NewRingOrientation,
@@ -175,6 +175,7 @@ impl GeosGeometries {
                 )
             );
         };
+        self.flag_every_row_if_unknown();
         let (exterior, holes) = reversed_rings(self.orientation, target);
         with_const_flags!(
             Z = z, REVERSED_EXTERIOR = exterior, REVERSED_HOLES = holes;
@@ -191,7 +192,7 @@ impl GeosGeometries {
     /// So a polygon is read as a single part, or as none if it is empty.
     /// A geometry that is not a polygon or multipolygon fails the same way.
     pub fn into_multi_polygon_array(
-        self,
+        mut self,
         z: bool,
         on_row_error: OnRowError,
         new_ring_orientation: NewRingOrientation,
@@ -207,6 +208,7 @@ impl GeosGeometries {
                 )
             );
         };
+        self.flag_every_row_if_unknown();
         let (exterior, holes) = reversed_rings(self.orientation, target);
         with_const_flags!(
             Z = z, REVERSED_EXTERIOR = exterior, REVERSED_HOLES = holes;
@@ -216,6 +218,22 @@ impl GeosGeometries {
                 on_row_error,
             )
         )
+    }
+
+    fn flag_every_row_if_unknown(&mut self) {
+        let GeometryOrientation { outer, holes } = self.orientation;
+        if outer != Orientation::Unknown && holes != Orientation::Unknown {
+            return;
+        }
+        for row in &mut self.geometries.rows {
+            if let GeosRow::Geometry {
+                maybe_wrong_orientation,
+                ..
+            } = row
+            {
+                *maybe_wrong_orientation = true;
+            }
+        }
     }
 }
 
