@@ -43,7 +43,7 @@ you might be better off leaving this one as this can skip expensive calculations
   check for such values in the operation. If it finds one, it will mark it as an error,
   which can be picked up by `on_row_error`. An empty point does not trigger this.
 - `early_coord_check="finite_and_empty"` (default for GEOS kernels) does the same as the above,
-  but also goes to `on_row_error` for an empty point.
+  but also goes to `on_row_error` for an empty point inside a geometry.
 
 This argument serves an important purpose for kernels that forward to GEOS.
 GEOS supports neither empty points inside a geometry nor any other NaN or infinite x or y.
@@ -53,6 +53,15 @@ while on skipping it might give some unexpected result.
 You read that right, setting `early_coord_check="off"` can also silently affect the results,
 due to GEOS handling invalid states differently (and sometimes inconsistently).
 An example would be GEOS silently returning (4, 0) for a distance of 0.5 on a line with a NaN vertex.
+
+With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
+What GEOS does with it depends on the operation.
+For example, buffer, simplify, and offset_curve leave it out,
+while intersection, difference, and relate raise.
+Convex_hull gives a null if it comes first,
+and line_interpolate_point gives a wrong point.
+A geometry that is itself the empty point passes either check,
+and works as you'd expect it to, as it is a standard GEOS type.
 
 If this is a function that also takes `include_m`/`include_z`,
 the check only includes the coordinates that these flags specify.

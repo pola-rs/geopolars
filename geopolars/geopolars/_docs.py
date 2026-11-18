@@ -142,14 +142,7 @@ GEOS supports neither empty points inside a geometry (a vertex with NaN on every
 nor any other NaN or infinite x or y.
 With `early_coord_check="off"`, they go to GEOS as they are.""",
     "early_coord_check": """\
-By default (`early_coord_check="finite_and_empty"`), a geometry with such a vertex never reaches GEOS:
-it raises instead.
-`"finite"` only catches the vertices with a NaN or infinite x or y that are not an empty point,
-and lets an empty point through to GEOS.
-GEOS is allowed to deal with the empty point, which in most cases means silently dropping it.
-An empty point on its own is not caught by either, as GEOS supports it.
-Turning the check off skips a pass over the coordinates,
-which can pay off on data with few non-finite coordinates.
+This expression can check for NaNs and nested empty points early.
 See `early_coord_check` on the Common arguments page (`docs/Common arguments.md`).""",
     "new_ring_orientation": """\
 By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them:
