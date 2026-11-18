@@ -8,7 +8,7 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
+use super::coords::kernel_output_type_wrapper_same_geometry;
 use crate::common_arguments::ShortLinesDef;
 use crate::geoarrow::{describe, geometry_series};
 
@@ -37,7 +37,7 @@ fn kernel_output_type_fix_out_of_bounds(
     input_fields: &[Field],
     _kwargs: FixOutOfBoundsKwargs,
 ) -> PolarsResult<Field> {
-    kernel_output_type_same_geometry(input_fields)
+    kernel_output_type_wrapper_same_geometry(input_fields)
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_fix_out_of_bounds)]

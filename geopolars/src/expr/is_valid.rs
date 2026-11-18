@@ -11,7 +11,7 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
+use super::coords::kernel_output_type_wrapper_same_geometry;
 use crate::geoarrow::{describe, geometry_series};
 
 /// The keyword arguments of the Python `is_valid_geoarrow` and `null_out_invalid_geoarrow`.
@@ -113,7 +113,7 @@ fn are_valid_ogc(geometries: &Series, kwargs: &IsValidOgcKwargs) -> PolarsResult
     are_valid_per_chunk(geometries, kwargs.check_null_coordinates, &check)
 }
 
-fn kernel_output_type_is_valid(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_wrapper_is_valid(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = &input_fields[0];
     describe(field.dtype())?;
     Ok(Field::new(field.name().clone(), DataType::Boolean))
@@ -123,7 +123,7 @@ fn kernel_output_type_is_valid_geoarrow(
     input_fields: &[Field],
     _kwargs: IsValidGeoArrowKwargs,
 ) -> PolarsResult<Field> {
-    kernel_output_type_is_valid(input_fields)
+    kernel_output_type_wrapper_is_valid(input_fields)
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_valid_geoarrow)]
@@ -135,7 +135,7 @@ fn kernel_output_type_is_valid_ogc(
     input_fields: &[Field],
     _kwargs: IsValidOgcKwargs,
 ) -> PolarsResult<Field> {
-    kernel_output_type_is_valid(input_fields)
+    kernel_output_type_wrapper_is_valid(input_fields)
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_valid_ogc)]
@@ -167,7 +167,7 @@ fn kernel_output_type_null_out_invalid_geoarrow(
     input_fields: &[Field],
     _kwargs: IsValidGeoArrowKwargs,
 ) -> PolarsResult<Field> {
-    kernel_output_type_same_geometry(input_fields)
+    kernel_output_type_wrapper_same_geometry(input_fields)
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_null_out_invalid_geoarrow)]
@@ -183,7 +183,7 @@ fn kernel_output_type_null_out_invalid_ogc(
     input_fields: &[Field],
     _kwargs: IsValidOgcKwargs,
 ) -> PolarsResult<Field> {
-    kernel_output_type_same_geometry(input_fields)
+    kernel_output_type_wrapper_same_geometry(input_fields)
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_null_out_invalid_ogc)]

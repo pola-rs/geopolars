@@ -69,7 +69,7 @@ fn hausdorff_line_between(
     let lines = hausdorff_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (failing, ignore) = (kwargs.failing(), kwargs.on_row_error);
+    let (failing, on_row_error) = (kwargs.failing(), kwargs.on_row_error);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
             many.iter()
@@ -81,7 +81,7 @@ fn hausdorff_line_between(
                         many_kind,
                         one_is_a,
                         failing,
-                        ignore,
+                        on_row_error,
                     )
                 })
                 .collect::<PolarsResult<Vec<_>>>()
@@ -90,7 +90,14 @@ fn hausdorff_line_between(
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| {
-                pairwise_hausdorff_lines(a.as_ref(), a_kind, b.as_ref(), b_kind, failing, ignore)
+                pairwise_hausdorff_lines(
+                    a.as_ref(),
+                    a_kind,
+                    b.as_ref(),
+                    b_kind,
+                    failing,
+                    on_row_error,
+                )
             })
             .collect::<PolarsResult<Vec<_>>>()?,
         GeometryPairs::OneAgainstMany { a: one, b: many } => {

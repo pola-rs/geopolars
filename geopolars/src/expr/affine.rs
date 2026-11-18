@@ -11,7 +11,7 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
+use super::coords::kernel_output_type_wrapper_same_geometry;
 use crate::geoarrow::{describe, geometry_series};
 
 // TODO: (Blocked until z-centroid is implemented): allow rotation around x/y for polygon
@@ -32,7 +32,7 @@ impl From<&AffineMatrix> for native::AffineMatrix {
 }
 
 fn kernel_output_type_affine(input_fields: &[Field], _kwargs: AffineMatrix) -> PolarsResult<Field> {
-    kernel_output_type_same_geometry(input_fields)
+    kernel_output_type_wrapper_same_geometry(input_fields)
 }
 
 /// See [`affine_transform`].
@@ -52,7 +52,9 @@ fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
 
 /// For an operation by the points of a second column,
 /// one per geometry: it hands back the geometry it got.
-fn kernel_output_type_same_geometry_by_points(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_wrapper_same_geometry_by_points(
+    input_fields: &[Field],
+) -> PolarsResult<Field> {
     let [geometry, points] = input_fields else {
         polars_bail!(ComputeError: "expected a geometry and its points, got {} inputs", input_fields.len());
     };
@@ -79,7 +81,7 @@ fn kernel_output_type_affine_by_points(
     input_fields: &[Field],
     _kwargs: AffineMatrix,
 ) -> PolarsResult<Field> {
-    kernel_output_type_same_geometry_by_points(input_fields)
+    kernel_output_type_wrapper_same_geometry_by_points(input_fields)
 }
 
 /// See [`affine_transform_about`].

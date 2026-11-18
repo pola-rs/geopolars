@@ -44,18 +44,18 @@ fn kernel_output_type_rings_overlap(
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_rings_overlap)]
 fn rings_overlap(inputs: &[Series], kwargs: RingsOverlapKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let (touching, ignore) = (kwargs.include_touching, kwargs.on_row_error);
+    let (touching, on_row_error) = (kwargs.include_touching, kwargs.on_row_error);
     let chunks = match aligned_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
-            .map(|(a, b)| pairwise_rings_overlap(a.as_ref(), b.as_ref(), touching, ignore))
+            .map(|(a, b)| pairwise_rings_overlap(a.as_ref(), b.as_ref(), touching, on_row_error))
             .collect::<PolarsResult<Vec<_>>>()?,
         // Overlapping goes both ways,
         // so it does not matter which side `one` came from.
         GeometryPairs::OneAgainstMany { a: one, b: many }
         | GeometryPairs::ManyAgainstOne { a: many, b: one } => many
             .iter()
-            .map(|many| rings_overlap_one(one.as_ref(), many.as_ref(), touching, ignore))
+            .map(|many| rings_overlap_one(one.as_ref(), many.as_ref(), touching, on_row_error))
             .collect::<PolarsResult<Vec<_>>>()?,
         GeometryPairs::AllNull(lengths) => lengths
             .iter()

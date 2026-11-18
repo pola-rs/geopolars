@@ -56,7 +56,7 @@ fn shortest_line_between(
     let lines = shortest_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (ignore, early) = (kwargs.on_row_error, kwargs.early_coord_check);
+    let (on_row_error, early) = (kwargs.on_row_error, kwargs.early_coord_check);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
             many.iter()
@@ -67,7 +67,7 @@ fn shortest_line_between(
                         many.as_ref(),
                         many_kind,
                         one_is_a,
-                        ignore,
+                        on_row_error,
                         early,
                     )
                 })
@@ -77,7 +77,7 @@ fn shortest_line_between(
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| {
-                pairwise_shortest_lines(a.as_ref(), a_kind, b.as_ref(), b_kind, ignore, early)
+                pairwise_shortest_lines(a.as_ref(), a_kind, b.as_ref(), b_kind, on_row_error, early)
             })
             .collect::<PolarsResult<Vec<_>>>()?,
         GeometryPairs::OneAgainstMany { a: one, b: many } => {

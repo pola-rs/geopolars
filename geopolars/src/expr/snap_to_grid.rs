@@ -6,7 +6,7 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
+use super::coords::kernel_output_type_wrapper_same_geometry;
 use crate::geoarrow::{describe, geometry_series};
 
 #[derive(Deserialize)]
@@ -32,7 +32,7 @@ fn kernel_output_type_snap_to_grid(
     input_fields: &[Field],
     _kwargs: SnapToGridKwargs,
 ) -> PolarsResult<Field> {
-    kernel_output_type_same_geometry(input_fields)
+    kernel_output_type_wrapper_same_geometry(input_fields)
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_snap_to_grid)]
