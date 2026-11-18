@@ -132,13 +132,15 @@ fn buffer_via_geos(
 }
 
 /// Every geometry passed to `op` with its distance, forwarded to GEOS.
-/// A row with a null distance is already null in `geometries` ([validity_with_distances]).
 /// `geos_distance` checks a distance, and gives it as `op` takes it.
 /// If `on_row_error=`[OnRowError::Null], a geometry that fails becomes null;
 /// otherwise its error is returned.
 /// A constant distance that fails would fail every row, so its error is always returned.
 /// The size hint stays the input's: it is only a starting capacity.
 /// Errors are the exception, so `on_row_error` is checked per row.
+///
+/// A row with a null distance must already be null in `geometries`,
+/// as [validity_with_distances] makes it before converting.
 pub(super) fn by_distance_via_geos(
     mut geometries: GeosGeometries,
     distance: BufferDistance,
@@ -154,6 +156,13 @@ pub(super) fn by_distance_via_geos(
         }
         BufferDistance::PerRow(distances) => {
             debug_assert_eq!(distances.len(), rows.len());
+            debug_assert!(
+                distances.validity().is_none_or(|has_distance| {
+                    let mut rows = rows.iter().enumerate();
+                    rows.all(|(i, row)| row.is_none() || has_distance.get_bit(i))
+                }),
+                "a row with a null distance must already be null",
+            );
             rows.replace_geometries(on_row_error, |i, input| {
                 op(input, geos_distance(distances.value(i))?)
             })?;
