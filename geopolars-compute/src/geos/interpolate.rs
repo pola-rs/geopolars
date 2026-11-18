@@ -7,7 +7,7 @@ use geos::Geom;
 
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
 use super::linestrings::multi_line_strings_to_geos_rows;
-use super::{validity_with_distances, GeosGeometries, ToGeosRows};
+use super::{validity_with_distances, GeometryOrientation, GeosGeometries, ToGeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// What the distance along the line is measured in.
@@ -67,10 +67,12 @@ fn interpolate_via_geos(
     mode: InterpolateMode,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<GeosGeometries> {
+    // The orientation is `UNKNOWN`, as points have no rings.
     match mode {
         InterpolateMode::Absolute => by_distance_via_geos(
             geometries,
             distance,
+            GeometryOrientation::UNKNOWN,
             on_row_error,
             finite_distance,
             |input, distance| Ok(input.interpolate(distance)?),
@@ -78,6 +80,7 @@ fn interpolate_via_geos(
         InterpolateMode::Normalized => by_distance_via_geos(
             geometries,
             distance,
+            GeometryOrientation::UNKNOWN,
             on_row_error,
             finite_distance,
             |input, fraction| Ok(input.interpolate_normalized(fraction)?),

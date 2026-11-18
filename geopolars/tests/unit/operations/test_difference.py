@@ -345,7 +345,7 @@ def test_an_empty_a_gives_an_empty_geometry() -> None:
 
 
 @pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
-def test_an_empty_b_gives_a_as_it_is(new_ring_orientation: str) -> None:
+def test_an_empty_b_gives_a_turned_as_asked(new_ring_orientation: str) -> None:
     a = _wkt("a", PolygonXY(), [_SQUARE, _CW, _SQUARE])
     b = _wkt("b", PolygonXY(), ["POLYGON EMPTY", "POLYGON EMPTY", _OVERLAPPING])
 
@@ -353,21 +353,45 @@ def test_an_empty_b_gives_a_as_it_is(new_ring_orientation: str) -> None:
         geo.difference("a", "b", new_ring_orientation=new_ring_orientation)
     )
 
-    assert _storage(out["a"])[:2] == _storage(a)[:2]
-    # Only the row that went through GEOS is turned.
-    assert _is_ccw(out["a"])[2] == (new_ring_orientation == "ccw")
+    got, given = _storage(out["a"]), _storage(a)
+    assert got[0] == given[0]
+    if new_ring_orientation == "ccw":
+        # Turning `_CW` gives `_SQUARE`.
+        assert got[1] == given[0]
+        assert _is_ccw(out["a"]) == [True, True, True]
+    else:
+        assert got[1] == given[1]
+        assert _is_ccw(out["a"])[2] is False
 
 
-def test_a_copy_of_a_is_not_turned() -> None:
+@pytest.mark.parametrize(
+    ("new_ring_orientation", "new_holes", "rings_ccw"),
+    [
+        ("ccw", "opposite", [True, False]),
+        ("ccw", "same", [True, True]),
+        ("cw", "opposite", [False, True]),
+    ],
+)
+def test_a_copy_of_a_only_turns_the_rings_that_run_the_wrong_way(
+    new_ring_orientation: str, new_holes: str, rings_ccw: list[bool]
+) -> None:
     holed = "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))"
     a = _wkt("a", PolygonXY(), [holed])
     b = _wkt("b", PolygonXY(), ["POLYGON EMPTY"])
 
     out = pl.DataFrame([a, b]).select(
-        geo.difference("a", "b", new_ring_orientation="ccw", new_holes="same")
+        geo.difference(
+            "a", "b", new_ring_orientation=new_ring_orientation, new_holes=new_holes
+        )
     )
 
-    assert _storage(out["a"]) == _storage(a)
+    [given] = _storage(a)
+    # The exterior of `holed` runs counter-clockwise, and its hole clockwise.
+    expected = [
+        ring if ccw == was_ccw else ring[::-1]
+        for ring, ccw, was_ccw in zip(given, rings_ccw, [True, False], strict=True)
+    ]
+    assert _storage(out["a"]) == [expected]
 
 
 def _coords(row: Any) -> list[Coord]:
@@ -388,6 +412,8 @@ def _xy_only(row: Any) -> Any:
 
 # Each of these would come back otherwise from GEOS:
 # re-oriented, without its duplicate point, noded or split.
+# The polygons already run as `new_ring_orientation="ccw"` asks,
+# so that option keeps them as they are too.
 _AS_IS = {
     "Point": (PointXY(), ["POINT (1 2)"]),
     "MultiPoint": (MultiPointXY(), ["MULTIPOINT ((3 3), (1 1), (1 1))"]),
@@ -398,11 +424,11 @@ _AS_IS = {
     ),
     "Polygon": (
         PolygonXY(),
-        [_SQUARE, "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 3 1, 3 3, 1 3, 1 1))"],
+        [_SQUARE, "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))"],
     ),
     "MultiPolygon": (
         MultiPolygonXY(),
-        ["MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((5 5, 5 6, 6 6, 6 5, 5 5)))"],
+        ["MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((5 5, 6 5, 6 6, 5 6, 5 5)))"],
     ),
 }
 
@@ -495,7 +521,7 @@ def test_an_empty_b_stores_a_part_without_vertices_without_rings() -> None:
 
 
 @pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
-def test_a_single_empty_b_gives_every_row_as_it_is(new_ring_orientation: str) -> None:
+def test_a_single_empty_b_copies_every_row(new_ring_orientation: str) -> None:
     # Both orientations, as one of them equals what GEOS gives, turned or not.
     many = _wkt("many", PolygonXY(), [_SQUARE, None, _CW, _WIDE])
     one = _wkt("one", PolygonXY(), ["POLYGON EMPTY"])
@@ -504,7 +530,11 @@ def test_a_single_empty_b_gives_every_row_as_it_is(new_ring_orientation: str) ->
         geo.difference("many", one, new_ring_orientation=new_ring_orientation)
     )
 
-    assert _storage(out["many"]) == _storage(many)
+    expected = _storage(many)
+    if new_ring_orientation == "ccw":
+        # Only the copy of `_CW` is turned, which gives `_SQUARE`.
+        expected[2] = expected[0]
+    assert _storage(out["many"]) == expected
 
 
 @pytest.mark.parametrize(
@@ -516,15 +546,18 @@ def test_copied_rows_line_up_with_computed_rows_in_one_chunk(
     a_dtype: GeoArrowType, allow_splitting: bool
 ) -> None:
     # The copies are rows 2, 4 and 6, between rows without polygons and rows from GEOS,
-    # so that a copy indexed by anything but its row is turned.
+    # so that a copy indexed by anything but its row is caught.
+    # Rows 4 and 6 are found nowhere else, and run clockwise, so their copies are turned.
+    cw = ["POLYGON ((5 5, 5 6, 6 6, 6 5, 5 5))", "POLYGON ((7 7, 7 9, 9 9, 9 7, 7 7))"]
+    ccw = ["POLYGON ((5 5, 6 5, 6 6, 5 6, 5 5))", "POLYGON ((7 7, 9 7, 9 9, 7 9, 7 7))"]
     a_rows = [
         None,
         "POLYGON EMPTY",
         _SQUARE,
         _SQUARE,
-        _CW,
+        cw[0],
         _SQUARE,
-        _CW,
+        cw[1],
         _SQUARE,
         _SQUARE,
     ]
@@ -549,12 +582,14 @@ def test_copied_rows_line_up_with_computed_rows_in_one_chunk(
     )["a"]
 
     wrapped = allow_splitting and a_dtype == PolygonXY()
-    got, given = _storage(out), _storage(a)
-    for row in (2, 4, 6):
-        assert got[row] == ([given[row]] if wrapped else given[row]), f"row {row}"
-    ccw = _is_ccw(out)
-    assert ccw[3] is True
-    assert ccw[5] is True
+    got = _storage(out)
+    turned = _storage(_wkt("turned", a_dtype, ccw))
+    copies = {2: _storage(a)[2], 4: turned[0], 6: turned[1]}
+    for row, expected in copies.items():
+        assert got[row] == ([expected] if wrapped else expected), f"row {row}"
+    is_ccw = _is_ccw(out)
+    assert is_ccw[3] is True
+    assert is_ccw[5] is True
     assert got[0] is None
     assert got[7] is None
     assert got[1] == []

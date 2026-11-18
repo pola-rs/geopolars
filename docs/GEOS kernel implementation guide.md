@@ -97,8 +97,6 @@ not in a container of its own.
 
 A `GeosRow` is `Empty` or a `Geometry` (null is described with the validity bitmask.
 We can just plonk `Empty` there, it should not matter).
-Two more are planned, `LeftUnchanged` and `RightUnchanged`,
-for a binary operation that gives one of its inputs back as it is.
 
 ## Trivial rows never reach GEOS
 
@@ -125,21 +123,19 @@ foregoing the need to convert its partner in the other column.
 
 ## Orientation of new rings
 
-GEOS operations that build new rings always give clockwise shells and counter-clockwise holes,
-whatever the orientation of the input. This held for (among others):
+GEOS sometimes changes the directions of rings.
+Most of the time, it gives clockwise shells and counter-clockwise holes for anything new that it constructs.
+This is not always the case though!
 
-- intersection, union, difference and unary_union
-- buffer, including buffer(0) and Point.buffer
-- normalize
-- make_valid on invalid input (the bowtie came back as two polygons, both with clockwise shells)
+Every operation must therefore set the `orientation` of its output `GeosGeometries`.
+Every row of the column runs in that direction,
+unless its `GeosRow::Geometry::maybe_wrong_orientation` is set.
 
-For these, the output already has a known orientation,
-so `new_ring_orientation="cw"` with `new_holes="opposite"` is a no-op, and can be skipped.
+When an orientation is asked for, a row without the flag is reversed based on the column's `orientation` alone,
+without its rings being checked.
+A row that may run otherwise, such as one passed through unchanged, must therefore have the flag.
+The rings of a row with the flag are checked when they are copied out of GEOS,
+and only reversed where needed.
+In a column of `UNKNOWN` orientation, every row is checked this way.
 
-Operations that leave the rings alone keep the orientation of the input though:
-
-- simplify returned a counter-clockwise shell with a counter-clockwise hole unchanged.
-- make_valid on input that is already valid returns it as is, even when the hole has the wrong orientation.
-  A valid polygon doesn't need any particular orientation, so this case passes straight through.
-
-Test it before assuming anything.
+Test it before assuming anything!

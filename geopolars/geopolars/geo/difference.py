@@ -88,8 +88,6 @@ def difference(
 
     {new_ring_orientation}
     It only affects a Polygon or MultiPolygon result.
-    {new_ring_orientation_skipping_geos}
-    Here, those are the rows where `b` is empty.
 
     {same_crs_pair}
     {overlay_crs}

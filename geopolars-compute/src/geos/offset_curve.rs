@@ -6,7 +6,9 @@ use geopolars_views::{GeometryArray, LineStringArray, MultiLineStringArray};
 use geos::{Geom, GeometryTypes, JoinStyle};
 
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
-use super::{unless_split, validity_with_distances, GeosGeometries, ToGeosRows};
+use super::{
+    unless_split, validity_with_distances, GeometryOrientation, GeosGeometries, ToGeosRows,
+};
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// The parameters GEOS's offset curve takes, besides the distance.
@@ -82,6 +84,8 @@ fn offset_curves_via_geos(
     by_distance_via_geos(
         geometries,
         distance,
+        // Lines have no rings.
+        GeometryOrientation::UNKNOWN,
         on_row_error,
         finite_distance,
         |input, distance| {

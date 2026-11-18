@@ -14,8 +14,8 @@ use geos::{Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::Bitmap;
 
 use super::{
-    axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
-    GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
+    axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeometryOrientation,
+    GeosGeometries, GeosRow, GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
 };
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
@@ -51,6 +51,7 @@ impl ToGeosRows for LineStringArray {
         Ok(GeosGeometries {
             geometries,
             size_hint,
+            orientation: GeometryOrientation::UNKNOWN,
         })
     }
 }
@@ -101,6 +102,7 @@ pub(super) fn multi_line_strings_to_geos_rows(
     Ok(GeosGeometries {
         geometries,
         size_hint,
+        orientation: GeometryOrientation::UNKNOWN,
     })
 }
 
@@ -152,15 +154,16 @@ impl GeosGeometries {
         for (i, geometry) in geometries.into_iter().enumerate() {
             let is_valid = match geometry {
                 GeosRow::Empty => true,
-                GeosRow::Geometry(line_string) | GeosRow::Unchanged(line_string) => {
-                    match line_string.geometry_type()? {
-                        GeometryTypes::LineString => {
-                            coords.push::<Z, false>(&line_string)?;
-                            true
-                        }
-                        other => wrong_kind("linestring", other, on_row_error)?,
+                GeosRow::Geometry {
+                    geometry: line_string,
+                    ..
+                } => match line_string.geometry_type()? {
+                    GeometryTypes::LineString => {
+                        coords.push::<Z, false>(&line_string)?;
+                        true
                     }
-                }
+                    other => wrong_kind("linestring", other, on_row_error)?,
+                },
             };
             if !is_valid {
                 validity.set_null(i);
@@ -191,24 +194,22 @@ impl GeosGeometries {
         for (i, geometry) in geometries.into_iter().enumerate() {
             let is_valid = match geometry {
                 GeosRow::Empty => true,
-                GeosRow::Geometry(geometry) | GeosRow::Unchanged(geometry) => {
-                    match geometry.geometry_type()? {
-                        GeometryTypes::LineString if geometry.is_empty()? => true,
-                        GeometryTypes::LineString => {
-                            coords.push::<Z, false>(&geometry)?;
-                            lines.push(coords.len());
-                            true
-                        }
-                        GeometryTypes::MultiLineString => {
-                            for n in 0..geometry.get_num_geometries()? {
-                                coords.push::<Z, false>(&geometry.get_geometry_n(n)?)?;
-                                lines.push(coords.len());
-                            }
-                            true
-                        }
-                        other => wrong_kind("multilinestring", other, on_row_error)?,
+                GeosRow::Geometry { geometry, .. } => match geometry.geometry_type()? {
+                    GeometryTypes::LineString if geometry.is_empty()? => true,
+                    GeometryTypes::LineString => {
+                        coords.push::<Z, false>(&geometry)?;
+                        lines.push(coords.len());
+                        true
                     }
-                }
+                    GeometryTypes::MultiLineString => {
+                        for n in 0..geometry.get_num_geometries()? {
+                            coords.push::<Z, false>(&geometry.get_geometry_n(n)?)?;
+                            lines.push(coords.len());
+                        }
+                        true
+                    }
+                    other => wrong_kind("multilinestring", other, on_row_error)?,
+                },
             };
             if !is_valid {
                 validity.set_null(i);

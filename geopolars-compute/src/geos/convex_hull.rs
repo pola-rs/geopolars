@@ -48,7 +48,9 @@ use geopolars_views::{
 };
 use geos::{CoordSeq, Geom, Geometry, GeometryTypes};
 
-use super::{axes, coords_pass_early_check, GeosGeometries, GeosRow, GeosRows};
+use super::{
+    axes, coords_pass_early_check, GeometryOrientation, GeosGeometries, GeosRow, GeosRows,
+};
 use crate::{
     row_or_null, EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
 };
@@ -246,7 +248,12 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
             0 => Some(GeosRow::Empty),
             // A single coordinate encloses nothing, and GEOS can't build a linestring of it.
             1 => None,
-            _ => row_or_null(hull(&row_x, &row_y, &row_z), on_row_error)?.map(GeosRow::Geometry),
+            _ => row_or_null(hull(&row_x, &row_y, &row_z), on_row_error)?.map(|hull| {
+                GeosRow::Geometry {
+                    geometry: hull,
+                    maybe_wrong_orientation: false,
+                }
+            }),
         });
     }
     Ok(GeosGeometries {
@@ -255,5 +262,7 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
             coords: coords.len() + rows.len(),
             parts: [rows.len(), 0],
         },
+        // GEOS builds every hull anew, from a linestring of the row's coordinates.
+        orientation: GeometryOrientation::GEOS_BUILT,
     })
 }

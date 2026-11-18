@@ -83,7 +83,7 @@ impl RelatePairs {
     fn relate_rows_geometry<'a>(&'a self, row: Option<&'a GeosRow>) -> Option<&'a Geometry> {
         match row? {
             GeosRow::Empty => Some(&self.empty),
-            GeosRow::Geometry(geometry) | GeosRow::Unchanged(geometry) => Some(geometry),
+            GeosRow::Geometry { geometry, .. } => Some(geometry),
         }
     }
 

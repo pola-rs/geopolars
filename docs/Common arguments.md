@@ -221,8 +221,7 @@ In these cases, you can ask what should be done with the newly added rings:
 
 What counts as a new ring:
 
-- GEOS output: every ring GEOS builds.
-  A row whose result skips GEOS (e.g. `difference` with an empty `b`) keeps its rings as they were.
+- GEOS output: all rings.
 - Constructors: all rings.
 - add_holes: only the added holes.
 
