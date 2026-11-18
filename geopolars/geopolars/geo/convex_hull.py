@@ -90,7 +90,7 @@ def convex_hull(
     the polygon is null, or GEOS raises.
     {early_coord_check}
     A geometry with a single coordinate encloses nothing,
-    so it gives a null polygon. (This bypasses finiteness chcking)
+    so it gives a null polygon. (This bypasses finiteness checking)
 
     {new_ring_orientation}
     A hull has no holes, so `new_holes` changes nothing.

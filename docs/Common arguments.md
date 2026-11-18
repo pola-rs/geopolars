@@ -23,8 +23,8 @@ With the `on_row_error` variable, you can set what to do if that happens.
 - `on_row_error="null"` instructs the kernel to simply mark the resulting row as null.
   The total rows coming out of the expression then does not change.
 
-This parameter does not affect how error handling outside outside the per-row part is done.
-If there is an error in the setup, it can still fail the entire query ever if `on_row_error="null"` is set.
+This parameter does not affect how error handling outside the per-row part is done.
+If there is an error in the setup, it can still fail the entire query even if `on_row_error="null"` is set.
 
 > [!NOTE]
 > Legacy: this replaces `ignore_per_row_errors: bool = False`.

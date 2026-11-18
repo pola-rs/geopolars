@@ -136,7 +136,7 @@ Empty and invalid geometries stay empty or invalid.""",
 This expression can error on individual rows. How these are handled is determined by `on_row_error`.
 See `on_row_error` on the Common arguments page (`docs/Common arguments.md`).""",
     "geos_errors": """\
-If GEOS returns an errow for a row, it is handled through `on_row_error`.""",
+If GEOS returns an error for a row, it is handled through `on_row_error`.""",
     "geos_non_finite": """\
 GEOS supports neither empty points inside a geometry (a vertex with NaN on every axis)
 nor any other NaN or infinite x or y.
