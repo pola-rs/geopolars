@@ -89,21 +89,18 @@ def add_holes(
 
     An empty list adds no holes.
     The polygon's own rings are still checked, as described below.
-    A polygon with an empty exterior cannot take holes (OGC validity).
-    What happens then is set by `empty_polygon_exterior`.
-
-    | `empty_polygon_exterior` | a polygon with an empty exterior that gets a hole with vertices |
-    | - | - |
-    | `"null"` | is null |
-    | `"error"` | goes to `on_row_error` |
-    | `"empty"` | stays as it is: none of the holes of its row are added |
-    | `"keep"` | takes the holes: valid GeoArrow, but not valid OGC |
-
-    If it only gets empty holes, it takes them, and stays an empty polygon.
+    {empty_polygon_exterior}
+    With `"empty"`, such a polygon stays as it is: none of the holes of its row are added.
+    With `"keep"`, a polygon stored without rings first gets an empty exterior,
+    so that its new rings stay holes.
+    A polygon with an empty exterior that only gets empty holes takes them,
+    and stays an empty polygon.
 
     A polygon is null if any of its rings is not a ring (see [`is_ring`][geopolars.geo.is_ring]),
     its existing rings included.
     A polygon whose rings are all empty is the exception, and stays as it is.
+    With `empty_polygon_exterior="keep"`, so does one with an empty exterior
+    whose holes are all rings or empty.
     Passing `close=CloseRings(...)` first closes every open ring, as `close_rings` does.
 
     {closing_rings}

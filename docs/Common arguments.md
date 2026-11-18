@@ -186,13 +186,14 @@ This argument says what should happen to such a thing.
 GeoArrow allows you to have an empty polygon exterior but a non-empty hole.
 Most of the time this is not a meaningful polygon though.
 
-- `empty_polygon_exterior="null"` (the default) makes kernels check for these.
-  If such a polygon is produced, it is turned into a `null` instead.
-- `empty_polygon_exterior="error"` checks too, but triggers `on_row_error`.
-- `empty_polygon_exterior="empty"` discards the holes, creating the empty polygon.
-- `empty_polygon_exterior="keep"` allows a kernel to create these.
-  This is valid GeoArrow, but not valid for OGC.
-  Running a polygon like this through other expressions might give unexpected results.
+| `empty_polygon_exterior` | a polygon a kernel would give an empty exterior and a hole with vertices |
+| - | - |
+| `"null"` (the default) | is null |
+| `"error"` | goes to `on_row_error` |
+| `"empty"` | loses its holes, so it is the empty polygon |
+| `"keep"` | keeps its holes: valid GeoArrow, but not valid OGC |
+
+With `"keep"`, running such a polygon through other expressions might give unexpected results.
 
 > [!NOTE]
 > Legacy: this replaces `empty_exterior: Literal["null", "keep"] = "null"`.

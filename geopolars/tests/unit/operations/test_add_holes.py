@@ -271,7 +271,7 @@ def test_a_polygon_without_rings_keeps_its_holes_behind_an_empty_exterior() -> N
 
 def test_an_empty_exterior_with_a_hole_can_raise() -> None:
     polygons, holes = _polygons([[]]), _lines(_HOLE)
-    with pytest.raises(ComputeError, match="empty exterior cannot take a hole"):
+    with pytest.raises(ComputeError, match="empty exterior got a hole with vertices"):
         _added(polygons, holes, empty_polygon_exterior="error")
 
 

@@ -105,7 +105,8 @@ impl fmt::Display for GeoComputeError {
             ),
             Self::HoleInEmptyExterior => write!(
                 f,
-                "a polygon with an empty exterior cannot take a hole with vertices"
+                "a polygon with an empty exterior got a hole with vertices, which is not valid OGC; \
+                set `empty_polygon_exterior` to \"null\", \"empty\" or \"keep\" not to raise"
             ),
             #[cfg(feature = "geos")]
             Self::Geos(source) => write!(f, "{source}"),

@@ -144,6 +144,10 @@ With `early_coord_check="off"`, they go to GEOS as they are.""",
     "early_coord_check": """\
 This expression can check for NaNs and nested empty points early.
 See `early_coord_check` on the Common arguments page (`docs/Common arguments.md`).""",
+    "empty_polygon_exterior": """\
+A polygon with an empty exterior and a hole with vertices is not valid OGC.
+What this expression does when it would make one is set by `empty_polygon_exterior`.
+See `empty_polygon_exterior` on the Common arguments page (`docs/Common arguments.md`).""",
     "new_ring_orientation": """\
 By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them:
 the exterior clockwise, and the holes counter-clockwise.
