@@ -19,6 +19,8 @@ dependencies = [
 # The root is a "virtual" project: it exists to pin the dev environment, and is
 # never built or published itself.
 package = false
+# Install the docs tooling on every sync, so `make install` does not remove it again.
+default-groups = ["dev", "docs"]
 
 # Mirrors the Python members of the [workspace] in the root Cargo.toml.
 [tool.uv.workspace]
@@ -44,4 +46,12 @@ dev = [
     # passing against the latest polars, so polars is not pinned here.
     "pytest>=8.0",
     "pytest-xdist>=3.5",
+]
+docs = [
+    "numpydoc>=1.8",
+    "pydata-sphinx-theme>=0.16",
+    "sphinx>=8.1",
+    "sphinx-autosummary-accessors>=2023.4",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.6",
 ]

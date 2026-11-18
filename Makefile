@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: install install-release wheel polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet rebuild test test-rust test-python clean
+.PHONY: install install-release wheel docs polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet rebuild test test-rust test-python clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -34,16 +34,30 @@ install-release: polars-src
 	$(UV_SYNC)
 
 WHEEL_SRC := target/wheel-src
+DOCS_SRC := target/docs-src
+
+# Copy the tracked files into $(1), with the `@doc` docstrings filled in.
+define expanded_source
+	rm -rf $(1) && mkdir -p $(1)
+	git ls-files -z | tar --null -T - -cf - | tar -xf - -C $(1)
+	python3 scripts/expand_docstrings.py $(1)/geopolars/geopolars
+endef
 
 ## Build a release wheel into target/wheels, with the `@doc` docstrings filled in,
 ## so that editors show them.
 ## maturin cannot rewrite Python files itself, so this builds from a copy of the tracked files.
 wheel:
-	rm -rf $(WHEEL_SRC) && mkdir -p $(WHEEL_SRC)
-	git ls-files -z | tar --null -T - -cf - | tar -xf - -C $(WHEEL_SRC)
-	python3 scripts/expand_docstrings.py $(WHEEL_SRC)/geopolars/geopolars
+	$(call expanded_source,$(WHEEL_SRC))
 	cd $(WHEEL_SRC)/geopolars && CARGO_TARGET_DIR=$(CURDIR)/target \
 		$(CURDIR)/.venv/bin/maturin build --release --out $(CURDIR)/target/wheels
+
+## Build the HTML API reference into target/docs/html,
+## from a copy of the source with the `@doc` docstrings filled in, as in the wheel.
+## Importing geopolars loads the plugin, which is not tracked, so it is copied in too.
+docs: install
+	$(call expanded_source,$(DOCS_SRC))
+	cp geopolars/geopolars/geopolars.abi3.so $(DOCS_SRC)/geopolars/geopolars/
+	.venv/bin/sphinx-build -M html $(DOCS_SRC)/geopolars/docs/source target/docs $(SPHINXOPTS)
 
 ## Check out POLARS_REV into POLARS_DIR, if it isn't already.
 polars-src: $(POLARS_STAMP)
