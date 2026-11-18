@@ -38,8 +38,7 @@ pub mod proj;
 #[cfg(feature = "rsgeo")]
 pub mod rsgeo;
 mod short_lines;
-#[cfg(feature = "native")]
-mod utils;
+pub mod utils;
 
 pub use early_coord_check::EarlyCoordCheck;
 pub use empty_polygon_exterior::EmptyPolygonExterior;
