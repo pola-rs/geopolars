@@ -31,7 +31,7 @@ def relate(
     {broadcast_single_geometry}
 
     OGC Simple Features defines the matrix
-    (<https://docs.ogc.org/is/06-103r4/06-103r4.pdf>, section 6.1.15.2).
+    (https://docs.ogc.org/is/06-103r4/06-103r4.pdf, section 6.1.15.2).
     In short, its rows stand for the interior, boundary, and exterior of `a`,
     and its columns for those of `b`.
     Swapping `a` and `b` therefore transposes the matrix.
@@ -56,9 +56,9 @@ def relate(
 
     {same_crs_pair}
 
-    ```python
-    df.select(geo.relate("parcel", "zone"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.relate("parcel", "zone"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

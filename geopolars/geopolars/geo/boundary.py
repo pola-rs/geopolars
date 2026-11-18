@@ -82,14 +82,16 @@ def boundary(geometry: IntoExprColumn) -> pl.Expr:
     A linestring gives its first and last vertex, or none if it is closed.
     A multi-geometry gives a list, one boundary per part.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | `MultiPointXY[ZM]` |
-    | `PolygonXY[ZM]` | `MultiLineStringXY[ZM]` |
-    | `MultiPointXY[ZM]` | refused |
-    | `MultiLineStringXY[ZM]` | `list[MultiPointXY[ZM]]` |
-    | `MultiPolygonXY[ZM]` | `list[MultiLineStringXY[ZM]]` |
+    =======================  =============================
+    in                       out
+    =======================  =============================
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       `MultiPointXY[ZM]`
+    `PolygonXY[ZM]`          `MultiLineStringXY[ZM]`
+    `MultiPointXY[ZM]`       refused
+    `MultiLineStringXY[ZM]`  `list[MultiPointXY[ZM]]`
+    `MultiPolygonXY[ZM]`     `list[MultiLineStringXY[ZM]]`
+    =======================  =============================
 
     The rings stay closed, as they are stored.
     A linestring is closed when its first and last vertex lie at exactly the same place
@@ -101,8 +103,8 @@ def boundary(geometry: IntoExprColumn) -> pl.Expr:
     A null geometry gives a null boundary.
     Points and multipoints have no boundary, and are refused.
 
-    ```python
-    df.select(geo.boundary("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.boundary("parcel"))
     """
     return on_geometry(geometry, _boundary)

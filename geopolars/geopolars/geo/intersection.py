@@ -73,26 +73,30 @@ def intersection(
     The table below gives the output kind as "without `allow_splitting` / with it" where the two differ.
     It is symmetric, so only its upper half is filled.
 
-    | a \\ b | Point | MultiPoint | LineString | MultiLineString | Polygon | MultiPolygon |
-    | - | - | - | - | - | - | - |
-    | Point | Point | Point | Point | Point | Point | Point |
-    | MultiPoint | | MultiPoint | MultiPoint | MultiPoint | MultiPoint | MultiPoint |
-    | LineString | | | LineString / MultiLineString | LineString / MultiLineString | LineString / MultiLineString | LineString / MultiLineString |
-    | MultiLineString | | | | MultiLineString | MultiLineString | MultiLineString |
-    | Polygon | | | | | Polygon / MultiPolygon | Polygon / MultiPolygon |
-    | MultiPolygon | | | | | | MultiPolygon |
+    ===============  =====  ==========  ============================  ============================  ============================  ============================
+    ``a \\ b``        Point  MultiPoint  LineString                    MultiLineString               Polygon                       MultiPolygon
+    ===============  =====  ==========  ============================  ============================  ============================  ============================
+    Point            Point  Point       Point                         Point                         Point                         Point
+    MultiPoint              MultiPoint  MultiPoint                    MultiPoint                    MultiPoint                    MultiPoint
+    LineString                          LineString / MultiLineString  LineString / MultiLineString  LineString / MultiLineString  LineString / MultiLineString
+    MultiLineString                                                   MultiLineString               MultiLineString               MultiLineString
+    Polygon                                                                                         Polygon / MultiPolygon        Polygon / MultiPolygon
+    MultiPolygon                                                                                                                  MultiPolygon
+    ===============  =====  ==========  ============================  ============================  ============================  ============================
 
     `keep` only picks the dimension.
     Whether the result is a single or a multi kind still follows the table above.
     Two linestrings with `keep="points"` therefore give a Point,
     and a row where they cross twice raises without `allow_splitting`.
 
-    | `keep` | allowed when | single / multi kind | what is dropped |
-    | - | - | - | - |
-    | `None` | always | as the table above | parts of a lower dimension than the lower-dimensional input |
-    | `"points"` | always | Point / MultiPoint | every line and polygon part |
-    | `"lines"` | neither is a point or multipoint | LineString / MultiLineString | every point and polygon part |
-    | `"polygons"` | both are polygons or multipolygons | Polygon / MultiPolygon | every point and line part |
+    ============  ==================================  ============================  ===========================================================
+    `keep`        allowed when                        single / multi kind           what is dropped
+    ============  ==================================  ============================  ===========================================================
+    `None`        always                              as the table above            parts of a lower dimension than the lower-dimensional input
+    `"points"`    always                              Point / MultiPoint            every line and polygon part
+    `"lines"`     neither is a point or multipoint    LineString / MultiLineString  every point and polygon part
+    `"polygons"`  both are polygons or multipolygons  Polygon / MultiPolygon        every point and line part
+    ============  ==================================  ============================  ===========================================================
 
     Points here are parts of the result, not vertices of its lines or polygons.
     A dropped part does not count towards a split,
@@ -121,10 +125,10 @@ def intersection(
     {overlay_crs}
     A `keep` that cannot be kept also raises at plan time.
 
-    ```python
-    df.select(geo.intersection("parcel", "flood_zone"))
-    df.select(geo.intersection("road", "river", keep="points", allow_splitting=True))
-    ```
+    .. code-block:: python
+
+        df.select(geo.intersection("parcel", "flood_zone"))
+        df.select(geo.intersection("road", "river", keep="points", allow_splitting=True))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

@@ -78,9 +78,9 @@ def snap_to_grid(
     by default `(0, 0, 0)`. A `z` left out is 0.
     Each axis is snapped on its own:
 
-    ```text
-    x' = origin_x + spacing_x·round((x - origin_x) / spacing_x)
-    ```
+    .. code-block:: text
+
+        x' = origin_x + spacing_x·round((x - origin_x) / spacing_x)
 
     and the same for `y` and `z`.
     A spacing of 0 leaves that axis as it is.
@@ -88,7 +88,7 @@ def snap_to_grid(
     rather than silently ignored.
     `m`, being a measure, is always carried through untouched.
 
-    `mode` says which grid line a position goes to, as in [Polars `pl.Expr.round`](https://docs.pola.rs/api/python/stable/reference/expressions/api/polars.Expr.round.html),
+    `mode` says which grid line a position goes to, as in :meth:`pl.Expr.round <polars.Expr.round>`,
     but counted in spacings from `origin`:
 
     - `"half_to_even"`, the default: the nearest one.
@@ -109,10 +109,10 @@ def snap_to_grid(
     Coordinates are snapped as they are, in the units of their CRS.
     {keeps_type_dimension_and_crs}
 
-    ```python
-    df.select(geo.snap_to_grid("shape", (0.5, 0.5)))
-    df.select(geo.snap_to_grid("shape", (10.0, 10.0, 1.0), origin=(5.0, 5.0)))
-    ```
+    .. code-block:: python
+
+        df.select(geo.snap_to_grid("shape", (0.5, 0.5)))
+        df.select(geo.snap_to_grid("shape", (10.0, 10.0, 1.0), origin=(5.0, 5.0)))
     """
     validate_one_of("mode", mode, RoundMode)
     return on_geometry(

@@ -57,19 +57,21 @@ def convex_hull(
     Only the exterior of a polygon counts, so its holes are ignored.
     An XY or XYM geometry gives a `PolygonXY`, an XYZ or XYZM one a `PolygonXYZ`:
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[M]` | `PolygonXY` |
-    | `LineStringXYZ[M]` | `PolygonXYZ` |
-    | `PolygonXY[M]` | `PolygonXY` |
-    | `PolygonXYZ[M]` | `PolygonXYZ` |
-    | `MultiPointXY[M]` | `PolygonXY` |
-    | `MultiPointXYZ[M]` | `PolygonXYZ` |
-    | `MultiLineStringXY[M]` | `PolygonXY` |
-    | `MultiLineStringXYZ[M]` | `PolygonXYZ` |
-    | `MultiPolygonXY[M]` | `PolygonXY` |
-    | `MultiPolygonXYZ[M]` | `PolygonXYZ` |
+    =======================  ============
+    in                       out
+    =======================  ============
+    `PointXY[ZM]`            refused
+    `LineStringXY[M]`        `PolygonXY`
+    `LineStringXYZ[M]`       `PolygonXYZ`
+    `PolygonXY[M]`           `PolygonXY`
+    `PolygonXYZ[M]`          `PolygonXYZ`
+    `MultiPointXY[M]`        `PolygonXY`
+    `MultiPointXYZ[M]`       `PolygonXYZ`
+    `MultiLineStringXY[M]`   `PolygonXY`
+    `MultiLineStringXYZ[M]`  `PolygonXYZ`
+    `MultiPolygonXY[M]`      `PolygonXY`
+    `MultiPolygonXYZ[M]`     `PolygonXYZ`
+    =======================  ============
 
     {computed_by_geos_keeping_z}
     {empty_and_null}
@@ -95,9 +97,9 @@ def convex_hull(
     {new_ring_orientation}
     A hull has no holes, so `new_holes` changes nothing.
 
-    ```python
-    df.select(geo.convex_hull("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.convex_hull("parcel"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

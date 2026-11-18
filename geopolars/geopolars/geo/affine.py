@@ -101,16 +101,17 @@ def translate(geometry: IntoExprColumn, offset: Offset | IntoExprColumn) -> pl.E
     not a position, so it is always carried through untouched.
 
     `offset` is either
+
     - `(dx, dy)` or `(dx, dy, dz)`, each one number for the whole column
       or a column (or expression) of numbers, one for every geometry, or
     - a `geoarrow.point` column (or a single point) with an offset for every geometry,
       its `x`, `y` and `z` being `dx`, `dy` and `dz`.
 
-    ```python
-    df.select(geo.translate("shape", (1.0, -2.0)))
-    df.select(geo.translate("shape", ("dx", "dy", 0.5)))
-    df.select(geo.translate("shape", "offset"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.translate("shape", (1.0, -2.0)))
+        df.select(geo.translate("shape", ("dx", "dy", 0.5)))
+        df.select(geo.translate("shape", "offset"))
 
     A geometry with a null offset comes out null.
     A `dz` is rejected for a geometry with no `z` rather than silently ignored:
@@ -346,6 +347,7 @@ def rotate(
     `m`, being a measure, is always carried through untouched.
 
     `origin` is the point the axis runs through, by default `(0, 0, 0)`. It is either
+
     {origin_per_column_or_row}
 
     A `z` left out is 0.
@@ -377,9 +379,9 @@ def rotate_about_centroid(
     {about_centroid_accepts}
 
 
-    ```python
-    df.select(geo.rotate_about_centroid("parcel", 30))
-    ```
+    .. code-block:: python
+
+        df.select(geo.rotate_about_centroid("parcel", 30))
     """
 
     _axis(axis)
@@ -430,10 +432,10 @@ def skew(
     `ys` does the same along `y`, by `tan(ys)` times the distance along `x`.
     Both are applied to the positions as they were:
 
-    ```text
-    x' = x + tan(xs)·(y - origin_y)
-    y' = y + tan(ys)·(x - origin_x)
-    ```
+    .. code-block:: text
+
+        x' = x + tan(xs)·(y - origin_y)
+        y' = y + tan(ys)·(x - origin_x)
 
     The angles are in degrees, or with `unit="pi"` in multiples of π radians.
     A quarter turn (±90°) has no tangent and is refused.
@@ -442,6 +444,7 @@ def skew(
     and `m`, being a measure, is always carried through untouched.
 
     `origin` is the point that stays where it is, by default `(0, 0, 0)`. It is either
+
     {origin_per_column_or_row}
 
     Coordinates are sheared as they are, in the units of their CRS.
@@ -469,9 +472,9 @@ def skew_about_centroid(
 
     {about_centroid_accepts}
 
-    ```python
-    df.select(geo.skew_about_centroid("parcel", xs=15))
-    ```
+    .. code-block:: python
+
+        df.select(geo.skew_about_centroid("parcel", xs=15))
     """
     about = _skew_about(_shear(xs, ys, unit))
     return on_geometry(geometry, _about_centroid("skew", about))
@@ -541,9 +544,9 @@ def scale(
     """Stretch every position of a geometry away from (or towards) `origin`,
     by a factor along each axis:
 
-    ```text
-    x' = origin_x + xfact·(x - origin_x)
-    ```
+    .. code-block:: text
+
+        x' = origin_x + xfact·(x - origin_x)
 
     and the same for `y` and `z`.
     A factor above 1 stretches, one between 0 and 1 shrinks,
@@ -554,6 +557,7 @@ def scale(
     `m`, being a measure, is always carried through untouched.
 
     `origin` is the point that stays where it is, by default `(0, 0, 0)`. It is either
+
     {origin_per_column_or_row}
 
     A `z` left out is 0.
@@ -581,9 +585,9 @@ def scale_about_centroid(
 
     {about_centroid_accepts}
 
-    ```python
-    df.select(geo.scale_about_centroid("parcel", 2.0, 2.0))
-    ```
+    .. code-block:: python
+
+        df.select(geo.scale_about_centroid("parcel", 2.0, 2.0))
     """
     _factors(xfact, yfact, zfact)
     about = _scale_about(xfact, yfact, zfact)
@@ -635,22 +639,22 @@ def affine_transform(
     so a matrix written for them works here unchanged.
     Six numbers transform in the plane, leaving `z` as it is:
 
-    ```text
-    [a, b, d, e, xoff, yoff]
+    .. code-block:: text
 
-    x' = a·x + b·y + xoff
-    y' = d·x + e·y + yoff
-    ```
+        [a, b, d, e, xoff, yoff]
+
+        x' = a·x + b·y + xoff
+        y' = d·x + e·y + yoff
 
     Twelve numbers transform in space:
 
-    ```text
-    [a, b, c, d, e, f, g, h, i, xoff, yoff, zoff]
+    .. code-block:: text
 
-    x' = a·x + b·y + c·z + xoff
-    y' = d·x + e·y + f·z + yoff
-    z' = g·x + h·y + i·z + zoff
-    ```
+        [a, b, c, d, e, f, g, h, i, xoff, yoff, zoff]
+
+        x' = a·x + b·y + c·z + xoff
+        y' = d·x + e·y + f·z + yoff
+        z' = g·x + h·y + i·z + zoff
 
     A twelve-number matrix that reads `z` (`c` or `f` not 0)
     or changes it (a bottom row other than `0, 0, 1, 0`)
@@ -662,6 +666,7 @@ def affine_transform(
     `x' = a·(x - origin_x) + b·(y - origin_y) + c·(z - origin_z) + xoff + origin_x`
     and likewise for `y` and `z`. The default leaves the matrix as shapely applies it.
     It is either
+
     {origin_per_column_or_row}
 
     A `z` left out is 0.

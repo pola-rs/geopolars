@@ -1,6 +1,6 @@
 """The `geoarrow.multipolygon` extension type.
 
-Per the [GeoArrow spec](https://geoarrow.org/format.html),
+Per the `GeoArrow spec <https://geoarrow.org/format.html>`_,
 an array of multipolygons is `List<List<List<Coordinate>>>`.
 """
 

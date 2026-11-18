@@ -32,20 +32,22 @@ def point(
     """Build a `geoarrow.point` column from its coordinate columns.
     Whether you pass `z` and/or `m` decides the dimension, and so the dtype:
 
-    | passed      | dtype       |
-    |-------------|-------------|
-    | -           | `PointXY`   |
-    | `z`         | `PointXYZ`  |
-    | `m`         | `PointXYM`  |
-    | `z` and `m` | `PointXYZM` |
+    ===========  ===========
+    passed       dtype
+    ===========  ===========
+    nothing      `PointXY`
+    `z`          `PointXYZ`
+    `m`          `PointXYM`
+    `z` and `m`  `PointXYZM`
+    ===========  ===========
 
     `z` is an elevation.
     `m` is an arbitrary measure carried along with the vertex,
     such as a timestamp or a distance along a route.
 
-    ```python
-    df.select(geo.point("lon", "lat", crs="EPSG:4326"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.point("lon", "lat", crs="EPSG:4326"))
 
     {null_inside_row}
 
@@ -73,13 +75,13 @@ def multi_point_from_points(
 ) -> pl.Expr:
     """Build a `geoarrow.multipoint` column out of lists of points.
 
-    ```python
-    df.group_by("survey").agg(
-        geo.multi_point_from_points(
-            geo.point("lon", "lat").implode()
-        ).alias("sightings")
-    )
-    ```
+    .. code-block:: python
+
+        df.group_by("survey").agg(
+            geo.multi_point_from_points(
+                geo.point("lon", "lat").implode()
+            ).alias("sightings")
+        )
 
     {null_inside_row}
 
@@ -100,9 +102,9 @@ def multi_point_from_columns(
     """Build a `geoarrow.multipoint` column from one coordinate column per axis.
     Each is a `List[Float64]` holding one list of coordinates per multipoint.
 
-    ```python
-    df.select(geo.multi_point_from_columns("lon", "lat", m="seen_at"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.multi_point_from_columns("lon", "lat", m="seen_at"))
 
     {null_inside_row}
 
@@ -121,8 +123,9 @@ def multi_point(
 ) -> pl.Expr:
     """Build a `geoarrow.multipoint` column, from points or from coordinates.
     Dispatches to either:
-    - [`multi_point_from_points`][geopolars.geo.multi_point_from_points]
-    - [`multi_point_from_columns`][geopolars.geo.multi_point_from_columns]
+
+    - :func:`~geopolars.geo.multi_point_from_points`
+    - :func:`~geopolars.geo.multi_point_from_columns`
     """
     if y is None:
         if z is not None or m is not None:

@@ -31,12 +31,14 @@ def has_repeats_in_succession(
 
     The geometries have to be valid by `is_valid_geoarrow` already. This trusts its input.
 
-    | geometry | has repeated points when |
-    | - | - |
-    | `PointXY[ZM]` | never |
-    | `LineStringXY[ZM]`, `MultiPointXY[ZM]` | two vertices in a row lie at the same place |
-    | `PolygonXY[ZM]` | two vertices in a row of one ring lie at the same place |
-    | `MultiLineStringXY[ZM]`, `MultiPolygonXY[ZM]` | one of its parts has repeated points |
+    =============================================  =======================================================
+    geometry                                       has repeated points when
+    =============================================  =======================================================
+    `PointXY[ZM]`                                  never
+    `LineStringXY[ZM]`, `MultiPointXY[ZM]`         two vertices in a row lie at the same place
+    `PolygonXY[ZM]`                                two vertices in a row of one ring lie at the same place
+    `MultiLineStringXY[ZM]`, `MultiPolygonXY[ZM]`  one of its parts has repeated points
+    =============================================  =======================================================
 
     The ends of a ring lie at the same place, but they are not in a row, so they do not count.
 
@@ -46,9 +48,9 @@ def has_repeats_in_succession(
 
     Repeated points are valid, also by OGC (see `is_valid_ogc`), but some tools may stumble over them.
 
-    ```python
-    df.filter(~geo.has_repeats_in_succession("route"))
-    ```
+    .. code-block:: python
+
+        df.filter(~geo.has_repeats_in_succession("route"))
     """
     validate_coincidence_tolerances(abs_tol, rel_tol)
 

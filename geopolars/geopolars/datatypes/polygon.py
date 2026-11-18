@@ -1,6 +1,6 @@
 """The `geoarrow.polygon` extension type.
 
-Per the [GeoArrow spec](https://geoarrow.org/format.html),
+Per the `GeoArrow spec <https://geoarrow.org/format.html>`_,
 An array of polygons is `List<List<Coordinate>>`:
 one list of rings per polygon, and one list of vertices per ring.
 The first ring is the exterior one.

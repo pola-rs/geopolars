@@ -77,12 +77,14 @@ def to_polygon(box: IntoExprColumn) -> pl.Expr:
     Both ends of every range survive, and the ring stays flat:
     a plane tilting from the `xmin` side up to the `xmax` side.
 
-    | box                                     | polygon                         |
-    |-----------------------------------------|---------------------------------|
-    | null                                    | null                            |
-    | an empty range in any dimension         | empty (no rings)                |
-    | `xmin > xmax`, geographic CRS           | continues past the antimeridian |
-    | `xmin > xmax`, any other CRS, or none   | null                            |
+    =====================================  ===============================
+    box                                    polygon
+    =====================================  ===============================
+    null                                   null
+    an empty range in any dimension        empty (no rings)
+    `xmin > xmax`, geographic CRS          continues past the antimeridian
+    `xmin > xmax`, any other CRS, or none  null
+    =====================================  ===============================
 
     A box from 170 to -170 crosses the antimeridian.
     With a geographic CRS, its polygon runs from 170 to 190 instead:
@@ -95,8 +97,8 @@ def to_polygon(box: IntoExprColumn) -> pl.Expr:
 
     An empty range is `inf` to `-inf`, or any other reversed range outside of x.
 
-    ```python
-    df.select(geo.to_polygon("extent"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.to_polygon("extent"))
     """
     return on_box(box, _to_polygon)

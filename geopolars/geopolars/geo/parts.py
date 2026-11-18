@@ -52,20 +52,22 @@ def parts(geometry: IntoExprColumn) -> pl.Expr:
     """Breaks down a multi-geometry into its parts, as a list in stored order.
     The parts keep the multi-geometry's dimension and CRS.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | refused |
-    | `PolygonXY[ZM]` | refused |
-    | `MultiPointXY[ZM]` | `list[PointXY[ZM]]` |
-    | `MultiLineStringXY[ZM]` | `list[LineStringXY[ZM]]` |
-    | `MultiPolygonXY[ZM]` | `list[PolygonXY[ZM]]` |
+    =======================  ========================
+    in                       out
+    =======================  ========================
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       refused
+    `PolygonXY[ZM]`          refused
+    `MultiPointXY[ZM]`       `list[PointXY[ZM]]`
+    `MultiLineStringXY[ZM]`  `list[LineStringXY[ZM]]`
+    `MultiPolygonXY[ZM]`     `list[PolygonXY[ZM]]`
+    =======================  ========================
 
     An empty multi-geometry gives an empty list.
     A null multi-geometry gives a null list.
 
-    ```python
-    df.select(geo.parts("river"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.parts("river"))
     """
     return on_geometry(geometry, _parts)

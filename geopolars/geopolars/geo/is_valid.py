@@ -54,7 +54,7 @@ def is_valid_geoarrow(
     """Whether each geometry is valid by the GeoArrow spec: one `bool` per row, a multi-geometry included.
     A null geometry gives a null result.
 
-    GeoArrow asks two things (<https://geoarrow.org/format.html>):
+    GeoArrow asks two things (https://geoarrow.org/format.html):
 
     - only the whole geometry may be null.
       A part, a ring or a coordinate nested in it may not;
@@ -83,9 +83,9 @@ def is_valid_geoarrow(
     Do not use this unless you know for sure the inner data is valid!
     The rings still have to be closed.
 
-    ```python
-    df.filter(geo.is_valid_geoarrow("parcel"))
-    ```
+    .. code-block:: python
+
+        df.filter(geo.is_valid_geoarrow("parcel"))
     """
     return on_geometry(
         geometry,
@@ -112,9 +112,9 @@ def null_out_invalid_geoarrow(
     but nothing checks a column that arrives another way,
     such as from a file or relabelled with `ext.to`:
 
-    ```python
-    pl.scan_parquet("routes.parquet").select(geo.null_out_invalid_geoarrow("route"))
-    ```
+    .. code-block:: python
+
+        pl.scan_parquet("routes.parquet").select(geo.null_out_invalid_geoarrow("route"))
 
     On a column that is entirely valid, it copies nothing.
     """
@@ -148,15 +148,17 @@ def is_valid_ogc(
     `out_of_bounds` and `check_null_coordinates` are as for `is_valid_geoarrow`.
 
     On top of that, per geometry
-    (<https://docs.ogc.org/is/06-103r4/06-103r4.pdf>, sections 6.1.11.1 and 6.1.14):
+    (https://docs.ogc.org/is/06-103r4/06-103r4.pdf, sections 6.1.11.1 and 6.1.14):
 
-    | geometry | valid when |
-    | - | - |
-    | `PointXY[ZM]`, `MultiPointXY[ZM]` | its coordinates are |
-    | `LineStringXY[ZM]` | it has no vertices, or at least 2 distinct ones |
-    | `PolygonXY[ZM]` | all rings empty, or every ring with at least 4 distinct vertices, fitting together (see below) |
-    | `MultiLineStringXY[ZM]` | every part valid as a linestring |
-    | `MultiPolygonXY[ZM]` | every part valid as a polygon, and the parts fit together (see below) |
+    =================================  ==============================================================================================
+    geometry                           valid when
+    =================================  ==============================================================================================
+    `PointXY[ZM]`, `MultiPointXY[ZM]`  its coordinates are
+    `LineStringXY[ZM]`                 it has no vertices, or at least 2 distinct ones
+    `PolygonXY[ZM]`                    all rings empty, or every ring with at least 4 distinct vertices, fitting together (see below)
+    `MultiLineStringXY[ZM]`            every part valid as a linestring
+    `MultiPolygonXY[ZM]`               every part valid as a polygon, and the parts fit together (see below)
+    =================================  ==============================================================================================
 
     A vertex is distinct when it lies elsewhere in x and y than the one before it.
     So the same vertex twice in a row is fine, as long as there are enough others.
@@ -181,9 +183,9 @@ def is_valid_ogc(
     An empty geometry is valid by OGC, as it is for GEOS.
     Use `is_empty` to find those, and `has_repeats_in_succession` to find the same vertex twice in a row.
 
-    ```python
-    df.filter(geo.is_valid_ogc("parcel"))
-    ```
+    .. code-block:: python
+
+        df.filter(geo.is_valid_ogc("parcel"))
     """
     return on_geometry(
         geometry,
@@ -210,9 +212,9 @@ def null_out_invalid_ogc(
     """Null out every geometry that `is_valid_ogc` rejects, keeping the rest as they are.
     The arguments are those of `is_valid_ogc`.
 
-    ```python
-    df.select(geo.null_out_invalid_ogc("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.null_out_invalid_ogc("parcel"))
 
     On a column that is entirely valid, it copies nothing.
     """

@@ -26,9 +26,9 @@ def set_crs(geometry: IntoExprColumn, crs: str, *, force: bool = False) -> pl.Ex
     unless `force` is set, in which case its label is overwritten.
     Any other metadata is kept.
 
-    ```python
-    df.select(geo.set_crs("parcel", "EPSG:28992"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.set_crs("parcel", "EPSG:28992"))
     """
 
     def build(column: pl.Expr, geometry: GeoArrowType) -> pl.Expr:
@@ -52,9 +52,9 @@ def is_geographic(geometry: IntoExprColumn, *, ignore_errors: bool = False) -> p
     A CRS that cannot be read is refused while the plan is built,
     unless `ignore_errors` is set, in which case it gives False.
 
-    ```python
-    df.with_columns(geo.is_geographic("parcel"))
-    ```
+    .. code-block:: python
+
+        df.with_columns(geo.is_geographic("parcel"))
     """
 
     def build(column: pl.Expr, geometry: GeoArrowType) -> pl.Expr:
@@ -89,12 +89,14 @@ def to_crs(
     What happens to `z` depends on which CRSs specify it.
     If a flag is needed but not specified, it fails at plan time.
 
-    | from | to | needs | `z` |
-    | - | - | - | - |
-    | specifies `z` | specifies `z` | - | reprojected |
-    | specifies `z` | no `z` | `allow_projection_with_unscaled_z=True` | kept as is |
-    | no `z` | no `z` | `allow_projection_with_unscaled_z=True` | kept as is |
-    | no `z` | specifies `z` | `assume_z_in_target_crs=True` | kept as is |
+    =============  =============  =======================================  ===========
+    from           to             needs                                    `z`
+    =============  =============  =======================================  ===========
+    specifies `z`  specifies `z`  nothing                                  reprojected
+    specifies `z`  no `z`         `allow_projection_with_unscaled_z=True`  kept as is
+    no `z`         no `z`         `allow_projection_with_unscaled_z=True`  kept as is
+    no `z`         specifies `z`  `assume_z_in_target_crs=True`            kept as is
+    =============  =============  =======================================  ===========
 
     A geometry without `z` needs neither flag.
     """

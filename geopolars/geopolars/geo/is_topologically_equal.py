@@ -50,9 +50,9 @@ def is_topologically_equal(
 
     {same_crs_pair}
 
-    ```python
-    df.filter(geo.is_topologically_equal("parcel", "surveyed"))
-    ```
+    .. code-block:: python
+
+        df.filter(geo.is_topologically_equal("parcel", "surveyed"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

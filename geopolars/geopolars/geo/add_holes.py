@@ -64,12 +64,14 @@ def add_holes(
     after the holes it already has.
     `holes` holds one linestring per polygon, a list of them, or a multilinestring.
 
-    | polygon | holes | out |
-    | - | - | - |
-    | `PolygonXY[ZM]` | `LineStringXY[ZM]` | `PolygonXY[ZM]` |
-    | `PolygonXY[ZM]` | `list[LineStringXY[ZM]]` | `PolygonXY[ZM]` |
-    | `PolygonXY[ZM]` | `MultiLineStringXY[ZM]` | `PolygonXY[ZM]` |
-    | anything else | | refused |
+    ===============  ========================  ===============
+    polygon          holes                     out
+    ===============  ========================  ===============
+    `PolygonXY[ZM]`  `LineStringXY[ZM]`        `PolygonXY[ZM]`
+    `PolygonXY[ZM]`  `list[LineStringXY[ZM]]`  `PolygonXY[ZM]`
+    `PolygonXY[ZM]`  `MultiLineStringXY[ZM]`   `PolygonXY[ZM]`
+    anything else                              refused
+    ===============  ========================  ===============
 
     A linestring can also be given as its vertices, as `list[PointXY]` or `MultiPointXY`.
     Bare coordinates (the storage of points) work in place of the points.
@@ -82,9 +84,11 @@ def add_holes(
 
     The result keeps the polygon's dimension and CRS.
     Holes of another dimension are refused.
+
     {same_crs}
 
     A null polygon gives a null polygon.
+
     {null_parts}
 
     An empty list adds no holes.
@@ -96,7 +100,7 @@ def add_holes(
     A polygon with an empty exterior that only gets empty holes takes them,
     and stays an empty polygon.
 
-    A polygon is null if any of its rings is not a ring (see [`is_ring`][geopolars.geo.is_ring]),
+    A polygon is null if any of its rings is not a ring (see :func:`~geopolars.geo.is_ring`),
     its existing rings included.
     A polygon whose rings are all empty is the exception, and stays as it is.
     With `empty_polygon_exterior="keep"`, so does one with an empty exterior
@@ -107,9 +111,9 @@ def add_holes(
 
     {on_row_error}
 
-    ```python
-    df.select(geo.add_holes("parcel", "ponds"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.add_holes("parcel", "ponds"))
     """
     validate_one_of("null_parts", null_parts, NullParts)
     validate_one_of(

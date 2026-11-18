@@ -58,14 +58,16 @@ def sort_parts(
     """The geometry with its parts sorted.
     {keeps_type_dimension_and_crs}
 
-    | in | sorted | rotated with `rings="rotate"` |
-    | - | - | - |
-    | `PointXY[ZM]` | nothing, returned as it is | nothing |
-    | `LineStringXY[ZM]` | nothing, returned as it is | the linestring, as a ring |
-    | `PolygonXY[ZM]` | its holes (the exterior stays first) | every ring |
-    | `MultiPointXY[ZM]` | its points | nothing |
-    | `MultiLineStringXY[ZM]` | its linestrings | every linestring, as a ring |
-    | `MultiPolygonXY[ZM]` | the holes of every polygon, then its polygons | every ring |
+    =======================  =============================================  =============================
+    in                       sorted                                         rotated with `rings="rotate"`
+    =======================  =============================================  =============================
+    `PointXY[ZM]`            nothing, returned as it is                     nothing
+    `LineStringXY[ZM]`       nothing, returned as it is                     the linestring, as a ring
+    `PolygonXY[ZM]`          its holes (the exterior stays first)           every ring
+    `MultiPointXY[ZM]`       its points                                     nothing
+    `MultiLineStringXY[ZM]`  its linestrings                                every linestring, as a ring
+    `MultiPolygonXY[ZM]`     the holes of every polygon, then its polygons  every ring
+    =======================  =============================================  =============================
 
     Two geometries that only differ in the order of their parts
     come out the same, so they can be compared part by part.
@@ -103,9 +105,9 @@ def sort_parts(
 
     {empty_and_null}
 
-    ```python
-    df.select(geo.sort_parts("islands", rings="rotate"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.sort_parts("islands", rings="rotate"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     if rings not in get_args(Rings):

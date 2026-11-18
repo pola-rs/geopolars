@@ -63,19 +63,21 @@ def force_2d(geometry: IntoExprColumn) -> pl.Expr:
     Only `z` is dropped: an `m` is kept.
     The geometry kind, its nesting and its CRS stay the same.
 
-    | in | out |
-    | - | - |
-    | `…XY` | `…XY` |
-    | `…XYZ` | `…XY` |
-    | `…XYM` | `…XYM` |
-    | `…XYZM` | `…XYM` |
+    =======  ======
+    in       out
+    =======  ======
+    `…XY`    `…XY`
+    `…XYZ`   `…XY`
+    `…XYM`   `…XYM`
+    `…XYZM`  `…XYM`
+    =======  ======
 
     A geometry without a `z` is returned as it is.
     {ignores_empty_and_invalid}
 
-    ```python
-    df.select(geo.force_2d("route"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.force_2d("route"))
     """
     return on_geometry(geometry, _with_axes(z=False, m=None))
 
@@ -87,9 +89,9 @@ def force_3d(geometry: IntoExprColumn) -> pl.Expr:
     An empty point (NaN in `x` and `y`) gets a NaN `z` instead, so that it stays empty.
     A geometry that already has a `z` is returned as it is.
 
-    ```python
-    df.select(geo.force_3d("route"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.force_3d("route"))
     """
     return on_geometry(geometry, _with_axes(z=True, m=None))
 
@@ -99,9 +101,9 @@ def without_m(geometry: IntoExprColumn) -> pl.Expr:
 
     Works like `force_2d`, but drops `m` instead of `z`.
 
-    ```python
-    df.select(geo.without_m("route"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.without_m("route"))
     """
     return on_geometry(geometry, _with_axes(z=None, m=False))
 
@@ -111,8 +113,8 @@ def force_m(geometry: IntoExprColumn) -> pl.Expr:
 
     Works like `force_3d`, but adds `m` instead of `z`.
 
-    ```python
-    df.select(geo.force_m("route"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.force_m("route"))
     """
     return on_geometry(geometry, _with_axes(z=None, m=True))

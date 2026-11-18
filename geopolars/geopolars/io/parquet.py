@@ -56,11 +56,11 @@ def from_geoparquet(
     A file without GeoParquet metadata leaves the frame as it is.
 
 
-    ```python
-    pl.scan_parquet("countries/*.parquet").pipe(
-        gpl.from_geoparquet, "countries/*.parquet"
-    ).select(geo.from_wkb("geometry", MultiPolygonXY))
-    ```
+    .. code-block:: python
+
+        pl.scan_parquet("countries/*.parquet").pipe(
+            gpl.from_geoparquet, "countries/*.parquet"
+        ).select(geo.from_wkb("geometry", MultiPolygonXY))
     """
     paths = (
         _expand_paths(
@@ -166,10 +166,10 @@ def geoparquet_metadata(
 
     Pass it to Polars' writer, next to any metadata of your own:
 
-    ```python
-    df.write_parquet(path, metadata=gpl.geoparquet_metadata(df))
-    lf.sink_parquet(path, metadata={**gpl.geoparquet_metadata(lf), "owner": "me"})
-    ```
+    .. code-block:: python
+
+        df.write_parquet(path, metadata=gpl.geoparquet_metadata(df))
+        lf.sink_parquet(path, metadata={**gpl.geoparquet_metadata(lf), "owner": "me"})
 
     Polars reads its own files back with their dtypes without it,
     but other GeoParquet readers (such as geopandas or GDAL) need it.

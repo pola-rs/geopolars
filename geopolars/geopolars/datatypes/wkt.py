@@ -1,6 +1,6 @@
 """The `geoarrow.wkt` extension type.
 
-Geometries encoded as [Well-Known Text](https://libgeos.org/specifications/wkt/),
+Geometries encoded as `Well-Known Text <https://libgeos.org/specifications/wkt/>`_,
 one value per row, over `String` storage.
 """
 

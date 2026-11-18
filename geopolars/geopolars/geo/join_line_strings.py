@@ -29,11 +29,13 @@ def join_line_strings(
 ) -> pl.Expr:
     """Joins the linestrings of each row into one, each one's end to the next one's start.
 
-    | in | `gaps="null"`, `"bridge"` | `gaps="split"` |
-    | - | - | - |
-    | `list[LineStringXY[ZM]]` | `LineStringXY[ZM]` | `MultiLineStringXY[ZM]` |
-    | `MultiLineStringXY[ZM]` | `LineStringXY[ZM]` | `MultiLineStringXY[ZM]` |
-    | anything else | refused | refused |
+    ========================  =========================  =======================
+    in                        `gaps="null"`, `"bridge"`  `gaps="split"`
+    ========================  =========================  =======================
+    `list[LineStringXY[ZM]]`  `LineStringXY[ZM]`         `MultiLineStringXY[ZM]`
+    `MultiLineStringXY[ZM]`   `LineStringXY[ZM]`         `MultiLineStringXY[ZM]`
+    anything else             refused                    refused
+    ========================  =========================  =======================
 
     {keeps_dimension_and_crs}
 
@@ -42,11 +44,13 @@ def join_line_strings(
     Where the two do not coincide, there is a gap.
     What is done with a gap is determined by `gaps`:
 
-    | `gaps` | a row with a gap |
-    | - | - |
-    | `"null"` | becomes null |
-    | `"bridge"` | is joined anyway, with a straight segment across the gap |
-    | `"split"` | starts a new part at the gap |
+    ==========  ========================================================
+    `gaps`      a row with a gap
+    ==========  ========================================================
+    `"null"`    becomes null
+    `"bridge"`  is joined anyway, with a straight segment across the gap
+    `"split"`   starts a new part at the gap
+    ==========  ========================================================
 
     With `"split"`, the linestrings between two gaps are joined into one part.
 
@@ -63,9 +67,9 @@ def join_line_strings(
     A null linestring or a null vertex in it also gives a null result.
     An empty list, or one of only empty linestrings, counts as empty.
 
-    ```python
-    df.select(geo.join_line_strings("legs", gaps="bridge"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.join_line_strings("legs", gaps="bridge"))
     """
     validate_one_of("gaps", gaps, Gaps)
     validate_coincidence_tolerances(abs_tol, rel_tol)

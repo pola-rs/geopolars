@@ -41,18 +41,20 @@ def simplify(
     A linestring or polygon (or their multi-variants) keeps its kind,
     and an XY or XYM geometry gives XY, an XYZ or XYZM one XYZ:
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | `PointXY[ZM]` |
-    | `LineStringXY[M]` | `LineStringXY` |
-    | `LineStringXYZ[M]` | `LineStringXYZ` |
-    | `PolygonXY[M]` | `PolygonXY` |
-    | `PolygonXYZ[M]` | `PolygonXYZ` |
-    | `MultiPointXY[ZM]` | `MultiPointXY[ZM]` |
-    | `MultiLineStringXY[M]` | `MultiLineStringXY` |
-    | `MultiLineStringXYZ[M]` | `MultiLineStringXYZ` |
-    | `MultiPolygonXY[M]` | `MultiPolygonXY` |
-    | `MultiPolygonXYZ[M]` | `MultiPolygonXYZ` |
+    =======================  ====================
+    in                       out
+    =======================  ====================
+    `PointXY[ZM]`            `PointXY[ZM]`
+    `LineStringXY[M]`        `LineStringXY`
+    `LineStringXYZ[M]`       `LineStringXYZ`
+    `PolygonXY[M]`           `PolygonXY`
+    `PolygonXYZ[M]`          `PolygonXYZ`
+    `MultiPointXY[ZM]`       `MultiPointXY[ZM]`
+    `MultiLineStringXY[M]`   `MultiLineStringXY`
+    `MultiLineStringXYZ[M]`  `MultiLineStringXYZ`
+    `MultiPolygonXY[M]`      `MultiPolygonXY`
+    `MultiPolygonXYZ[M]`     `MultiPolygonXYZ`
+    =======================  ====================
 
     {computed_by_geos_keeping_z}
     A point or multipoint has nothing to leave out,
@@ -65,6 +67,7 @@ def simplify(
     which might break topology.
 
     If `preserve_topology=False`:
+
     - a polygon smaller than `tolerance` becomes empty;
     - a hole, or a part of a multipolygon, smaller than `tolerance` is dropped;
     - a polygon whose simplified rings cross is repaired,
@@ -87,9 +90,9 @@ def simplify(
     unless it starts a ring, where GEOS raises.
     {early_coord_check}
 
-    ```python
-    df.select(geo.simplify("parcel", 0.5))
-    ```
+    .. code-block:: python
+
+        df.select(geo.simplify("parcel", 0.5))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

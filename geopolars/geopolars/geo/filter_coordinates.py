@@ -91,9 +91,9 @@ def filter_coordinates(
 
     {keeps_type_dimension_and_crs}
 
-    ```python
-    df.select(geo.filter_coordinates("route", select_empty=False))
-    ```
+    .. code-block:: python
+
+        df.select(geo.filter_coordinates("route", select_empty=False))
     """
     non_finite = NonFinite(
         select_non_finite=select_non_finite,
