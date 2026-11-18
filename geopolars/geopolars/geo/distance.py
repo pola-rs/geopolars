@@ -71,10 +71,12 @@ def distance(
 ) -> pl.Expr:
     """How far apart two points are, row by row, as an `f64`.
 
-    | `method`     | measured                     | in                  |
-    |--------------|------------------------------|---------------------|
-    | `"planar"`   | Pythagorean                  | coordinate units    |
-    | `"geodesic"` | along the CRS's ellipsoid    | CRS units           |
+    ============  =========================  ================
+    `method`      measured                   in
+    ============  =========================  ================
+    `"planar"`    Pythagorean                coordinate units
+    `"geodesic"`  along the CRS's ellipsoid  CRS units
+    ============  =========================  ================
 
     The distance is calculated according to `method`.
     If not given, points that declare a CRS are measured `"geodesic"`,
@@ -101,9 +103,9 @@ def distance(
     An empty point gives a NaN distance.
     Either side may be a single point, in which case its distance to all the other points is measured.
 
-    ```python
-    df.select(geo.distance("home", "work"))
-    df.select(geo.distance("home", "work", method="planar"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.distance("home", "work"))
+        df.select(geo.distance("home", "work", method="planar"))
     """
     return on_geometry_pair(a, b, partial(_distance, method=method))

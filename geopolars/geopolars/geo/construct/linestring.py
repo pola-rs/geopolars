@@ -20,18 +20,18 @@ def line_string_from_vertices(
     """Build a `geoarrow.linestring` column out of lists of vertices.
 
     `vertices` is a list column holding one list per linestring,
-    of either `geoarrow.point`s or the bare coordinate structs a point wraps.
+    of either `geoarrow.point` values or the bare coordinate structs a point wraps.
     A `geoarrow.multipoint` column works too: its points become the vertices, in order.
 
     Vertices normally arrive grouped:
 
-    ```python
-    df.group_by("route").agg(
-        geo.line_string_from_vertices(
-            geo.point("lon", "lat").implode()
-        ).alias("route")
-    )
-    ```
+    .. code-block:: python
+
+        df.group_by("route").agg(
+            geo.line_string_from_vertices(
+                geo.point("lon", "lat").implode()
+            ).alias("route")
+        )
 
     {null_inside_row}
 
@@ -52,9 +52,9 @@ def line_string_from_columns(
     """Build a `geoarrow.linestring` column from one coordinate column per axis.
     Each is a `List[Float64]` holding one list of coordinates per linestring
 
-    ```python
-    df.select(geo.line_string_from_columns("lon", "lat", z="elevation"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.line_string_from_columns("lon", "lat", z="elevation"))
 
     {null_inside_row}
 
@@ -73,8 +73,9 @@ def line_string(
 ) -> pl.Expr:
     """Build a `geoarrow.linestring` column, from vertices or from coordinates.
     Dispatches to either:
-    - [`line_string_from_vertices`][geopolars.geo.line_string_from_vertices]
-    - [`line_string_from_columns`][geopolars.geo.line_string_from_columns]
+
+    - :func:`~geopolars.geo.line_string_from_vertices`
+    - :func:`~geopolars.geo.line_string_from_columns`
     """
     if y is None:
         if z is not None or m is not None:
@@ -95,22 +96,22 @@ def multi_line_string_from_line_strings(
     """Build a `geoarrow.multilinestring` column out of lists of linestrings.
     Takes either a list of linestrings, or bare vertex lists.
 
-    ```python
-    (
-        df.group_by("river", "branch", maintain_order=True)
-        .agg(
-            geo.line_string_from_vertices(
-                geo.point("lon", "lat").implode()
-            ).alias("branch")
+    .. code-block:: python
+
+        (
+            df.group_by("river", "branch", maintain_order=True)
+            .agg(
+                geo.line_string_from_vertices(
+                    geo.point("lon", "lat").implode()
+                ).alias("branch")
+            )
+            .group_by("river", maintain_order=True)
+            .agg(
+                geo.multi_line_string_from_line_strings(
+                    pl.col("branch").implode()
+                ).alias("river")
+            )
         )
-        .group_by("river", maintain_order=True)
-        .agg(
-            geo.multi_line_string_from_line_strings(
-                pl.col("branch").implode()
-            ).alias("river")
-        )
-    )
-    ```
 
     {null_inside_row}
 
@@ -131,9 +132,9 @@ def multi_line_string_from_columns(
     """Build a `geoarrow.multilinestring` column from one column per axis.
     Each is a `List[List[Float64]]`.
 
-    ```python
-    df.select(geo.multi_line_string_from_columns("lon", "lat"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.multi_line_string_from_columns("lon", "lat"))
 
     {null_inside_row}
 
@@ -152,8 +153,9 @@ def multi_line_string(
 ) -> pl.Expr:
     """Build a `geoarrow.multilinestring` column, from linestrings or coordinates.
     Dispatches to either:
-    - [`multi_line_string_from_line_strings`][geopolars.geo.multi_line_string_from_line_strings]
-    - [`multi_line_string_from_columns`][geopolars.geo.multi_line_string_from_columns]
+
+    - :func:`~geopolars.geo.multi_line_string_from_line_strings`
+    - :func:`~geopolars.geo.multi_line_string_from_columns`
     """
     if y is None:
         if z is not None or m is not None:

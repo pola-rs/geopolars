@@ -44,23 +44,25 @@ def x(geometry: IntoExprColumn) -> pl.Expr:
     The nesting of the output of this function depends on how nested the geometry is.
     A point will return a single value, while a linestring will return a list of values.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | `f64` |
-    | `LineStringXY[ZM]` | `list[f64]` |
-    | `PolygonXY[ZM]` | `list[list[f64]]` |
-    | `MultiPointXY[ZM]` | `list[f64]` |
-    | `MultiLineStringXY[ZM]` | `list[list[f64]]` |
-    | `MultiPolygonXY[ZM]` | `list[list[list[f64]]]` |
+    =======================  =======================
+    in                       out
+    =======================  =======================
+    `PointXY[ZM]`            `f64`
+    `LineStringXY[ZM]`       `list[f64]`
+    `PolygonXY[ZM]`          `list[list[f64]]`
+    `MultiPointXY[ZM]`       `list[f64]`
+    `MultiLineStringXY[ZM]`  `list[list[f64]]`
+    `MultiPolygonXY[ZM]`     `list[list[list[f64]]]`
+    =======================  =======================
 
     The values are returned as they are stored, in the unit of the CRS.
     The CRS itself is not carried over: the result is a plain float column.
     Every stored coordinate is included, so a polygon's rings keep their closing coordinate.
     A null geometry has no `x`; an empty one gives an empty list.
 
-    ```python
-    df.select(geo.x("location"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.x("location"))
     """
     return on_geometry(geometry, _getter("x"))
 
@@ -70,9 +72,9 @@ def y(geometry: IntoExprColumn) -> pl.Expr:
 
     Works exactly like `x`, for the `y` axis.
 
-    ```python
-    df.select(geo.y("location"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.y("location"))
     """
     return on_geometry(geometry, _getter("y"))
 
@@ -84,9 +86,9 @@ def z(geometry: IntoExprColumn) -> pl.Expr:
     Only a geometry that has a `z` (`…XYZ` or `…XYZM`) has one to read:
     any other is refused.
 
-    ```python
-    df.select(geo.z("location"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.z("location"))
     """
     return on_geometry(geometry, _getter("z"))
 
@@ -98,8 +100,8 @@ def m(geometry: IntoExprColumn) -> pl.Expr:
     Only a geometry that has an `m` (`…XYM` or `…XYZM`) has one to read:
     any other is refused while the plan is built.
 
-    ```python
-    df.select(geo.m("location"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.m("location"))
     """
     return on_geometry(geometry, _getter("m"))

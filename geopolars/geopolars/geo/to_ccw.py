@@ -57,9 +57,9 @@ def to_ccw(geometry: IntoExprColumn, *, holes_cw: bool = True) -> pl.Expr:
     A ring that runs neither way (see `is_ccw`) is left as it is.
     {ignores_empty_and_invalid}
 
-    ```python
-    df.select(geo.to_ccw("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.to_ccw("parcel"))
     """
     return on_geometry(geometry, partial(_to_ccw, holes_cw=holes_cw))
 
@@ -72,9 +72,9 @@ def to_cw(geometry: IntoExprColumn, *, holes_ccw: bool = True) -> pl.Expr:
 
     This is `to_ccw`, then `reverse` of every ring.
 
-    ```python
-    df.select(geo.to_cw("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.to_cw("parcel"))
     """
     return reverse(
         to_ccw(geometry, holes_cw=holes_ccw), reverse_holes=True, nested=False

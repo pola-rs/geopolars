@@ -46,14 +46,16 @@ def difference(
     For a LineString or Polygon, the result can split.
     {overlay_splitting}
 
-    | a | output kind |
-    | - | - |
-    | Point | Point |
-    | MultiPoint | MultiPoint |
-    | LineString | LineString, or MultiLineString with `allow_splitting` |
-    | MultiLineString | MultiLineString |
-    | Polygon | Polygon, or MultiPolygon with `allow_splitting` |
-    | MultiPolygon | MultiPolygon |
+    ===============  =====================================================
+    a                output kind
+    ===============  =====================================================
+    Point            Point
+    MultiPoint       MultiPoint
+    LineString       LineString, or MultiLineString with `allow_splitting`
+    MultiLineString  MultiLineString
+    Polygon          Polygon, or MultiPolygon with `allow_splitting`
+    MultiPolygon     MultiPolygon
+    ===============  =====================================================
 
     {broadcast_single_geometry}
 
@@ -92,10 +94,10 @@ def difference(
     {same_crs_pair}
     {overlay_crs}
 
-    ```python
-    df.select(geo.difference("parcel", "road_reserve"))
-    df.select(geo.difference("trail", "private_land", allow_splitting=True))
-    ```
+    .. code-block:: python
+
+        df.select(geo.difference("parcel", "road_reserve"))
+        df.select(geo.difference("trail", "private_land", allow_splitting=True))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

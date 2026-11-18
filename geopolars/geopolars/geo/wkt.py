@@ -41,11 +41,11 @@ def from_wkt(
 
     {decode_into_dtype}
 
-    ```python
-    pl.read_csv("parcels.csv").select(
-        geo.from_wkt("geometry", MultiPolygonXY, crs="EPSG:4326")
-    )
-    ```
+    .. code-block:: python
+
+        pl.read_csv("parcels.csv").select(
+            geo.from_wkt("geometry", MultiPolygonXY, crs="EPSG:4326")
+        )
     """
     return register_plugin_function(
         plugin_path=LIB,

@@ -32,12 +32,12 @@ def polygons_from_rings_in_single_column(
     """Build a `geoarrow.polygon` column out of lists of rings.
 
     `rings` is a list column holding one list per polygon, of either
-    `geoarrow.linestring`s or the bare vertex lists a linestring wraps. The
+    `geoarrow.linestring` values or the bare vertex lists a linestring wraps. The
     first ring of a polygon is its exterior ring; the rest are its holes.
 
     {null_inside_row}
 
-    Every ring has to be a ring (see [`is_ring`][geopolars.geo.is_ring]):
+    Every ring has to be a ring (see :func:`~geopolars.geo.is_ring`):
     at least 4 vertices, the last one repeating the first.
     A polygon with a ring that is not one is null in the result.
     The exception is a polygon whose rings are all empty, which is the empty polygon.
@@ -45,26 +45,27 @@ def polygons_from_rings_in_single_column(
     A ring that is still too short after that stays refused.
 
     {closing_rings}
+
     {flag_for_absent_axis}
 
     Rings normally arrive grouped, one linestring at a time:
 
-    ```python
-    (
-        df.group_by("plot", "ring", maintain_order=True)
-        .agg(
-            geo.line_string_from_vertices(
-                geo.point("lon", "lat").implode()
-            ).alias("ring")
+    .. code-block:: python
+
+        (
+            df.group_by("plot", "ring", maintain_order=True)
+            .agg(
+                geo.line_string_from_vertices(
+                    geo.point("lon", "lat").implode()
+                ).alias("ring")
+            )
+            .group_by("plot", maintain_order=True)
+            .agg(
+                geo.polygons_from_rings_in_single_column(
+                    pl.col("ring").implode()
+                ).alias("plot")
+            )
         )
-        .group_by("plot", maintain_order=True)
-        .agg(
-            geo.polygons_from_rings_in_single_column(
-                pl.col("ring").implode()
-            ).alias("plot")
-        )
-    )
-    ```
     """
     return _gather("polygon", rings, _polygon_kwargs(crs, close))
 
@@ -90,6 +91,7 @@ def polygons_from_rings_in_separate_columns(
     {paired_rows}
 
     A null exterior, or one with a null anywhere inside it, gives a null polygon.
+
     {null_parts}
 
     The polygon takes the CRS of the exterior,
@@ -99,30 +101,30 @@ def polygons_from_rings_in_separate_columns(
     `crs` sets the CRS of an exterior or holes that declare none,
     and refuses one that already declares another.
     Rings are checked (and closed with `close`)
-    as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
+    as in :func:`~geopolars.geo.polygons_from_rings_in_single_column`.
 
-    ```python
-    outer = ways.filter(role="outer").group_by("relation").agg(
-        geo.line_string_from_vertices(
-            geo.point("lon", "lat").implode()
-        ).alias("outer")
-    )
-    inner = (
-        ways.filter(role="inner")
-        .group_by("relation", "way")
-        .agg(
+    .. code-block:: python
+
+        outer = ways.filter(role="outer").group_by("relation").agg(
             geo.line_string_from_vertices(
                 geo.point("lon", "lat").implode()
-            ).alias("inner")
+            ).alias("outer")
         )
-        .group_by("relation")
-        .agg("inner")
-    )
-    # A relation without inner ways gets null holes, which `"drop"` leaves out.
-    outer.join(inner, on="relation", how="left").select(
-        geo.polygons_from_rings_in_separate_columns("outer", "inner", null_parts="drop")
-    )
-    ```
+        inner = (
+            ways.filter(role="inner")
+            .group_by("relation", "way")
+            .agg(
+                geo.line_string_from_vertices(
+                    geo.point("lon", "lat").implode()
+                ).alias("inner")
+            )
+            .group_by("relation")
+            .agg("inner")
+        )
+        # A relation without inner ways gets null holes, which `"drop"` leaves out.
+        outer.join(inner, on="relation", how="left").select(
+            geo.polygons_from_rings_in_separate_columns("outer", "inner", null_parts="drop")
+        )
     """
     validate_one_of("null_parts", null_parts, NullParts)
     return register_plugin_function(
@@ -147,15 +149,15 @@ def polygons_from_coordinates(
     """Build a `geoarrow.polygon` column from one coordinate column per axis.
     Each is a `List[Float64]`, holding the exterior ring of one polygon per row.
     Polygons created by this expression can therefore not have any holes.
-    For those, use [`polygons_from_nested_coordinates`][geopolars.geo.polygons_from_nested_coordinates]
-    or [`polygons_from_rings_in_separate_columns`][geopolars.geo.polygons_from_rings_in_separate_columns].
+    For those, use :func:`~geopolars.geo.polygons_from_nested_coordinates`
+    or :func:`~geopolars.geo.polygons_from_rings_in_separate_columns`.
 
-    ```python
-    df.select(geo.polygons_from_coordinates("lon", "lat"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.polygons_from_coordinates("lon", "lat"))
 
     Nulls are handled, and rings checked (and closed with `close`),
-    as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
+    as in :func:`~geopolars.geo.polygons_from_rings_in_single_column`.
     """
     return _from_columns("polygon_coords", x, y, z, m, _polygon_kwargs(crs, close))
 
@@ -172,15 +174,15 @@ def polygons_from_nested_coordinates(
     """Build a `geoarrow.polygon` column from one coordinate column per axis.
     Each is a `List[List[Float64]]`: one list per polygon, of one list per ring.
     The first ring of a polygon is its exterior ring, and the rest are its holes.
-    See [`polygons_from_coordinates`][geopolars.geo.polygons_from_coordinates]
+    See :func:`~geopolars.geo.polygons_from_coordinates`
     for polygons without holes, one ring per row.
 
-    ```python
-    df.select(geo.polygons_from_nested_coordinates("lon", "lat"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.polygons_from_nested_coordinates("lon", "lat"))
 
     Nulls are handled, and rings checked (and closed with `close`),
-    as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
+    as in :func:`~geopolars.geo.polygons_from_rings_in_single_column`.
     """
     return _from_columns(
         "polygon_nested_coords", x, y, z, m, _polygon_kwargs(crs, close)
@@ -197,31 +199,31 @@ def multi_polygons_from_polygons(
     """Build a `geoarrow.multipolygon` column out of lists of polygons.
     Takes either a list of polygons, or bare lists of rings.
 
-    ```python
-    (
-        df.group_by("country", "island", "ring", maintain_order=True)
-        .agg(
-            geo.line_string_from_vertices(
-                geo.point("lon", "lat").implode()
-            ).alias("ring")
+    .. code-block:: python
+
+        (
+            df.group_by("country", "island", "ring", maintain_order=True)
+            .agg(
+                geo.line_string_from_vertices(
+                    geo.point("lon", "lat").implode()
+                ).alias("ring")
+            )
+            .group_by("country", "island", maintain_order=True)
+            .agg(
+                geo.polygons_from_rings_in_single_column(
+                    pl.col("ring").implode()
+                ).alias("island")
+            )
+            .group_by("country", maintain_order=True)
+            .agg(
+                geo.multi_polygons_from_polygons(
+                    pl.col("island").implode()
+                ).alias("country")
+            )
         )
-        .group_by("country", "island", maintain_order=True)
-        .agg(
-            geo.polygons_from_rings_in_single_column(
-                pl.col("ring").implode()
-            ).alias("island")
-        )
-        .group_by("country", maintain_order=True)
-        .agg(
-            geo.multi_polygons_from_polygons(
-                pl.col("island").implode()
-            ).alias("country")
-        )
-    )
-    ```
 
     Nulls are handled, and rings checked (and closed with `close`),
-    as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
+    as in :func:`~geopolars.geo.polygons_from_rings_in_single_column`.
     A multipolygon with a polygon that fails this is null in the result.
     """
     return _gather("multipolygon", polygons, _polygon_kwargs(crs, close))
@@ -240,15 +242,15 @@ def multi_polygons_from_coordinates(
     Each is a `List[List[Float64]]`: one list per multipolygon,
     of the exterior ring of each of its polygons.
     Multipolygons created by this expression can therefore not have any holes.
-    For those, use [`multi_polygons_from_nested_coordinates`][geopolars.geo.multi_polygons_from_nested_coordinates]
-    or [`multi_polygons_from_polygons`][geopolars.geo.multi_polygons_from_polygons].
+    For those, use :func:`~geopolars.geo.multi_polygons_from_nested_coordinates`
+    or :func:`~geopolars.geo.multi_polygons_from_polygons`.
 
-    ```python
-    df.select(geo.multi_polygons_from_coordinates("lon", "lat"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.multi_polygons_from_coordinates("lon", "lat"))
 
     Nulls are handled, and rings checked (and closed with `close`),
-    as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
+    as in :func:`~geopolars.geo.polygons_from_rings_in_single_column`.
     A multipolygon with a polygon that fails this is null in the result.
     """
     return _from_columns("multipolygon_coords", x, y, z, m, _polygon_kwargs(crs, close))
@@ -266,15 +268,15 @@ def multi_polygons_from_nested_coordinates(
     """Build a `geoarrow.multipolygon` column from one coordinate column per axis.
     Each is a `List[List[List[Float64]]]`: polygons, then rings, then coordinates.
     The first ring of every polygon is its exterior ring, and the rest are its holes.
-    See [`multi_polygons_from_coordinates`][geopolars.geo.multi_polygons_from_coordinates]
+    See :func:`~geopolars.geo.multi_polygons_from_coordinates`
     for multipolygons without holes.
 
-    ```python
-    df.select(geo.multi_polygons_from_nested_coordinates("lon", "lat"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.multi_polygons_from_nested_coordinates("lon", "lat"))
 
     Nulls are handled, and rings checked (and closed with `close`),
-    as in [`polygons_from_rings_in_single_column`][geopolars.geo.polygons_from_rings_in_single_column].
+    as in :func:`~geopolars.geo.polygons_from_rings_in_single_column`.
     A multipolygon with a polygon that fails this is null in the result.
     """
     return _from_columns(

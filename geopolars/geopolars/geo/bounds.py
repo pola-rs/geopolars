@@ -41,8 +41,10 @@ def _bounds(
 
 def _envelope(geometry: IntoExprColumn) -> pl.Expr:
     """same as `bounds`, except:
+
     - One box per row around the whole geometry
     - all parts of a multi-geometry together.
+
     Used for a GeoParquet covering.
     """
     return on_geometry(
@@ -58,14 +60,16 @@ def bounds(
     """The bounding box of a geometry, as a `geoarrow.box` with its dimension and CRS.
     A multi-geometry gives a list of boxes instead, one per part.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | `BoxXY[ZM]` |
-    | `LineStringXY[ZM]` | `BoxXY[ZM]` |
-    | `PolygonXY[ZM]` | `BoxXY[ZM]` |
-    | `MultiPointXY[ZM]` | `list[BoxXY[ZM]]` |
-    | `MultiLineStringXY[ZM]` | `list[BoxXY[ZM]]` |
-    | `MultiPolygonXY[ZM]` | `list[BoxXY[ZM]]` |
+    =======================  =================
+    in                       out
+    =======================  =================
+    `PointXY[ZM]`            `BoxXY[ZM]`
+    `LineStringXY[ZM]`       `BoxXY[ZM]`
+    `PolygonXY[ZM]`          `BoxXY[ZM]`
+    `MultiPointXY[ZM]`       `list[BoxXY[ZM]]`
+    `MultiLineStringXY[ZM]`  `list[BoxXY[ZM]]`
+    `MultiPolygonXY[ZM]`     `list[BoxXY[ZM]]`
+    =======================  =================
 
     A point's box repeats its own coordinates: `xmin == xmax`.
     `margin_x` and `margin_y` widen the box by that much on both sides
@@ -77,9 +81,9 @@ def bounds(
     {empty_box}
     A null geometry gives a null box.
 
-    ```python
-    df.select(geo.bounds("parcel", margin_x=10.0, margin_y=10.0))
-    ```
+    .. code-block:: python
+
+        df.select(geo.bounds("parcel", margin_x=10.0, margin_y=10.0))
     """
     return on_geometry(
         geometry,
@@ -103,9 +107,9 @@ def total_bounds(geometry: IntoExprColumn, *, ignore_nulls: bool = False) -> pl.
     unless `ignore_nulls=True`: then it is skipped.
     A column without rows, or with only null ones, gives a null box.
 
-    ```python
-    df.group_by("region").agg(geo.total_bounds("parcel"))
-    ```
+    .. code-block:: python
+
+        df.group_by("region").agg(geo.total_bounds("parcel"))
     """
 
     # This function does not stream. Plugins cannot really make streaming things yet.

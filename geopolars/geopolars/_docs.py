@@ -40,11 +40,13 @@ An infinite one makes any two finite values close, but an infinity only close to
     "closing_rings": """\
 For a ring with the first vertex as F and the last as L:
 
-| ends | result |
-| - | - |
-| x or y differ | F is appended |
-| x and y the same, z differs | F is appended, or with `snap_z=True`, L gets the z of F |
-| x, y and z the same, m differs | left as it is, or with `snap_m=True`, L gets the m of F |
+==============================  ======
+ends                            result
+==============================  ======
+x or y differ                   F is appended
+x and y the same, z differs     F is appended, or with `snap_z=True`, L gets the z of F
+x, y and z the same, m differs  left as it is, or with `snap_m=True`, L gets the m of F
+==============================  ======
 
 If `snap_z=True` and `snap_m=True`, a snapped L gets both the z and the m of F.
 An appended F brings its own z and m, so the ring is closed in every axis.""",
@@ -59,11 +61,13 @@ The empty point has NaN on every axis it has.
     "selected_coordinate_actions": """\
 `action` says what happens to a coordinate {selected}:
 
-| `action` | a coordinate {selected} |
-| - | - |
-| `"drop"` | is removed |
-| `"set_empty"` | gets NaN on every axis |
-| `"set_null"` | makes its row null |
+=============  =======================
+`action`       a coordinate {selected}
+=============  =======================
+`"drop"`       is removed
+`"set_empty"`  gets NaN on every axis
+`"set_null"`   makes its row null
+=============  =======================
 
 A point cannot lose its coordinate, so with `"drop"` it becomes the empty point,
 just as a linestring or ring that loses every vertex becomes empty.
@@ -76,11 +80,13 @@ A linestring is too short with a single vertex, and a ring with fewer than 4.
 This also holds for input that was too short already.
 What is done with these is determined by `short_lines`:
 
-| `short_lines` | a too-short linestring or ring |
-| - | - |
-| `"null"` | makes its row null |
-| `"keep"` | stays as it is, e.g. `[A]`, or a ring `[A, B, A]` |
-| `"empty"` | becomes empty |
+=============  ==============================
+`short_lines`  a too-short linestring or ring
+=============  ==============================
+`"null"`       makes its row null
+`"keep"`       stays as it is, e.g. `[A]`, or a ring `[A, B, A]`
+`"empty"`      becomes empty
+=============  ==============================
 
 Note that an empty exterior ring makes a polygon invalid by OGC,
 unless every hole of it is empty too (the empty polygon).""",
@@ -109,13 +115,27 @@ If you pass a single geometry on either side, it is {paired_with} every row of t
 Bare coordinates and an untyped null (`pl.lit(None)`) cannot declare a CRS,
 so they go with any.
 
-| `{geometry}` | `{parts}` | result |
-| - | - | - |
-| declares X | declares X | accepted |
-| declares none | declares none | accepted |
-| anything | bare coordinates, or `pl.lit(None)` | accepted |
-| declares X | declares none, or the other way round | refused |
-| declares X | declares Y | refused |""",
+.. list-table::
+    :header-rows: 1
+
+    * - `{geometry}`
+      - `{parts}`
+      - result
+    * - declares X
+      - declares X
+      - accepted
+    * - declares none
+      - declares none
+      - accepted
+    * - anything
+      - bare coordinates, or `pl.lit(None)`
+      - accepted
+    * - declares X
+      - declares none, or the other way round
+      - refused
+    * - declares X
+      - declares Y
+      - refused""",
     "same_crs_pair": """\
 `a` and `b` have to declare the same CRS, or neither one.
 If the CRSs differ (or only one has a CRS, and the other does not), an error is raised at plan time.""",
@@ -125,10 +145,12 @@ A null {part} is a null row of `{parts}`, a null in a list of them,
 or one with a null anywhere inside it (such as a null vertex, or a null coordinate value).
 An untyped null (`pl.lit(None)`) as `{parts}` is null on every row.
 
-| `null_parts` | a null {part} |
-| - | - |
-| `"drop"` | is left out; the other {parts} of the row are still added |
-| `"null"` | makes the result null |""",
+============  =============
+`null_parts`  a null {part}
+============  =============
+`"drop"`      is left out; the other {parts} of the row are still added
+`"null"`      makes the result null
+============  =============""",
     "ignores_empty_and_invalid": """\
 This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",
@@ -222,18 +244,21 @@ and so does one with a null vertex, or one that is not finite in x or y.""",
     "point_measure": """\
 `m` stands for 'measure', an arbitrary per-vertex value.
 Typical uses:
+
 - a timestamp
 - a distance along a route
 - an airspeed measurement""",
     "linestring_measure": """\
 `m` stands for 'measure', an arbitrary value carried per *vertex* rather
 than per linestring. Typical uses:
+
 - a timestamp, making the linestring a trajectory
 - a distance along a route
 - an airspeed measurement""",
     "polygon_measure": """\
 `m` stands for 'measure', an arbitrary value carried per *vertex* rather
 than per ring or per polygon. Typical uses:
+
 - a timestamp
 - a distance along the boundary
 - a sensor reading taken at that vertex""",

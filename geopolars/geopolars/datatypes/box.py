@@ -1,7 +1,7 @@
 """The `geoarrow.box` extension type.
 Mirrors `GeoBox` in `src/geoarrow/bbox.rs`.
 
-Per the [GeoArrow spec](https://geoarrow.org/format.html):
+Per the `GeoArrow spec <https://geoarrow.org/format.html>`_:
 an array of axis-aligned rectangles is a struct of their bounds,
 `Struct<xmin, ymin, [zmin], [mmin], xmax, ymax, [zmax], [mmax]>`.
 """

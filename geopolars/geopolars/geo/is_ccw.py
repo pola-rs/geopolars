@@ -51,14 +51,16 @@ def is_ccw(geometry: IntoExprColumn, *, holes_cw: bool = True) -> pl.Expr:
     The default is how GeoParquet and OGC wind a polygon.
     A multilinestring or multipolygon has to have every part run that way.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | `bool` |
-    | `PolygonXY[ZM]` | `bool` |
-    | `MultiPointXY[ZM]` | refused |
-    | `MultiLineStringXY[ZM]` | `bool` |
-    | `MultiPolygonXY[ZM]` | `bool` |
+    =======================  =======
+    in                       out
+    =======================  =======
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       `bool`
+    `PolygonXY[ZM]`          `bool`
+    `MultiPointXY[ZM]`       refused
+    `MultiLineStringXY[ZM]`  `bool`
+    `MultiPolygonXY[ZM]`     `bool`
+    =======================  =======
 
     The orientation is the sign of the area the ring encloses in x and y; z and m are ignored.
     An empty linestring, ring, polygon or multi runs either way, so it gives `True`.
@@ -68,8 +70,8 @@ def is_ccw(geometry: IntoExprColumn, *, holes_cw: bool = True) -> pl.Expr:
     Whether a line is closed is not checked: an open line is taken as closed back to its start.
     Combine with `is_ring` or `is_valid_geoarrow` to check that too.
 
-    ```python
-    df.select(geo.is_ccw("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.is_ccw("parcel"))
     """
     return on_geometry(geometry, partial(_is_ccw, holes_cw=holes_cw))

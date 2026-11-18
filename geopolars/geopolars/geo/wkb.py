@@ -40,11 +40,11 @@ def from_wkb(
 
     {decode_into_dtype}
 
-    ```python
-    pl.read_parquet("parcels.parquet").select(
-        geo.from_wkb("geometry", MultiPolygonXY, crs="EPSG:4326")
-    )
-    ```
+    .. code-block:: python
+
+        pl.read_parquet("parcels.parquet").select(
+            geo.from_wkb("geometry", MultiPolygonXY, crs="EPSG:4326")
+        )
     """
     return register_plugin_function(
         plugin_path=LIB,

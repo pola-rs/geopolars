@@ -42,14 +42,16 @@ def is_ring(geometry: IntoExprColumn) -> pl.Expr:
     The joined line counts each joint once.
     An empty part breaks the chain.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | `bool` |
-    | `PolygonXY[ZM]` | refused |
-    | `MultiPointXY[ZM]` | refused |
-    | `MultiLineStringXY[ZM]` | `bool` |
-    | `MultiPolygonXY[ZM]` | refused |
+    =======================  =======
+    in                       out
+    =======================  =======
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       `bool`
+    `PolygonXY[ZM]`          refused
+    `MultiPointXY[ZM]`       refused
+    `MultiLineStringXY[ZM]`  `bool`
+    `MultiPolygonXY[ZM]`     refused
+    =======================  =======
 
     m is a measure along the line rather than a position, so it is not compared.
     4 vertices is a triangle plus the one closing it, so a closed line with fewer is no ring.
@@ -58,8 +60,8 @@ def is_ring(geometry: IntoExprColumn) -> pl.Expr:
 
     This is what the polygon constructors check every ring against.
 
-    ```python
-    df.select(geo.is_ring("route"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.is_ring("route"))
     """
     return on_geometry(geometry, _is_ring)

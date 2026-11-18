@@ -28,20 +28,22 @@ def box(
     """Build a `geoarrow.box` column from its bounds.
     Whether you pass the `z` and/or `m` bounds decides the dimension, and so the dtype:
 
-    | passed                         | dtype     |
-    |--------------------------------|-----------|
-    | -                              | `BoxXY`   |
-    | `zmin`, `zmax`                 | `BoxXYZ`  |
-    | `mmin`, `mmax`                 | `BoxXYM`  |
-    | `zmin`, `zmax`, `mmin`, `mmax` | `BoxXYZM` |
+    ==============================  =========
+    passed                          dtype
+    ==============================  =========
+    nothing                         `BoxXY`
+    `zmin`, `zmax`                  `BoxXYZ`
+    `mmin`, `mmax`                  `BoxXYM`
+    `zmin`, `zmax`, `mmin`, `mmax`  `BoxXYZM`
+    ==============================  =========
 
     The bounds are taken as given: `xmin > xmax` is a box that crosses the antimeridian,
     and a range from `inf` to `-inf` is empty.
     A null bound makes the whole box null.
 
-    ```python
-    df.select(geo.box("west", "south", "east", "north", crs="EPSG:4326"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.box("west", "south", "east", "north", crs="EPSG:4326"))
     """
     given = _given(xmin, ymin, zmin, mmin)
     for axis, low, high in (("z", zmin, zmax), ("m", mmin, mmax)):

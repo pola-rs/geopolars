@@ -130,9 +130,9 @@ def fix_out_of_bounds(
 
     {keeps_type_dimension_and_crs}
 
-    ```python
-    df.select(geo.fix_out_of_bounds("route", action="clamp"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.fix_out_of_bounds("route", action="clamp"))
     """
     out_of_bounds = OutOfBounds(
         crs_bounds=crs_bounds, action=action, short_lines=short_lines

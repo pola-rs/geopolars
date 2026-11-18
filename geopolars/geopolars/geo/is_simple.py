@@ -24,17 +24,19 @@ def is_simple(geometry: IntoExprColumn) -> pl.Expr:
     One `bool` per row, a multi-geometry included. A null geometry gives a null result.
 
     A simple geometry does not cross or touch itself
-    (<https://docs.ogc.org/is/06-103r4/06-103r4.pdf>, sections 6.1.4 to 6.1.8).
+    (https://docs.ogc.org/is/06-103r4/06-103r4.pdf, sections 6.1.4 to 6.1.8).
     The geometries have to be valid by `is_valid_geoarrow`, but not necessarily by OGC (see `is_valid_ogc`).
 
-    | geometry | simple when |
-    | - | - |
-    | `PointXY[ZM]` | always |
-    | `MultiPointXY[ZM]` | no two points lie at exactly the same place in x and y |
-    | `LineStringXY[ZM]` | it does not pass through the same place twice, except that its ends may meet |
-    | `MultiLineStringXY[ZM]` | every part is simple, and two parts only meet where both have an end |
-    | `PolygonXY[ZM]` | every ring is simple, as a linestring with its ends meeting |
-    | `MultiPolygonXY[ZM]` | every ring of every part is simple |
+    =======================  ============================================================================
+    geometry                 simple when
+    =======================  ============================================================================
+    `PointXY[ZM]`            always
+    `MultiPointXY[ZM]`       no two points lie at exactly the same place in x and y
+    `LineStringXY[ZM]`       it does not pass through the same place twice, except that its ends may meet
+    `MultiLineStringXY[ZM]`  every part is simple, and two parts only meet where both have an end
+    `PolygonXY[ZM]`          every ring is simple, as a linestring with its ends meeting
+    `MultiPolygonXY[ZM]`     every ring of every part is simple
+    =======================  ============================================================================
 
     Going back and forth between two points counts as passing through the same place twice.
     Repeated vertices do not count, as long as they are exactly equal.
@@ -52,9 +54,9 @@ def is_simple(geometry: IntoExprColumn) -> pl.Expr:
     For anything but a point or multipoint, a NaN or infinite x or y makes the geometry not simple.
     In a multipoint, a NaN never lies at the same place as anything.
 
-    ```python
-    df.filter(geo.is_simple("route"))
-    ```
+    .. code-block:: python
+
+        df.filter(geo.is_simple("route"))
     """
 
     def build(column: pl.Expr, _geometry: GeoArrowType) -> pl.Expr:

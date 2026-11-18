@@ -66,10 +66,10 @@ def line_interpolate_point(
     often the end of the line, or a point with a NaN or infinite coordinate.
     {early_coord_check}
 
-    ```python
-    df.select(geo.line_interpolate_point("road", 100.0))
-    df.select(geo.line_interpolate_point("road", 0.5, mode="normalized"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.line_interpolate_point("road", 100.0))
+        df.select(geo.line_interpolate_point("road", 0.5, mode="normalized"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

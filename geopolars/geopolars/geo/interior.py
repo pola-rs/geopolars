@@ -37,21 +37,23 @@ def interior(geometry: IntoExprColumn) -> pl.Expr:
     with the polygon's dimension and CRS. The exterior is left out.
     A multipolygon gives a list instead, one multilinestring per polygon.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | refused |
-    | `PolygonXY[ZM]` | `MultiLineStringXY[ZM]` |
-    | `MultiPointXY[ZM]` | refused |
-    | `MultiLineStringXY[ZM]` | refused |
-    | `MultiPolygonXY[ZM]` | `list[MultiLineStringXY[ZM]]` |
+    =======================  =============================
+    in                       out
+    =======================  =============================
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       refused
+    `PolygonXY[ZM]`          `MultiLineStringXY[ZM]`
+    `MultiPointXY[ZM]`       refused
+    `MultiLineStringXY[ZM]`  refused
+    `MultiPolygonXY[ZM]`     `list[MultiLineStringXY[ZM]]`
+    =======================  =============================
 
     The rings stay closed, as they are stored.
     A polygon without holes, or without any rings, gives an empty multilinestring.
     A null polygon gives a null multilinestring.
 
-    ```python
-    df.select(geo.interior("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.interior("parcel"))
     """
     return on_geometry(geometry, _interior)

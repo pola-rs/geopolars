@@ -107,9 +107,9 @@ def wrap_longitude(
     The geometry needs a geographic CRS: without one there is no longitude to wrap,
     and the expression is refused while the plan is built.
 
-    ```python
-    df.select(geo.wrap_longitude("route", skip_crossing=True))
-    ```
+    .. code-block:: python
+
+        df.select(geo.wrap_longitude("route", skip_crossing=True))
     """
     if start is not None and not math.isfinite(start):
         msg = f"`start` has to be a finite number, got: {start!r}"

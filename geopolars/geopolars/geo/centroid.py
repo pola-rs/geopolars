@@ -47,8 +47,8 @@ def centroid(geometry: IntoExprColumn) -> pl.Expr:
     A polygon's centroid is measured on the plane the coordinates lie in,
     even when they carry a CRS, and the CRS is carried over to the result.
     Holes are taken out.
-    Its 'x' and 'y' are the centroid of its footprint (its shadow on the x/y plane),
-    and its 'z' and 'm' are averaged over that footprint's area.
+    Its `x` and `y` are the centroid of its footprint (its shadow on the x/y plane),
+    and its `z` and `m` are averaged over that footprint's area.
     For a flat 3D polygon, that puts the centroid on the polygon,
     right above the centroid of its footprint.
     The result keeps the polygon's dimension.
@@ -56,8 +56,8 @@ def centroid(geometry: IntoExprColumn) -> pl.Expr:
 
     A linestring's centroid is the midpoint of each of its segments,
     weighted by that segment's length.
-    Fully three-dimensional if 'z'.
-    If the line has an 'm', it is averaged.
+    Fully three-dimensional if `z`.
+    If the line has an `m`, it is averaged.
     The result keeps the line's dimension.
     A null linestring, an empty one,
     and one without length (a single vertex, or all on one spot) have no centroid.
@@ -77,17 +77,19 @@ def centroid(geometry: IntoExprColumn) -> pl.Expr:
     (see `mean_coordinate`).
     A null or empty multipoint has no centroid.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | `PointXY[ZM]` |
-    | `LineStringXY[ZM]` | `PointXY[ZM]` |
-    | `PolygonXY[ZM]` | `PointXY[ZM]` |
-    | `MultiPointXY[ZM]` | `PointXY[ZM]` |
-    | `MultiLineStringXY[ZM]` | `PointXY[ZM]` |
-    | `MultiPolygonXY[ZM]` | `PointXY[ZM]` |
+    =======================  =============
+    in                       out
+    =======================  =============
+    `PointXY[ZM]`            `PointXY[ZM]`
+    `LineStringXY[ZM]`       `PointXY[ZM]`
+    `PolygonXY[ZM]`          `PointXY[ZM]`
+    `MultiPointXY[ZM]`       `PointXY[ZM]`
+    `MultiLineStringXY[ZM]`  `PointXY[ZM]`
+    `MultiPolygonXY[ZM]`     `PointXY[ZM]`
+    =======================  =============
 
-    ```python
-    df.select(geo.centroid("parcel"), geo.centroid("road"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.centroid("parcel"), geo.centroid("road"))
     """
     return on_geometry(geometry, _centroid)

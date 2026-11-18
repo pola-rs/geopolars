@@ -52,9 +52,9 @@ def is_equal(
     `a` and `b` have to be the same kind and dimension, or an error is raised at plan time.
     {same_crs_pair}
 
-    ```python
-    df.filter(geo.is_equal("parcel", "surveyed", abs_tol=0.01))
-    ```
+    .. code-block:: python
+
+        df.filter(geo.is_equal("parcel", "surveyed", abs_tol=0.01))
     """
     validate_coincidence_tolerances(abs_tol, rel_tol)
     kwargs = {

@@ -81,9 +81,9 @@ def hausdorff_line_between(
 
     {same_crs_pair}
 
-    ```python
-    df.with_columns(geo.hausdorff_line_between("route", "planned_route").alias("worst_deviation"))
-    ```
+    .. code-block:: python
+
+        df.with_columns(geo.hausdorff_line_between("route", "planned_route").alias("worst_deviation"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("non_finite", non_finite, HausdorffNonFinite)

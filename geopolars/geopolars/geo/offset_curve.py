@@ -55,10 +55,12 @@ def offset_curve(
     Only linestrings and multilinestrings are accepted.
     The output is always XY:
 
-    | in | out | with `allow_splitting` |
-    | - | - | - |
-    | `LineStringXY[Z][M]` | `LineStringXY` | `MultiLineStringXY` |
-    | `MultiLineStringXY[Z][M]` | `MultiLineStringXY` | `MultiLineStringXY` |
+    =========================  ===================  ======================
+    in                         out                  with `allow_splitting`
+    =========================  ===================  ======================
+    `LineStringXY[Z][M]`       `LineStringXY`       `MultiLineStringXY`
+    `MultiLineStringXY[Z][M]`  `MultiLineStringXY`  `MultiLineStringXY`
+    =========================  ===================  ======================
 
     {computed_by_geos_dropping_z_and_m}
     {empty_and_null}
@@ -86,10 +88,10 @@ def offset_curve(
     {geos_non_finite}
     {early_coord_check}
 
-    ```python
-    df.select(geo.offset_curve("road", 5.0))
-    df.select(geo.offset_curve("road", -5.0, join_style="mitre"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.offset_curve("road", 5.0))
+        df.select(geo.offset_curve("road", -5.0, join_style="mitre"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

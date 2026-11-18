@@ -37,20 +37,22 @@ def exterior(geometry: IntoExprColumn) -> pl.Expr:
     as a closed linestring with the polygon's dimension and CRS.
     A multipolygon gives a list of exteriors instead, one per polygon.
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | refused |
-    | `PolygonXY[ZM]` | `LineStringXY[ZM]` |
-    | `MultiPointXY[ZM]` | refused |
-    | `MultiLineStringXY[ZM]` | refused |
-    | `MultiPolygonXY[ZM]` | `list[LineStringXY[ZM]]` |
+    =======================  ========================
+    in                       out
+    =======================  ========================
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       refused
+    `PolygonXY[ZM]`          `LineStringXY[ZM]`
+    `MultiPointXY[ZM]`       refused
+    `MultiLineStringXY[ZM]`  refused
+    `MultiPolygonXY[ZM]`     `list[LineStringXY[ZM]]`
+    =======================  ========================
 
     A polygon without rings gives an empty linestring.
     A null polygon gives a null linestring.
 
-    ```python
-    df.select(geo.exterior("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.exterior("parcel"))
     """
     return on_geometry(geometry, _exterior)

@@ -41,12 +41,14 @@ def remove_repeats_in_succession(
     to ensure exact coincidence (a prerequisite for GeoArrow validity),
     unless that one is the first vertex (see `collapsed_lines` below).
 
-    | geometry | removed |
-    | - | - |
-    | `PointXY[ZM]` | nothing, returns the input |
-    | `LineStringXY[ZM]`, `MultiPointXY[ZM]` | coincidence in direct succession |
-    | `PolygonXY[ZM]` | the same, per ring |
-    | `MultiLineStringXY[ZM]`, `MultiPolygonXY[ZM]` | the same, per part |
+    =============================================  ================================
+    geometry                                       removed
+    =============================================  ================================
+    `PointXY[ZM]`                                  nothing, returns the input
+    `LineStringXY[ZM]`, `MultiPointXY[ZM]`         coincidence in direct succession
+    `PolygonXY[ZM]`                                the same, per ring
+    `MultiLineStringXY[ZM]`, `MultiPolygonXY[ZM]`  the same, per part
+    =============================================  ================================
 
     Each vertex is compared with the first vertex in a coinciding set, not the one directly in front of it.
     This means that a group of vertices that slowly drifts will at some point be cut off.
@@ -68,9 +70,9 @@ def remove_repeats_in_succession(
 
     {ignores_empty_and_invalid}
 
-    ```python
-    df.select(geo.remove_repeats_in_succession("route", abs_tol=0.01))
-    ```
+    .. code-block:: python
+
+        df.select(geo.remove_repeats_in_succession("route", abs_tol=0.01))
     """
 
     validate_one_of("collapsed_lines", collapsed_lines, CollapsedLines)

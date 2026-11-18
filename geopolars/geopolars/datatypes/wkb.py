@@ -1,6 +1,6 @@
 """The `geoarrow.wkb` extension type.
 
-Geometries encoded as [Well-Known Binary](https://libgeos.org/specifications/wkb/),
+Geometries encoded as `Well-Known Binary <https://libgeos.org/specifications/wkb/>`_,
 one value per row, over `Binary` storage.
 """
 

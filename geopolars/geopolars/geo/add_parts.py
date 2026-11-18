@@ -47,12 +47,14 @@ def add_parts(
     """Add the parts of `parts` to each geometry, after the parts it already has.
     The result is always a multi-geometry.
 
-    | geometry | parts | out |
-    | - | - | - |
-    | `PointXY[ZM]`, `MultiPointXY[ZM]` | `PointXY[ZM]`, `list[PointXY[ZM]]`, `MultiPointXY[ZM]` | `MultiPointXY[ZM]` |
-    | `LineStringXY[ZM]`, `MultiLineStringXY[ZM]` | `LineStringXY[ZM]`, `list[LineStringXY[ZM]]`, `MultiLineStringXY[ZM]` | `MultiLineStringXY[ZM]` |
-    | `PolygonXY[ZM]`, `MultiPolygonXY[ZM]` | `PolygonXY[ZM]`, `list[PolygonXY[ZM]]`, `MultiPolygonXY[ZM]` | `MultiPolygonXY[ZM]` |
-    | anything else | | refused |
+    ===========================================  =====================================================================  =======================
+    geometry                                     parts                                                                  out
+    ===========================================  =====================================================================  =======================
+    `PointXY[ZM]`, `MultiPointXY[ZM]`            `PointXY[ZM]`, `list[PointXY[ZM]]`, `MultiPointXY[ZM]`                 `MultiPointXY[ZM]`
+    `LineStringXY[ZM]`, `MultiLineStringXY[ZM]`  `LineStringXY[ZM]`, `list[LineStringXY[ZM]]`, `MultiLineStringXY[ZM]`  `MultiLineStringXY[ZM]`
+    `PolygonXY[ZM]`, `MultiPolygonXY[ZM]`        `PolygonXY[ZM]`, `list[PolygonXY[ZM]]`, `MultiPolygonXY[ZM]`           `MultiPolygonXY[ZM]`
+    anything else                                                                                                       refused
+    ===========================================  =====================================================================  =======================
 
     A part can also be given as its vertices, as points nested in lists in its shape:
     a linestring as `list[PointXY]` or `MultiPointXY`, a polygon as `list[list[PointXY]]`.
@@ -65,10 +67,12 @@ def add_parts(
 
     {keeps_dimension_and_crs}
     Parts of another dimension are refused.
+
     {same_crs}
 
     The parts are not checked for validity: they are copied as they are.
     A null geometry gives a null multi-geometry.
+
     {null_parts}
 
     `"drop"` suits a list of parts aggregated from rows of which some are null.
@@ -77,22 +81,24 @@ def add_parts(
     A single geometry becomes the first part of the result, so `empty_parts` applies to it as well.
     An existing multi-geometry keeps every part it already has, empty ones included.
 
-    | `empty_parts` | an empty part |
-    | - | - |
-    | `"keep"` | is added like any other part |
-    | `"drop"` | is left out |
+    =============  ============================
+    `empty_parts`  an empty part
+    =============  ============================
+    `"keep"`       is added like any other part
+    `"drop"`       is left out
+    =============  ============================
 
     {empty_point}
 
-    ```python
-    df.select(geo.add_parts("roads", "new_roads"))
+    .. code-block:: python
 
-    # Every road of a region added to that region's highway, leaving out the null ones.
-    roads_per_region = roads.group_by("region").agg("road")
-    highways.join(roads_per_region, on="region").select(
-        geo.add_parts("highway", "road", null_parts="drop")
-    )
-    ```
+        df.select(geo.add_parts("roads", "new_roads"))
+
+        # Every road of a region added to that region's highway, leaving out the null ones.
+        roads_per_region = roads.group_by("region").agg("road")
+        highways.join(roads_per_region, on="region").select(
+            geo.add_parts("highway", "road", null_parts="drop")
+        )
     """
 
     # TODO: Should this really accept Polygon + Polygon -> Multipolygon? Shouldn't you just use the multipolygon constructor in such a case?

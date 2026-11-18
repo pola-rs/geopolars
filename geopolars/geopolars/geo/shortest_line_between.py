@@ -44,10 +44,12 @@ def shortest_line_between(
     `in_crs` is experimental, and may change or go away.
     Reprojecting both geometries with `to_crs` first gives the same line.
 
-    | `in_crs` | `a` and `b` | line in |
-    | - | - | - |
-    | `None` | both declare the same CRS, or neither does | the CRS of `a` and `b` |
-    | a CRS | both declare a CRS, which may differ | `in_crs` |
+    ========  ==========================================  ======================
+    `in_crs`  `a` and `b`                                 line in
+    ========  ==========================================  ======================
+    `None`    both declare the same CRS, or neither does  the CRS of `a` and `b`
+    a CRS     both declare a CRS, which may differ        `in_crs`
+    ========  ==========================================  ======================
 
     Any other combination raises at plan time.
 
@@ -70,9 +72,9 @@ def shortest_line_between(
     Depending on where the vertex is, it raises or might give a line that is not the shortest.
     {early_coord_check}
 
-    ```python
-    df.with_columns(geo.shortest_line_between("house", "road").alias("driveway"))
-    ```
+    .. code-block:: python
+
+        df.with_columns(geo.shortest_line_between("house", "road").alias("driveway"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

@@ -38,23 +38,25 @@ def count_coordinates(
 
     This gives one `UInt32` count per geometry, however deeply it is nested.
 
-    | in | counts |
-    | - | - |
-    | `PointXY[ZM]` | `1`, or `0` when it is empty |
-    | `LineStringXY[ZM]` | its non-empty vertices |
-    | `PolygonXY[ZM]` | the non-empty vertices of every ring |
-    | `MultiPointXY[ZM]` | its non-empty points |
-    | `MultiLineStringXY[ZM]` | the non-empty vertices of every linestring |
-    | `MultiPolygonXY[ZM]` | the non-empty vertices of every ring of every polygon |
+    =======================  =====================================================
+    in                       counts
+    =======================  =====================================================
+    `PointXY[ZM]`            `1`, or `0` when it is empty
+    `LineStringXY[ZM]`       its non-empty vertices
+    `PolygonXY[ZM]`          the non-empty vertices of every ring
+    `MultiPointXY[ZM]`       its non-empty points
+    `MultiLineStringXY[ZM]`  the non-empty vertices of every linestring
+    `MultiPolygonXY[ZM]`     the non-empty vertices of every ring of every polygon
+    =======================  =====================================================
 
     With `include_empty=True`, an empty point counts like any other.
     {empty_point}
     This skips a ring's last coordinate, as this repeats its first.
     A geometry without coordinates counts `0`; a null geometry gives null.
 
-    ```python
-    df.select(geo.count_coordinates("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.count_coordinates("parcel"))
     """
     return on_geometry(
         geometry, partial(_count_coordinates, include_empty=include_empty)

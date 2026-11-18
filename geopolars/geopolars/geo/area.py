@@ -85,7 +85,7 @@ def area_planar(
     This also considers its holes.
     Which way a ring winds does not matter: a hole is always subtracted from the exterior.
     A multipolygon gets the sum of the areas of its polygons.
-    Only the two-dimensional part is considered: 'z' and 'm' are ignored.
+    Only the two-dimensional part is considered: `z` and `m` are ignored.
     For a 3D polygon that gives the area of its footprint
     (its shadow on the x/y plane), not the area of its surface in 3D:
     a tilted polygon gets less than its true area, and a vertical one gets `0.0`.
@@ -96,21 +96,23 @@ def area_planar(
     unless `allow_non_polygons` is set: then each of them gets `0.0`
     (and a null stays null).
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | refused |
-    | `PolygonXY[ZM]` | `0.0` and up |
-    | `MultiPointXY[ZM]` | refused |
-    | `MultiLineStringXY[ZM]` | refused |
-    | `MultiPolygonXY[ZM]` | `0.0` and up |
+    =======================  ============
+    in                       out
+    =======================  ============
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       refused
+    `PolygonXY[ZM]`          `0.0` and up
+    `MultiPointXY[ZM]`       refused
+    `MultiLineStringXY[ZM]`  refused
+    `MultiPolygonXY[ZM]`     `0.0` and up
+    =======================  ============
 
     A self-intersecting ring is not valid by OGC (see `is_valid_ogc`), and the parts of it that
     wind the other way will cancel rather than add.
 
-    ```python
-    df.select(geo.area_planar("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.area_planar("parcel"))
     """
     return on_geometry(
         geometry, partial(_planar, allow_non_polygons=allow_non_polygons)
@@ -136,12 +138,12 @@ def area_geodesic(
     A geometry without a CRS is refused while the plan is built,
     as is a CRS that is not defined on longitude/latitude.
 
-    Polygons, multipolygons, holes, 'z' and 'm', and other geometries
+    Polygons, multipolygons, holes, `z` and `m`, and other geometries
     (including `allow_non_polygons`) are treated as in `area_planar`.
 
-    ```python
-    df.select(geo.area_geodesic("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.area_geodesic("parcel"))
     """
     return on_geometry(
         geometry, partial(_geodesic, allow_non_polygons=allow_non_polygons)
@@ -166,8 +168,8 @@ def area(geometry: IntoExprColumn, *, allow_non_polygons: bool = False) -> pl.Ex
     Forwards to `area_planar` for a geometry without a CRS or with an equal-area CRS,
     and to `area_geodesic` for every other CRS.
 
-    ```python
-    df.select(geo.area("parcel"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.area("parcel"))
     """
     return on_geometry(geometry, partial(_area, allow_non_polygons=allow_non_polygons))

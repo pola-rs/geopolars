@@ -41,14 +41,16 @@ def reverse(
     """The geometry with the order of its vertices reversed.
     {keeps_type_dimension_and_crs}
 
-    | in | reversed |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | its vertices |
-    | `PolygonXY[ZM]` | its exterior |
-    | `MultiPointXY[ZM]` | the order of its points |
-    | `MultiLineStringXY[ZM]` | every linestring |
-    | `MultiPolygonXY[ZM]` | the exterior of every polygon |
+    =======================  =============================
+    in                       reversed
+    =======================  =============================
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       its vertices
+    `PolygonXY[ZM]`          its exterior
+    `MultiPointXY[ZM]`       the order of its points
+    `MultiLineStringXY[ZM]`  every linestring
+    `MultiPolygonXY[ZM]`     the exterior of every polygon
+    =======================  =============================
 
     With `reverse_holes=True`, the holes of a (multi)polygon are reversed too.
     The order of a polygon's rings is kept.
@@ -61,9 +63,9 @@ def reverse(
 
     {ignores_empty_and_invalid}
 
-    ```python
-    df.select(geo.reverse("route"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.reverse("route"))
     """
     return on_geometry(
         geometry, partial(_reverse, reverse_holes=reverse_holes, nested=nested)

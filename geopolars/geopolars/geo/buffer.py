@@ -82,14 +82,16 @@ def buffer(
     in which parts whose buffers overlap are merged into one.
     The output is always XY:
 
-    | in | out | with `allow_splitting`, and `distance` a column or at most 0 |
-    | - | - | - |
-    | `PointXY[Z][M]` | `PolygonXY` | `MultiPolygonXY` |
-    | `LineStringXY[Z][M]` | `PolygonXY` | `MultiPolygonXY` |
-    | `PolygonXY[Z][M]` | `PolygonXY` | `MultiPolygonXY` |
-    | `MultiPointXY[Z][M]` | `MultiPolygonXY` | `MultiPolygonXY` |
-    | `MultiLineStringXY[Z][M]` | `MultiPolygonXY` | `MultiPolygonXY` |
-    | `MultiPolygonXY[Z][M]` | `MultiPolygonXY` | `MultiPolygonXY` |
+    =========================  ================  ============================================================
+    in                         out               with `allow_splitting`, and `distance` a column or at most 0
+    =========================  ================  ============================================================
+    `PointXY[Z][M]`            `PolygonXY`       `MultiPolygonXY`
+    `LineStringXY[Z][M]`       `PolygonXY`       `MultiPolygonXY`
+    `PolygonXY[Z][M]`          `PolygonXY`       `MultiPolygonXY`
+    `MultiPointXY[Z][M]`       `MultiPolygonXY`  `MultiPolygonXY`
+    `MultiLineStringXY[Z][M]`  `MultiPolygonXY`  `MultiPolygonXY`
+    `MultiPolygonXY[Z][M]`     `MultiPolygonXY`  `MultiPolygonXY`
+    =========================  ================  ============================================================
 
     {computed_by_geos_dropping_z_and_m}
     {empty_and_null}
@@ -141,10 +143,10 @@ def buffer(
 
     {new_ring_orientation}
 
-    ```python
-    df.select(geo.buffer("parcel", 2.0))
-    df.select(geo.buffer("road", 5.0, cap_style="flat"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.buffer("parcel", 2.0))
+        df.select(geo.buffer("road", 5.0, cap_style="flat"))
     """
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)

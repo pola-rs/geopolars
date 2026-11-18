@@ -93,19 +93,21 @@ def length(
     unless `allow_non_lines` is set: then each of them gets `0.0`
     (and a null stays null).
 
-    | in | out |
-    | - | - |
-    | `PointXY[ZM]` | refused |
-    | `LineStringXY[ZM]` | `0.0` and up |
-    | `PolygonXY[ZM]` | refused |
-    | `MultiPointXY[ZM]` | refused |
-    | `MultiLineStringXY[ZM]` | `0.0` and up |
-    | `MultiPolygonXY[ZM]` | refused |
+    =======================  ============
+    in                       out
+    =======================  ============
+    `PointXY[ZM]`            refused
+    `LineStringXY[ZM]`       `0.0` and up
+    `PolygonXY[ZM]`          refused
+    `MultiPointXY[ZM]`       refused
+    `MultiLineStringXY[ZM]`  `0.0` and up
+    `MultiPolygonXY[ZM]`     refused
+    =======================  ============
 
-    ```python
-    df.select(geo.length("route"))
-    df.select(geo.length("route", method="planar"))
-    ```
+    .. code-block:: python
+
+        df.select(geo.length("route"))
+        df.select(geo.length("route", method="planar"))
     """
     return on_geometry(
         geometry,
