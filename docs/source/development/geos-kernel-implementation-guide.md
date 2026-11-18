@@ -17,7 +17,11 @@ view -> GeosGeometries -> (GEOS, row by row, in place) -> GeosGeometries -> view
 
 First, `to_geos_rows` converts the view.
 A private function then replaces each `GeosRow::Geometry` with what GEOS makes of it,
-and an `into_*_array` conversion gives the view of the output kind.
+with `replace_geometries`.
+It also takes the orientation of what GEOS gives
+(see [Orientation of new rings](#orientation-of-new-rings)),
+so that the column's orientation always matches its rows.
+Then, an `into_*_array` conversion gives the view of the output kind.
 So something that looks like this:
 
 ```rust
@@ -41,17 +45,18 @@ fn simplify_via_geos(
 ) -> GeoComputeResult<GeosGeometries> {
     with_const_flags!(
         PRESERVE_TOPOLOGY = preserve_topology;
-        simplify_via_geos_with::<PRESERVE_TOPOLOGY>(&mut geometries.geometries, tolerance, on_row_error)
+        simplify_via_geos_with::<PRESERVE_TOPOLOGY>(&mut geometries, tolerance, on_row_error)
     )?;
     Ok(geometries)
 }
 
 fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
-    geometries: &mut GeosRows,
+    geometries: &mut GeosGeometries,
     tolerance: f64,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<()> {
-    geometries.replace_geometries(on_row_error, |_, input| {
+    // Both simplifiers keep the rings of the input, whose orientation is unknown.
+    geometries.replace_geometries(GeometryOrientation::UNKNOWN, on_row_error, |_, input| {
         … // GEOS on `input`
     })
 }
