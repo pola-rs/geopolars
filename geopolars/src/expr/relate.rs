@@ -1,6 +1,8 @@
 //! The DE-9IM matrix of two geometries
 //! Implements the Python `relate`.
 
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use polars::prelude::*;
 use polars_arrow::array::Utf8ViewArray;
 use polars_arrow::datatypes::ArrowDataType;
@@ -12,14 +14,16 @@ use crate::geoarrow::{
 };
 
 /// The keyword arguments of the Python `relate`.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RelateKwargs {
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
-fn kernel_output_type_relate(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_relate(input_fields: &[Field], _kwargs: RelateKwargs) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "relate takes two geometries, got {} inputs", input_fields.len());
     };
@@ -27,10 +31,10 @@ fn kernel_output_type_relate(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(a.name().clone(), DataType::String))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_relate)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_relate)]
 fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
+    let (on_row_error, early) = (kwargs.on_row_error, kwargs.early_coord_check);
     let chunk_pairs = match single_chunk_masked_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs,
         // `RelatePairs` pairs a single row with every row itself,
@@ -47,7 +51,9 @@ fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
     let chunks = chunk_pairs
         .iter()
-        .map(|(a, b)| geopolars_core::relate(a.as_ref(), a_kind, b.as_ref(), b_kind, ignore, early))
+        .map(|(a, b)| {
+            geopolars_core::relate(a.as_ref(), a_kind, b.as_ref(), b_kind, on_row_error, early)
+        })
         .collect::<PolarsResult<Vec<_>>>()?;
     Ok(StringChunked::from_chunk_iter(a.name().clone(), chunks).into_series())
 }

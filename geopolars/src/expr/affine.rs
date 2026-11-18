@@ -11,7 +11,7 @@ use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
+use super::coords::kernel_output_type_wrapper_same_geometry;
 use crate::geoarrow::{describe, geometry_series};
 
 // TODO: (Blocked until z-centroid is implemented): allow rotation around x/y for polygon
@@ -31,8 +31,12 @@ impl From<&AffineMatrix> for native::AffineMatrix {
     }
 }
 
+fn kernel_output_type_affine(input_fields: &[Field], _kwargs: AffineMatrix) -> PolarsResult<Field> {
+    kernel_output_type_wrapper_same_geometry(input_fields)
+}
+
 /// See [`affine_transform`].
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_affine)]
 fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let matrix = native::AffineMatrix::from(&kwargs);
@@ -48,7 +52,9 @@ fn affine(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
 
 /// For an operation by the points of a second column,
 /// one per geometry: it hands back the geometry it got.
-fn kernel_output_type_same_geometry_by_points(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_wrapper_same_geometry_by_points(
+    input_fields: &[Field],
+) -> PolarsResult<Field> {
     let [geometry, points] = input_fields else {
         polars_bail!(ComputeError: "expected a geometry and its points, got {} inputs", input_fields.len());
     };
@@ -71,8 +77,15 @@ fn kernel_output_type_same_geometry_by_points(input_fields: &[Field]) -> PolarsR
     Ok(geometry.clone())
 }
 
+fn kernel_output_type_affine_by_points(
+    input_fields: &[Field],
+    _kwargs: AffineMatrix,
+) -> PolarsResult<Field> {
+    kernel_output_type_wrapper_same_geometry_by_points(input_fields)
+}
+
 /// See [`affine_transform_about`].
-#[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_affine_by_points)]
 fn affine_about(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let (storage, origins) = storage_and_points_per_geometry(inputs)?;
@@ -87,7 +100,7 @@ fn affine_about(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series>
 }
 
 /// See [`affine_transform_then_shift`].
-#[polars_expr(output_type_func=kernel_output_type_same_geometry_by_points)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_affine_by_points)]
 fn affine_then_shift(inputs: &[Series], kwargs: AffineMatrix) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let (storage, vectors) = storage_and_points_per_geometry(inputs)?;

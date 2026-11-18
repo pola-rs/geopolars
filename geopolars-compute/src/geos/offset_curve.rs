@@ -1,20 +1,13 @@
 //! Offset curves, forwarded to GEOS.
 //!
 //! GEOS builds an offset curve from a buffer in 2D, so every output is XY.
-//!
-//! # Const generic flags
-//!
-//! ## `EARLY_FINITE_CHECK`
-//!
-//! The public functions take `early_finite_check`.
-//! See [super] for `EARLY_FINITE_CHECK`.
 
-use geopolars_views::{LineStringArray, MultiLineStringArray};
+use geopolars_views::{GeometryArray, LineStringArray, MultiLineStringArray};
 use geos::{Geom, GeometryTypes, JoinStyle};
 
 use super::buffer::{by_distance_via_geos, finite_distance, BufferDistance};
-use super::{unless_split, GeosGeometries, ToGeosRows};
-use crate::GeoComputeResult;
+use super::{unless_split, validity_with_distances, GeosGeometries, ToGeosRows};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// The parameters GEOS's offset curve takes, besides the distance.
 pub struct OffsetCurveStyle {
@@ -31,20 +24,22 @@ pub struct OffsetCurveStyle {
 /// A row that GEOS splits into several linestrings therefore fails with [`crate::GeoComputeError::Split`].
 /// [`offset_curves_into_multi_line_strings`] keeps them instead.
 pub fn offset_curves_into_line_strings(
-    array: &LineStringArray,
+    mut array: LineStringArray,
     distance: BufferDistance,
     style: &OffsetCurveStyle,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
+    let validity = validity_with_distances(array.rows.validity(), distance);
+    array.rows = array.rows.with_validity(validity);
     offset_curves_via_geos(
-        array.to_geos_rows(ignore_per_row_errors, early_finite_check)?,
+        array.to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
-        ignore_per_row_errors,
+        on_row_error,
         false,
     )?
-    .into_line_string_array::<false>(ignore_per_row_errors)
+    .into_line_string_array::<false>(on_row_error)
 }
 
 /// Like [`offset_curves_into_line_strings`], but into a multilinestring,
@@ -52,20 +47,23 @@ pub fn offset_curves_into_line_strings(
 /// Implements the Python `offset_curve` where it gives a multilinestring.
 /// A row that GEOS splits into several linestrings gets them all as parts.
 pub fn offset_curves_into_multi_line_strings(
-    array: &impl ToGeosRows,
+    array: GeometryArray,
     distance: BufferDistance,
     style: &OffsetCurveStyle,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiLineStringArray> {
+    let validity = validity_with_distances(array.validity(), distance);
     offset_curves_via_geos(
-        array.to_geos_rows(ignore_per_row_errors, early_finite_check)?,
+        array
+            .with_validity(validity)
+            .to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
-        ignore_per_row_errors,
+        on_row_error,
         true,
     )?
-    .into_multi_line_string_array::<false>(ignore_per_row_errors)
+    .into_multi_line_string_array::<false>(on_row_error)
 }
 
 /// See [`by_distance_via_geos`].
@@ -73,7 +71,7 @@ fn offset_curves_via_geos(
     geometries: GeosGeometries,
     distance: BufferDistance,
     style: &OffsetCurveStyle,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     allow_splitting: bool,
 ) -> GeoComputeResult<GeosGeometries> {
     let OffsetCurveStyle {
@@ -84,7 +82,7 @@ fn offset_curves_via_geos(
     by_distance_via_geos(
         geometries,
         distance,
-        ignore_per_row_errors,
+        on_row_error,
         finite_distance,
         |input, distance| {
             let curve = input.offset_curve(distance, quadrant_segments, join_style, mitre_limit)?;

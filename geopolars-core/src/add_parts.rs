@@ -3,6 +3,7 @@ use geopolars_compute::native::{
     multi_line_strings_with_added_parts, multi_points_with_added_parts,
     multi_polygons_with_added_parts, WithoutEmptyParts,
 };
+use geopolars_compute::NullParts;
 use geopolars_views::{
     downcast, Coords, GeometryArray, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
@@ -12,7 +13,7 @@ use polars_core::prelude::PolarsResult;
 
 use crate::parts::{
     lines_per_row, one_line_per_row, one_point_per_row, one_polygon_per_row, points_per_row,
-    polygons_per_row, rows_validity, NullParts,
+    polygons_per_row, rows_validity,
 };
 
 /// `empty_parts` of the Python `add_parts`.

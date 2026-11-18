@@ -6,15 +6,15 @@ A native kernel (A-tier) copies the polygons and their new holes into new buffer
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import EmptyPolygonExterior, NullParts, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import PolygonType
 from geopolars.geo._dispatch import _to_expr, on_geometry
-from geopolars.geo.add_parts import NullParts
 
 if TYPE_CHECKING:
     import polars as pl
@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
     from geopolars.geo.close_rings import CloseRings
 
-EmptyExterior = Literal["null", "keep"]
-
 
 def _add_holes(
     column: pl.Expr,
@@ -32,7 +30,8 @@ def _add_holes(
     holes: IntoExprColumn,
     close: CloseRings | None,
     null_parts: NullParts,
-    empty_exterior: EmptyExterior,
+    empty_polygon_exterior: EmptyPolygonExterior,
+    on_row_error: OnRowError,
 ) -> pl.Expr:
     if not isinstance(geometry, PolygonType):
         msg = f"add_holes expects a polygon column, got: {geometry!r}"
@@ -45,7 +44,8 @@ def _add_holes(
         kwargs={
             "close": None if close is None else asdict(close),
             "null_parts": null_parts,
-            "empty_exterior": empty_exterior,
+            "empty_polygon_exterior": empty_polygon_exterior,
+            "on_row_error": on_row_error,
         },
     )
 
@@ -57,7 +57,8 @@ def add_holes(
     *,
     close: CloseRings | None = None,
     null_parts: NullParts = "null",
-    empty_exterior: EmptyExterior = "null",
+    empty_polygon_exterior: EmptyPolygonExterior = "null",
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """Add the rings of `holes` to each polygon as extra holes,
     after the holes it already has.
@@ -88,32 +89,42 @@ def add_holes(
 
     An empty list adds no holes.
     The polygon's own rings are still checked, as described below.
-    A polygon with an empty exterior cannot take holes (OGC validity).
-    What happens then is set by `empty_exterior`.
-
-    | `empty_exterior` | a polygon with an empty exterior that gets a hole with vertices |
-    | - | - |
-    | `"null"` | is null |
-    | `"keep"` | stays as it is: none of the holes of its row are added |
-
-    If it only gets empty holes, it takes them, and stays an empty polygon.
+    {empty_polygon_exterior}
+    With `"empty"`, none of the holes of its row are added, so such a polygon stays as it is.
+    With `"keep"`, a polygon stored without rings first gets an empty exterior,
+    so that its new rings stay holes.
+    A polygon with an empty exterior that only gets empty holes takes them,
+    and stays an empty polygon.
 
     A polygon is null if any of its rings is not a ring (see [`is_ring`][geopolars.geo.is_ring]),
     its existing rings included.
     A polygon whose rings are all empty is the exception, and stays as it is.
+    With `empty_polygon_exterior="keep"`, so does one with an empty exterior
+    whose holes are all rings or empty.
     Passing `close=CloseRings(...)` first closes every open ring, as `close_rings` does.
 
     {closing_rings}
+
+    {on_row_error}
 
     ```python
     df.select(geo.add_holes("parcel", "ponds"))
     ```
     """
     validate_one_of("null_parts", null_parts, NullParts)
-    validate_one_of("empty_exterior", empty_exterior, EmptyExterior)
+    validate_one_of(
+        "empty_polygon_exterior", empty_polygon_exterior, EmptyPolygonExterior
+    )
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     return on_geometry(
         polygon,
         lambda column, geometry: _add_holes(
-            column, geometry, holes, close, null_parts, empty_exterior
+            column,
+            geometry,
+            holes,
+            close,
+            null_parts,
+            empty_polygon_exterior,
+            on_row_error,
         ),
     )

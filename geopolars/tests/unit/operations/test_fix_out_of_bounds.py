@@ -127,12 +127,12 @@ def test_a_multipoint_can_lose_all_of_its_points() -> None:
 
 
 @pytest.mark.parametrize(
-    ("too_short", "expected"),
+    ("short_lines", "expected"),
     [("null", None), ("keep", [_A + _B, _A]), ("empty", [_A + _B, []])],
 )
-def test_a_short_part_of_a_multilinestring(too_short: str, expected: object) -> None:
+def test_a_short_part_of_a_multilinestring(short_lines: str, expected: object) -> None:
     out = _fix(
-        MultiLineStringXY(crs=WGS84), [_A + _B, _A + _NORTH], too_short=too_short
+        MultiLineStringXY(crs=WGS84), [_A + _B, _A + _NORTH], short_lines=short_lines
     )
 
     assert out == [expected]
@@ -150,7 +150,7 @@ def test_a_ring_keeps_its_vertices_inside() -> None:
 
 
 @pytest.mark.parametrize(
-    ("too_short", "expected"),
+    ("short_lines", "expected"),
     [
         ("null", None),
         ("keep", [_line((4, 0), (4, 4), (0, 4))]),
@@ -158,9 +158,9 @@ def test_a_ring_keeps_its_vertices_inside() -> None:
     ],
 )
 def test_a_ring_that_loses_its_ends_is_too_short(
-    too_short: str, expected: object
+    short_lines: str, expected: object
 ) -> None:
-    assert _fix(PolygonXY(crs=WGS84), [_OVER_THE_POLE], too_short=too_short) == [
+    assert _fix(PolygonXY(crs=WGS84), [_OVER_THE_POLE], short_lines=short_lines) == [
         expected
     ]
 
@@ -204,7 +204,7 @@ def test_a_wrapped_longitude_can_be_allowed(action: str, expected: Line) -> None
         line,
         crs_bounds="crs_wrapped_longitude",
         action=action,
-        too_short="keep",
+        short_lines="keep",
     )
 
     assert out == [expected]
@@ -276,7 +276,7 @@ def test_namespace_matches_the_functional_api() -> None:
     [
         ({"crs_bounds": "off"}, "crs_bounds"),
         ({"action": "keep"}, "action"),
-        ({"too_short": "drop"}, "too_short"),
+        ({"short_lines": "drop"}, "short_lines"),
     ],
 )
 def test_an_unknown_option_is_refused(kwargs: dict[str, str], name: str) -> None:

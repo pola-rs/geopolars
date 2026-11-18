@@ -3,6 +3,8 @@ use std::fmt;
 use geopolars_views::MIN_RING_VERTICES;
 use proj::ProjError;
 
+use crate::OnRowError;
+
 /// An error from one of the kernels of this crate.
 #[derive(Debug)]
 pub enum GeoComputeError {
@@ -36,21 +38,23 @@ pub enum GeoComputeError {
     NegativeOneSidedDistance { distance: f64 },
     /// A result in several parts, where only one fits.
     Split { parts: usize },
+    /// A hole with vertices for a polygon with an empty exterior.
+    HoleInEmptyExterior,
     #[cfg(feature = "geos")]
     Geos(geos::Error),
 }
 
 pub type GeoComputeResult<T> = Result<T, GeoComputeError>;
 
-/// The result of one row, or `None` if it failed and `ignore_per_row_errors=true`.
-#[cfg(any(feature = "geos", feature = "rsgeo"))]
+/// The result of one row, or `None` if it failed and `on_row_error=`[OnRowError::Null].
+#[cfg(any(feature = "native", feature = "geos", feature = "rsgeo"))]
 #[inline(always)]
-pub(crate) fn row_or_null<T>(
-    result: GeoComputeResult<Option<T>>,
-    ignore_per_row_errors: bool,
-) -> GeoComputeResult<Option<T>> {
+pub(crate) fn row_or_null<T, E>(
+    result: Result<Option<T>, E>,
+    on_row_error: OnRowError,
+) -> Result<Option<T>, E> {
     match result {
-        Err(_) if ignore_per_row_errors => Ok(None),
+        Err(_) if on_row_error == OnRowError::Null => Ok(None),
         result => result,
     }
 }
@@ -99,6 +103,11 @@ impl fmt::Display for GeoComputeError {
                 "the result split into {parts} parts, which a single geometry cannot hold; \
                 set `allow_splitting=True` to get a multi kind"
             ),
+            Self::HoleInEmptyExterior => write!(
+                f,
+                "a polygon with an empty exterior got a hole with vertices, which is not valid OGC; \
+                set `empty_polygon_exterior` to \"null\", \"empty\" or \"keep\" not to raise"
+            ),
             #[cfg(feature = "geos")]
             Self::Geos(source) => write!(f, "{source}"),
         }
@@ -116,7 +125,8 @@ impl std::error::Error for GeoComputeError {
             | Self::NotFiniteCoordinate { .. }
             | Self::NotFiniteDistance { .. }
             | Self::NegativeOneSidedDistance { .. }
-            | Self::Split { .. } => None,
+            | Self::Split { .. }
+            | Self::HoleInEmptyExterior => None,
             #[cfg(feature = "geos")]
             Self::Geos(source) => Some(source),
         }

@@ -1,5 +1,5 @@
 //! What to do with the selected coordinates of a geometry.
-//! Implements the `action` and `too_short` of the Python `filter_coordinates` and `fix_out_of_bounds`.
+//! Implements the `action` and `short_lines` of the Python `filter_coordinates` and `fix_out_of_bounds`.
 //! Every kernel marks the coordinates its [CoordinateSelection] selects ([selected_coords]),
 //! then takes its [SelectedAction] on them.
 //!
@@ -37,8 +37,9 @@ use polars_arrow::offset::OffsetsBuffer;
 
 use super::coordinate_selection::{selected_coords, which_are_not_selected, CoordinateSelection};
 use super::rings::offsets_of;
-use super::too_short::TooShort;
 use crate::passing::valid_rows_passing;
+use crate::utils::copy_ranges;
+use crate::ShortLines;
 
 /// See `action` of `NonFinite` and `OutOfBounds` in Python.
 #[derive(Debug, Clone, Copy)]
@@ -152,14 +153,14 @@ fn is_too_short<const CHECK_CLOSED: bool, const Z: bool>(
 /// The offsets of what each of `lists` keeps, and the coordinates it keeps.
 /// A list keeps the vertices that are not `selected`, unless it is then [too short](is_too_short).
 /// Last, a mask of the lists that pass:
-/// unset where a list is too short with [TooShort::Null], which keeps none.
+/// unset where a list is too short with [ShortLines::Null], which keeps none.
 /// `None` when every list passes.
 fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
     lists: &ValidList,
     kind: Lists,
     coords: &ValidCoords,
     selected: &Bitmap,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     debug_assert!(
         lists.spans_all_of(coords.len()),
@@ -176,13 +177,13 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
             if !is_too_short::<CHECK_CLOSED, Z>(coords, kind, &runs[first_run..], kept) {
                 return kept;
             }
-            match too_short {
-                TooShort::Keep => kept,
-                TooShort::Empty => {
+            match short_lines {
+                ShortLines::Keep => kept,
+                ShortLines::Empty => {
                     runs.truncate(first_run);
                     0
                 }
-                TooShort::Null => {
+                ShortLines::Null => {
                     runs.truncate(first_run);
                     passing
                         .get_or_insert_with(|| MutableBitmap::from_len_set(lists.len()))
@@ -199,7 +200,7 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
     }
     (
         offsets_of(lengths.into_iter()),
-        coords.copy_ranges(merged_where_contiguous(runs.iter().cloned())),
+        copy_ranges(coords, merged_where_contiguous(runs.iter().cloned())),
         passing,
     )
 }
@@ -209,7 +210,7 @@ fn without_selected_in_rings(
     rings: &ValidList,
     coords: &ValidCoords,
     selected: &Bitmap,
-    too_short: TooShort,
+    short_lines: ShortLines,
     check_closed: bool,
 ) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     let kind = Lists::Rings;
@@ -217,24 +218,24 @@ fn without_selected_in_rings(
     if check_closed {
         with_const_flags!(
             Z = coords.dim().has_z();
-            without_selected::<true, Z>(rings, kind, coords, selected, too_short)
+            without_selected::<true, Z>(rings, kind, coords, selected, short_lines)
         )
     } else {
-        without_selected::<false, false>(rings, kind, coords, selected, too_short)
+        without_selected::<false, false>(rings, kind, coords, selected, short_lines)
     }
 }
 
 pub(super) fn line_strings_without_selected(
     array: &LineStringArray,
     selected: &Bitmap,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> LineStringArray {
     let (offsets, coords, passing) = without_selected::<false, false>(
         array.rows.ignoring_validity(),
         Lists::Lines,
         &array.coords,
         selected,
-        too_short,
+        short_lines,
     );
     let validity = combine_validities_and(array.rows.validity(), passing.as_ref());
     LineStringArray::from_parts(List::from_offsets(offsets, validity), coords)
@@ -243,14 +244,14 @@ pub(super) fn line_strings_without_selected(
 pub(super) fn multi_points_without_selected(
     array: &MultiPointArray,
     selected: &Bitmap,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> MultiPointArray {
     let (offsets, coords, _) = without_selected::<false, false>(
         array.rows.ignoring_validity(),
         Lists::Points,
         &array.coords,
         selected,
-        too_short,
+        short_lines,
     );
     MultiPointArray::from_parts(
         List::from_offsets(offsets, array.rows.validity().cloned()),
@@ -261,14 +262,14 @@ pub(super) fn multi_points_without_selected(
 pub(super) fn polygons_without_selected(
     array: &PolygonArray,
     selected: &Bitmap,
-    too_short: TooShort,
+    short_lines: ShortLines,
     check_closed: bool,
 ) -> PolygonArray {
     let (rings, coords, passing) = without_selected_in_rings(
         &array.rings,
         &array.coords,
         selected,
-        too_short,
+        short_lines,
         check_closed,
     );
     PolygonArray::from_parts(
@@ -281,14 +282,14 @@ pub(super) fn polygons_without_selected(
 pub(super) fn multi_line_strings_without_selected(
     array: &MultiLineStringArray,
     selected: &Bitmap,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> MultiLineStringArray {
     let (lines, coords, passing) = without_selected::<false, false>(
         &array.lines,
         Lists::Lines,
         &array.coords,
         selected,
-        too_short,
+        short_lines,
     );
     MultiLineStringArray::from_parts(
         rows_nulled_unless_passing(&array.rows, &[], passing),
@@ -300,14 +301,14 @@ pub(super) fn multi_line_strings_without_selected(
 pub(super) fn multi_polygons_without_selected(
     array: &MultiPolygonArray,
     selected: &Bitmap,
-    too_short: TooShort,
+    short_lines: ShortLines,
     check_closed: bool,
 ) -> MultiPolygonArray {
     let (rings, coords, passing) = without_selected_in_rings(
         &array.rings,
         &array.coords,
         selected,
-        too_short,
+        short_lines,
         check_closed,
     );
     MultiPolygonArray::from_parts(
@@ -365,14 +366,14 @@ pub fn line_strings_with_selected(
     array: &LineStringArray,
     selection: &CoordinateSelection,
     action: SelectedAction,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> LineStringArray {
     let selected = || selected_coords_bitmap(&array.coords, selection);
     match action {
         SelectedAction::SetEmpty => {
             LineStringArray::from_parts(array.rows.clone(), emptied(&array.coords, &selected()))
         }
-        SelectedAction::Drop => line_strings_without_selected(array, &selected(), too_short),
+        SelectedAction::Drop => line_strings_without_selected(array, &selected(), short_lines),
         SelectedAction::SetNull => LineStringArray::from_parts(
             rows_nulled_where_selected(&array.rows, &[], &array.coords, selection),
             array.coords.clone(),
@@ -384,14 +385,14 @@ pub fn multi_points_with_selected(
     array: &MultiPointArray,
     selection: &CoordinateSelection,
     action: SelectedAction,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> MultiPointArray {
     let selected = || selected_coords_bitmap(&array.coords, selection);
     match action {
         SelectedAction::SetEmpty => {
             MultiPointArray::from_parts(array.rows.clone(), emptied(&array.coords, &selected()))
         }
-        SelectedAction::Drop => multi_points_without_selected(array, &selected(), too_short),
+        SelectedAction::Drop => multi_points_without_selected(array, &selected(), short_lines),
         SelectedAction::SetNull => MultiPointArray::from_parts(
             rows_nulled_where_selected(&array.rows, &[], &array.coords, selection),
             array.coords.clone(),
@@ -403,7 +404,7 @@ pub fn polygons_with_selected(
     array: &PolygonArray,
     selection: &CoordinateSelection,
     action: SelectedAction,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> PolygonArray {
     let selected = || selected_coords_bitmap(&array.coords, selection);
     match action {
@@ -412,7 +413,7 @@ pub fn polygons_with_selected(
             array.rings.clone(),
             emptied(&array.coords, &selected()),
         ),
-        SelectedAction::Drop => polygons_without_selected(array, &selected(), too_short, true),
+        SelectedAction::Drop => polygons_without_selected(array, &selected(), short_lines, true),
         SelectedAction::SetNull => PolygonArray::from_parts(
             rows_nulled_where_selected(&array.rows, &[&array.rings], &array.coords, selection),
             array.rings.clone(),
@@ -425,7 +426,7 @@ pub fn multi_line_strings_with_selected(
     array: &MultiLineStringArray,
     selection: &CoordinateSelection,
     action: SelectedAction,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> MultiLineStringArray {
     let selected = || selected_coords_bitmap(&array.coords, selection);
     match action {
@@ -434,7 +435,9 @@ pub fn multi_line_strings_with_selected(
             array.lines.clone(),
             emptied(&array.coords, &selected()),
         ),
-        SelectedAction::Drop => multi_line_strings_without_selected(array, &selected(), too_short),
+        SelectedAction::Drop => {
+            multi_line_strings_without_selected(array, &selected(), short_lines)
+        }
         SelectedAction::SetNull => MultiLineStringArray::from_parts(
             rows_nulled_where_selected(&array.rows, &[&array.lines], &array.coords, selection),
             array.lines.clone(),
@@ -447,7 +450,7 @@ pub fn multi_polygons_with_selected(
     array: &MultiPolygonArray,
     selection: &CoordinateSelection,
     action: SelectedAction,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> MultiPolygonArray {
     let selected = || selected_coords_bitmap(&array.coords, selection);
     match action {
@@ -458,7 +461,7 @@ pub fn multi_polygons_with_selected(
             emptied(&array.coords, &selected()),
         ),
         SelectedAction::Drop => {
-            multi_polygons_without_selected(array, &selected(), too_short, true)
+            multi_polygons_without_selected(array, &selected(), short_lines, true)
         }
         SelectedAction::SetNull => MultiPolygonArray::from_parts(
             rows_nulled_where_selected(

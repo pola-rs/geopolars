@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
@@ -28,6 +28,9 @@ from geopolars.datatypes import (
     PolygonXYZ,
     PolygonXYZM,
 )
+
+if TYPE_CHECKING:
+    from geopolars._typing import EarlyCoordCheck
 
 _XY = pl.Struct({"x": pl.Float64, "y": pl.Float64})
 
@@ -272,7 +275,7 @@ _NO_SPLITS = {
 
 
 @pytest.mark.parametrize("dimension", _SPLITS)
-def test_a_split_gives_null_with_ignore_per_row_errors(dimension: str) -> None:
+def test_a_split_gives_null_with_on_row_error_null(dimension: str) -> None:
     a, b, keep, _ = _SPLITS[dimension]
     a_whole, b_whole, whole = _NO_SPLITS[dimension]
 
@@ -280,7 +283,7 @@ def test_a_split_gives_null_with_ignore_per_row_errors(dimension: str) -> None:
         (a[0], [a[1], a_whole]),
         (b[0], [b[1], b_whole]),
         keep=keep,
-        ignore_per_row_errors=True,
+        on_row_error="null",
     )
 
     _assert_geometries(out, [None, whole])
@@ -333,7 +336,7 @@ def test_crossing_lines_give_their_crossings_when_points_are_kept() -> None:
     b = (LineStringXY(), ["LINESTRING (0 4, 4 0)", _TOUCHING_TWICE])
 
     assert _to_wkt(_intersection(a, b)) == ["LINESTRING EMPTY", "LINESTRING EMPTY"]
-    out = _intersection(a, b, keep="points", ignore_per_row_errors=True)
+    out = _intersection(a, b, keep="points", on_row_error="null")
     assert out.dtype == PointXY()
     _assert_geometries(out, ["POINT (2 2)", None])
     out = _intersection(a, b, keep="points", allow_splitting=True)
@@ -372,7 +375,7 @@ def test_a_multipoint_keeps_the_points_inside() -> None:
     _assert_geometries(out, ["MULTIPOINT ((1 1), (0.5 0.5))", None, "MULTIPOINT EMPTY"])
 
 
-def test_the_exterior_runs_counter_clockwise_with_ccw_outer() -> None:
+def test_the_exterior_runs_counter_clockwise_with_ccw() -> None:
     a = (PolygonXY(), [_SQUARE])
     b = (PolygonXY(), ["POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))"])
 
@@ -380,16 +383,16 @@ def test_the_exterior_runs_counter_clockwise_with_ccw_outer() -> None:
         return pl.select(geo.is_ccw(out)).item()
 
     assert not is_ccw(_intersection(a, b))
-    assert is_ccw(_intersection(a, b, ccw_outer=True))
+    assert is_ccw(_intersection(a, b, new_ring_orientation="ccw"))
 
 
-def test_ccw_outer_turns_every_part_and_keeps_holes_clockwise() -> None:
+def test_ccw_turns_every_part_and_keeps_holes_clockwise() -> None:
     def is_ccw(out: pl.Series) -> bool:
         return pl.select(geo.is_ccw(out)).item()
 
     a, b = (PolygonXY(), [_U]), (PolygonXY(), [_ACROSS_THE_ARMS])
     assert not is_ccw(_intersection(a, b, allow_splitting=True))
-    split = _intersection(a, b, allow_splitting=True, ccw_outer=True)
+    split = _intersection(a, b, allow_splitting=True, new_ring_orientation="ccw")
     assert split.dtype == MultiPolygonXY()
     assert is_ccw(split)
     holed = (
@@ -398,16 +401,18 @@ def test_ccw_outer_turns_every_part_and_keeps_holes_clockwise() -> None:
     )
     big = (PolygonXY(), ["POLYGON ((-1 -1, 5 -1, 5 5, -1 5, -1 -1))"])
     assert not is_ccw(_intersection(holed, big))
-    assert is_ccw(_intersection(holed, big, ccw_outer=True))
+    assert is_ccw(_intersection(holed, big, new_ring_orientation="ccw"))
 
 
-@pytest.mark.parametrize("ccw_outer", [False, True])
-def test_a_hole_is_kept(ccw_outer: bool) -> None:
+@pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
+def test_a_hole_is_kept(new_ring_orientation: str) -> None:
     holed = "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))"
     big = "POLYGON ((-1 -1, 5 -1, 5 5, -1 5, -1 -1))"
 
     out = _intersection(
-        (PolygonXY(), [holed]), (PolygonXY(), [big]), ccw_outer=ccw_outer
+        (PolygonXY(), [holed]),
+        (PolygonXY(), [big]),
+        new_ring_orientation=new_ring_orientation,
     )
 
     _assert_geometries(out, [holed])
@@ -606,8 +611,10 @@ _NOT_FINITE_LINE = _xy((0, 0), (math.nan, 1), (2, 2))
 _FINITE_LINE = _xy((0, 0), (1, 0), (1, 1))
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
-def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -> None:
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
+def test_a_row_paired_with_a_null_never_reaches_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     df = pl.DataFrame(
         [
             _series("a", LineStringXY(), [None, None, _FINITE_LINE]),
@@ -617,19 +624,19 @@ def test_a_row_paired_with_a_null_never_reaches_geos(early_finite_check: bool) -
         ]
     )
 
-    out = df.select(geo.intersection("a", "b", early_finite_check=early_finite_check))
+    out = df.select(geo.intersection("a", "b", early_coord_check=early_coord_check))
 
     _assert_geometries(out["a"], [None, None, "LINESTRING (0 0, 1 0, 1 1)"])
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_against_a_single_null_geometry_no_row_reaches_geos(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     many = _series("many", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE])
     one = _wkt("one", PolygonXY(), [None])
     df = pl.DataFrame(many)
-    kwargs = {"early_finite_check": early_finite_check}
+    kwargs = {"early_coord_check": early_coord_check}
 
     out = df.select(geo.intersection("many", one, **kwargs))["many"]
     assert out.to_list() == [None, None]
@@ -638,9 +645,9 @@ def test_against_a_single_null_geometry_no_row_reaches_geos(
     assert out.to_list() == [None, None]
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
-    early_finite_check: bool,
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     around = "POLYGON ((-1 -1, 3 -1, 3 3, -1 3, -1 -1))"
     df = pl.DataFrame(
@@ -664,13 +671,13 @@ def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
         "LINESTRING EMPTY",
         "LINESTRING (0 0, 1 0, 1 1)",
     ]
-    kwargs = {"early_finite_check": early_finite_check}
+    kwargs = {"early_coord_check": early_coord_check}
 
     _assert_geometries(df.select(geo.intersection("a", "b", **kwargs))["a"], expected)
     _assert_geometries(df.select(geo.intersection("b", "a", **kwargs))["b"], expected)
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 @pytest.mark.parametrize(
     ("one", "empty"),
     [
@@ -680,11 +687,11 @@ def test_a_row_paired_with_an_empty_geometry_never_reaches_geos(
     ids=["polygon", "point"],
 )
 def test_against_a_single_empty_geometry_no_row_reaches_geos(
-    one: pl.Series, empty: str, early_finite_check: bool
+    one: pl.Series, empty: str, early_coord_check: EarlyCoordCheck
 ) -> None:
     many = _series("many", LineStringXY(), [_ONE_VERTEX_LINE, _NOT_FINITE_LINE])
     df = pl.DataFrame(many)
-    kwargs = {"early_finite_check": early_finite_check}
+    kwargs = {"early_coord_check": early_coord_check}
 
     out = df.select(geo.intersection("many", one, **kwargs))["many"]
     assert _to_wkt(out) == [empty, empty]
@@ -692,7 +699,7 @@ def test_against_a_single_empty_geometry_no_row_reaches_geos(
     assert _to_wkt(out) == [empty, empty]
 
 
-@pytest.mark.parametrize("early_finite_check", [False, True])
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
 @pytest.mark.parametrize(
     ("many", "expected"),
     [
@@ -702,11 +709,13 @@ def test_against_a_single_empty_geometry_no_row_reaches_geos(
     ids=["null_and_empty", "null"],
 )
 def test_against_only_null_and_empty_rows_a_single_geometry_never_reaches_geos(
-    many: list[str | None], expected: list[str | None], early_finite_check: bool
+    many: list[str | None],
+    expected: list[str | None],
+    early_coord_check: EarlyCoordCheck,
 ) -> None:
     df = pl.DataFrame(_wkt("many", PolygonXY(), many))
     one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
-    kwargs = {"early_finite_check": early_finite_check}
+    kwargs = {"early_coord_check": early_coord_check}
 
     out = df.select(geo.intersection("many", one, **kwargs))["many"]
     assert _to_wkt(out) == expected
@@ -722,7 +731,7 @@ def test_against_a_null_and_a_geometry_a_single_geometry_still_fails() -> None:
         df.select(geo.intersection("many", one))
 
 
-def _not_finite_lines(**kwargs: bool) -> pl.Series:
+def _not_finite_lines(**kwargs: Any) -> pl.Series:
     """A line that is not finite, then one that is, each intersected with a square around both."""
     df = pl.DataFrame(
         [
@@ -735,38 +744,41 @@ def _not_finite_lines(**kwargs: bool) -> pl.Series:
 
 def test_geos_raises_on_a_line_that_is_not_finite() -> None:
     with pytest.raises(ComputeError, match="NaN/Inf"):
-        _not_finite_lines()
+        _not_finite_lines(early_coord_check="off")
 
 
-def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
-    out = _not_finite_lines(ignore_per_row_errors=True)
+def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
+    out = _not_finite_lines(early_coord_check="off", on_row_error="null")
 
     _assert_geometries(out, [None, "LINESTRING (0 0, 1 0, 1 1)"])
 
 
-def test_the_early_finite_check_raises_before_geos() -> None:
+@pytest.mark.parametrize("early_coord_check", ["finite", "finite_and_empty"])
+def test_the_early_coord_check_raises_before_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
-        _not_finite_lines(early_finite_check=True)
-    out = _not_finite_lines(early_finite_check=True, ignore_per_row_errors=True)
+        _not_finite_lines(early_coord_check=early_coord_check)
+    out = _not_finite_lines(early_coord_check=early_coord_check, on_row_error="null")
     _assert_geometries(out, [None, "LINESTRING (0 0, 1 0, 1 1)"])
 
 
 @pytest.mark.parametrize("single_first", [True, False])
-def test_ignore_per_row_errors_with_a_single_geometry(single_first: bool) -> None:
-    def run(one: pl.Series, many: pl.Series, **kwargs: bool) -> pl.Series:
+def test_on_row_error_null_with_a_single_geometry(single_first: bool) -> None:
+    def run(one: pl.Series, many: pl.Series, **kwargs: Any) -> pl.Series:
         a, b = (one, "many") if single_first else ("many", one)
         return pl.DataFrame(many).select(geo.intersection(a, b, **kwargs)).to_series()
 
     big = _wkt("one", PolygonXY(), ["POLYGON ((-1 -1, 3 -1, 3 3, -1 3, -1 -1))"])
     lines = _series("many", LineStringXY(), [_NOT_FINITE_LINE, _FINITE_LINE])
-    out = run(big, lines, ignore_per_row_errors=True)
+    out = run(big, lines, on_row_error="null")
     _assert_geometries(out, [None, "LINESTRING (0 0, 1 0, 1 1)"])
 
     bad = _series("one", LineStringXY(), [_NOT_FINITE_LINE])
     squares = _wkt("many", PolygonXY(), [_SQUARE, _SQUARE])
-    with pytest.raises(ComputeError, match="NaN/Inf"):
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
         run(bad, squares)
-    assert run(bad, squares, ignore_per_row_errors=True).to_list() == [None, None]
+    assert run(bad, squares, on_row_error="null").to_list() == [None, None]
 
 
 def test_the_namespace_method_passes_its_options_on() -> None:
@@ -774,11 +786,11 @@ def test_the_namespace_method_passes_its_options_on() -> None:
         [_wkt("a", PolygonXY(), [_U]), _wkt("b", PolygonXY(), [_ACROSS_THE_ARMS])]
     )
 
-    out = df.select(pl.col("a").geo.intersection("b", ignore_per_row_errors=True))
+    out = df.select(pl.col("a").geo.intersection("b", on_row_error="null"))
     assert out["a"].to_list() == [None]
     out = df.select(
         pl.col("a").geo.intersection(
-            "b", keep="lines", allow_splitting=True, ccw_outer=True
+            "b", keep="lines", allow_splitting=True, new_ring_orientation="ccw"
         )
     )
     assert out["a"].dtype == MultiLineStringXY()
@@ -893,9 +905,9 @@ def test_matches_shapely(a_kind: str, b_kind: str, keep: str | None) -> None:
     )
     kept = [_kept_parts(shapely.intersection(x, y), dimension) for x, y in zip(a, b)]
 
-    def intersections(**kwargs: bool) -> pl.Series:
+    def intersections(**kwargs: Any) -> pl.Series:
         out = df.select(
-            geo.intersection("a", "b", keep=keep, ignore_per_row_errors=True, **kwargs)
+            geo.intersection("a", "b", keep=keep, on_row_error="null", **kwargs)
         )
         return out["a"]
 

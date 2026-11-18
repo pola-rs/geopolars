@@ -243,18 +243,44 @@ def test_a_multipolygon_hull_carries_the_crs() -> None:
 _HALF_NAN = _line((0, 0), (4, 0), (2, float("nan")), (4, 4), (0, 4))
 
 
-def test_a_geometry_geos_fails_on_raises_by_default() -> None:
+_WITH_AN_EMPTY_POINT = _line((0, 0), (4, 0), (float("nan"), float("nan")), (0, 4))
+
+
+def test_finite_leaves_an_empty_point_to_geos() -> None:
+    df = _multipoints(_WITH_AN_EMPTY_POINT)
+
+    out = df.select(geo.convex_hull("polygon", early_coord_check="finite"))
+
+    triangle = _line((0, 0), (0, 4), (4, 0), (0, 0))
+    assert out.to_series().ext.storage().to_list() == [[triangle]]
+
+
+def test_finite_and_empty_refuses_an_empty_point() -> None:
+    df = _multipoints(_WITH_AN_EMPTY_POINT)
+
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
+        df.select(geo.convex_hull("polygon", early_coord_check="finite_and_empty"))
+
+
+def test_finite_still_refuses_a_vertex_with_one_nan_axis() -> None:
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
+        _lines(_HALF_NAN).select(geo.convex_hull("polygon", early_coord_check="finite"))
+
+
+def test_a_geometry_geos_fails_on_raises() -> None:
     df = _lines(_HALF_NAN, _line((0, 0), (4, 0), (4, 4), (0, 4)))
 
-    with pytest.raises(ComputeError, match="NaN"):
-        df.select(geo.convex_hull("polygon"))
+    with pytest.raises(ComputeError, match="NaN/Inf"):
+        df.select(geo.convex_hull("polygon", early_coord_check="off"))
 
 
-def test_ignore_per_row_errors_gives_a_null_hull() -> None:
+def test_on_row_error_null_gives_a_null_hull() -> None:
     df = _lines(_HALF_NAN, _line((0, 0), (4, 0), (4, 4), (0, 4)))
 
     hulls = (
-        df.select(geo.convex_hull("polygon", ignore_per_row_errors=True))
+        df.select(
+            geo.convex_hull("polygon", early_coord_check="off", on_row_error="null")
+        )
         .to_series()
         .ext.storage()
         .to_list()
@@ -281,8 +307,10 @@ def test_the_exterior_runs_as_geos_gives_it_clockwise() -> None:
     assert _is_ccw(out) == [False]
 
 
-def test_ccw_outer_runs_the_exterior_counter_clockwise() -> None:
-    out = _polygons([_NOTCHED]).select(geo.convex_hull("polygon", ccw_outer=True))
+def test_ccw_runs_the_exterior_counter_clockwise() -> None:
+    out = _polygons([_NOTCHED]).select(
+        geo.convex_hull("polygon", new_ring_orientation="ccw")
+    )
 
     assert _is_ccw(out) == [True]
     assert out.to_series().ext.storage().to_list() == [
@@ -290,17 +318,17 @@ def test_ccw_outer_runs_the_exterior_counter_clockwise() -> None:
     ]
 
 
-def test_the_namespace_forwards_ccw_outer() -> None:
+def test_the_namespace_forwards_new_ring_orientation() -> None:
     df = _polygons([_NOTCHED])
 
-    assert df.select(pl.col("polygon").geo.convex_hull(ccw_outer=True)).equals(
-        df.select(geo.convex_hull("polygon", ccw_outer=True))
-    )
+    assert df.select(
+        pl.col("polygon").geo.convex_hull(new_ring_orientation="ccw")
+    ).equals(df.select(geo.convex_hull("polygon", new_ring_orientation="ccw")))
 
 
-def test_the_namespace_forwards_ignore_per_row_errors() -> None:
+def test_the_namespace_forwards_on_row_error() -> None:
     df = _lines(_HALF_NAN)
 
-    assert df.select(
-        pl.col("polygon").geo.convex_hull(ignore_per_row_errors=True)
-    ).equals(df.select(geo.convex_hull("polygon", ignore_per_row_errors=True)))
+    assert df.select(pl.col("polygon").geo.convex_hull(on_row_error="null")).equals(
+        df.select(geo.convex_hull("polygon", on_row_error="null"))
+    )

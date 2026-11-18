@@ -1,4 +1,5 @@
 use geopolars_compute::geos::{shortest_lines_against_one, shortest_lines_pairwise};
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{GeometryArray, Kind};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -15,14 +16,14 @@ pub fn pairwise_shortest_lines(
     a_kind: Kind,
     b: &dyn Array,
     b_kind: Kind,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
     let (a, b) = (
         GeometryArray::new(a, a_kind)?,
         GeometryArray::new(b, b_kind)?,
     );
-    shortest_lines_pairwise(a, b, ignore_per_row_errors, early_finite_check)
+    shortest_lines_pairwise(a, b, on_row_error, early_coord_check)
         .map(GeometryArray::LineString)
         .into_polars()
 }
@@ -39,8 +40,8 @@ pub fn shortest_lines_to_one(
     many: &dyn Array,
     many_kind: Kind,
     lines_start_on_one: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
     let one = GeometryArray::new(one, one_kind)?;
     let many = GeometryArray::new(many, many_kind)?;
@@ -48,8 +49,8 @@ pub fn shortest_lines_to_one(
         &one,
         &many,
         lines_start_on_one,
-        ignore_per_row_errors,
-        early_finite_check,
+        on_row_error,
+        early_coord_check,
     )
     .map(GeometryArray::LineString)
     .into_polars()

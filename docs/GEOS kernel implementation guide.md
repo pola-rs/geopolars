@@ -47,17 +47,13 @@ fn simplify_via_geos(
 }
 
 fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
-    geometries: &mut [GeosRow],
+    geometries: &mut GeosRows,
     tolerance: f64,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<()> {
-    for geometry in geometries {
-        let GeosRow::Geometry(input) = geometry else {
-            continue;
-        };
-        *geometry = … // GEOS on `input`, with an error going through `on_row_error`
-    }
-    Ok(())
+    geometries.replace_geometries(on_row_error, |_, input| {
+        … // GEOS on `input`
+    })
 }
 ```
 
@@ -108,7 +104,7 @@ for a binary operation that gives one of its inputs back as it is.
 
 Converting a geometry to GEOS and calling GEOS on it is expensive.
 A kernel that can tell the result of a row without GEOS gives it before converting.
-Null and empty rows become `GeosRow::Null` and `GeosRow::Empty`.
+Null rows are unset in the validity of `GeosRows`, and empty rows become `GeosRow::Empty`.
 These are much cheaper to create,
 and let us switch what we do without inspecting the GEOS data.
 
@@ -119,6 +115,8 @@ foregoing the need to convert its partner in the other column.
 
 - A GEOS kernel defaults to `early_coord_check="finite_and_empty"`.
   The check runs during the conversion to GEOS.
+- `"finite"` lets an empty point inside a geometry through to GEOS.
+  What GEOS then does is described under `early_coord_check` in [Common arguments](<Common arguments.md>).
 - If the check can be turned off,
   the module documents what GEOS does with non-finite input then,
   as `geos/convex_hull.rs` does.

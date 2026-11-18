@@ -1,6 +1,10 @@
 //! The convex hull of a linestring or polygon, or their multi-variants, forwarded to GEOS.
 //! Implements the Python `convex_hull`.
 
+use crate::common_arguments::{
+    EarlyCoordCheckDef, NewHolesDef, NewRingOrientationDef, OnRowErrorDef,
+};
+use geopolars_compute::{EarlyCoordCheck, NewHoles, NewRingOrientation, OnRowError};
 use geopolars_core::{convex_hulls, NestedKind};
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
@@ -23,7 +27,10 @@ fn hull_type(dtype: &DataType) -> PolarsResult<(Geo, NestedKind)> {
     Ok((hull, kind))
 }
 
-fn kernel_output_type_convex_hull(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_convex_hull(
+    input_fields: &[Field],
+    _kwargs: ConvexHullKwargs,
+) -> PolarsResult<Field> {
     let (hull, _) = hull_type(input_fields[0].dtype())?;
     Ok(Field::new(input_fields[0].name().clone(), hull.dtype()))
 }
@@ -32,12 +39,17 @@ fn kernel_output_type_convex_hull(input_fields: &[Field]) -> PolarsResult<Field>
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConvexHullKwargs {
-    ignore_per_row_errors: bool,
-    ccw_outer: bool,
-    early_finite_check: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
+    #[serde(with = "NewRingOrientationDef")]
+    new_ring_orientation: NewRingOrientation,
+    #[serde(with = "NewHolesDef")]
+    new_holes: NewHoles,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_convex_hull)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_convex_hull)]
 fn convex_hull(inputs: &[Series], kwargs: ConvexHullKwargs) -> PolarsResult<Series> {
     let (hull, kind) = hull_type(inputs[0].dtype())?;
     let storage = inputs[0].ext()?.storage();
@@ -48,9 +60,10 @@ fn convex_hull(inputs: &[Series], kwargs: ConvexHullKwargs) -> PolarsResult<Seri
             convex_hulls(
                 chunk.as_ref(),
                 kind,
-                kwargs.ignore_per_row_errors,
-                kwargs.ccw_outer,
-                kwargs.early_finite_check,
+                kwargs.on_row_error,
+                kwargs.new_ring_orientation,
+                kwargs.new_holes,
+                kwargs.early_coord_check,
             )
         })
         .collect::<PolarsResult<_>>()?;

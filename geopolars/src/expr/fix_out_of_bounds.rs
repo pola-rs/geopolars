@@ -1,14 +1,15 @@
 //! Fixing the coordinates outside the CRS's bounds.
 //! Implements the Python `fix_out_of_bounds`.
 
-use geopolars_compute::native::{Bounds, CoordinateSelection, OutOfBoundsAction, TooShort};
+use geopolars_compute::native::{Bounds, CoordinateSelection, OutOfBoundsAction};
+use geopolars_compute::ShortLines;
 use geopolars_core::{with_clamped_coords, with_selected_coords};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
-use super::remove_repeats_in_succession::TooShortDef;
+use super::coords::kernel_output_type_wrapper_same_geometry;
+use crate::common_arguments::ShortLinesDef;
 use crate::geoarrow::{describe, geometry_series};
 
 #[derive(Deserialize)]
@@ -28,17 +29,24 @@ pub struct FixOutOfBoundsKwargs {
     bounds: Bounds,
     #[serde(with = "OutOfBoundsActionDef")]
     action: OutOfBoundsAction,
-    #[serde(with = "TooShortDef")]
-    too_short: TooShort,
+    #[serde(with = "ShortLinesDef")]
+    short_lines: ShortLines,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+fn kernel_output_type_fix_out_of_bounds(
+    input_fields: &[Field],
+    _kwargs: FixOutOfBoundsKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_wrapper_same_geometry(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_fix_out_of_bounds)]
 fn fix_out_of_bounds(inputs: &[Series], kwargs: FixOutOfBoundsKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let FixOutOfBoundsKwargs {
         bounds,
         action,
-        too_short,
+        short_lines,
     } = kwargs;
     let selection = CoordinateSelection {
         non_finite: None,
@@ -50,7 +58,7 @@ fn fix_out_of_bounds(inputs: &[Series], kwargs: FixOutOfBoundsKwargs) -> PolarsR
         .iter()
         .map(|chunk| match action.selected_action() {
             Some(action) => {
-                with_selected_coords(chunk.as_ref(), kind, &selection, action, too_short)
+                with_selected_coords(chunk.as_ref(), kind, &selection, action, short_lines)
             }
             None => with_clamped_coords(chunk.as_ref(), kind, &bounds),
         })

@@ -1,8 +1,9 @@
 use geopolars_compute::native::{
     line_strings_with_selected, multi_line_strings_with_selected, multi_points_with_selected,
     multi_polygons_with_selected, points_with_selected, polygons_with_selected,
-    CoordinateSelection, SelectedAction, TooShort,
+    CoordinateSelection, SelectedAction,
 };
+use geopolars_compute::ShortLines;
 use geopolars_views::{
     downcast, Coords, GeometryArray, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray,
@@ -19,7 +20,7 @@ pub fn with_selected_coords(
     kind: Kind,
     selection: &CoordinateSelection,
     action: SelectedAction,
-    too_short: TooShort,
+    short_lines: ShortLines,
 ) -> PolarsResult<GeometryArray> {
     let rows = || downcast::<ListArray<i64>>(chunk, "a list of parts");
     Ok(match kind {
@@ -32,31 +33,31 @@ pub fn with_selected_coords(
             &LineStringArray::new(rows()?)?,
             selection,
             action,
-            too_short,
+            short_lines,
         )),
         Kind::MultiPoint => GeometryArray::MultiPoint(multi_points_with_selected(
             &MultiPointArray::new(rows()?)?,
             selection,
             action,
-            too_short,
+            short_lines,
         )),
         Kind::Polygon => GeometryArray::Polygon(polygons_with_selected(
             &PolygonArray::new(rows()?)?,
             selection,
             action,
-            too_short,
+            short_lines,
         )),
         Kind::MultiLineString => GeometryArray::MultiLineString(multi_line_strings_with_selected(
             &MultiLineStringArray::new(rows()?)?,
             selection,
             action,
-            too_short,
+            short_lines,
         )),
         Kind::MultiPolygon => GeometryArray::MultiPolygon(multi_polygons_with_selected(
             &MultiPolygonArray::new(rows()?)?,
             selection,
             action,
-            too_short,
+            short_lines,
         )),
     })
 }

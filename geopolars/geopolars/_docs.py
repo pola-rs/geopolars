@@ -68,15 +68,15 @@ The empty point has NaN on every axis it has.
 A point cannot lose its coordinate, so with `"drop"` it becomes the empty point,
 just as a linestring or ring that loses every vertex becomes empty.
 With `"drop"`, a ring that is no longer closed (see `is_valid_geoarrow`) is too short as well (see below).
-With `"set_empty"` and `"set_null"`, every offset is kept, and `too_short` is ignored.
+With `"set_empty"` and `"set_null"`, every offset is kept, and `short_lines` is ignored.
 A ring whose ends are emptied is no longer closed.""",
-    "too_short": """\
+    "short_lines": """\
 This operation removes coordinates, which can leave a linestring or ring too short.
 A linestring is too short with a single vertex, and a ring with fewer than 4.
 This also holds for input that was too short already.
-What is done with these is determined by `too_short`:
+What is done with these is determined by `short_lines`:
 
-| `too_short` | a too-short linestring or ring |
+| `short_lines` | a too-short linestring or ring |
 | - | - |
 | `"null"` | makes its row null |
 | `"keep"` | stays as it is, e.g. `[A]`, or a ring `[A, B, A]` |
@@ -132,25 +132,32 @@ An untyped null (`pl.lit(None)`) as `{parts}` is null on every row.
     "ignores_empty_and_invalid": """\
 This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",
+    "on_row_error": """\
+This expression can error on individual rows. How these are handled is determined by `on_row_error`.
+See `on_row_error` on the Common arguments page (`docs/Common arguments.md`).""",
     "geos_errors": """\
-A geometry GEOS fails on raises GEOS's error, failing the query.
-With `ignore_per_row_errors=True`, it gives a null {output} instead.""",
+If GEOS returns an error for a row, it is handled through `on_row_error`.""",
     "geos_non_finite": """\
 GEOS supports neither empty points inside a geometry (a vertex with NaN on every axis)
 nor any other NaN or infinite x or y.
-By default they go to GEOS as they are.""",
-    "early_finite_check": """\
-With `early_finite_check=True`, a geometry with such a vertex is caught before it reaches GEOS.
-It then raises, or gives a null {output} with `ignore_per_row_errors=True`.
-This only adds a short path.
-It pays off when you expect many non-finite coordinates in your data.""",
-    "ccw_outer": """\
-The exterior runs as GEOS gives it, clockwise.
-With `ccw_outer=True`, it runs counter-clockwise instead at a minimal performance cost.""",
-    "ccw_outer_skipping_geos": """\
-The orientation is only set for the rows that go through GEOS.
+With `early_coord_check="off"`, they go to GEOS as they are.""",
+    "early_coord_check": """\
+This expression can check for NaNs and nested empty points early.
+See `early_coord_check` on the Common arguments page (`docs/Common arguments.md`).""",
+    "empty_polygon_exterior": """\
+A polygon with an empty exterior and a hole with vertices is not valid OGC.
+What this expression does when it would make one is set by `empty_polygon_exterior`.
+See `empty_polygon_exterior` on the Common arguments page (`docs/Common arguments.md`).""",
+    "new_ring_orientation": """\
+By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them:
+the exterior clockwise, and the holes counter-clockwise.
+With `"ccw"` or `"cw"`, the exterior runs that way instead, at a minimal performance cost.
+The holes then run against it with `new_holes="opposite"` (the default), or along it with `"same"`.
+See `new_ring_orientation` on the Common arguments page (`docs/Common arguments.md`).""",
+    "new_ring_orientation_skipping_geos": """\
+Only the rings GEOS builds are new.
 A row whose result is trivial skips GEOS, and keeps the orientation of its input,
-whatever `ccw_outer` is.""",
+whatever `new_ring_orientation` is.""",
     "overlay_splitting": """\
 A row whose result has several parts then raises.
 With `allow_splitting=True`, the result is the multi kind instead, which holds every part.""",

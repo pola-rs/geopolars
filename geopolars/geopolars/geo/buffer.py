@@ -12,7 +12,13 @@ import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import (
+    EarlyCoordCheck,
+    NewHoles,
+    NewRingOrientation,
+    OnRowError,
+)
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType, PointType
 from geopolars.geo._dispatch import _to_expr, on_geometry
 
@@ -56,9 +62,10 @@ def buffer(
     mitre_limit: float | None = None,
     side: Literal["both", "left", "right"] = "both",
     allow_splitting: bool = False,
-    ccw_outer: bool = False,
-    ignore_per_row_errors: bool = False,
-    early_finite_check: bool = False,
+    new_ring_orientation: NewRingOrientation = "keep",
+    new_holes: NewHoles = "opposite",
+    on_row_error: OnRowError = "raise",
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """Draws a 'buffer' around the geometry.
     Think of it like an outset/inset of the original shape.
@@ -69,7 +76,6 @@ def buffer(
     or a column (or expression) with one distance per geometry.
     A null distance gives a null polygon.
     A NaN or infinite distance in a column raises, as does a negative one with `side`.
-    With `ignore_per_row_errors=True`, such a row gives a null polygon instead.
 
     A point, linestring or polygon gives a polygon.
     Their multi-variants give a multipolygon,
@@ -128,17 +134,22 @@ def buffer(
 
     {geos_errors}
     The same goes for a polygon it splits without `allow_splitting`.
+    {on_row_error}
 
     {geos_non_finite}
-    {early_finite_check}
+    {early_coord_check}
 
-    {ccw_outer}
+    {new_ring_orientation}
 
     ```python
     df.select(geo.buffer("parcel", 2.0))
     df.select(geo.buffer("road", 5.0, cap_style="flat"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
+    validate_one_of("new_holes", new_holes, NewHoles)
 
     # TODO: we could add some image examples here?
     # - a normal outset
@@ -190,9 +201,10 @@ def buffer(
                 else float(mitre_limit),
                 "side": side,
                 "allow_splitting": allow_splitting,
-                "ccw_outer": ccw_outer,
-                "ignore_per_row_errors": ignore_per_row_errors,
-                "early_finite_check": early_finite_check,
+                "new_ring_orientation": new_ring_orientation,
+                "new_holes": new_holes,
+                "on_row_error": on_row_error,
+                "early_coord_check": early_coord_check,
             },
             is_elementwise=True,
         )

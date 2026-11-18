@@ -10,7 +10,13 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import (
+    EarlyCoordCheck,
+    NewHoles,
+    NewRingOrientation,
+    OnRowError,
+)
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import (
     LineStringType,
     MultiLineStringType,
@@ -39,9 +45,10 @@ _ACCEPTED = (
 def convex_hull(
     geometry: IntoExprColumn,
     *,
-    ignore_per_row_errors: bool = False,
-    ccw_outer: bool = False,
-    early_finite_check: bool = False,
+    on_row_error: OnRowError = "raise",
+    new_ring_orientation: NewRingOrientation = "keep",
+    new_holes: NewHoles = "opposite",
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """The smallest convex polygon that contains every vertex of a linestring or polygon,
     with its CRS.
@@ -76,18 +83,26 @@ def convex_hull(
     A geometry crossing the antimeridian is hulled the long way round.
 
     {geos_errors}
+    {on_row_error}
 
     {geos_non_finite}
     Depending on where such a vertex sits, it is left out of the hull,
     the polygon is null, or GEOS raises.
-    {early_finite_check}
+    {early_coord_check}
+    A geometry with a single coordinate skips this check,
+    and gives a null polygon even if that coordinate is not finite.
 
-    {ccw_outer}
+    {new_ring_orientation}
+    A hull has no holes, so `new_holes` changes nothing.
 
     ```python
     df.select(geo.convex_hull("parcel"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
+    validate_one_of("new_holes", new_holes, NewHoles)
 
     def build(column: pl.Expr, dtype: GeoArrowType) -> pl.Expr:
         if not isinstance(dtype, _ACCEPTED):
@@ -101,9 +116,10 @@ def convex_hull(
             args=[column],
             function_name="convex_hull",
             kwargs={
-                "ignore_per_row_errors": ignore_per_row_errors,
-                "ccw_outer": ccw_outer,
-                "early_finite_check": early_finite_check,
+                "on_row_error": on_row_error,
+                "new_ring_orientation": new_ring_orientation,
+                "new_holes": new_holes,
+                "early_coord_check": early_coord_check,
             },
             is_elementwise=True,
         )

@@ -71,7 +71,7 @@ def is_valid_geoarrow(
       no NaN, no infinity.
       The exception is the empty point, which may stand anywhere, also as a vertex.
     - `out_of_bounds`: no coordinate may lie outside the bounds `fix_out_of_bounds` would fix.
-      Its `crs_bounds` says which bounds those are. Its `action` and `too_short` are ignored here.
+      Its `crs_bounds` says which bounds those are. Its `action` and `short_lines` are ignored here.
       With `out_of_bounds=None`, the default, bounds are not checked, and PROJ is not asked for any.
 
     {empty_point}

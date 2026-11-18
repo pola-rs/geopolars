@@ -14,7 +14,7 @@ use polars_arrow::offset::Offsets;
 
 use super::has_repeats_in_succession::{with_coincide, Coincidence};
 use super::selected_coords::{line_strings_without_selected, multi_line_strings_without_selected};
-use super::too_short::TooShort;
+use crate::ShortLines;
 
 /// `gaps` of the Python `join_line_strings`, for [multi_line_strings_joined].
 /// `gaps="split"` gives multilinestrings, so [multi_line_strings_split_at_gaps] does it instead.
@@ -106,7 +106,9 @@ pub fn multi_line_strings_joined(
     // Only the first vertex of a later part is dropped, so a line keeps every vertex of its first part.
     // It is only too short if that part already was.
     match dropped {
-        Some(dropped) => line_strings_without_selected(&joined, &dropped.freeze(), TooShort::Keep),
+        Some(dropped) => {
+            line_strings_without_selected(&joined, &dropped.freeze(), ShortLines::Keep)
+        }
         None => joined,
     }
 }
@@ -171,10 +173,10 @@ pub fn multi_line_strings_split_at_gaps(
     let (rows, lines) =
         lines_split_at(array, &vertices_per_row(array), gaps.into_iter().peekable());
     let joined = MultiLineStringArray::from_parts(rows, lines, array.coords.clone());
-    // See `multi_line_strings_joined` on `TooShort::Keep`. A split line starts at a gap, which is never dropped.
+    // See `multi_line_strings_joined` on `ShortLines::Keep`. A split line starts at a gap, which is never dropped.
     match dropped {
         Some(dropped) => {
-            multi_line_strings_without_selected(&joined, &dropped.freeze(), TooShort::Keep)
+            multi_line_strings_without_selected(&joined, &dropped.freeze(), ShortLines::Keep)
         }
         None => joined,
     }

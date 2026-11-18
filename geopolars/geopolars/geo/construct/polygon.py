@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import NullParts
 from geopolars._utils import LIB, validate_one_of
-from geopolars.geo.add_parts import NullParts
 from geopolars.geo.construct._common import (
     _from_columns,
     _gather,

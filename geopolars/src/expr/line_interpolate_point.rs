@@ -1,7 +1,9 @@
 //! The point at a distance along a line, forwarded to GEOS.
 //! Implements the Python `line_interpolate_point`.
 
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
 use geopolars_compute::geos::InterpolateMode;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::{interpolated_points, LineKind};
 use geopolars_views::Kind;
 use polars::prelude::*;
@@ -21,7 +23,10 @@ fn line_interpolate_point_type(dtype: &DataType) -> PolarsResult<(Geo, LineKind)
     Ok((point, kind))
 }
 
-fn kernel_output_type_line_interpolate_point(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_line_interpolate_point(
+    input_fields: &[Field],
+    _kwargs: LineInterpolatePointKwargs,
+) -> PolarsResult<Field> {
     let (point, _) = line_interpolate_point_type(input_fields[0].dtype())?;
     Ok(Field::new(input_fields[0].name().clone(), point.dtype()))
 }
@@ -41,11 +46,13 @@ pub struct LineInterpolatePointKwargs {
     distance: Option<f64>,
     #[serde(with = "InterpolateModeDef")]
     mode: InterpolateMode,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_line_interpolate_point)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_line_interpolate_point)]
 fn line_interpolate_point(
     inputs: &[Series],
     kwargs: LineInterpolatePointKwargs,
@@ -54,18 +61,11 @@ fn line_interpolate_point(
     let LineInterpolatePointKwargs {
         distance,
         mode,
-        ignore_per_row_errors,
-        early_finite_check,
+        on_row_error,
+        early_coord_check,
     } = kwargs;
     let chunks = chunks_by_distance(inputs, distance, |rows, distance| {
-        interpolated_points(
-            rows,
-            kind,
-            distance,
-            mode,
-            ignore_per_row_errors,
-            early_finite_check,
-        )
+        interpolated_points(rows, kind, distance, mode, on_row_error, early_coord_check)
     })?;
     geometry_series(inputs[0].name().clone(), point, chunks)
 }

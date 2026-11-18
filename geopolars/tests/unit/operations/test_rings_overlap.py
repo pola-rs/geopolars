@@ -104,7 +104,7 @@ def test_anything_but_a_ring_raises(line: Ring) -> None:
         _overlap([_square(0, 0)], [line])
 
 
-def test_ignore_per_row_errors_gives_a_null_result() -> None:
+def test_on_row_error_null_gives_a_null_result() -> None:
     open_line = [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 0.0}, {"x": 1.0, "y": 1.0}]
     df = pl.DataFrame(
         [
@@ -112,12 +112,12 @@ def test_ignore_per_row_errors_gives_a_null_result() -> None:
             _rings("b", [_square(0, 0), _square(0, 0)]),
         ]
     )
-    out = df.select(geo.rings_overlap("a", "b", ignore_per_row_errors=True))
+    out = df.select(geo.rings_overlap("a", "b", on_row_error="null"))
     assert out["a"].to_list() == [None, True]
 
 
 @pytest.mark.parametrize("single_first", [True, False])
-def test_ignore_per_row_errors_on_a_single_ring(single_first: bool) -> None:
+def test_on_row_error_null_on_a_single_ring(single_first: bool) -> None:
     open_line = [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 0.0}, {"x": 1.0, "y": 1.0}]
     many = _rings("many", [_square(0, 0), open_line])
     good, bad = _rings("one", [_square(0, 0)]), _rings("one", [open_line])
@@ -125,7 +125,7 @@ def test_ignore_per_row_errors_on_a_single_ring(single_first: bool) -> None:
     def overlap(one: pl.Series) -> list[bool | None]:
         df = pl.DataFrame(many)
         a, b = (one, "many") if single_first else ("many", one)
-        out = df.select(geo.rings_overlap(a, b, ignore_per_row_errors=True))
+        out = df.select(geo.rings_overlap(a, b, on_row_error="null"))
         return out.to_series().to_list()
 
     assert overlap(good) == [True, None]

@@ -494,7 +494,7 @@ def test_a_ring_that_is_not_closed_raises(dtype: GeoArrowType, ring: Vertices) -
     with pytest.raises(pl.exceptions.ComputeError, match="expects closed rings"):
         _rotated_out(df)
     rotated = _rotated_rows(dtype, [good])[0]
-    assert _rotated_out(df, ignore_per_row_errors=True) == [
+    assert _rotated_out(df, on_row_error="null") == [
         rotated,
         None,
         rotated,

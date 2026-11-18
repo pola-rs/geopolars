@@ -1,6 +1,7 @@
 use geopolars_compute::geos::{
     buffer_into_multi_polygons, buffer_into_polygons, BufferDistance, BufferStyle,
 };
+use geopolars_compute::{EarlyCoordCheck, NewHoles, NewRingOrientation, OnRowError};
 use geopolars_views::{GeometryArray, Kind};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -17,18 +18,35 @@ pub fn buffers(
     into_multi: bool,
     distance: BufferDistance,
     style: &BufferStyle,
-    ccw_outer: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-    let array = &GeometryArray::new(chunk, kind)?;
+    let early = early_coord_check;
+    let array = GeometryArray::new(chunk, kind)?;
     if into_multi {
-        buffer_into_multi_polygons(array, distance, style, ccw_outer, ignore, early)
-            .map(GeometryArray::MultiPolygon)
+        buffer_into_multi_polygons(
+            array,
+            distance,
+            style,
+            new_ring_orientation,
+            new_holes,
+            on_row_error,
+            early,
+        )
+        .map(GeometryArray::MultiPolygon)
     } else {
-        buffer_into_polygons(array, distance, style, ccw_outer, ignore, early)
-            .map(GeometryArray::Polygon)
+        buffer_into_polygons(
+            array,
+            distance,
+            style,
+            new_ring_orientation,
+            new_holes,
+            on_row_error,
+            early,
+        )
+        .map(GeometryArray::Polygon)
     }
     .into_polars()
 }

@@ -23,10 +23,8 @@ With the `on_row_error` variable, you can set what to do if that happens.
 - `on_row_error="null"` instructs the kernel to simply mark the resulting row as null.
   The total rows coming out of the expression then does not change.
 
-Note that there is no `"drop"` option here.
-The kernels are registered with `is_elementwise=True`, and dropping rows changes the column length.
-That breaks `with_columns`, broadcasting a single geometry against a column,
-and pairing with other columns of the same frame.
+This parameter does not affect how error handling outside the per-row part is done.
+If there is an error in the setup, it can still fail the entire query even if `on_row_error="null"` is set.
 
 > [!NOTE]
 > Legacy: this replaces `ignore_per_row_errors: bool = False`.
@@ -45,7 +43,7 @@ you might be better off leaving this one as this can skip expensive calculations
   check for such values in the operation. If it finds one, it will mark it as an error,
   which can be picked up by `on_row_error`. An empty point does not trigger this.
 - `early_coord_check="finite_and_empty"` (default for GEOS kernels) does the same as the above,
-  but also goes to `on_row_error` for an empty point.
+  but also goes to `on_row_error` for an empty point inside a geometry.
 
 This argument serves an important purpose for kernels that forward to GEOS.
 GEOS supports neither empty points inside a geometry nor any other NaN or infinite x or y.
@@ -55,6 +53,23 @@ while on skipping it might give some unexpected result.
 You read that right, setting `early_coord_check="off"` can also silently affect the results,
 due to GEOS handling invalid states differently (and sometimes inconsistently).
 An example would be GEOS silently returning (4, 0) for a distance of 0.5 on a line with a NaN vertex.
+
+With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
+What GEOS does with it depends on the operation, and often on where the point is:
+
+| Operation | An empty point inside a geometry |
+| - | - |
+| `buffer`, `offset_curve` | is left out |
+| `simplify` | is left out, but kept as the first vertex |
+| `simplify` with `preserve_topology=True` | fails the row |
+| `intersection`, `difference`, `shortest_line_between` | fails the row |
+| `relate` | fails the row, unless it is the first vertex |
+| `convex_hull` | is left out, but gives a null as the first vertex |
+| `line_interpolate_point` | gives a wrong point |
+| `is_topologically_equal` | gives a wrong answer |
+
+A geometry that is itself the empty point passes either check,
+and works as you'd expect it to, as it is a standard GEOS type.
 
 If this is a function that also takes `include_m`/`include_z`,
 the check only includes the coordinates that these flags specify.
@@ -179,16 +194,18 @@ This argument says what should happen to such a thing.
 GeoArrow allows you to have an empty polygon exterior but a non-empty hole.
 Most of the time this is not a meaningful polygon though.
 
-- `empty_polygon_exterior="null"` (the default) makes kernels check for these.
-  If such a polygon is produced, it is turned into a `null` instead.
-- `empty_polygon_exterior="error"` checks too, but triggers `on_row_error`.
-- `empty_polygon_exterior="empty"` discards the holes, creating the empty polygon.
-- `empty_polygon_exterior="keep"` allows a kernel to create these.
-  This is valid GeoArrow, but not valid for OGC.
-  Running a polygon like this through other expressions might give unexpected results.
+| `empty_polygon_exterior` | a polygon a kernel would give an empty exterior and a hole with vertices |
+| - | - |
+| `"null"` (the default) | is null |
+| `"error"` | goes to `on_row_error` |
+| `"empty"` | loses its holes, so it is the empty polygon |
+| `"keep"` | keeps its holes: valid GeoArrow, but not valid OGC |
+
+With `"keep"`, running such a polygon through other expressions might give unexpected results.
 
 > [!NOTE]
 > Legacy: this replaces `empty_exterior: Literal["null", "keep"] = "null"`.
+> Its `"keep"` is now `"empty"`.
 
 ## Output geometry
 
@@ -204,12 +221,14 @@ In these cases, you can ask what should be done with the newly added rings:
 
 What counts as a new ring:
 
-- GEOS output: all rings.
+- GEOS output: every ring GEOS builds.
+  A row whose result skips GEOS (e.g. `difference` with an empty `b`) keeps its rings as they were.
 - Constructors: all rings.
 - add_holes: only the added holes.
 
 > [!NOTE]
 > Legacy: this replaces `ccw_outer: bool = False`.
+> `ccw_outer=True` is now `new_ring_orientation="ccw"`.
 
 ### `new_holes: Literal["opposite", "same"] = "opposite"`
 

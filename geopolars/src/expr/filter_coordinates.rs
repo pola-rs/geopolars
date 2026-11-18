@@ -1,14 +1,15 @@
 //! Emptying, dropping or nulling the coordinates that are not finite, or empty.
 //! Implements the Python `filter_coordinates`.
 
-use geopolars_compute::native::{CoordinateSelection, NonFinite, SelectedAction, TooShort};
+use geopolars_compute::native::{CoordinateSelection, NonFinite, SelectedAction};
+use geopolars_compute::ShortLines;
 use geopolars_core::with_selected_coords;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use super::coords::kernel_output_type_same_geometry;
-use super::remove_repeats_in_succession::TooShortDef;
+use super::coords::kernel_output_type_wrapper_same_geometry;
+use crate::common_arguments::ShortLinesDef;
 use crate::geoarrow::{describe, geometry_series};
 
 #[derive(Deserialize)]
@@ -29,8 +30,8 @@ pub struct NonFiniteKwargs {
     pub(super) ignore_m: bool,
     #[serde(with = "SelectedActionDef")]
     pub(super) action: SelectedAction,
-    #[serde(with = "TooShortDef")]
-    pub(super) too_short: TooShort,
+    #[serde(with = "ShortLinesDef")]
+    pub(super) short_lines: ShortLines,
 }
 
 impl NonFiniteKwargs {
@@ -47,7 +48,14 @@ impl NonFiniteKwargs {
     }
 }
 
-#[polars_expr(output_type_func=kernel_output_type_same_geometry)]
+fn kernel_output_type_filter_coordinates(
+    input_fields: &[Field],
+    _kwargs: NonFiniteKwargs,
+) -> PolarsResult<Field> {
+    kernel_output_type_wrapper_same_geometry(input_fields)
+}
+
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_filter_coordinates)]
 fn filter_coordinates(inputs: &[Series], kwargs: NonFiniteKwargs) -> PolarsResult<Series> {
     let kind = describe(inputs[0].dtype())?.kind;
     let selection = kwargs.selection();
@@ -61,7 +69,7 @@ fn filter_coordinates(inputs: &[Series], kwargs: NonFiniteKwargs) -> PolarsResul
                 kind,
                 &selection,
                 kwargs.action,
-                kwargs.too_short,
+                kwargs.short_lines,
             )
         })
         .collect::<PolarsResult<_>>()?;

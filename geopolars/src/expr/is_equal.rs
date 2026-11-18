@@ -21,7 +21,10 @@ pub struct IsEqualKwargs {
     unique_m: bool,
 }
 
-fn kernel_output_type_is_equal(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_is_equal(
+    input_fields: &[Field],
+    _kwargs: IsEqualKwargs,
+) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "is_equal takes two geometries, got {} inputs", input_fields.len());
     };
@@ -35,7 +38,7 @@ fn kernel_output_type_is_equal(input_fields: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_is_equal)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_equal)]
 fn is_equal(inputs: &[Series], kwargs: IsEqualKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let kind = describe(a.dtype())?.kind;

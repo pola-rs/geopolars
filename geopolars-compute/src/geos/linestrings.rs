@@ -15,9 +15,9 @@ use polars_arrow::bitmap::Bitmap;
 
 use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
-    OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
+    GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
 };
-use crate::GeoComputeResult;
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 impl ToGeos for ScalarLineString<'_> {
     type Geos = Geometry;
@@ -31,8 +31,8 @@ impl ToGeosRows for LineStringArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
-        early_finite_check: bool,
+        on_row_error: OnRowError,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let axes = axes(&self.coords);
         let size_hint = SizeHint {
@@ -43,8 +43,8 @@ impl ToGeosRows for LineStringArray {
             &self.rows,
             &axes,
             as_empty,
-            ignore_per_row_errors,
-            early_finite_check,
+            on_row_error,
+            early_coord_check,
             |vertices| vertices,
             |vertices| line_string_to_geos(&axes, vertices),
         )?;
@@ -67,11 +67,11 @@ impl ToGeosRows for MultiLineStringArray {
     fn to_geos_rows_taking_as_empty(
         &self,
         as_empty: Option<&Bitmap>,
-        ignore_per_row_errors: bool,
-        early_finite_check: bool,
+        on_row_error: OnRowError,
+        early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
-        let (ignore, early) = (ignore_per_row_errors, early_finite_check);
-        multi_line_strings_to_geos_rows(self, false, as_empty, ignore, early)
+        let early = early_coord_check;
+        multi_line_strings_to_geos_rows(self, false, as_empty, on_row_error, early)
     }
 }
 
@@ -81,8 +81,8 @@ pub(super) fn multi_line_strings_to_geos_rows(
     array: &MultiLineStringArray,
     drop_empty_parts: bool,
     as_empty: Option<&Bitmap>,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<GeosGeometries> {
     let axes = axes(&array.coords);
     let size_hint = SizeHint {
@@ -93,8 +93,8 @@ pub(super) fn multi_line_strings_to_geos_rows(
         &array.rows,
         &axes,
         as_empty,
-        ignore_per_row_errors,
-        early_finite_check,
+        on_row_error,
+        early_coord_check,
         |parts| array.lines.span(parts),
         |parts| multi_line_string_to_geos(&axes, &array.lines, parts, drop_empty_parts),
     )?;
@@ -138,28 +138,33 @@ pub(super) fn multi_line_string_to_geos(
 impl GeosGeometries {
     /// Our linestring array of the geometries, one row each.
     /// Every GEOS geometry is freed once it is copied.
-    /// A geometry that is not a linestring is an error.
-    /// If `ignore_per_row_errors=true`, its row is null instead.
+    /// A geometry that is not a linestring goes to `on_row_error`.
     pub fn into_line_string_array<const Z: bool>(
         self,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
     ) -> GeoComputeResult<LineStringArray> {
-        let mut validity = ValidityBuilder::with_capacity(self.geometries.len());
+        let GeosRows {
+            rows: geometries,
+            mut validity,
+        } = self.geometries;
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
-        let mut rows = OffsetsBuilder::with_capacity(self.geometries.len());
-        for geometry in self.geometries {
+        let mut rows = OffsetsBuilder::with_capacity(geometries.len());
+        for (i, geometry) in geometries.into_iter().enumerate() {
             let is_valid = match geometry {
-                GeosRow::Null => false,
                 GeosRow::Empty => true,
-                GeosRow::Geometry(line_string) => match line_string.geometry_type()? {
-                    GeometryTypes::LineString => {
-                        coords.push::<Z, false>(&line_string)?;
-                        true
+                GeosRow::Geometry(line_string) | GeosRow::Unchanged(line_string) => {
+                    match line_string.geometry_type()? {
+                        GeometryTypes::LineString => {
+                            coords.push::<Z, false>(&line_string)?;
+                            true
+                        }
+                        other => wrong_kind("linestring", other, on_row_error)?,
                     }
-                    other => wrong_kind("linestring", other, ignore_per_row_errors)?,
-                },
+                }
             };
-            validity.push(is_valid);
+            if !is_valid {
+                validity.set_null(i);
+            }
             rows.push(coords.len());
         }
         Ok(LineStringArray::from_parts(
@@ -174,34 +179,40 @@ impl GeosGeometries {
     /// A geometry that is not a linestring or multilinestring fails the same way.
     pub fn into_multi_line_string_array<const Z: bool>(
         self,
-        ignore_per_row_errors: bool,
+        on_row_error: OnRowError,
     ) -> GeoComputeResult<MultiLineStringArray> {
-        let mut validity = ValidityBuilder::with_capacity(self.geometries.len());
+        let GeosRows {
+            rows: geometries,
+            mut validity,
+        } = self.geometries;
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
         let mut lines = OffsetsBuilder::with_capacity(self.size_hint.parts[0]);
-        let mut rows = OffsetsBuilder::with_capacity(self.geometries.len());
-        for geometry in self.geometries {
+        let mut rows = OffsetsBuilder::with_capacity(geometries.len());
+        for (i, geometry) in geometries.into_iter().enumerate() {
             let is_valid = match geometry {
-                GeosRow::Null => false,
                 GeosRow::Empty => true,
-                GeosRow::Geometry(geometry) => match geometry.geometry_type()? {
-                    GeometryTypes::LineString if geometry.is_empty()? => true,
-                    GeometryTypes::LineString => {
-                        coords.push::<Z, false>(&geometry)?;
-                        lines.push(coords.len());
-                        true
-                    }
-                    GeometryTypes::MultiLineString => {
-                        for n in 0..geometry.get_num_geometries()? {
-                            coords.push::<Z, false>(&geometry.get_geometry_n(n)?)?;
+                GeosRow::Geometry(geometry) | GeosRow::Unchanged(geometry) => {
+                    match geometry.geometry_type()? {
+                        GeometryTypes::LineString if geometry.is_empty()? => true,
+                        GeometryTypes::LineString => {
+                            coords.push::<Z, false>(&geometry)?;
                             lines.push(coords.len());
+                            true
                         }
-                        true
+                        GeometryTypes::MultiLineString => {
+                            for n in 0..geometry.get_num_geometries()? {
+                                coords.push::<Z, false>(&geometry.get_geometry_n(n)?)?;
+                                lines.push(coords.len());
+                            }
+                            true
+                        }
+                        other => wrong_kind("multilinestring", other, on_row_error)?,
                     }
-                    other => wrong_kind("multilinestring", other, ignore_per_row_errors)?,
-                },
+                }
             };
-            validity.push(is_valid);
+            if !is_valid {
+                validity.set_null(i);
+            }
             rows.push(lines.len());
         }
         Ok(MultiLineStringArray::from_parts(

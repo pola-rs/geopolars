@@ -200,8 +200,15 @@ def test_a_dropped_hole_takes_no_room_in_an_empty_polygon() -> None:
     assert out.ext.storage().to_list() == [[]]
 
 
-def test_an_empty_hole_can_be_added_to_an_empty_polygon() -> None:
-    out = _added(_polygons([], [[]]), _lines([], []))
+@pytest.mark.parametrize("empty_polygon_exterior", ["null", "error", "empty", "keep"])
+def test_an_empty_hole_can_be_added_to_an_empty_polygon(
+    empty_polygon_exterior: str,
+) -> None:
+    out = _added(
+        _polygons([], [[]]),
+        _lines([], []),
+        empty_polygon_exterior=empty_polygon_exterior,
+    )
 
     assert out.ext.storage().to_list() == [[[]], [[], []]]
 
@@ -212,45 +219,86 @@ def test_an_empty_exterior_has_no_room_for_holes() -> None:
     assert out.to_list() == [None]
 
 
-def test_a_polygon_with_an_empty_exterior_can_be_kept() -> None:
+def test_a_polygon_with_an_empty_exterior_can_stay_empty() -> None:
     out = _added(
         _polygons([], [[]], [_EXTERIOR]),
         _lines(_HOLE, _HOLE, _HOLE),
-        empty_exterior="keep",
+        empty_polygon_exterior="empty",
     )
 
     assert out.ext.storage().to_list() == [[], [[]], [_EXTERIOR, _HOLE]]
 
 
-def test_a_kept_polygon_takes_none_of_its_holes_unless_all_are_empty() -> None:
+def test_an_empty_polygon_takes_none_of_its_holes_unless_all_are_empty() -> None:
     out = _added(
         _polygons([[]], [[]]),
         _listed_lines([[], _HOLE, []], [[], []]),
-        empty_exterior="keep",
+        empty_polygon_exterior="empty",
     )
 
     assert out.ext.storage().to_list() == [[[]], [[], [], []]]
 
 
-def test_a_kept_polygon_ignores_the_holes_that_are_dropped() -> None:
+def test_an_empty_polygon_ignores_the_holes_that_are_dropped() -> None:
     broken = [*_HOLE[:3], None]
     out = _added(
         _polygons([[]], [[]]),
         _listed_lines([broken, []], [None, _HOLE]),  # type: ignore[list-item]
         null_parts="drop",
-        empty_exterior="keep",
+        empty_polygon_exterior="empty",
     )
 
     assert out.ext.storage().to_list() == [[[], []], [[]]]
 
 
-def test_a_null_hole_still_nulls_a_kept_polygon() -> None:
-    out = _added(_polygons([]), _lines(None), empty_exterior="keep")
+def test_a_null_hole_still_nulls_an_empty_polygon() -> None:
+    out = _added(_polygons([]), _lines(None), empty_polygon_exterior="empty")
 
     assert out.to_list() == [None]
 
 
-@pytest.mark.parametrize("kwargs", [{"null_parts": "skip"}, {"empty_exterior": "drop"}])
+def test_an_empty_exterior_can_keep_its_holes() -> None:
+    out = _added(_polygons([[]]), _lines(_HOLE), empty_polygon_exterior="keep")
+
+    assert out.ext.storage().to_list() == [[[], _HOLE]]
+
+
+def test_a_polygon_without_rings_keeps_its_holes_behind_an_empty_exterior() -> None:
+    out = _added(_polygons([]), _lines(_HOLE), empty_polygon_exterior="keep")
+
+    assert out.ext.storage().to_list() == [[[], _HOLE]]
+
+
+def test_an_empty_exterior_with_a_hole_can_raise() -> None:
+    polygons, holes = _polygons([[]]), _lines(_HOLE)
+    with pytest.raises(ComputeError, match="empty exterior got a hole with vertices"):
+        _added(polygons, holes, empty_polygon_exterior="error")
+
+
+def test_an_empty_exterior_with_a_hole_can_be_an_error_made_null() -> None:
+    out = _added(
+        _polygons([[]], [_EXTERIOR]),
+        _lines(_HOLE, _HOLE),
+        empty_polygon_exterior="error",
+        on_row_error="null",
+    )
+
+    assert out.ext.storage().to_list() == [None, [_EXTERIOR, _HOLE]]
+
+
+def test_a_row_nulled_by_a_null_hole_does_not_raise() -> None:
+    out = _added(
+        _polygons([[]]),
+        _listed_lines([_HOLE, None]),
+        empty_polygon_exterior="error",
+    )
+
+    assert out.to_list() == [None]
+
+
+@pytest.mark.parametrize(
+    "kwargs", [{"null_parts": "skip"}, {"empty_polygon_exterior": "drop"}]
+)
 def test_unknown_modes_are_refused(kwargs: dict[str, str]) -> None:
     with pytest.raises(ValueError, match="must be one of"):
         geo.add_holes("polygon", "holes", **kwargs)  # type: ignore[arg-type]

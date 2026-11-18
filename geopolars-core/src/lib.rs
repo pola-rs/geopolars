@@ -44,7 +44,7 @@ mod snap_to_grid;
 mod sort_parts;
 mod to_ccw;
 
-pub use add_holes::{add_holes, EmptyExterior};
+pub use add_holes::add_holes;
 pub use add_parts::{add_parts, EmptyParts};
 pub use affine::{affine_transform, affine_transform_about, affine_transform_then_shift};
 pub use area::areas;
@@ -74,7 +74,7 @@ pub use length::lengths;
 pub use line_interpolate_point::interpolated_points;
 pub use offset_curve::offset_curves;
 pub use overlay::{overlay, OverlayOptions};
-pub use parts::{CloseRings, NullParts};
+pub use parts::CloseRings;
 pub use relate::relate;
 pub use remove_repeats_in_succession::without_repeats_in_succession;
 pub use reverse::reverse;

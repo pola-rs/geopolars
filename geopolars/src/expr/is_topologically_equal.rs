@@ -1,6 +1,8 @@
 //! Whether two geometries are topologically equal, forwarded to GEOS.
 //! Implements the Python `is_topologically_equal`.
 
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::are_topologically_equal;
 use polars::prelude::*;
 use polars_arrow::array::BooleanArray;
@@ -13,14 +15,19 @@ use crate::geoarrow::{
 };
 
 /// The keyword arguments of the Python `is_topologically_equal`.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IsTopologicallyEqualKwargs {
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
-fn kernel_output_type_is_topologically_equal(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_is_topologically_equal(
+    input_fields: &[Field],
+    _kwargs: IsTopologicallyEqualKwargs,
+) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "is_topologically_equal takes two geometries, got {} inputs", input_fields.len());
     };
@@ -28,13 +35,13 @@ fn kernel_output_type_is_topologically_equal(input_fields: &[Field]) -> PolarsRe
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_is_topologically_equal)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_topologically_equal)]
 fn is_topologically_equal(
     inputs: &[Series],
     kwargs: IsTopologicallyEqualKwargs,
 ) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let (ignore, early) = (kwargs.ignore_per_row_errors, kwargs.early_finite_check);
+    let (on_row_error, early) = (kwargs.on_row_error, kwargs.early_coord_check);
     let chunk_pairs = match single_chunk_masked_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs,
         GeometryPairs::OneAgainstMany { a, b } => b.into_iter().map(|b| (a.clone(), b)).collect(),
@@ -50,7 +57,7 @@ fn is_topologically_equal(
     let chunks = chunk_pairs
         .iter()
         .map(|(a, b)| {
-            are_topologically_equal(a.as_ref(), a_kind, b.as_ref(), b_kind, ignore, early)
+            are_topologically_equal(a.as_ref(), a_kind, b.as_ref(), b_kind, on_row_error, early)
         })
         .collect::<PolarsResult<Vec<_>>>()?;
     Ok(BooleanChunked::from_chunk_iter(a.name().clone(), chunks).into_series())

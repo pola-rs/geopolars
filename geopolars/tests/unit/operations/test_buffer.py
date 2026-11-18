@@ -89,7 +89,7 @@ def test_the_output_is_xy_polygons_or_multipolygons(
         (dimension.multilinestrings(ring_coords), MultiPolygonXY()),
         (dimension.multipolygons(multipolygon_coords), MultiPolygonXY()),
     ):
-        out = df.select(geo.buffer(df.columns[0], 1.0, ignore_per_row_errors=True))
+        out = df.select(geo.buffer(df.columns[0], 1.0, on_row_error="null"))
 
         assert out.schema[df.columns[0]] == expected
 
@@ -116,7 +116,7 @@ def test_allow_splitting_gives_multipolygons_for_a_negative_distance(
         (dimension.multipolygons(multipolygon_coords), MultiPolygonXY()),
     ):
         buffered = geo.buffer(
-            df.columns[0], distance, allow_splitting=True, ignore_per_row_errors=True
+            df.columns[0], distance, allow_splitting=True, on_row_error="null"
         )
 
         assert df.select(buffered).schema[df.columns[0]] == expected
@@ -168,6 +168,16 @@ def test_a_null_or_empty_geometry_stays_so(
     assert _buffered(_column(dtype, None, empty), 1.0) == [None, []]
 
 
+def test_a_null_distance_nulls_a_row_that_is_not_finite() -> None:
+    df = _column(LineStringXY, _line((0, 0), (1, math.nan)), _SEGMENT).with_columns(
+        d=pl.Series([None, 1.0], dtype=pl.Float64)
+    )
+
+    out = df.select(geo.buffer("geom", "d")).to_series()
+
+    assert out.is_null().to_list() == [True, False]
+
+
 def test_a_negative_distance_shrinks_a_polygon() -> None:
     [[ring]] = _buffered(_column(PolygonXY, [_SQUARE]), -1.0)
 
@@ -186,7 +196,7 @@ def test_a_polygon_split_in_two_raises() -> None:
 def test_a_polygon_split_in_two_is_null_when_ignoring_errors() -> None:
     df = _column(PolygonXY, [_DUMBBELL], [_SQUARE])
 
-    [split, square] = _buffered(df, -0.5, ignore_per_row_errors=True)
+    [split, square] = _buffered(df, -0.5, on_row_error="null")
 
     assert split is None
     assert len(square) == 1
@@ -266,19 +276,23 @@ def test_one_side_of_a_point_is_its_regular_buffer() -> None:
     assert _buffered(df, 1.0, side="left") == _buffered(df, 1.0)
 
 
-def test_the_exterior_is_clockwise_unless_ccw_outer() -> None:
+def test_the_exterior_is_clockwise_unless_ccw() -> None:
     df = _column(PointXY, _ORIGIN)
 
-    for ccw_outer in (False, True):
-        out = df.select(geo.buffer("geom", 1.0, ccw_outer=ccw_outer).geo.is_ccw())
+    for new_ring_orientation in ("keep", "ccw"):
+        out = df.select(
+            geo.buffer(
+                "geom", 1.0, new_ring_orientation=new_ring_orientation
+            ).geo.is_ccw()
+        )
 
-        assert out.to_series().to_list() == [ccw_outer]
+        assert out.to_series().to_list() == [new_ring_orientation == "ccw"]
 
 
-def test_ccw_outer_turns_every_part_of_a_multipolygon() -> None:
+def test_ccw_turns_every_part_of_a_multipolygon() -> None:
     df = _column(MultiPolygonXY, [[_DUMBBELL]])
 
-    out = df.select(geo.buffer("geom", -0.5, ccw_outer=True).geo.is_ccw())
+    out = df.select(geo.buffer("geom", -0.5, new_ring_orientation="ccw").geo.is_ccw())
 
     assert out.to_series().to_list() == [True]
 
@@ -287,13 +301,23 @@ def test_a_non_finite_vertex_is_caught_early() -> None:
     df = _column(LineStringXY, _line((0, 0), (1, math.nan)), _SEGMENT)
 
     with pytest.raises(ComputeError, match="finite"):
-        _buffered(df, 1.0, early_finite_check=True)
+        _buffered(df, 1.0, early_coord_check="finite_and_empty")
 
     [caught, line] = _buffered(
-        df, 1.0, early_finite_check=True, ignore_per_row_errors=True
+        df, 1.0, early_coord_check="finite_and_empty", on_row_error="null"
     )
     assert caught is None
     assert line is not None
+
+
+def test_finite_leaves_an_empty_point_inside_a_geometry_to_geos() -> None:
+    df = _column(MultiPointXY, _line((0, 0), (math.nan, math.nan), (4, 0)))
+
+    with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
+        _buffered(df, 1.0)
+    assert _areas(df, 1.0, early_coord_check="finite") == pytest.approx(
+        _areas(_column(MultiPointXY, _line((0, 0), (4, 0))), 1.0)
+    )
 
 
 @pytest.mark.parametrize(
@@ -316,6 +340,14 @@ def test_invalid_options_are_refused(kwargs: dict[str, object]) -> None:
 
     with pytest.raises(ValueError, match="buffer"):
         geo.buffer("geom", distance, **kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "kwargs", [{"new_ring_orientation": "clockwise"}, {"new_holes": "against"}]
+)
+def test_an_unknown_orientation_is_refused(kwargs: dict[str, str]) -> None:
+    with pytest.raises(ValueError, match="must be one of"):
+        geo.buffer("geom", 1.0, **kwargs)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -419,7 +451,7 @@ def test_an_invalid_row_distance_raises_or_is_null(
     with pytest.raises(ComputeError, match=match):
         df.select(geo.buffer("geom", "d", **kwargs))  # type: ignore[arg-type]
 
-    out = df.select(geo.buffer("geom", "d", ignore_per_row_errors=True, **kwargs))  # type: ignore[arg-type]
+    out = df.select(geo.buffer("geom", "d", on_row_error="null", **kwargs))  # type: ignore[arg-type]
     [invalid, valid] = out.to_series().ext.storage().to_list()
     assert invalid is None
     assert valid is not None

@@ -27,6 +27,7 @@ use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
 use super::concatenated::{concatenate_parts_onto_geometry, Built, Nested};
 use crate::inner_nulls::MaskedParts;
+use crate::utils::copy_ranges;
 
 /// Which of a polygon's rings `rings` to keep.
 type Keep = fn(Range<usize>) -> Range<usize>;
@@ -98,7 +99,7 @@ fn exteriors(
     let spans = kept.map(|kept| rings.span(kept));
     LineStringArray::from_parts(
         List::from_offsets(offsets_of(spans.clone().map(|span| span.len())), validity),
-        coords.copy_ranges(spans),
+        copy_ranges(coords, spans),
     )
 }
 
@@ -118,7 +119,7 @@ fn interiors(
         List::from_offsets(offsets_of(kept.clone().map(|kept| kept.len())), validity),
         ValidList::from_offsets(offsets_of(ring_lengths)),
         // Copied as in `exteriors`.
-        coords.copy_ranges(kept.map(|kept| rings.span(kept))),
+        copy_ranges(coords, kept.map(|kept| rings.span(kept))),
     )
 }
 
@@ -274,25 +275,4 @@ pub fn polygons_with_added_holes(
         coords,
     } = concatenate_parts_onto_geometry(polygons.into(), None, holes, keep, output_validity);
     PolygonArray::from_parts(rows, rings, coords)
-}
-
-/// Marks which polygons can take the holes on the same row of `holes`,
-/// as `empty_exterior` of the Python `add_holes` describes.
-/// Only the holes set in the mask of `holes` count towards this.
-pub fn have_room_for_holes(
-    polygons: &PolygonArray,
-    holes: &MaskedParts<MultiLineStringArray>,
-) -> Bitmap {
-    let (rows, lines) = (&holes.view.rows, &holes.view.lines);
-    let is_kept = |line: usize| holes.keep.as_ref().is_none_or(|keep| keep.get_bit(line));
-    (0..polygons.rows.len())
-        .map(|i| {
-            !polygons.rows.is_valid(i)
-                || !polygons.get(i).has_empty_exterior()
-                || !rows.is_valid(i)
-                || rows
-                    .range(i)
-                    .all(|line| !is_kept(line) || lines.range(line).is_empty())
-        })
-        .collect()
 }

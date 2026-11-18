@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import EarlyCoordCheck, OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
 if TYPE_CHECKING:
@@ -22,8 +23,8 @@ def relate(
     a: IntoExprColumn,
     b: IntoExprColumn,
     *,
-    ignore_per_row_errors: bool = False,
-    early_finite_check: bool = False,
+    on_row_error: OnRowError = "raise",
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """Gets the DE-9IM matrix in a text format. This tells you how two geometries intersect.
 
@@ -47,10 +48,11 @@ def relate(
     Computed by GEOS, without a tolerance.
 
     {geos_errors}
+    {on_row_error}
 
     {geos_non_finite}
     GEOS then gives no meaningful answer.
-    {early_finite_check}
+    {early_coord_check}
 
     {same_crs_pair}
 
@@ -58,9 +60,11 @@ def relate(
     df.select(geo.relate("parcel", "zone"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     kwargs = {
-        "ignore_per_row_errors": ignore_per_row_errors,
-        "early_finite_check": early_finite_check,
+        "on_row_error": on_row_error,
+        "early_coord_check": early_coord_check,
     }
 
     def build(

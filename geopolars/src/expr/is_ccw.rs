@@ -15,13 +15,13 @@ pub struct IsCcwKwargs {
     holes_cw: bool,
 }
 
-fn kernel_output_type_is_ccw(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_is_ccw(input_fields: &[Field], _kwargs: IsCcwKwargs) -> PolarsResult<Field> {
     let field = &input_fields[0];
     SegmentKind::new("is_ccw", describe(field.dtype())?.kind)?;
     Ok(Field::new(field.name().clone(), DataType::Boolean))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_is_ccw)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_is_ccw)]
 fn is_ccw(inputs: &[Series], kwargs: IsCcwKwargs) -> PolarsResult<Series> {
     let kind = SegmentKind::new("is_ccw", describe(inputs[0].dtype())?.kind)?;
     let storage = inputs[0].ext()?.storage();

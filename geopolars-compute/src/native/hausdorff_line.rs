@@ -39,7 +39,8 @@ use polars_arrow::offset::Offsets;
 use super::coordinate_selection::{is_empty_point, is_non_finite_value};
 use super::{selected_coords, CoordinateSelection, NonFinite};
 use crate::passing::rows_passing;
-use crate::{GeoComputeError, GeoComputeResult};
+use crate::utils::with_null_at;
+use crate::{row_or_null, GeoComputeError, GeoComputeResult, OnRowError};
 
 fn search_leaves_out_non_finite(failing: NonFinite) -> bool {
     !(failing.select_non_finite && failing.select_empty)
@@ -475,7 +476,10 @@ impl Lines {
     }
 
     fn into_array(self, validity: Option<Bitmap>) -> LineStringArray {
-        let rows = List::from_offsets(self.offsets.into(), validity).with_null_at(&self.failed);
+        let rows = with_null_at(
+            List::from_offsets(self.offsets.into(), validity),
+            &self.failed,
+        );
         LineStringArray::from_parts(
             rows,
             ValidCoords::from_axes((self.x, self.y, self.z, self.m)),
@@ -522,7 +526,7 @@ fn lines_between<const SKIP: bool>(
     b: &Side,
     row_pairs: impl ExactSizeIterator<Item = (usize, usize)>,
     output_validity: Option<Bitmap>,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<LineStringArray> {
     let dim = a.coords.dim().shared_with(b.coords.dim());
     let mut lines = Lines::new(row_pairs.len(), dim);
@@ -531,9 +535,9 @@ fn lines_between<const SKIP: bool>(
             .as_ref()
             .is_none_or(|validity| validity.get_bit(row))
         {
-            match push_line::<SKIP>(&mut lines, a, i, b, j) {
-                Err(_) if ignore_per_row_errors => lines.failed.push(row),
-                line => line?,
+            let line = push_line::<SKIP>(&mut lines, a, i, b, j).map(Some);
+            if row_or_null(line, on_row_error)?.is_none() {
+                lines.failed.push(row);
             }
         }
         lines.end_row();
@@ -552,7 +556,7 @@ pub fn hausdorff_lines_pairwise(
     a: &GeometryArray,
     b: &GeometryArray,
     failing: NonFinite,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<LineStringArray> {
     debug_assert_eq!(a.len(), b.len(), "`a` and `b` must have the same length");
     let rows = (0..a.len()).map(|i| (i, i));
@@ -560,7 +564,7 @@ pub fn hausdorff_lines_pairwise(
     let (a, b) = (Side::new(a, failing), Side::new(b, failing));
     with_const_flags!(
         SKIP = search_leaves_out_non_finite(failing);
-        lines_between::<SKIP>(&a, &b, rows, validity, ignore_per_row_errors)
+        lines_between::<SKIP>(&a, &b, rows, validity, on_row_error)
     )
 }
 
@@ -573,7 +577,7 @@ pub fn hausdorff_lines_against_one(
     many: &GeometryArray,
     lines_start_on_one: bool,
     failing: NonFinite,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<LineStringArray> {
     assert_eq!(one.len(), 1, "`one` must be a single row");
     let len = many.len();
@@ -592,6 +596,6 @@ pub fn hausdorff_lines_against_one(
     });
     with_const_flags!(
         SKIP = search_leaves_out_non_finite(failing);
-        lines_between::<SKIP>(a, b, rows, validity, ignore_per_row_errors)
+        lines_between::<SKIP>(a, b, rows, validity, on_row_error)
     )
 }

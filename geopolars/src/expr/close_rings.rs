@@ -23,13 +23,16 @@ impl From<CloseRingsKwargs> for CloseRings {
     }
 }
 
-fn kernel_output_type_close_rings(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_close_rings(
+    input_fields: &[Field],
+    _kwargs: CloseRingsKwargs,
+) -> PolarsResult<Field> {
     let field = &input_fields[0];
     SegmentKind::new("close_rings", describe(field.dtype())?.kind)?;
     Ok(field.clone())
 }
 
-#[polars_expr(output_type_func=kernel_output_type_close_rings)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_close_rings)]
 fn close_rings(inputs: &[Series], kwargs: CloseRingsKwargs) -> PolarsResult<Series> {
     let kind = SegmentKind::new("close_rings", describe(inputs[0].dtype())?.kind)?;
     let storage = inputs[0].ext()?.storage();

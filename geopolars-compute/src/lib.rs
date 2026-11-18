@@ -10,6 +10,8 @@
 #[macro_use]
 mod const_generic_dispatch;
 
+mod early_coord_check;
+mod empty_polygon_exterior;
 mod error;
 #[cfg(feature = "native")]
 pub mod geoarrow_validity;
@@ -19,6 +21,8 @@ pub mod inner_nulls;
 mod metric;
 #[cfg(feature = "native")]
 pub mod native;
+mod new_ring_orientation;
+mod null_parts;
 #[cfg(all(feature = "native", feature = "geos"))]
 pub mod ogc_validity;
 mod on_row_error;
@@ -33,9 +37,16 @@ mod per_row;
 pub mod proj;
 #[cfg(feature = "rsgeo")]
 pub mod rsgeo;
+mod short_lines;
+pub mod utils;
 
-#[cfg(any(feature = "geos", feature = "rsgeo"))]
+pub use early_coord_check::EarlyCoordCheck;
+pub use empty_polygon_exterior::EmptyPolygonExterior;
+#[cfg(any(feature = "native", feature = "geos", feature = "rsgeo"))]
 use error::row_or_null;
 pub use error::{GeoComputeError, GeoComputeResult};
 pub use metric::{BaseMetric, GeodesicMetric, Planar, WithHeight};
+pub use new_ring_orientation::{NewHoles, NewRingOrientation};
+pub use null_parts::NullParts;
 pub use on_row_error::OnRowError;
+pub use short_lines::ShortLines;

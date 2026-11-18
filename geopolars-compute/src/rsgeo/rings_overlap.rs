@@ -18,7 +18,7 @@ use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::datatypes::ArrowDataType;
 
 use super::{per_row_optional_bool, ring_is_finite, to_rsgeo_ring};
-use crate::{row_or_null, GeoComputeResult};
+use crate::{row_or_null, GeoComputeResult, OnRowError};
 
 /// Whether two rings related as `matrix` overlap.
 #[inline(always)]
@@ -58,7 +58,7 @@ fn ring_pair_overlaps<const TOUCHING: bool>(
 pub fn rings_overlap_pairwise<const TOUCHING: bool>(
     a: &LineStringArray,
     b: &LineStringArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<BooleanArray> {
     debug_assert_eq!(a.rows.len(), b.rows.len(), "Chunks must be the same size");
     let rows = a
@@ -68,7 +68,7 @@ pub fn rings_overlap_pairwise<const TOUCHING: bool>(
     per_row_optional_bool(&rows, |i| {
         row_or_null(
             ring_pair_overlaps::<TOUCHING>(&a.get(i), &b.get(i)),
-            ignore_per_row_errors,
+            on_row_error,
         )
     })
 }
@@ -79,9 +79,9 @@ pub fn rings_overlap_pairwise<const TOUCHING: bool>(
 pub fn rings_overlap_against_one<const TOUCHING: bool>(
     one: &ScalarLineString,
     many: &LineStringArray,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<BooleanArray> {
-    let Some(one) = row_or_null(finite_ring(one), ignore_per_row_errors)? else {
+    let Some(one) = row_or_null(finite_ring(one), on_row_error)? else {
         return Ok(BooleanArray::new_null(
             ArrowDataType::Boolean,
             many.rows.len(),
@@ -89,7 +89,7 @@ pub fn rings_overlap_against_one<const TOUCHING: bool>(
     };
     let one = PreparedGeometry::from(one);
     per_row_optional_bool(&many.rows, |i| {
-        let ring = row_or_null(finite_ring(&many.get(i)), ignore_per_row_errors)?;
+        let ring = row_or_null(finite_ring(&many.get(i)), on_row_error)?;
         Ok(ring.map(|ring| overlap::<TOUCHING>(&one.relate(&ring))))
     })
 }

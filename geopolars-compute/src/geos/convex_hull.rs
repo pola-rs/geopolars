@@ -25,20 +25,19 @@
 //!
 //! # Const generic flags
 //!
-//! See [super] for `EARLY_FINITE_CHECK`.
-//! If `EARLY_FINITE_CHECK=false`, what happens to NaN coordinates depends on where they are placed.
-//! - only empty points (x and y NaN) -> a `POINT (NaN NaN)`, so the row is null
+//! See [super] for `EARLY_COORD_CHECK`, `ALL_VALID` and `Z`.
+//! With [EarlyCoordCheck::Off], what happens to NaN coordinates depends on where they are placed.
+//! [EarlyCoordCheck::Finite] only lets empty points (x and y NaN) through,
+//! so the first three cases below apply to it too.
+//! - only empty points -> a `POINT (NaN NaN)`, so the row is null
 //! - an empty point first, then real ones -> also a `POINT (NaN NaN)`,
-//!   so the row is silently null, even with `ignore_per_row_errors=false`;
+//!   so the row is silently null, even with `on_row_error=`[OnRowError::Raise];
 //! - an empty point after a real one -> it is left out, giving the hull of the others
 //! - a vertex with just one NaN axis -> an error ("orientationIndex encountered NaN/Inf numbers").
-//!   So the error is returned, or with `ignore_per_row_errors=true` the row is null.
+//!   So the error is returned, or with `on_row_error=`[OnRowError::Null] the row is null.
 //!
-//! If `EARLY_FINITE_CHECK=true`, each of these rows fails the same way a GEOS error does,
+//! With [EarlyCoordCheck::FiniteAndEmpty], each of these rows fails the same way a GEOS error does,
 //! which makes this consistent.
-//!
-//!
-//! See [super] for `ALL_VALID` and `Z`.
 
 use std::ops::Range;
 
@@ -49,8 +48,10 @@ use geopolars_views::{
 };
 use geos::{CoordSeq, Geom, Geometry, GeometryTypes};
 
-use super::{axes, xy_is_finite_or_error, GeosGeometries, GeosRow};
-use crate::GeoComputeResult;
+use super::{axes, coords_pass_early_check, GeosGeometries, GeosRow, GeosRows};
+use crate::{
+    row_or_null, EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
+};
 
 // TODO: a geometry crossing the antimeridian is hulled the long way round.
 // We could add a flag that checks if the input crosses it (>180°),
@@ -60,16 +61,18 @@ use crate::GeoComputeResult;
 /// Implements the Python `convex_hull` for linestrings, which documents its behaviour.
 pub fn line_string_convex_hulls(
     array: &LineStringArray,
-    ignore_per_row_errors: bool,
-    ccw_outer: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
-        ignore_per_row_errors,
-        ccw_outer,
-        early_finite_check,
+        on_row_error,
+        new_ring_orientation,
+        new_holes,
+        early_coord_check,
         |vertices, ranges| ranges.push(vertices),
     )
 }
@@ -77,16 +80,18 @@ pub fn line_string_convex_hulls(
 /// Like [`line_string_convex_hulls`], with one hull around all the points.
 pub fn multi_point_convex_hulls(
     array: &MultiPointArray,
-    ignore_per_row_errors: bool,
-    ccw_outer: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
-        ignore_per_row_errors,
-        ccw_outer,
-        early_finite_check,
+        on_row_error,
+        new_ring_orientation,
+        new_holes,
+        early_coord_check,
         |vertices, ranges| ranges.push(vertices),
     )
 }
@@ -94,16 +99,18 @@ pub fn multi_point_convex_hulls(
 /// Like [`line_string_convex_hulls`], with one hull of all the parts as a whole.
 pub fn multi_line_string_convex_hulls(
     array: &MultiLineStringArray,
-    ignore_per_row_errors: bool,
-    ccw_outer: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
-        ignore_per_row_errors,
-        ccw_outer,
-        early_finite_check,
+        on_row_error,
+        new_ring_orientation,
+        new_holes,
+        early_coord_check,
         |parts, ranges| ranges.extend(parts.map(|j| array.lines.range(j))),
     )
 }
@@ -111,16 +118,18 @@ pub fn multi_line_string_convex_hulls(
 /// Like [`line_string_convex_hulls`], hulling only the exterior.
 pub fn polygon_convex_hulls(
     array: &PolygonArray,
-    ignore_per_row_errors: bool,
-    ccw_outer: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
-        ignore_per_row_errors,
-        ccw_outer,
-        early_finite_check,
+        on_row_error,
+        new_ring_orientation,
+        new_holes,
+        early_coord_check,
         |parts, ranges| {
             if !parts.is_empty() {
                 ranges.push(array.rings.range(parts.start));
@@ -133,16 +142,18 @@ pub fn polygon_convex_hulls(
 /// with one hull of the exteriors of all the parts as a whole.
 pub fn multi_polygon_convex_hulls(
     array: &MultiPolygonArray,
-    ignore_per_row_errors: bool,
-    ccw_outer: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
     hulls(
         &array.rows,
         &array.coords,
-        ignore_per_row_errors,
-        ccw_outer,
-        early_finite_check,
+        on_row_error,
+        new_ring_orientation,
+        new_holes,
+        early_coord_check,
         |parts, ranges| {
             ranges.extend(
                 parts
@@ -158,35 +169,35 @@ pub fn multi_polygon_convex_hulls(
 fn hulls(
     rows: &List,
     coords: &ValidCoords,
-    ignore_per_row_errors: bool,
-    ccw_outer: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    early_coord_check: EarlyCoordCheck,
     coord_ranges: impl Fn(Range<usize>, &mut Vec<Range<usize>>),
 ) -> GeoComputeResult<PolygonArray> {
     let has_z = coords.dim().has_z();
     let hulls = with_const_flags!(
         Z = has_z,
         ALL_VALID = rows.is_all_valid(),
-        EARLY_FINITE_CHECK = early_finite_check;
-        hulls_with::<Z, ALL_VALID, EARLY_FINITE_CHECK>(
+        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
+        hulls_with::<Z, ALL_VALID, EARLY_COORD_CHECK>(
             rows,
             coords,
-            ignore_per_row_errors,
+            on_row_error,
             coord_ranges,
         )
     )?;
-    // GEOS gives the exterior as running clockwise.
-    hulls.into_polygon_array(has_z, ignore_per_row_errors, ccw_outer)
+    hulls.into_polygon_array(has_z, on_row_error, new_ring_orientation, new_holes)
 }
 
 /// [`hulls`] as GEOS polygons.
 /// The size hint is an upper bound:
 /// a row's hull is one ring, which closes on at most one coordinate more than the row has.
-/// Errors are the exception, so `ignore_per_row_errors` is checked per row rather than made const.
-fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_FINITE_CHECK: bool>(
+/// Errors are the exception, so `on_row_error` is checked per row rather than made const.
+fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
     rows: &List,
     coords: &ValidCoords,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     coord_ranges: impl Fn(Range<usize>, &mut Vec<Range<usize>>),
 ) -> GeoComputeResult<GeosGeometries> {
     let (in_x, in_y, in_z, _) = axes(coords);
@@ -200,10 +211,8 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_FINITE_CHECK: bo
     let mut row_z = Vec::new();
 
     // `None` if it is not a polygon (the hull collapsed)
-    let hull = |row_x: &[f64], row_y: &[f64], row_z: &[f64]| {
-        if EARLY_FINITE_CHECK {
-            xy_is_finite_or_error(row_x, row_y)?;
-        }
+    let hull = |row_x: &[f64], row_y: &[f64], row_z: &[f64]| -> GeoComputeResult<_> {
+        coords_pass_early_check::<EARLY_COORD_CHECK>(row_x, row_y)?;
         let seq = CoordSeq::new_from_arrays(row_x, row_y, Z.then_some(row_z), None)?;
         let hull = Geometry::create_line_string(seq)?.convex_hull()?;
         debug_assert!(!hull.is_empty()?, "Check before offset should catch this");
@@ -213,11 +222,11 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_FINITE_CHECK: bo
         Ok(Some(hull))
     };
 
-    let mut hulls = Vec::with_capacity(rows.len());
+    let mut hulls = GeosRows::with_capacity(rows.len());
     for i in 0..rows.len() {
         // A null row's offsets point anywhere, so it is not converted.
         if !ALL_VALID && !rows.is_valid(i) {
-            hulls.push(GeosRow::Null);
+            hulls.push(None);
             continue;
         }
         ranges.clear();
@@ -234,14 +243,10 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_FINITE_CHECK: bo
         }
         hulls.push(match row_x.len() {
             // An empty row has an empty hull, without a trip to GEOS.
-            0 => GeosRow::Empty,
+            0 => Some(GeosRow::Empty),
             // A single coordinate encloses nothing, and GEOS can't build a linestring of it.
-            1 => GeosRow::Null,
-            _ => match hull(&row_x, &row_y, &row_z) {
-                Ok(hull) => hull.into(),
-                Err(e) if !ignore_per_row_errors => return Err(e),
-                Err(_) => GeosRow::Null,
-            },
+            1 => None,
+            _ => row_or_null(hull(&row_x, &row_y, &row_z), on_row_error)?.map(GeosRow::Geometry),
         });
     }
     Ok(GeosGeometries {

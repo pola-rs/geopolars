@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import EarlyCoordCheck, OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType
 from geopolars.geo._dispatch import on_geometry
 from geopolars.geo.buffer import (
@@ -37,8 +38,8 @@ def offset_curve(
     join_style: Literal["round", "mitre", "bevel"] = "round",
     mitre_limit: float | None = None,
     allow_splitting: bool = False,
-    ignore_per_row_errors: bool = False,
-    early_finite_check: bool = False,
+    on_row_error: OnRowError = "raise",
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """The line running alongside every line, `distance` away from it.
     A positive `distance` offsets to the left, relative to the direction of the line.
@@ -50,7 +51,6 @@ def offset_curve(
     or a column (or expression) with one distance per geometry.
     A null distance gives a null linestring.
     A NaN or infinite distance in a column raises.
-    With `ignore_per_row_errors=True`, such a row gives a null linestring instead.
 
     Only linestrings and multilinestrings are accepted.
     The output is always XY:
@@ -81,15 +81,18 @@ def offset_curve(
 
     {geos_errors}
     The same goes for a linestring it splits without `allow_splitting`.
+    {on_row_error}
 
     {geos_non_finite}
-    {early_finite_check}
+    {early_coord_check}
 
     ```python
     df.select(geo.offset_curve("road", 5.0))
     df.select(geo.offset_curve("road", -5.0, join_style="mitre"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     constant = isinstance(distance, int | float)
     if constant and not math.isfinite(distance):
         msg = f"offset_curve expects a finite distance, got: {distance!r}"
@@ -129,8 +132,8 @@ def offset_curve(
                 if mitre_limit is None
                 else float(mitre_limit),
                 "allow_splitting": allow_splitting,
-                "ignore_per_row_errors": ignore_per_row_errors,
-                "early_finite_check": early_finite_check,
+                "on_row_error": on_row_error,
+                "early_coord_check": early_coord_check,
             },
             is_elementwise=True,
         )

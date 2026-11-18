@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
@@ -23,6 +23,9 @@ from geopolars.datatypes import (
     PolygonXY,
     PolygonXYZ,
 )
+
+if TYPE_CHECKING:
+    from geopolars._typing import EarlyCoordCheck
 
 _XY = pl.Struct({"x": pl.Float64, "y": pl.Float64})
 
@@ -55,7 +58,7 @@ def _wkt(name: str, dtype: GeoArrowType, wkts: list[str | None]) -> pl.Series:
 def _relate(
     a: tuple[GeoArrowType, list[str | None]],
     b: tuple[GeoArrowType, list[str | None]],
-    **kwargs: bool,
+    **kwargs: Any,
 ) -> list[str | None]:
     df = pl.DataFrame([_wkt("a", *a), _wkt("b", *b)])
     out = df.select(geo.relate("a", "b", **kwargs))
@@ -92,9 +95,7 @@ def test_z_and_m_are_not_compared() -> None:
     line = "LINESTRING M (0 0 1, 1 1 2)"
 
     assert _relate((PolygonXYZ(), [a]), (PolygonXY(), [_SQUARE])) == ["2FFF1FFF2"]
-    assert _relate((LineStringXYM(), [line]), (PolygonXY(), [_SQUARE])) == [
-        "1FFF0F212"
-    ]
+    assert _relate((LineStringXYM(), [line]), (PolygonXY(), [_SQUARE])) == ["1FFF0F212"]
 
 
 @pytest.mark.parametrize(
@@ -200,7 +201,7 @@ _NOT_FINITE_LINE = _xy((0, 0), (math.nan, 1), (2, 2))
 _FINITE_LINE = _xy((0, 0), (1, 0), (1, 1))
 
 
-def _not_finite_lines(**kwargs: bool) -> list[str | None]:
+def _not_finite_lines(**kwargs: Any) -> list[str | None]:
     """A line that is not finite, then one that is, each related to itself."""
     rows = [_NOT_FINITE_LINE, _FINITE_LINE]
     df = pl.DataFrame(
@@ -211,17 +212,25 @@ def _not_finite_lines(**kwargs: bool) -> list[str | None]:
 
 def test_geos_raises_on_a_line_that_is_not_finite() -> None:
     with pytest.raises(ComputeError, match="NaN/Inf"):
-        _not_finite_lines()
+        _not_finite_lines(early_coord_check="off")
 
 
-def test_geos_failing_on_a_row_gives_null_with_ignore_per_row_errors() -> None:
-    assert _not_finite_lines(ignore_per_row_errors=True) == [None, "1FFF0FFF2"]
+def test_geos_failing_on_a_row_gives_null_with_on_row_error_null() -> None:
+    assert _not_finite_lines(early_coord_check="off", on_row_error="null") == [
+        None,
+        "1FFF0FFF2",
+    ]
 
 
-def test_the_early_finite_check_raises_before_geos() -> None:
+@pytest.mark.parametrize("early_coord_check", ["finite", "finite_and_empty"])
+def test_the_early_coord_check_raises_before_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
-        _not_finite_lines(early_finite_check=True)
-    assert _not_finite_lines(early_finite_check=True, ignore_per_row_errors=True) == [
+        _not_finite_lines(early_coord_check=early_coord_check)
+    assert _not_finite_lines(
+        early_coord_check=early_coord_check, on_row_error="null"
+    ) == [
         None,
         "1FFF0FFF2",
     ]
@@ -233,7 +242,7 @@ def test_the_namespace_method_passes_its_options_on() -> None:
         [_series("a", LineStringXY(), rows), _series("b", LineStringXY(), rows)]
     )
 
-    out = df.select(pl.col("a").geo.relate("b", ignore_per_row_errors=True))
+    out = df.select(pl.col("a").geo.relate("b", on_row_error="null"))
 
     assert out["a"].to_list() == [None, "1FFF0FFF2"]
 

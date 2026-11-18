@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
@@ -27,7 +28,7 @@ def rings_overlap(
     b: IntoExprColumn,
     *,
     include_touching: bool = False,
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """Whether two rings overlap, row by row, as a `bool`:
     whether the areas they enclose share area.
@@ -52,7 +53,7 @@ def rings_overlap(
     Every linestring has to be a ring:
     at least four vertices, the last exactly at the first.
     Anything else, including an empty linestring, raises.
-    With `ignore_per_row_errors=True`, it gives a null result instead.
+    {on_row_error}
     A ring that is not simple (see `is_simple`) gives no meaningful answer.
     {null_ring_input}
 
@@ -60,6 +61,7 @@ def rings_overlap(
     df.filter(~geo.rings_overlap("hole", "other_hole", include_touching=True))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
 
     def build(
         a: pl.Expr, a_dtype: GeoArrowType, b: pl.Expr, b_dtype: GeoArrowType
@@ -79,7 +81,7 @@ def rings_overlap(
             function_name="rings_overlap",
             kwargs={
                 "include_touching": include_touching,
-                "ignore_per_row_errors": ignore_per_row_errors,
+                "on_row_error": on_row_error,
             },
             is_elementwise=True,
         )

@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import ShortLines
 from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import on_geometry
-from geopolars.geo.remove_repeats_in_succession import TooShort
 
 if TYPE_CHECKING:
     import polars as pl
@@ -33,10 +33,10 @@ class NonFinite:
     ignore_z: bool = False
     ignore_m: bool = False
     action: NonFiniteAction = "drop"
-    too_short: TooShort = "null"
+    short_lines: ShortLines = "null"
 
     def __post_init__(self) -> None:
-        for name, allowed in [("action", NonFiniteAction), ("too_short", TooShort)]:
+        for name, allowed in [("action", NonFiniteAction), ("short_lines", ShortLines)]:
             validate_one_of(name, getattr(self, name), allowed)
 
 
@@ -64,7 +64,7 @@ def filter_coordinates(
     ignore_z: bool = False,
     ignore_m: bool = False,
     action: NonFiniteAction = "drop",
-    too_short: TooShort = "null",
+    short_lines: ShortLines = "null",
 ) -> pl.Expr:
     """Finds coordinates that are not finite (NaN, inf) or empty,
     and performs an action on then (make empty, null, or drop).
@@ -87,7 +87,7 @@ def filter_coordinates(
     `"drop"` is the default.
     With `action="set_empty"`, selecting only empty coordinates changes nothing.
 
-    {too_short}
+    {short_lines}
 
     {keeps_type_dimension_and_crs}
 
@@ -101,6 +101,6 @@ def filter_coordinates(
         ignore_z=ignore_z,
         ignore_m=ignore_m,
         action=action,
-        too_short=too_short,
+        short_lines=short_lines,
     )
     return on_geometry(geometry, partial(_filter_coordinates, non_finite=non_finite))

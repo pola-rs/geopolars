@@ -1,6 +1,7 @@
 use geopolars_compute::geos::{
     simplify_line_strings, simplify_multi_line_strings, simplify_multi_polygons, simplify_polygons,
 };
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{
     downcast, GeometryArray, LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray,
 };
@@ -18,29 +19,29 @@ pub fn simplify(
     kind: SegmentKind,
     tolerance: f64,
     preserve_topology: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<GeometryArray> {
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+    let early = early_coord_check;
     match kind {
         SegmentKind::LineString => {
             let array = LineStringArray::new(downcast(chunk, "a list of coordinates")?)?;
-            simplify_line_strings(&array, tolerance, preserve_topology, ignore, early)
+            simplify_line_strings(&array, tolerance, preserve_topology, on_row_error, early)
                 .map(GeometryArray::LineString)
         }
         SegmentKind::MultiLineString => {
             let array = MultiLineStringArray::new(downcast(chunk, "a list of linestrings")?)?;
-            simplify_multi_line_strings(&array, tolerance, preserve_topology, ignore, early)
+            simplify_multi_line_strings(&array, tolerance, preserve_topology, on_row_error, early)
                 .map(GeometryArray::MultiLineString)
         }
         SegmentKind::Polygon => {
             let array = PolygonArray::new(downcast(chunk, "a list of rings")?)?;
-            simplify_polygons(&array, tolerance, preserve_topology, ignore, early)
+            simplify_polygons(&array, tolerance, preserve_topology, on_row_error, early)
                 .map(GeometryArray::Polygon)
         }
         SegmentKind::MultiPolygon => {
             let array = MultiPolygonArray::new(downcast(chunk, "a list of polygons")?)?;
-            simplify_multi_polygons(&array, tolerance, preserve_topology, ignore, early)
+            simplify_multi_polygons(&array, tolerance, preserve_topology, on_row_error, early)
                 .map(GeometryArray::MultiPolygon)
         }
     }

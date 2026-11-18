@@ -1,6 +1,8 @@
 //! Whether two rings overlap.
 //! Implements the Python `rings_overlap`.
 
+use crate::common_arguments::OnRowErrorDef;
+use geopolars_compute::OnRowError;
 use geopolars_core::{pairwise_rings_overlap, rings_overlap_one};
 use geopolars_views::Kind;
 use polars::prelude::*;
@@ -16,10 +18,14 @@ use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs, GeometryPairs};
 #[serde(default, deny_unknown_fields)]
 pub struct RingsOverlapKwargs {
     include_touching: bool,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
-fn kernel_output_type_rings_overlap(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_rings_overlap(
+    input_fields: &[Field],
+    _kwargs: RingsOverlapKwargs,
+) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "rings_overlap takes two rings, got {} inputs", input_fields.len());
     };
@@ -35,21 +41,21 @@ fn kernel_output_type_rings_overlap(input_fields: &[Field]) -> PolarsResult<Fiel
     Ok(Field::new(a.name().clone(), DataType::Boolean))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_rings_overlap)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_rings_overlap)]
 fn rings_overlap(inputs: &[Series], kwargs: RingsOverlapKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
-    let (touching, ignore) = (kwargs.include_touching, kwargs.ignore_per_row_errors);
+    let (touching, on_row_error) = (kwargs.include_touching, kwargs.on_row_error);
     let chunks = match aligned_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
-            .map(|(a, b)| pairwise_rings_overlap(a.as_ref(), b.as_ref(), touching, ignore))
+            .map(|(a, b)| pairwise_rings_overlap(a.as_ref(), b.as_ref(), touching, on_row_error))
             .collect::<PolarsResult<Vec<_>>>()?,
         // Overlapping goes both ways,
         // so it does not matter which side `one` came from.
         GeometryPairs::OneAgainstMany { a: one, b: many }
         | GeometryPairs::ManyAgainstOne { a: many, b: one } => many
             .iter()
-            .map(|many| rings_overlap_one(one.as_ref(), many.as_ref(), touching, ignore))
+            .map(|many| rings_overlap_one(one.as_ref(), many.as_ref(), touching, on_row_error))
             .collect::<PolarsResult<Vec<_>>>()?,
         GeometryPairs::AllNull(lengths) => lengths
             .iter()

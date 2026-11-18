@@ -1,7 +1,9 @@
 //! The line spanning the Hausdorff distance between two geometries.
 //! Implements the Python `hausdorff_line_between`.
 
+use crate::common_arguments::OnRowErrorDef;
 use geopolars_compute::native::NonFinite;
+use geopolars_compute::OnRowError;
 use geopolars_core::{hausdorff_lines_to_one, pairwise_hausdorff_lines};
 use geopolars_views::Kind;
 use polars::prelude::*;
@@ -23,7 +25,8 @@ pub struct HausdorffLineBetweenKwargs {
     select_empty: bool,
     ignore_z: bool,
     ignore_m: bool,
-    ignore_per_row_errors: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
 impl HausdorffLineBetweenKwargs {
@@ -44,7 +47,10 @@ fn hausdorff_line_between_type(a: &DataType, b: &DataType) -> PolarsResult<Geo> 
     Ok(Geo::new(Kind::LineString, dim, a.metadata.clone()))
 }
 
-fn kernel_output_type_hausdorff_line_between(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_hausdorff_line_between(
+    input_fields: &[Field],
+    _kwargs: HausdorffLineBetweenKwargs,
+) -> PolarsResult<Field> {
     let [a, b] = input_fields else {
         polars_bail!(ComputeError: "hausdorff_line_between takes two geometries, got {} inputs", input_fields.len());
     };
@@ -54,7 +60,7 @@ fn kernel_output_type_hausdorff_line_between(input_fields: &[Field]) -> PolarsRe
     ))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_hausdorff_line_between)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_hausdorff_line_between)]
 fn hausdorff_line_between(
     inputs: &[Series],
     kwargs: HausdorffLineBetweenKwargs,
@@ -63,7 +69,7 @@ fn hausdorff_line_between(
     let lines = hausdorff_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
     let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (failing, ignore) = (kwargs.failing(), kwargs.ignore_per_row_errors);
+    let (failing, on_row_error) = (kwargs.failing(), kwargs.on_row_error);
     let against_one =
         |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
             many.iter()
@@ -75,7 +81,7 @@ fn hausdorff_line_between(
                         many_kind,
                         one_is_a,
                         failing,
-                        ignore,
+                        on_row_error,
                     )
                 })
                 .collect::<PolarsResult<Vec<_>>>()
@@ -84,7 +90,14 @@ fn hausdorff_line_between(
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| {
-                pairwise_hausdorff_lines(a.as_ref(), a_kind, b.as_ref(), b_kind, failing, ignore)
+                pairwise_hausdorff_lines(
+                    a.as_ref(),
+                    a_kind,
+                    b.as_ref(),
+                    b_kind,
+                    failing,
+                    on_row_error,
+                )
             })
             .collect::<PolarsResult<Vec<_>>>()?,
         GeometryPairs::OneAgainstMany { a: one, b: many } => {

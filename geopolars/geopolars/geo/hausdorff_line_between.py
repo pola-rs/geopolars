@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
@@ -27,7 +28,7 @@ def hausdorff_line_between(
     non_finite: HausdorffNonFinite = "raise",
     ignore_z: bool = False,
     ignore_m: bool = False,
-    ignore_per_row_errors: bool = False,
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """The line spanning the Hausdorff distance between two geometries, row by row.
     The Hausdorff distance is the furthest any point of one geometry lies from the other geometry.
@@ -61,13 +62,13 @@ def hausdorff_line_between(
     {empty_point}
     `non_finite` sets what happens to such a vertex.
 
-    - `"raise"`: a geometry with such a vertex raises.
+    - `"raise"`: a geometry with such a vertex fails.
     - `"drop"`: such a vertex is left out.
       A line or ring then runs straight from the vertex before it to the vertex after it.
       A ring that loses its first vertex also loses its last one, and is no longer closed.
       It is then measured as a line up to the last vertex it keeps.
     - `"drop_empty"`: the empty point is left out, as with `"drop"`.
-      Any other vertex that is not finite raises.
+      Non-finite vertices still fail (as with `"raise"`).
 
     A geometry that `"drop"` or `"drop_empty"` leaves without vertices counts as empty.
 
@@ -76,7 +77,7 @@ def hausdorff_line_between(
     Neither changes which vertex is the empty point.
     A point row that is the empty point is an empty geometry, not a geometry with an empty vertex.
     It therefore never raises.
-    A geometry that would raise gives a null line instead if `ignore_per_row_errors=True`.
+    {on_row_error}
 
     {same_crs_pair}
 
@@ -84,13 +85,14 @@ def hausdorff_line_between(
     df.with_columns(geo.hausdorff_line_between("route", "planned_route").alias("worst_deviation"))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("non_finite", non_finite, HausdorffNonFinite)
     kwargs = {
         "select_non_finite": non_finite != "drop",
         "select_empty": non_finite == "raise",
         "ignore_z": ignore_z,
         "ignore_m": ignore_m,
-        "ignore_per_row_errors": ignore_per_row_errors,
+        "on_row_error": on_row_error,
     }
 
     def build(

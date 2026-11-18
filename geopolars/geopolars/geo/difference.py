@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import (
+    EarlyCoordCheck,
+    NewHoles,
+    NewRingOrientation,
+    OnRowError,
+)
+from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
 
 if TYPE_CHECKING:
@@ -23,9 +29,10 @@ def difference(
     b: IntoExprColumn,
     *,
     allow_splitting: bool = False,
-    ccw_outer: bool = False,
-    ignore_per_row_errors: bool = False,
-    early_finite_check: bool = False,
+    new_ring_orientation: NewRingOrientation = "keep",
+    new_holes: NewHoles = "opposite",
+    on_row_error: OnRowError = "raise",
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """The geometry you get when you subtract `b` from `a`.
 
@@ -69,18 +76,19 @@ def difference(
 
     {geos_errors}
     The same goes for a result in several parts without `allow_splitting`.
+    {on_row_error}
 
     {geos_non_finite}
-    {early_finite_check}
+    {early_coord_check}
     A row where `b` is empty does not go to GEOS,
-    but raises on such a vertex in `a` whatever `early_finite_check` is
-    (or gives a null {output} with `ignore_per_row_errors=True`).
+    but still fails on such a vertex in `a` whatever `early_coord_check` is,
+    which `on_row_error` then handles.
     GEOS itself does not raise on every such vertex,
     so this row can be stricter than one that GEOS computes.
 
-    {ccw_outer}
+    {new_ring_orientation}
     It only affects a Polygon or MultiPolygon result.
-    {ccw_outer_skipping_geos}
+    {new_ring_orientation_skipping_geos}
     Here, those are the rows where `b` is empty.
 
     {same_crs_pair}
@@ -91,11 +99,16 @@ def difference(
     df.select(geo.difference("trail", "private_land", allow_splitting=True))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
+    validate_one_of("new_holes", new_holes, NewHoles)
     kwargs = {
         "allow_splitting": allow_splitting,
-        "ccw_outer": ccw_outer,
-        "ignore_per_row_errors": ignore_per_row_errors,
-        "early_finite_check": early_finite_check,
+        "new_ring_orientation": new_ring_orientation,
+        "new_holes": new_holes,
+        "on_row_error": on_row_error,
+        "early_coord_check": early_coord_check,
     }
 
     def build(

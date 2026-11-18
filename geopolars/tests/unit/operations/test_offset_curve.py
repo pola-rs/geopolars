@@ -62,7 +62,7 @@ def test_the_output_is_xy_linestrings_or_multilinestrings(
             df.columns[0],
             1.0,
             allow_splitting=allow_splitting,
-            ignore_per_row_errors=True,
+            on_row_error="null",
         )
 
         assert df.select(curve).schema[df.columns[0]] == expected
@@ -120,7 +120,7 @@ def test_a_split_line_raises() -> None:
 def test_a_split_line_is_null_when_ignoring_errors() -> None:
     df = _column(LineStringXY, _CROSSING, _SEGMENT)
 
-    [split, segment] = _offset(df, -1.0, ignore_per_row_errors=True)
+    [split, segment] = _offset(df, -1.0, on_row_error="null")
 
     assert split is None
     assert segment is not None
@@ -150,6 +150,14 @@ def test_a_null_or_empty_geometry_stays_so(
     assert _offset(_column(dtype, None, empty), 1.0) == [None, []]
 
 
+def test_a_null_distance_nulls_a_row_that_is_not_finite() -> None:
+    df = _column(LineStringXY, _line((0, 0), (1, math.nan)), _SEGMENT).with_columns(
+        d=pl.Series([None, 1.0], dtype=pl.Float64)
+    )
+
+    assert _offset(df, "d")[0] is None
+
+
 def test_a_line_without_length_gives_an_empty_linestring() -> None:
     assert _offset(_column(LineStringXY, _line((1, 1), (1, 1))), 1.0) == [[]]
 
@@ -174,7 +182,7 @@ def test_a_non_finite_row_distance_raises_or_is_null() -> None:
     with pytest.raises(ComputeError, match="finite"):
         _offset(df, "d")
 
-    [invalid, valid] = _offset(df, "d", ignore_per_row_errors=True)
+    [invalid, valid] = _offset(df, "d", on_row_error="null")
     assert invalid is None
     assert valid is not None
 

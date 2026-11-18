@@ -8,18 +8,27 @@ use polars_arrow::array::BooleanArray;
 use super::pairs::GeosPairs;
 use super::GeosRow;
 use crate::per_row::optional_bool_array;
-use crate::{row_or_null, GeoComputeResult};
+use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 #[inline(always)]
-fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Option<bool>> {
+fn rows_are_topologically_equal(
+    a: Option<&GeosRow>,
+    b: Option<&GeosRow>,
+) -> GeoComputeResult<Option<bool>> {
+    let (Some(a), Some(b)) = (a, b) else {
+        return Ok(None);
+    };
     Ok(Some(match (a, b) {
-        (GeosRow::Null, _) | (_, GeosRow::Null) => return Ok(None),
         (GeosRow::Empty, GeosRow::Empty) => true,
         // An empty row never went to GEOS, so it can't be compared there.
-        (GeosRow::Empty, GeosRow::Geometry(other)) | (GeosRow::Geometry(other), GeosRow::Empty) => {
+        (GeosRow::Empty, GeosRow::Geometry(other) | GeosRow::Unchanged(other))
+        | (GeosRow::Geometry(other) | GeosRow::Unchanged(other), GeosRow::Empty) => {
             other.is_empty()?
         }
-        (GeosRow::Geometry(a), GeosRow::Geometry(b)) => a.equals(b)?,
+        (
+            GeosRow::Geometry(a) | GeosRow::Unchanged(a),
+            GeosRow::Geometry(b) | GeosRow::Unchanged(b),
+        ) => a.equals(b)?,
     }))
 }
 
@@ -32,16 +41,16 @@ fn rows_are_topologically_equal(a: &GeosRow, b: &GeosRow) -> GeoComputeResult<Op
 pub fn topologically_equal(
     a: &GeometryArray,
     b: &GeometryArray,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<BooleanArray> {
     // TODO: Skip the partner of an empty row, as `intersection` does,
     // with emptiness by vertices as `rows_without_vertices` gives it:
     // `MULTIPOLYGON (EMPTY)` has a part, and GEOS finds it equal to `POLYGON EMPTY`.
-    let pairs = GeosPairs::new(a, b, ignore_per_row_errors, early_finite_check)?;
+    let pairs = GeosPairs::new(a, b, on_row_error, early_coord_check)?;
     let tested = pairs
         .iter()
-        .map(|(a, b)| row_or_null(rows_are_topologically_equal(a, b), ignore_per_row_errors))
+        .map(|(a, b)| row_or_null(rows_are_topologically_equal(a, b), on_row_error))
         .collect::<GeoComputeResult<Vec<_>>>()?;
     Ok(optional_bool_array(&tested))
 }

@@ -508,9 +508,7 @@ def test_every_kind_follows_non_finite(kind: str, nan_first: bool) -> None:
         ):
             df.select(geo.hausdorff_line_between(a, b, non_finite=non_finite))
         out = df.select(
-            geo.hausdorff_line_between(
-                a, b, non_finite=non_finite, ignore_per_row_errors=True
-            )
+            geo.hausdorff_line_between(a, b, non_finite=non_finite, on_row_error="null")
         )
         assert _as_wkt(out[a]) == [None, line]
     out = df.select(geo.hausdorff_line_between(a, b, non_finite="drop"))
@@ -589,12 +587,12 @@ def test_an_m_that_is_not_finite_only_counts_without_ignore_m() -> None:
     assert _as_wkt(out["a"]) == ["LINESTRING M(10 0 1,0 1 2)"]
 
 
-def test_a_failing_row_gives_null_with_ignore_per_row_errors() -> None:
+def test_a_failing_row_gives_null_with_on_row_error_null() -> None:
     a = _line_strings("a", [[(0, 0), (math.nan, 1), (10, 0)], [(0, 0), (10, 0)]])
     b = _wkt("b", LineStringXY(), [_BUMP, _BUMP])
 
     out = pl.DataFrame([a, b]).select(
-        pl.col("a").geo.hausdorff_line_between("b", ignore_per_row_errors=True)
+        pl.col("a").geo.hausdorff_line_between("b", on_row_error="null")
     )
 
     assert _as_wkt(out["a"]) == [None, "LINESTRING(5 0,5 4)"]
@@ -610,19 +608,19 @@ def test_an_empty_geometry_against_a_failing_one_gives_an_empty_line() -> None:
     assert _as_wkt(df.select(geo.hausdorff_line_between("b", "a"))["b"]) == expected
 
 
-def test_against_a_single_failing_geometry_every_row_is_null_with_ignore_per_row_errors() -> (
+def test_against_a_single_failing_geometry_every_row_is_null_with_on_row_error_null() -> (
     None
 ):
     one = _line_strings("one", [[(0, 0), (math.nan, 1), (10, 0)]])
     df = pl.DataFrame(_wkt("many", PointXY(), ["POINT (3 0)", None]))
 
-    out = df.select(geo.hausdorff_line_between(one, "many", ignore_per_row_errors=True))
+    out = df.select(geo.hausdorff_line_between(one, "many", on_row_error="null"))
     assert _as_wkt(out.to_series()) == [None, None]
-    out = df.select(geo.hausdorff_line_between("many", one, ignore_per_row_errors=True))
+    out = df.select(geo.hausdorff_line_between("many", one, on_row_error="null"))
     assert _as_wkt(out["many"]) == [None, None]
 
 
-def test_against_a_single_geometry_a_failing_row_gives_null_with_ignore_per_row_errors() -> (
+def test_against_a_single_geometry_a_failing_row_gives_null_with_on_row_error_null() -> (
     None
 ):
     # The failing row is in the second chunk, which the kernel gets on its own.
@@ -637,13 +635,13 @@ def test_against_a_single_geometry_a_failing_row_gives_null_with_ignore_per_row_
 
     with pytest.raises(ComputeError, match="expects finite coordinates"):
         df.select(geo.hausdorff_line_between(one, "many"))
-    out = df.select(geo.hausdorff_line_between(one, "many", ignore_per_row_errors=True))
+    out = df.select(geo.hausdorff_line_between(one, "many", on_row_error="null"))
     assert _as_wkt(out.to_series()) == [
         "LINESTRING(0 0,4 0)",
         None,
         "LINESTRING(0 0,4 0)",
     ]
-    out = df.select(geo.hausdorff_line_between("many", one, ignore_per_row_errors=True))
+    out = df.select(geo.hausdorff_line_between("many", one, on_row_error="null"))
     assert _as_wkt(out["many"]) == ["LINESTRING(4 0,0 0)", None, "LINESTRING(4 0,0 0)"]
 
 

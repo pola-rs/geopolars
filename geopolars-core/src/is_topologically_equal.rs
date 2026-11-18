@@ -1,4 +1,5 @@
 use geopolars_compute::geos::topologically_equal;
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{GeometryArray, Kind};
 use polars_arrow::array::{Array, BooleanArray};
 use polars_core::prelude::PolarsResult;
@@ -14,12 +15,12 @@ pub fn are_topologically_equal(
     a_kind: Kind,
     b: &dyn Array,
     b_kind: Kind,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<BooleanArray> {
     let (a, b) = (
         GeometryArray::new(a, a_kind)?,
         GeometryArray::new(b, b_kind)?,
     );
-    topologically_equal(&a, &b, ignore_per_row_errors, early_finite_check).into_polars()
+    topologically_equal(&a, &b, on_row_error, early_coord_check).into_polars()
 }

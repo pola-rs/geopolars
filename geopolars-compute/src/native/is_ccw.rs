@@ -17,6 +17,7 @@ use polars_arrow::array::BooleanArray;
 
 use super::area::twice_signed_area;
 use crate::per_row::per_row_bool;
+use crate::utils::with_ranges_reversed;
 
 /// Whether `ring` runs counter-clockwise, or clockwise if `CW=true`,
 /// by the rules of the Python `is_ccw`.
@@ -72,7 +73,7 @@ pub fn multi_polygons_are_ccw<const HOLES_CW: bool>(
 }
 
 /// Which of `lines` run clockwise, so have to be reversed to run counter-clockwise.
-/// Collected, as [ValidCoords::with_ranges_reversed] goes over them once per axis.
+/// Collected, as [with_ranges_reversed] goes over them once per axis.
 fn lines_to_flip(
     lines: impl Iterator<Item = Range<usize>>,
     coords: &ValidCoords,
@@ -95,7 +96,7 @@ fn lines_to_flip(
 // It is not CCW now, yet `to_ccw` does not flip it.
 /// Which rings of `polygons` have to be reversed to [run counter-clockwise](polygon_is_ccw).
 /// Each item of `polygons` is the range of that polygon's rings in `rings`.
-/// Collected, as [ValidCoords::with_ranges_reversed] goes over them once per axis.
+/// Collected, as [with_ranges_reversed] goes over them once per axis.
 fn rings_to_flip<const HOLES_CW: bool>(
     polygons: impl Iterator<Item = Range<usize>>,
     rings: &ValidList,
@@ -127,7 +128,7 @@ pub fn line_strings_to_ccw(array: &LineStringArray) -> LineStringArray {
     let flipped = lines_to_flip(rows, &array.coords);
     LineStringArray::from_parts(
         array.rows.clone(),
-        array.coords.with_ranges_reversed(flipped.into_iter()),
+        with_ranges_reversed(&array.coords, flipped.into_iter()),
     )
 }
 
@@ -137,7 +138,7 @@ pub fn polygons_to_ccw<const HOLES_CW: bool>(array: &PolygonArray) -> PolygonArr
     PolygonArray::from_parts(
         array.rows.clone(),
         array.rings.clone(),
-        array.coords.with_ranges_reversed(flipped.into_iter()),
+        with_ranges_reversed(&array.coords, flipped.into_iter()),
     )
 }
 
@@ -146,7 +147,7 @@ pub fn multi_line_strings_to_ccw(array: &MultiLineStringArray) -> MultiLineStrin
     MultiLineStringArray::from_parts(
         array.rows.clone(),
         array.lines.clone(),
-        array.coords.with_ranges_reversed(flipped.into_iter()),
+        with_ranges_reversed(&array.coords, flipped.into_iter()),
     )
 }
 
@@ -157,6 +158,6 @@ pub fn multi_polygons_to_ccw<const HOLES_CW: bool>(array: &MultiPolygonArray) ->
         array.rows.clone(),
         array.polygons.clone(),
         array.rings.clone(),
-        array.coords.with_ranges_reversed(flipped.into_iter()),
+        with_ranges_reversed(&array.coords, flipped.into_iter()),
     )
 }

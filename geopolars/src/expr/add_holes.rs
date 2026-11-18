@@ -1,14 +1,15 @@
 //! Adding holes to polygons, from another column.
 //! Implements the Python `add_holes`.
 
-use geopolars_core::{EmptyExterior, NullParts};
+use geopolars_compute::{EmptyPolygonExterior, NullParts, OnRowError};
 use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
-use super::construct::{fields_of, listed_parts, paired_rows, parts_storage, NullPartsDef};
+use super::construct::{fields_of, listed_parts, paired_rows, parts_storage};
+use crate::common_arguments::{EmptyPolygonExteriorDef, NullPartsDef, OnRowErrorDef};
 use crate::geoarrow::{describe, ensure_same_crs_unless_bare, geometry_series, Geo};
 
 /// The keyword arguments of the Python `add_holes`.
@@ -18,15 +19,10 @@ pub struct AddHolesKwargs {
     pub close: Option<CloseRingsKwargs>,
     #[serde(with = "NullPartsDef")]
     null_parts: NullParts,
-    #[serde(with = "EmptyExteriorDef")]
-    empty_exterior: EmptyExterior,
-}
-
-#[derive(Deserialize)]
-#[serde(remote = "EmptyExterior", rename_all = "snake_case")]
-enum EmptyExteriorDef {
-    Null,
-    Keep,
+    #[serde(with = "EmptyPolygonExteriorDef")]
+    empty_polygon_exterior: EmptyPolygonExterior,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
 /// Checks the input fields of `add_holes`.
@@ -48,12 +44,15 @@ fn holes_added(input_fields: &[Field]) -> PolarsResult<(Geo, bool)> {
     ))
 }
 
-fn kernel_output_type_add_holes(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_add_holes(
+    input_fields: &[Field],
+    _kwargs: AddHolesKwargs,
+) -> PolarsResult<Field> {
     let (geo, _) = holes_added(input_fields)?;
     Ok(Field::new(input_fields[0].name().clone(), geo.dtype()))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_add_holes)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_add_holes)]
 fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> {
     let (geo, listed) = holes_added(&fields_of(inputs))?;
     let polygons = inputs[0].ext()?.storage();
@@ -65,7 +64,8 @@ fn add_holes(inputs: &[Series], kwargs: AddHolesKwargs) -> PolarsResult<Series> 
         holes.chunks()[0].as_ref(),
         listed,
         kwargs.null_parts,
-        kwargs.empty_exterior,
+        kwargs.empty_polygon_exterior,
+        kwargs.on_row_error,
         kwargs.close.map(Into::into),
     )?;
     geometry_series(inputs[0].name().clone(), geo, vec![chunk])

@@ -8,11 +8,11 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::close_rings::CloseRingsKwargs;
+use crate::common_arguments::NullPartsDef;
 use crate::geoarrow::crs::{ExtensionMetadata, MetadataKwargs};
 use crate::geoarrow::{coord, describe, ensure_same_crs_unless_bare, geometry_series, Geo};
-use geopolars_core::{
-    assembled_multi_polygons, assembled_polygons, validated_storage, NestedKind, NullParts,
-};
+use geopolars_compute::NullParts;
+use geopolars_core::{assembled_multi_polygons, assembled_polygons, validated_storage, NestedKind};
 use geopolars_views::{GeoDimension, Kind};
 
 /// The keyword arguments of the Python constructors that build polygons:
@@ -742,13 +742,6 @@ pub(super) fn parts_storage(
         }
         _ => storage_of(parts),
     }
-}
-
-#[derive(Deserialize)]
-#[serde(remote = "NullParts", rename_all = "snake_case")]
-pub(super) enum NullPartsDef {
-    Drop,
-    Null,
 }
 
 /// Implements the Python `polygons_from_rings_in_separate_columns`.

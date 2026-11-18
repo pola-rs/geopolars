@@ -7,6 +7,12 @@ from typing import TYPE_CHECKING, Literal, get_args
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import (
+    EarlyCoordCheck,
+    NewHoles,
+    NewRingOrientation,
+    OnRowError,
+)
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import (
     LineStringType,
@@ -42,9 +48,10 @@ def intersection(
     *,
     keep: Keep | None = None,
     allow_splitting: bool = False,
-    ccw_outer: bool = False,
-    ignore_per_row_errors: bool = False,
-    early_finite_check: bool = False,
+    new_ring_orientation: NewRingOrientation = "keep",
+    new_holes: NewHoles = "opposite",
+    on_row_error: OnRowError = "raise",
+    early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
     """The part two geometries have in common, row by row.
     {broadcast_single_geometry}
@@ -102,11 +109,12 @@ def intersection(
 
     {geos_errors}
     The same goes for a result in several parts without `allow_splitting`.
+    {on_row_error}
 
     {geos_non_finite}
-    {early_finite_check}
+    {early_coord_check}
 
-    {ccw_outer}
+    {new_ring_orientation}
     It only affects a Polygon or MultiPolygon result.
 
     {same_crs_pair}
@@ -118,14 +126,19 @@ def intersection(
     df.select(geo.intersection("road", "river", keep="points", allow_splitting=True))
     ```
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
+    validate_one_of("new_holes", new_holes, NewHoles)
     if keep is not None:
         validate_one_of("keep", keep, Keep)
     kwargs = {
         "keep": keep,
         "allow_splitting": allow_splitting,
-        "ccw_outer": ccw_outer,
-        "ignore_per_row_errors": ignore_per_row_errors,
-        "early_finite_check": early_finite_check,
+        "new_ring_orientation": new_ring_orientation,
+        "new_holes": new_holes,
+        "on_row_error": on_row_error,
+        "early_coord_check": early_coord_check,
     }
 
     def build(

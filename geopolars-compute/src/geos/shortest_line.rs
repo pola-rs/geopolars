@@ -8,24 +8,27 @@ use geos::{Geom, Geometry};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::{combine_validities_and, combine_validities_and_not};
 
-use super::{rows_without_vertices, GeosGeometries, GeosRow, ToGeosRows};
-use crate::GeoComputeResult;
+use super::{rows_without_vertices, GeosGeometries, GeosRow, GeosRows, ToGeosRows};
+use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 #[inline(always)]
 fn shortest_line_between_rows(
-    a: &GeosRow,
-    b: &GeosRow,
-    ignore_per_row_errors: bool,
-) -> GeoComputeResult<GeosRow> {
+    a: Option<&GeosRow>,
+    b: Option<&GeosRow>,
+    on_row_error: OnRowError,
+) -> GeoComputeResult<Option<GeosRow>> {
+    let (Some(a), Some(b)) = (a, b) else {
+        return Ok(None);
+    };
     match (a, b) {
-        (GeosRow::Null, _) | (_, GeosRow::Null) => Ok(GeosRow::Null),
-        (GeosRow::Empty, _) | (_, GeosRow::Empty) => Ok(GeosRow::Empty),
-        (GeosRow::Geometry(a), GeosRow::Geometry(b)) => {
-            match shortest_line_between_geometries(a, b) {
-                Err(_) if ignore_per_row_errors => Ok(GeosRow::Null),
-                line => line,
-            }
-        }
+        (GeosRow::Empty, _) | (_, GeosRow::Empty) => Ok(Some(GeosRow::Empty)),
+        (
+            GeosRow::Geometry(a) | GeosRow::Unchanged(a),
+            GeosRow::Geometry(b) | GeosRow::Unchanged(b),
+        ) => row_or_null(
+            shortest_line_between_geometries(a, b).map(Some),
+            on_row_error,
+        ),
     }
 }
 
@@ -41,18 +44,22 @@ fn shortest_line_between_geometries(a: &Geometry, b: &Geometry) -> GeoComputeRes
 }
 
 fn shortest_lines_into_array(
-    lines: Vec<GeosRow>,
-    ignore_per_row_errors: bool,
+    lines: impl ExactSizeIterator<Item = GeoComputeResult<Option<GeosRow>>>,
+    on_row_error: OnRowError,
 ) -> GeoComputeResult<LineStringArray> {
+    let mut geometries = GeosRows::with_capacity(lines.len());
+    for line in lines {
+        geometries.push(line?);
+    }
     let size_hint = SizeHint {
-        coords: 2 * lines.len(),
+        coords: 2 * geometries.len(),
         parts: [0, 0],
     };
     GeosGeometries {
-        geometries: lines,
+        geometries,
         size_hint,
     }
-    .into_line_string_array::<false>(ignore_per_row_errors)
+    .into_line_string_array::<false>(on_row_error)
 }
 
 fn is_valid(validity: Option<&Bitmap>, i: usize) -> bool {
@@ -66,33 +73,34 @@ fn is_valid(validity: Option<&Bitmap>, i: usize) -> bool {
 pub fn shortest_lines_pairwise(
     a: GeometryArray,
     b: GeometryArray,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
     debug_assert_eq!(a.len(), b.len(), "`a` and `b` must have the same length");
     let valid = combine_validities_and(a.validity(), b.validity());
     let empty = &rows_without_vertices(&a) | &rows_without_vertices(&b);
     let sent_to_geos = combine_validities_and_not(valid.as_ref(), Some(&empty));
-    let (ignore, early) = (ignore_per_row_errors, early_finite_check);
+    let early = early_coord_check;
     let a = a
         .with_validity(sent_to_geos.clone())
-        .to_geos_rows(ignore, early)?;
-    let b = b.with_validity(sent_to_geos).to_geos_rows(ignore, early)?;
+        .to_geos_rows(on_row_error, early)?;
+    let b = b
+        .with_validity(sent_to_geos)
+        .to_geos_rows(on_row_error, early)?;
     let lines = a
         .geometries
         .iter()
-        .zip(&b.geometries)
+        .zip(b.geometries.iter())
         .enumerate()
         .map(|(i, (a, b))| {
             // Every row that was not sent to GEOS is null on both sides,
             // so an empty one gets its line here.
             if empty.get_bit(i) && is_valid(valid.as_ref(), i) {
-                return Ok(GeosRow::Empty);
+                return Ok(Some(GeosRow::Empty));
             }
-            shortest_line_between_rows(a, b, ignore_per_row_errors)
-        })
-        .collect::<GeoComputeResult<Vec<_>>>()?;
-    shortest_lines_into_array(lines, ignore_per_row_errors)
+            shortest_line_between_rows(a, b, on_row_error)
+        });
+    shortest_lines_into_array(lines, on_row_error)
 }
 
 /// Gets the shortest line between a single geometry and every row of `many`,
@@ -103,42 +111,35 @@ pub fn shortest_lines_against_one(
     one: &GeometryArray,
     many: &GeometryArray,
     lines_start_on_one: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
-    let one = one.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    let [one] = one.geometries.as_slice() else {
-        panic!("`one` must be a single row, got {}", one.geometries.len());
+    let one = one.to_geos_rows(on_row_error, early_coord_check)?;
+    let mut one = one.geometries.iter();
+    let (Some(one), None) = (one.next(), one.next()) else {
+        panic!("`one` must be a single row");
     };
     let one_is_empty = match one {
-        GeosRow::Null => {
-            let lines = (0..many.len()).map(|_| GeosRow::Null).collect();
-            return shortest_lines_into_array(lines, ignore_per_row_errors);
+        None => {
+            let lines = (0..many.len()).map(|_| Ok(None));
+            return shortest_lines_into_array(lines, on_row_error);
         }
-        GeosRow::Empty => true,
-        GeosRow::Geometry(one) => one.is_empty()?,
+        Some(GeosRow::Empty) => true,
+        Some(GeosRow::Geometry(one) | GeosRow::Unchanged(one)) => one.is_empty()?,
     };
     if one_is_empty {
-        let lines = (0..many.len())
-            .map(|i| match is_valid(many.validity(), i) {
-                true => GeosRow::Empty,
-                false => GeosRow::Null,
-            })
-            .collect();
-        return shortest_lines_into_array(lines, ignore_per_row_errors);
+        let lines =
+            (0..many.len()).map(|i| Ok(is_valid(many.validity(), i).then_some(GeosRow::Empty)));
+        return shortest_lines_into_array(lines, on_row_error);
     }
-    let many = many.to_geos_rows(ignore_per_row_errors, early_finite_check)?;
-    let lines = many
-        .geometries
-        .iter()
-        .map(|row| {
-            let (a, b) = if lines_start_on_one {
-                (one, row)
-            } else {
-                (row, one)
-            };
-            shortest_line_between_rows(a, b, ignore_per_row_errors)
-        })
-        .collect::<GeoComputeResult<Vec<_>>>()?;
-    shortest_lines_into_array(lines, ignore_per_row_errors)
+    let many = many.to_geos_rows(on_row_error, early_coord_check)?;
+    let lines = many.geometries.iter().map(|row| {
+        let (a, b) = if lines_start_on_one {
+            (one, row)
+        } else {
+            (row, one)
+        };
+        shortest_line_between_rows(a, b, on_row_error)
+    });
+    shortest_lines_into_array(lines, on_row_error)
 }

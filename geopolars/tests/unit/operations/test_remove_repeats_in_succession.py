@@ -134,7 +134,7 @@ _A = _line((1, 1))
 
 
 @pytest.mark.parametrize(
-    ("collapsed_lines", "too_short", "collapsed", "single"),
+    ("collapsed_lines", "short_lines", "collapsed", "single"),
     [
         ("keep_ends", "null", _A + _A, None),
         ("keep_ends", "keep", _A + _A, _A),
@@ -146,7 +146,7 @@ _A = _line((1, 1))
 )
 def test_what_a_collapsed_or_short_line_keeps(
     collapsed_lines: str,
-    too_short: str,
+    short_lines: str,
     collapsed: Line | None,
     single: Line | None,
 ) -> None:
@@ -155,30 +155,30 @@ def test_what_a_collapsed_or_short_line_keeps(
         _A + _A + _A,
         _A,
         collapsed_lines=collapsed_lines,
-        too_short=too_short,
+        short_lines=short_lines,
     )
 
     assert out == [collapsed, single]
 
 
 @pytest.mark.parametrize(
-    ("too_short", "expected"),
+    ("short_lines", "expected"),
     [("null", None), ("keep", [_REMOVED, _A]), ("empty", [_REMOVED, []])],
 )
-def test_a_short_part_of_a_multilinestring(too_short: str, expected: object) -> None:
+def test_a_short_part_of_a_multilinestring(short_lines: str, expected: object) -> None:
     out = _remove(
         MultiLineStringXY(),
         [_REPEATED, _A + _A],
         collapsed_lines="single_vertex",
-        too_short=too_short,
+        short_lines=short_lines,
     )
 
     assert out == [expected]
 
 
-@pytest.mark.parametrize("too_short", ["null", "keep", "empty"])
-def test_a_multipoint_of_one_point_repeated_keeps_one(too_short: str) -> None:
-    out = _remove(MultiPointXY(), _A + _A + _A, too_short=too_short)
+@pytest.mark.parametrize("short_lines", ["null", "keep", "empty"])
+def test_a_multipoint_of_one_point_repeated_keeps_one(short_lines: str) -> None:
+    out = _remove(MultiPointXY(), _A + _A + _A, short_lines=short_lines)
 
     assert out == [_A]
 
@@ -188,7 +188,7 @@ _B = _line((2, 2))
 
 @pytest.mark.parametrize("collapsed_lines", ["keep_ends", "single_vertex"])
 @pytest.mark.parametrize(
-    ("too_short", "at_one_place", "back_and_forth"),
+    ("short_lines", "at_one_place", "back_and_forth"),
     [
         ("null", None, None),
         ("keep", [_A + _A], [_A + _B + _A]),
@@ -196,7 +196,7 @@ _B = _line((2, 2))
     ],
 )
 def test_what_a_short_ring_keeps(
-    collapsed_lines: str, too_short: str, at_one_place: object, back_and_forth: object
+    collapsed_lines: str, short_lines: str, at_one_place: object, back_and_forth: object
 ) -> None:
     out = _remove(
         PolygonXY(),
@@ -204,14 +204,14 @@ def test_what_a_short_ring_keeps(
         [_A + _B + _B + _A],
         [_A + _A + _B + _A],
         collapsed_lines=collapsed_lines,
-        too_short=too_short,
+        short_lines=short_lines,
     )
 
     assert out == [at_one_place, back_and_forth, back_and_forth]
 
 
 def test_a_ring_that_was_short_already() -> None:
-    assert _remove(PolygonXY(), [_A + _B + _A], too_short="empty") == [[[]]]
+    assert _remove(PolygonXY(), [_A + _B + _A], short_lines="empty") == [[[]]]
 
 
 def test_a_short_exterior_or_hole_becomes_empty_in_place() -> None:
@@ -220,7 +220,7 @@ def test_a_short_exterior_or_hole_becomes_empty_in_place() -> None:
     out = _remove(
         MultiPolygonXY(),
         [[_A + _A + _A + _A, hole], [_SQUARE, _A + _B + _A]],
-        too_short="empty",
+        short_lines="empty",
     )
 
     assert out == [[[[], hole], [_SQUARE, []]]]
@@ -231,9 +231,9 @@ def test_an_unknown_collapsed_lines_is_refused() -> None:
         geo.remove_repeats_in_succession("g", collapsed_lines="first")  # type: ignore[arg-type]
 
 
-def test_an_unknown_too_short_is_refused() -> None:
-    with pytest.raises(ValueError, match="too_short"):
-        geo.remove_repeats_in_succession("g", too_short="drop")  # type: ignore[arg-type]
+def test_an_unknown_short_lines_is_refused() -> None:
+    with pytest.raises(ValueError, match="short_lines"):
+        geo.remove_repeats_in_succession("g", short_lines="drop")  # type: ignore[arg-type]
 
 
 def test_only_a_multipoint_point_in_a_row_is_removed() -> None:

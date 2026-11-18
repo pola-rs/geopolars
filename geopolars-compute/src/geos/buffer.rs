@@ -1,21 +1,16 @@
 //! Buffers, forwarded to GEOS.
 //!
 //! GEOS builds a buffer in 2D, so every output is XY.
-//!
-//! # Const generic flags
-//!
-//! ## `EARLY_FINITE_CHECK`
-//!
-//! The public functions take `early_finite_check`.
-//! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{GeometryArray, MultiPolygonArray, PolygonArray};
 use geos::{BufferParams, Geom, Geometry, GeometryTypes};
 pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
-use super::{unless_split, GeosGeometries, GeosRow, ToGeosRows};
-use crate::{GeoComputeError, GeoComputeResult};
+use super::{unless_split, validity_with_distances, GeosGeometries, ToGeosRows};
+use crate::{
+    EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
+};
 
 /// How far away is the buffer?
 #[derive(Clone, Copy)]
@@ -55,42 +50,50 @@ pub struct BufferStyle {
 /// A row that GEOS splits into several polygons therefore fails with [`GeoComputeError::Split`].
 /// [`buffer_into_multi_polygons`] keeps them instead.
 pub fn buffer_into_polygons(
-    array: &GeometryArray,
+    array: GeometryArray,
     distance: BufferDistance,
     style: &BufferStyle,
-    ccw_outer: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<PolygonArray> {
+    let validity = validity_with_distances(array.validity(), distance);
     buffer_via_geos(
-        array.to_geos_rows(ignore_per_row_errors, early_finite_check)?,
+        array
+            .with_validity(validity)
+            .to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
-        ignore_per_row_errors,
+        on_row_error,
         false,
     )?
-    .into_polygon_array(false, ignore_per_row_errors, ccw_outer)
+    .into_polygon_array(false, on_row_error, new_ring_orientation, new_holes)
 }
 
 /// Like [`buffer_into_polygons`], but into a multipolygon, for any kind.
 /// Implements the Python `buffer` where it gives a multipolygon.
 /// A row that GEOS splits into several polygons gets them all as parts.
 pub fn buffer_into_multi_polygons(
-    array: &GeometryArray,
+    array: GeometryArray,
     distance: BufferDistance,
     style: &BufferStyle,
-    ccw_outer: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<MultiPolygonArray> {
+    let validity = validity_with_distances(array.validity(), distance);
     buffer_via_geos(
-        array.to_geos_rows(ignore_per_row_errors, early_finite_check)?,
+        array
+            .with_validity(validity)
+            .to_geos_rows(on_row_error, early_coord_check)?,
         distance,
         style,
-        ignore_per_row_errors,
+        on_row_error,
         true,
     )?
-    .into_multi_polygon_array(false, ignore_per_row_errors, ccw_outer)
+    .into_multi_polygon_array(false, on_row_error, new_ring_orientation, new_holes)
 }
 
 fn buffer_params(style: &BufferStyle) -> GeoComputeResult<BufferParams> {
@@ -103,20 +106,18 @@ fn buffer_params(style: &BufferStyle) -> GeoComputeResult<BufferParams> {
         .build()?)
 }
 
-/// Every geometry buffered by `distance`, forwarded to GEOS.
-/// See [`by_distance_via_geos`].
 fn buffer_via_geos(
     geometries: GeosGeometries,
     distance: BufferDistance,
     style: &BufferStyle,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     allow_splitting: bool,
 ) -> GeoComputeResult<GeosGeometries> {
     let params = buffer_params(style)?;
     by_distance_via_geos(
         geometries,
         distance,
-        ignore_per_row_errors,
+        on_row_error,
         |distance| geos_distance(distance, style.side),
         |input, distance| {
             let buffer = input.buffer_with_params(distance, &params)?;
@@ -128,54 +129,40 @@ fn buffer_via_geos(
     )
 }
 
-/// Every geometry passed to `op` with its distance, forwarded to GEOS.
-/// `geos_distance` checks a distance, and gives it as `op` takes it.
-/// If `ignore_per_row_errors=true`, a geometry that fails becomes null;
-/// otherwise its error is returned.
+/// Passes every geometry to `op` with its distance, which `geos_distance` checks and converts.
+/// A row that fails goes to `on_row_error`.
 /// A constant distance that fails would fail every row, so its error is always returned.
-/// The size hint stays the input's: it is only a starting capacity.
-/// Errors are the exception, so `ignore_per_row_errors` is checked per row.
+///
+/// A row with a null distance must already be null in `geometries`,
+/// which [validity_with_distances] does before converting.
 pub(super) fn by_distance_via_geos(
     mut geometries: GeosGeometries,
     distance: BufferDistance,
-    ignore_per_row_errors: bool,
+    on_row_error: OnRowError,
     geos_distance: impl Fn(f64) -> GeoComputeResult<f64>,
     op: impl Fn(&Geometry, f64) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<GeosGeometries> {
-    let apply = |input: &Geometry, geos_distance: f64| -> GeoComputeResult<GeosRow> {
-        match op(input, geos_distance) {
-            Ok(output) => Ok(GeosRow::Geometry(output)),
-            Err(e) if !ignore_per_row_errors => Err(e),
-            Err(_) => Ok(GeosRow::Null),
-        }
-    };
+    let rows = &mut geometries.geometries;
     match distance {
         BufferDistance::Constant(distance) => {
             let distance = geos_distance(distance)?;
-            for geometry in &mut geometries.geometries {
-                if let GeosRow::Geometry(input) = geometry {
-                    *geometry = apply(input, distance)?;
-                }
-            }
+            rows.replace_geometries(on_row_error, |_, input| op(input, distance))?;
         }
         BufferDistance::PerRow(distances) => {
-            debug_assert_eq!(distances.len(), geometries.geometries.len());
-            for (geometry, distance) in geometries.geometries.iter_mut().zip(distances.iter()) {
-                let Some(&distance) = distance else {
-                    *geometry = GeosRow::Null;
-                    continue;
-                };
-                let GeosRow::Geometry(input) = geometry else {
-                    continue;
-                };
-                *geometry = match geos_distance(distance) {
-                    Ok(distance) => apply(input, distance)?,
-                    Err(e) if !ignore_per_row_errors => return Err(e),
-                    Err(_) => GeosRow::Null,
-                };
-            }
+            debug_assert_eq!(distances.len(), rows.len());
+            debug_assert!(
+                distances.validity().is_none_or(|has_distance| {
+                    let mut rows = rows.iter().enumerate();
+                    rows.all(|(i, row)| row.is_none() || has_distance.get_bit(i))
+                }),
+                "a row with a null distance must already be null",
+            );
+            rows.replace_geometries(on_row_error, |i, input| {
+                op(input, geos_distance(distances.value(i))?)
+            })?;
         }
     }
+    // The size hint stays that of the input, as it is only a starting capacity.
     Ok(geometries)
 }
 

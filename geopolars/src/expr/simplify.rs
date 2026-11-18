@@ -1,6 +1,8 @@
 //! The simplification of a linestring or polygon, or their multi-variants.
 //! Implements the Python `simplify`.
 
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::SegmentKind;
 use geopolars_views::GeoDimension;
 use polars::prelude::*;
@@ -24,7 +26,10 @@ fn simplified_type(dtype: &DataType) -> PolarsResult<(Geo, SegmentKind)> {
     Ok((simplified, kind))
 }
 
-fn kernel_output_type_simplify(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_simplify(
+    input_fields: &[Field],
+    _kwargs: SimplifyKwargs,
+) -> PolarsResult<Field> {
     let (simplified, _) = simplified_type(input_fields[0].dtype())?;
     Ok(Field::new(
         input_fields[0].name().clone(),
@@ -38,18 +43,20 @@ fn kernel_output_type_simplify(input_fields: &[Field]) -> PolarsResult<Field> {
 pub struct SimplifyKwargs {
     tolerance: f64,
     preserve_topology: bool,
-    ignore_per_row_errors: bool,
-    early_finite_check: bool,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
+    #[serde(with = "EarlyCoordCheckDef")]
+    early_coord_check: EarlyCoordCheck,
 }
 
-#[polars_expr(output_type_func=kernel_output_type_simplify)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_simplify)]
 fn simplify(inputs: &[Series], kwargs: SimplifyKwargs) -> PolarsResult<Series> {
     let (simplified, kind) = simplified_type(inputs[0].dtype())?;
     let SimplifyKwargs {
         tolerance,
         preserve_topology,
-        ignore_per_row_errors,
-        early_finite_check,
+        on_row_error,
+        early_coord_check,
     } = kwargs;
     let storage = inputs[0].ext()?.storage();
     let chunks = storage
@@ -61,8 +68,8 @@ fn simplify(inputs: &[Series], kwargs: SimplifyKwargs) -> PolarsResult<Series> {
                 kind,
                 tolerance,
                 preserve_topology,
-                ignore_per_row_errors,
-                early_finite_check,
+                on_row_error,
+                early_coord_check,
             )
         })
         .collect::<PolarsResult<_>>()?;

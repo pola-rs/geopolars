@@ -1,4 +1,5 @@
 use geopolars_compute::geos::{Overlay, OverlayPairs};
+use geopolars_compute::{EarlyCoordCheck, NewHoles, NewRingOrientation, OnRowError};
 use geopolars_views::{GeometryArray, Kind};
 use polars_arrow::array::Array;
 use polars_core::prelude::PolarsResult;
@@ -8,9 +9,10 @@ use crate::IntoPolarsResult;
 /// See the Python `intersection` and `difference`.
 #[derive(Debug, Clone, Copy)]
 pub struct OverlayOptions {
-    pub ccw_outer: bool,
-    pub ignore_per_row_errors: bool,
-    pub early_finite_check: bool,
+    pub new_ring_orientation: NewRingOrientation,
+    pub new_holes: NewHoles,
+    pub on_row_error: OnRowError,
+    pub early_coord_check: EarlyCoordCheck,
 }
 
 /// Overlays the geometries on the same row of a chunk of an `a_kind` column's storage
@@ -34,12 +36,13 @@ pub fn overlay(
         GeometryArray::new(b, b_kind)?,
     );
     let OverlayOptions {
-        ccw_outer,
-        ignore_per_row_errors,
-        early_finite_check,
+        new_ring_orientation,
+        new_holes,
+        on_row_error,
+        early_coord_check,
     } = options;
-    let pairs = OverlayPairs::new(&a, &b, overlay, ignore_per_row_errors, early_finite_check)
-        .into_polars()?;
+    let pairs =
+        OverlayPairs::new(&a, &b, overlay, on_row_error, early_coord_check).into_polars()?;
     match output_kind {
         Kind::Point => pairs.into_points(z).map(GeometryArray::Point),
         Kind::MultiPoint => pairs.into_multi_points(z).map(GeometryArray::MultiPoint),
@@ -48,10 +51,10 @@ pub fn overlay(
             .into_multi_line_strings(z)
             .map(GeometryArray::MultiLineString),
         Kind::Polygon => pairs
-            .into_polygons(z, ccw_outer)
+            .into_polygons(z, new_ring_orientation, new_holes)
             .map(GeometryArray::Polygon),
         Kind::MultiPolygon => pairs
-            .into_multi_polygons(z, ccw_outer)
+            .into_multi_polygons(z, new_ring_orientation, new_holes)
             .map(GeometryArray::MultiPolygon),
     }
     .into_polars()

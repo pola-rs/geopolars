@@ -72,13 +72,16 @@ pub struct TotalBoundsKwargs {
     ignore_nulls: bool,
 }
 
-fn kernel_output_type_total_bounds(input_fields: &[Field]) -> PolarsResult<Field> {
+fn kernel_output_type_total_bounds(
+    input_fields: &[Field],
+    _kwargs: TotalBoundsKwargs,
+) -> PolarsResult<Field> {
     let field = &input_fields[0];
     let dtype = bounds_dtype(field.dtype(), false)?;
     Ok(Field::new(field.name().clone(), dtype))
 }
 
-#[polars_expr(output_type_func=kernel_output_type_total_bounds)]
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_total_bounds)]
 fn total_bounds(inputs: &[Series], kwargs: TotalBoundsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
     let (kind, dim) = (geo.kind, geo.dim);
