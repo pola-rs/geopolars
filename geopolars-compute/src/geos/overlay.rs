@@ -167,7 +167,7 @@ impl OverlayPairs {
             geometries,
             size_hint: summed_size_hint(self.pairs.size_hints()),
             // GEOS builds every ring of an overlay anew.
-            // The copy of `a` that `difference_rows` gives for an empty `b` is flagged instead.
+            // The copy of `a` that `difference_rows` gives for an empty `b` has `maybe_wrong_orientation` instead.
             orientation: GeometryOrientation::GEOS_BUILT,
         })
     }

@@ -412,7 +412,8 @@ def _xy_only(row: Any) -> Any:
 
 # Each of these would come back otherwise from GEOS:
 # re-oriented, without its duplicate point, noded or split.
-# The polygons already run as `new_ring_orientation="ccw"` asks, so it keeps them too.
+# The polygons already run as `new_ring_orientation="ccw"` asks,
+# so that option keeps them as they are too.
 _AS_IS = {
     "Point": (PointXY(), ["POINT (1 2)"]),
     "MultiPoint": (MultiPointXY(), ["MULTIPOINT ((3 3), (1 1), (1 1))"]),

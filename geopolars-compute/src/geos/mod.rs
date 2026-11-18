@@ -31,7 +31,7 @@
 //! ## `REVERSED_EXTERIOR`, `REVERSED_HOLES`
 //!
 //! Copying a polygon out of GEOS is generic over `REVERSED_EXTERIOR` and `REVERSED_HOLES`,
-//! which `reversed_rings` sets from the column's `orientation`, `new_ring_orientation` and `new_holes`.
+//! which `reversed_rings` sets from the column's `orientation`, `new_ring_orientation`, and `new_holes`.
 //! `CoordsBuilder::push` takes one of them as `REVERSED`, for the ring it copies.
 //! A reversed ring is copied in reverse order, which flips its orientation.
 //!
@@ -529,7 +529,7 @@ impl GeometryOrientation {
         holes: Orientation::Unknown,
     };
 
-    /// A clockwise exterior with counter-clockwise holes, as GEOS gives most rings it builds itself.
+    /// A clockwise exterior with counter-clockwise holes, as GEOS gives most rings it builds itself
     /// (see "Orientation of new rings" in `docs/GEOS kernel implementation guide.md`).
     pub const GEOS_BUILT: Self = Self {
         outer: Orientation::Cw,
@@ -571,8 +571,8 @@ impl GeosRows {
 
 impl GeosGeometries {
     /// Replaces every GEOS geometry with what `op` makes of it, given its row index.
-    /// This includes a row with `maybe_wrong_orientation`, which then no longer has it.
-    /// `op` gives geometries of `orientation`, which the column takes on.
+    /// `op` gives geometries of `orientation`, so the column takes on that orientation,
+    /// and no row keeps `maybe_wrong_orientation`.
     /// A row `op` fails on goes to `on_row_error`.
     #[inline(always)]
     fn replace_geometries(
@@ -611,7 +611,6 @@ impl GeosGeometries {
 pub enum GeosRow {
     /// Empty, without a GEOS geometry. Valid for every kind.
     Empty,
-    /// The GEOS representation of a geometry.
     Geometry {
         geometry: Geometry,
         /// The row may not follow [`GeosGeometries::orientation`],
@@ -621,7 +620,7 @@ pub enum GeosRow {
 }
 
 /// The orientation `new_ring_orientation` and `new_holes` ask for.
-/// `None` if they keep the rings as they are.
+/// `None` for `new_ring_orientation="keep"`, which keeps the rings as they are.
 fn target_orientation(
     new_ring_orientation: NewRingOrientation,
     new_holes: NewHoles,
@@ -772,14 +771,15 @@ impl CoordsBuilder {
     }
 
     /// Appends `ring`, reversed if it does not run as `target`.
-    /// A ring that is empty, or of an `Unknown` target, is appended as it is.
+    /// An empty ring, or any ring with an `Unknown` target, is appended as it is.
     fn push_running<const Z: bool>(
         &mut self,
         ring: &impl Geom,
         target: Orientation,
     ) -> GeoComputeResult<()> {
         let seq = ring.get_coord_seq()?;
-        // GEOS can't tell the orientation of an empty ring, and refuses rings of 1 to 3 vertices.
+        // GEOS can't tell the orientation of an empty ring.
+        // It refuses rings of 1 to 3 vertices, so those never get here.
         let reversed = match target {
             Orientation::Unknown => false,
             _ if seq.size()? == 0 => false,

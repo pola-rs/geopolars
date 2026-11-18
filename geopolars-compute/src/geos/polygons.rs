@@ -156,8 +156,9 @@ impl GeosGeometries {
     /// Every GEOS geometry is freed once it is copied.
     /// A geometry that is not a polygon goes to `on_row_error`.
     /// The rings are oriented as `new_ring_orientation` and `new_holes` ask.
-    /// In a row with `maybe_wrong_orientation`, or any row of a column of unknown `orientation`,
-    /// each ring is checked, and only reversed if it has to be.
+    /// Each ring of a row with `maybe_wrong_orientation` is checked first,
+    /// and only reversed if it runs the wrong way.
+    /// If `orientation` is even partly unknown, every row is checked this way.
     pub fn into_polygon_array(
         mut self,
         z: bool,
@@ -368,7 +369,7 @@ fn push_multi_polygon<
     const Z: bool,
     const REVERSED_EXTERIOR: bool,
     const REVERSED_HOLES: bool,
-    const CHECKED: bool,
+    const CHECK_ORIENTATION: bool,
 >(
     coords: &mut CoordsBuilder,
     rings: &mut OffsetsBuilder,
@@ -380,7 +381,7 @@ fn push_multi_polygon<
     match geometry.geometry_type()? {
         GeometryTypes::Polygon if geometry.is_empty()? => Ok(true),
         GeometryTypes::Polygon => {
-            push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES, CHECKED>(
+            push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES, CHECK_ORIENTATION>(
                 coords, rings, geometry, target,
             )?;
             polygons.push(rings.len());
@@ -389,7 +390,7 @@ fn push_multi_polygon<
         GeometryTypes::MultiPolygon => {
             for n in 0..geometry.get_num_geometries()? {
                 let polygon = geometry.get_geometry_n(n)?;
-                push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES, CHECKED>(
+                push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES, CHECK_ORIENTATION>(
                     coords, rings, &polygon, target,
                 )?;
                 polygons.push(rings.len());
@@ -407,7 +408,7 @@ fn push_polygon<
     const Z: bool,
     const REVERSED_EXTERIOR: bool,
     const REVERSED_HOLES: bool,
-    const CHECKED: bool,
+    const CHECK_ORIENTATION: bool,
 >(
     coords: &mut CoordsBuilder,
     rings: &mut OffsetsBuilder,
@@ -417,7 +418,7 @@ fn push_polygon<
 ) -> GeoComputeResult<bool> {
     match geometry.geometry_type()? {
         GeometryTypes::Polygon => {
-            push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES, CHECKED>(
+            push_rings::<Z, REVERSED_EXTERIOR, REVERSED_HOLES, CHECK_ORIENTATION>(
                 coords, rings, geometry, target,
             )?;
             Ok(true)
@@ -435,7 +436,7 @@ fn push_rings<
     const Z: bool,
     const REVERSED_EXTERIOR: bool,
     const REVERSED_HOLES: bool,
-    const CHECKED: bool,
+    const CHECK_ORIENTATION: bool,
 >(
     coords: &mut CoordsBuilder,
     rings: &mut OffsetsBuilder,
@@ -448,23 +449,23 @@ fn push_rings<
         return Ok(());
     }
     let exterior = polygon.get_exterior_ring()?;
-    push_ring::<Z, REVERSED_EXTERIOR, CHECKED>(coords, &exterior, target.outer)?;
+    push_ring::<Z, REVERSED_EXTERIOR, CHECK_ORIENTATION>(coords, &exterior, target.outer)?;
     rings.push(coords.len());
     for n in 0..polygon.get_num_interior_rings()? {
         let hole = polygon.get_interior_ring_n(n)?;
-        push_ring::<Z, REVERSED_HOLES, CHECKED>(coords, &hole, target.holes)?;
+        push_ring::<Z, REVERSED_HOLES, CHECK_ORIENTATION>(coords, &hole, target.holes)?;
         rings.push(coords.len());
     }
     Ok(())
 }
 
 #[inline(always)]
-fn push_ring<const Z: bool, const REVERSED: bool, const CHECKED: bool>(
+fn push_ring<const Z: bool, const REVERSED: bool, const CHECK_ORIENTATION: bool>(
     coords: &mut CoordsBuilder,
     ring: &impl Geom,
     target: Orientation,
 ) -> GeoComputeResult<()> {
-    if CHECKED {
+    if CHECK_ORIENTATION {
         coords.push_running::<Z>(ring, target)
     } else {
         coords.push::<Z, REVERSED>(ring)
