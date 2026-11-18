@@ -151,8 +151,9 @@ pub(super) fn multi_polygon_to_geos(
 impl GeosGeometries {
     /// Our polygon array of the geometries, one row each.
     /// Every GEOS geometry is freed once it is copied.
-    /// A geometry that is not a polygon is an error.
-    /// If `on_row_error=`[OnRowError::Null], its row is null instead.
+    /// A geometry that is not a polygon goes to `on_row_error`.
+    /// The rings are oriented as `new_ring_orientation` and `new_holes` ask,
+    /// except in an `Unchanged` row, which keeps its rings as they were.
     pub fn into_polygon_array(
         self,
         z: bool,
@@ -283,8 +284,8 @@ fn into_polygon_array_with<
     ))
 }
 
-/// Appends `geometry`, a polygon or a multipolygon, as the parts of one multipolygon.
-/// Gives whether its row is valid, as [wrong_kind] does for any other kind.
+/// Appends a polygon or a multipolygon as the parts of one multipolygon.
+/// Any other kind goes to [wrong_kind], which decides whether its row is valid.
 #[inline(always)]
 fn push_multi_polygon<const Z: bool, const REVERSED_EXTERIOR: bool, const REVERSED_HOLES: bool>(
     coords: &mut CoordsBuilder,
@@ -312,8 +313,8 @@ fn push_multi_polygon<const Z: bool, const REVERSED_EXTERIOR: bool, const REVERS
     }
 }
 
-/// Appends `geometry`, a polygon.
-/// Gives whether its row is valid, as [wrong_kind] does for any other kind.
+/// Appends a polygon.
+/// Any other kind goes to [wrong_kind], which decides whether its row is valid.
 #[inline(always)]
 fn push_polygon<const Z: bool, const REVERSED_EXTERIOR: bool, const REVERSED_HOLES: bool>(
     coords: &mut CoordsBuilder,

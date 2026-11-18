@@ -147,8 +147,7 @@ pub fn multi_line_strings_self_intersect(array: &MultiLineStringArray) -> ListAr
 }
 
 /// Whether each polygon intersects itself (see `polygon_self_intersects`).
-/// If `on_row_error=`[OnRowError::Null], a polygon with a ring that is not one is null;
-/// otherwise that is the error.
+/// A polygon with a ring that is not one goes to `on_row_error`.
 pub fn polygons_self_intersect(
     array: &PolygonArray,
     on_row_error: OnRowError,
@@ -159,7 +158,8 @@ pub fn polygons_self_intersect(
 }
 
 /// [polygons_self_intersect], as a list per row of a chunk, one per part.
-/// If `on_row_error=`[OnRowError::Null], only the part with a ring that is not one is null.
+/// A part with a ring that is not one goes to `on_row_error` on its own,
+/// so [OnRowError::Null] only nulls that part.
 pub fn multi_polygons_self_intersect(
     array: &MultiPolygonArray,
     on_row_error: OnRowError,

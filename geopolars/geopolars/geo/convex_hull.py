@@ -89,8 +89,8 @@ def convex_hull(
     Depending on where such a vertex sits, it is left out of the hull,
     the polygon is null, or GEOS raises.
     {early_coord_check}
-    A geometry with a single coordinate encloses nothing,
-    so it gives a null polygon. (This bypasses finiteness checking)
+    A geometry with a single coordinate skips this check,
+    and gives a null polygon even if that coordinate is not finite.
 
     {new_ring_orientation}
     A hull has no holes, so `new_holes` changes nothing.

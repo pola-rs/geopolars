@@ -9,7 +9,7 @@ const_enum!(
 );
 
 const_enum!(
-    /// Whether the new holes run against the exterior or along it, under [NewRingOrientation].
+    /// Whether the holes that [enum@NewRingOrientation] orients run against the exterior or along it.
     /// Implements `new_holes`, which `docs/Common arguments.md` documents.
     pub enum NewHoles {
         Opposite,

@@ -60,8 +60,7 @@ impl GeosGeometries {
     /// Every GEOS geometry is freed once it is copied.
     /// As GEOS gives a multipoint of one part as a plain point,
     /// a point is read as a single part, or as none if it is empty.
-    /// A geometry that is not a point or multipoint is an error.
-    /// If `on_row_error=`[OnRowError::Null], its row is null instead.
+    /// A geometry that is not a point or multipoint goes to `on_row_error`.
     pub fn into_multi_point_array<const Z: bool>(
         self,
         on_row_error: OnRowError,

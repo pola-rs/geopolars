@@ -56,10 +56,10 @@ An example would be GEOS silently returning (4, 0) for a distance of 0.5 on a li
 
 With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
 What GEOS does with it depends on the operation.
-For example, buffer, simplify, and offset_curve leave it out,
-while intersection, difference, and relate raise.
-Convex_hull gives a null if it comes first,
-and line_interpolate_point gives a wrong point.
+For example, `buffer`, `simplify`, and `offset_curve` leave it out,
+while `intersection`, `difference`, and `relate` raise.
+`convex_hull` gives a null if it comes first,
+and `line_interpolate_point` gives a wrong point.
 A geometry that is itself the empty point passes either check,
 and works as you'd expect it to, as it is a standard GEOS type.
 

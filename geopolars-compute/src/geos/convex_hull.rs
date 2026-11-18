@@ -25,10 +25,11 @@
 //!
 //! # Const generic flags
 //!
-//! See [super] for `EARLY_COORD_CHECK`.
+//! See [super] for `EARLY_COORD_CHECK`, `ALL_VALID` and `Z`.
 //! With [EarlyCoordCheck::Off], what happens to NaN coordinates depends on where they are placed.
-//! With [EarlyCoordCheck::Finite], the same goes for empty points, the first three cases.
-//! - only empty points (x and y NaN) -> a `POINT (NaN NaN)`, so the row is null
+//! [EarlyCoordCheck::Finite] only lets empty points (x and y NaN) through,
+//! so the first three cases below apply to it too.
+//! - only empty points -> a `POINT (NaN NaN)`, so the row is null
 //! - an empty point first, then real ones -> also a `POINT (NaN NaN)`,
 //!   so the row is silently null, even with `on_row_error=`[OnRowError::Raise];
 //! - an empty point after a real one -> it is left out, giving the hull of the others
@@ -37,9 +38,6 @@
 //!
 //! With [EarlyCoordCheck::FiniteAndEmpty], each of these rows fails the same way a GEOS error does,
 //! which makes this consistent.
-//!
-//!
-//! See [super] for `ALL_VALID` and `Z`.
 
 use std::ops::Range;
 
@@ -187,7 +185,6 @@ fn hulls(
             coord_ranges,
         )
     )?;
-    // GEOS gives the exterior as running clockwise.
     hulls.into_polygon_array(has_z, on_row_error, new_ring_orientation, new_holes)
 }
 

@@ -138,8 +138,7 @@ pub(super) fn multi_line_string_to_geos(
 impl GeosGeometries {
     /// Our linestring array of the geometries, one row each.
     /// Every GEOS geometry is freed once it is copied.
-    /// A geometry that is not a linestring is an error.
-    /// If `on_row_error=`[OnRowError::Null], its row is null instead.
+    /// A geometry that is not a linestring goes to `on_row_error`.
     pub fn into_line_string_array<const Z: bool>(
         self,
         on_row_error: OnRowError,

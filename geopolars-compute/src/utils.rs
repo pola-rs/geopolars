@@ -7,8 +7,8 @@ use geopolars_views::output::succeeded;
 use geopolars_views::{List, ValidCoords};
 use polars_arrow::compute::utils::combine_validities_and;
 
-/// `coords` copied into new buffers, with each of `ranges` reversed.
-/// `ranges` is run once per axis.
+/// Copies the coordinates into new buffers, reversing each of `ranges`.
+/// `ranges` is iterated once per axis.
 pub(crate) fn with_ranges_reversed(
     coords: &ValidCoords,
     ranges: impl Iterator<Item = Range<usize>> + Clone,
@@ -28,9 +28,8 @@ pub(crate) fn with_ranges_reversed(
     ))
 }
 
-/// The coordinates of `coords` at `ranges`, in order, copied into new buffers in one pass.
-/// `ranges` is run twice: once to size the buffers, once to copy.
-/// An axis `coords` doesn't have is not copied either.
+/// Copies the coordinates at `ranges` into new buffers, in order.
+/// `ranges` is iterated twice, once to size the buffers and once to copy.
 pub(crate) fn copy_ranges(
     coords: &ValidCoords,
     ranges: impl Iterator<Item = Range<usize>> + Clone,
@@ -44,6 +43,7 @@ pub(crate) fn copy_ranges(
 }
 
 /// [copy_ranges], copying z only if `Z=true`, and m only if `M=true`.
+/// `coords` must have every axis that is copied.
 #[inline(always)]
 fn copy_ranges_with<const Z: bool, const M: bool>(
     coords: &ValidCoords,
@@ -71,7 +71,7 @@ fn copy_ranges_with<const Z: bool, const M: bool>(
     ValidCoords::from_axes((x, y, Z.then_some(z), M.then_some(m)))
 }
 
-/// The coordinates of `coords` at `indices`, in order, copied into new buffers.
+/// Copies the coordinates at `indices` into new buffers, in that order.
 pub(crate) fn gathered(coords: &ValidCoords, indices: &[usize]) -> ValidCoords {
     let gather = |axis: &[f64]| indices.iter().map(|&i| axis[i]).collect::<Vec<_>>();
     ValidCoords::from_axes((
@@ -82,7 +82,7 @@ pub(crate) fn gathered(coords: &ValidCoords, indices: &[usize]) -> ValidCoords {
     ))
 }
 
-/// `rows`, with the rows at `failed` null too.
+/// Marks the rows at `failed` as null, on top of those that already are.
 pub(crate) fn with_null_at(rows: List, failed: &[usize]) -> List {
     let succeeded = succeeded(rows.len(), failed);
     let validity = combine_validities_and(rows.validity(), succeeded.as_ref());

@@ -1,5 +1,4 @@
 //! Adding holes to polygons from another column.
-//! Implements the Python `add_holes`, up to closing and checking the rings.
 
 use geopolars_views::{List, MultiLineStringArray, PolygonArray, ValidList};
 use polars_arrow::bitmap::Bitmap;
@@ -16,39 +15,52 @@ fn null_count(validity: &Option<Bitmap>) -> usize {
 /// Adds `holes` to `polygons` as [polygons_with_added_holes] does,
 /// treating a polygon with an empty exterior as `empty_polygon_exterior` asks.
 /// Implements the Python `add_holes`, up to closing and checking the rings.
+///
+/// The arguments must uphold the preconditions of [polygons_with_added_holes].
 pub fn holes_added_to_polygons(
     polygons: &PolygonArray,
     holes: MaskedParts<MultiLineStringArray>,
-    validity: Option<Bitmap>,
+    output_validity: Option<Bitmap>,
     empty_polygon_exterior: EmptyPolygonExterior,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PolygonArray> {
-    let room = have_room_for_holes(polygons, &holes);
-    let (holes, validity) = match empty_polygon_exterior {
+    let room = holes_added_to_polygons_have_room(polygons, &holes);
+    let (holes, output_validity) = match empty_polygon_exterior {
         EmptyPolygonExterior::Keep => {
             // A polygon without rings would take its first hole as its exterior.
-            let polygons = polygons_with_empty_exteriors(polygons, &!&room);
-            return Ok(polygons_with_added_holes(&polygons, Some(&holes), validity));
+            let polygons = holes_added_to_polygons_with_empty_exteriors(polygons, &!&room);
+            return Ok(polygons_with_added_holes(
+                &polygons,
+                Some(&holes),
+                output_validity,
+            ));
         }
-        EmptyPolygonExterior::Empty => (holes.only_on_rows(&room), validity),
+        EmptyPolygonExterior::Empty => (holes.only_on_rows(&room), output_validity),
         mode @ (EmptyPolygonExterior::Null | EmptyPolygonExterior::Error) => {
-            let with_room = combine_validities_and(validity.as_ref(), Some(&room));
+            let with_room = combine_validities_and(output_validity.as_ref(), Some(&room));
             // A row that is null already has no exterior to complain about.
             if mode == EmptyPolygonExterior::Error
                 && on_row_error == OnRowError::Raise
-                && null_count(&with_room) > null_count(&validity)
+                && null_count(&with_room) > null_count(&output_validity)
             {
                 return Err(GeoComputeError::HoleInEmptyExterior);
             }
             (holes, with_room)
         }
     };
-    Ok(polygons_with_added_holes(polygons, Some(&holes), validity))
+    Ok(polygons_with_added_holes(
+        polygons,
+        Some(&holes),
+        output_validity,
+    ))
 }
 
-/// `polygons`, with an empty exterior for each polygon without rings set in `marked`,
-/// so that the holes it is given next stay holes.
-fn polygons_with_empty_exteriors(polygons: &PolygonArray, marked: &Bitmap) -> PolygonArray {
+/// Gives an empty exterior to each polygon without rings that is set in `marked`,
+/// so that the holes it gets next stay holes.
+fn holes_added_to_polygons_with_empty_exteriors(
+    polygons: &PolygonArray,
+    marked: &Bitmap,
+) -> PolygonArray {
     let (rows, rings) = (&polygons.rows, &polygons.rings);
     let gets_exterior =
         |i: usize| marked.get_bit(i) && rows.is_valid(i) && rows.range(i).is_empty();
@@ -69,10 +81,9 @@ fn polygons_with_empty_exteriors(polygons: &PolygonArray, marked: &Bitmap) -> Po
     )
 }
 
-/// Marks which polygons can take the holes on the same row of `holes`,
-/// as `empty_polygon_exterior` of the Python `add_holes` describes.
-/// Only the holes set in the mask of `holes` count towards this.
-fn have_room_for_holes(
+/// Marks the polygons that can take their holes.
+/// Only an empty exterior cannot, and only if it gets a hole with vertices that is set in the mask of `holes`.
+fn holes_added_to_polygons_have_room(
     polygons: &PolygonArray,
     holes: &MaskedParts<MultiLineStringArray>,
 ) -> Bitmap {

@@ -88,7 +88,6 @@ impl GeosPairs {
         Ok(Self { a, b, rows })
     }
 
-    /// `None` for a null row.
     pub(super) fn iter(&self) -> impl Iterator<Item = (Option<&GeosRow>, Option<&GeosRow>)> {
         broadcast(&self.a.geometries, self.rows).zip(broadcast(&self.b.geometries, self.rows))
     }

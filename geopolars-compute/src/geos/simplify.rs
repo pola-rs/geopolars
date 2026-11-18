@@ -101,12 +101,8 @@ pub fn simplify_multi_polygons(
     )
 }
 
-/// Every geometry simplified to within `tolerance`, forwarded to GEOS.
-/// A null or empty geometry stays as it is.
-/// If `on_row_error=`[OnRowError::Null], a geometry GEOS fails on becomes null;
-/// otherwise its error is returned.
-/// The size hint is kept as an upper bound: simplifying removes vertices.
-/// Only where GEOS repairs a crossing can it add some.
+/// Simplifies every geometry to within `tolerance` through GEOS.
+/// A row GEOS fails on goes to `on_row_error`.
 fn simplify_via_geos(
     mut geometries: GeosGeometries,
     tolerance: f64,
@@ -121,6 +117,8 @@ fn simplify_via_geos(
             on_row_error,
         )
     )?;
+    // The size hint is kept as an upper bound, as simplifying removes vertices.
+    // Only where GEOS repairs a crossing can it add some.
     Ok(geometries)
 }
 

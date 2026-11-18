@@ -106,8 +106,6 @@ fn buffer_params(style: &BufferStyle) -> GeoComputeResult<BufferParams> {
         .build()?)
 }
 
-/// Every geometry buffered by `distance`, forwarded to GEOS.
-/// See [`by_distance_via_geos`].
 fn buffer_via_geos(
     geometries: GeosGeometries,
     distance: BufferDistance,
@@ -131,16 +129,12 @@ fn buffer_via_geos(
     )
 }
 
-/// Every geometry passed to `op` with its distance, forwarded to GEOS.
-/// `geos_distance` checks a distance, and gives it as `op` takes it.
-/// If `on_row_error=`[OnRowError::Null], a geometry that fails becomes null;
-/// otherwise its error is returned.
+/// Passes every geometry to `op` with its distance, which `geos_distance` checks and converts.
+/// A row that fails goes to `on_row_error`.
 /// A constant distance that fails would fail every row, so its error is always returned.
-/// The size hint stays the input's: it is only a starting capacity.
-/// Errors are the exception, so `on_row_error` is checked per row.
 ///
 /// A row with a null distance must already be null in `geometries`,
-/// as [validity_with_distances] makes it before converting.
+/// which [validity_with_distances] does before converting.
 pub(super) fn by_distance_via_geos(
     mut geometries: GeosGeometries,
     distance: BufferDistance,
@@ -168,6 +162,7 @@ pub(super) fn by_distance_via_geos(
             })?;
         }
     }
+    // The size hint stays that of the input, as it is only a starting capacity.
     Ok(geometries)
 }
 

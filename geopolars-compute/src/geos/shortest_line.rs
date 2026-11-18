@@ -43,7 +43,6 @@ fn shortest_line_between_geometries(a: &Geometry, b: &Geometry) -> GeoComputeRes
     Ok(GeosRow::Geometry(line))
 }
 
-/// `None` in `lines` is a null row.
 fn shortest_lines_into_array(
     lines: impl ExactSizeIterator<Item = GeoComputeResult<Option<GeosRow>>>,
     on_row_error: OnRowError,

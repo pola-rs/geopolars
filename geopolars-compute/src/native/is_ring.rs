@@ -73,8 +73,8 @@ fn has_only_rings<const Z: bool>(
 
 /// Whether every ring of each polygon is a ring, or every one is empty (the empty polygon).
 /// With [EmptyPolygonExterior::Keep], an empty exterior may also have holes that are rings or empty.
-/// Every other mode fails such a polygon here,
-/// as `"error"` and `"empty"` already act where the holes are added ([super::holes_added_to_polygons]).
+/// Every other mode fails such a polygon,
+/// as `"error"` and `"empty"` have already acted on it in [super::holes_added_to_polygons].
 pub fn polygons_have_only_rings<const Z: bool>(
     array: &PolygonArray,
     empty_polygon_exterior: EmptyPolygonExterior,

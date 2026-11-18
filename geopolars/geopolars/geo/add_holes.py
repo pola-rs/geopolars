@@ -90,7 +90,7 @@ def add_holes(
     An empty list adds no holes.
     The polygon's own rings are still checked, as described below.
     {empty_polygon_exterior}
-    With `"empty"`, such a polygon stays as it is: none of the holes of its row are added.
+    With `"empty"`, none of the holes of its row are added, so such a polygon stays as it is.
     With `"keep"`, a polygon stored without rings first gets an empty exterior,
     so that its new rings stay holes.
     A polygon with an empty exterior that only gets empty holes takes them,

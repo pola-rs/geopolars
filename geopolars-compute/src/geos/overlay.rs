@@ -86,7 +86,7 @@ impl OverlayPairs {
     /// for the Python `intersection` or `difference` (which document their behaviour).
     /// A row whose overlay is already decided by a null or empty partner is not converted.
     /// An empty `b` makes the difference a copy of `a`, so that row of `a` is still converted, and can fail.
-    /// A row that fails, here or in an `into_*` method, is null if `on_row_error=`[OnRowError::Null].
+    /// A row that fails, here or in an `into_*` method, goes to `on_row_error`.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
     pub fn new(

@@ -9,15 +9,13 @@
 //! ## `EARLY_COORD_CHECK`
 //!
 //! Converting rows to GEOS, and the convex hulls, are generic over `EARLY_COORD_CHECK`,
-//! an [EarlyCoordCheck] set from `early_coord_check`.
-//! With [EarlyCoordCheck::FiniteAndEmpty], a row with a NaN or infinite x or y never goes to GEOS.
+//! an [enum@EarlyCoordCheck].
+//! A row that fails the check never goes to GEOS.
 //! It is an error instead, which `on_row_error` treats like a GEOS error.
-//! [EarlyCoordCheck::Finite] lets an empty point (x and y NaN) through to GEOS.
-//! With [EarlyCoordCheck::Off], every coordinate goes to GEOS as it is.
-//! See `early_coord_check` in Python for what GEOS makes of them.
 //!
-//! Converting points takes a bool `EARLY_FINITE_CHECK` instead, set unless [EarlyCoordCheck::Off]:
-//! a point that is itself the empty point passes either check, as GEOS supports it.
+//! Converting points takes a bool `EARLY_FINITE_CHECK` instead, which is set unless [EarlyCoordCheck::Off].
+//! The two checks are the same for a point,
+//! as a point that is itself the empty point passes either check.
 //!
 //! ## `ALL_VALID`
 //!
@@ -106,11 +104,9 @@ pub trait ToGeos {
 }
 
 /// Converts an array into one [`GeosRow`] per row.
-/// A null row is null in [`GeosRows`].
 /// A row without parts is `Empty`, so it never goes to GEOS.
-/// The size hint is the size of the array itself.
-/// If `on_row_error=`[OnRowError::Null], a row GEOS fails to build is null too;
-/// otherwise its error is returned.
+/// A row that fails `early_coord_check`, or that GEOS fails to build, goes to `on_row_error`.
+/// The size hint is that of the array itself.
 pub trait ToGeosRows {
     fn to_geos_rows(
         &self,
@@ -441,7 +437,6 @@ fn xy_is_finite_or_error(x: &[f64], y: &[f64]) -> GeoComputeResult<()> {
     Err(GeoComputeError::GeosNotFinite { position })
 }
 
-/// [xy_is_finite_or_error], letting an empty point (x and y NaN) through.
 #[inline(always)]
 fn xy_is_finite_or_empty_or_error(x: &[f64], y: &[f64]) -> GeoComputeResult<()> {
     let passes = |x: f64, y: f64| (x.is_finite() & y.is_finite()) | is_geoarrow_empty_point(x, y);
@@ -459,7 +454,7 @@ fn xy_is_finite_or_empty_or_error(x: &[f64], y: &[f64]) -> GeoComputeResult<()> 
     Err(GeoComputeError::GeosNotFinite { position })
 }
 
-/// The check of `early_coord_check` on the x and y of one row.
+/// Checks the x and y of one row as `EARLY_COORD_CHECK` asks.
 #[inline(always)]
 fn coords_pass_early_check<const EARLY_COORD_CHECK: u8>(
     x: &[f64],
@@ -494,8 +489,8 @@ pub struct GeosGeometries {
 }
 
 /// One [`GeosRow`] per row, and which rows are null.
-/// A null row holds `Empty`, so that a conversion copies nothing for it.
 pub struct GeosRows {
+    /// A null row holds `Empty`, so that a conversion copies nothing for it.
     rows: Vec<GeosRow>,
     validity: ValidityBuilder,
 }
@@ -512,7 +507,6 @@ impl GeosRows {
         self.rows.len()
     }
 
-    /// `None` is a null row.
     #[inline(always)]
     fn push(&mut self, row: Option<GeosRow>) {
         self.validity.push(row.is_some());
@@ -520,9 +514,8 @@ impl GeosRows {
     }
 
     /// Replaces every GEOS geometry with what `op` makes of it, given its row index.
-    /// Null and empty rows are left as they are.
-    /// If `on_row_error=`[OnRowError::Null], a row `op` fails on becomes null;
-    /// otherwise its error is returned.
+    /// This includes an `Unchanged` row, which then no longer counts as unchanged.
+    /// A row `op` fails on goes to `on_row_error`.
     #[inline(always)]
     fn replace_geometries(
         &mut self,
@@ -544,7 +537,6 @@ impl GeosRows {
         Ok(())
     }
 
-    /// `None` for a null row.
     fn iter(&self) -> impl ExactSizeIterator<Item = Option<&GeosRow>> + Clone {
         let validity = &self.validity;
         let valid = move |(i, row)| validity.is_valid(i).then_some(row);
@@ -574,8 +566,8 @@ fn reversed_rings(new_ring_orientation: NewRingOrientation, new_holes: NewHoles)
     }
 }
 
-/// Which rows have a result: a row is null if its geometry or its distance is null.
-/// Put on the input before converting it to GEOS,
+/// Combines the validity of the geometries with that of the distances.
+/// It goes on the input before converting it to GEOS,
 /// so that a row with a null distance is never checked or converted.
 fn validity_with_distances(validity: Option<&Bitmap>, distance: BufferDistance) -> Option<Bitmap> {
     match distance {
@@ -584,8 +576,8 @@ fn validity_with_distances(validity: Option<&Bitmap>, distance: BufferDistance) 
     }
 }
 
-/// For a conversion getting a geometry of a kind it can't hold:
-/// `false` (its row is null) if `on_row_error=`[OnRowError::Null], otherwise an error.
+/// Sends a geometry of a kind the conversion cannot hold to `on_row_error`.
+/// `Ok(false)` means its row is null.
 fn wrong_kind(
     expected: &str,
     found: GeometryTypes,

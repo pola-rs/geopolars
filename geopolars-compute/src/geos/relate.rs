@@ -41,7 +41,7 @@ pub struct RelatePairs {
 
 impl RelatePairs {
     /// Each side is converted to GEOS in full, so a row paired with a null can still fail.
-    /// A row that fails here or in [`RelatePairs::matrices`] is null if `on_row_error=`[OnRowError::Null].
+    /// A row that fails here or in [`RelatePairs::matrices`] goes to `on_row_error`.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
     pub fn new(
