@@ -2,20 +2,11 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 #
 # Based on the one of py-polars.
-# `make docs` runs this from a copy of the source with the `@doc` docstrings filled in.
+# `make docs` runs this with a copy of the package with the `@doc` docstrings filled in.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import sphinx_autosummary_accessors
-
-# -- Path setup --------------------------------------------------------------
-
-# Add the geopolars package directory
-sys.path.insert(0, str(Path(__file__).parents[2].resolve()))
-
 
 # -- Project information -----------------------------------------------------
 

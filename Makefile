@@ -34,30 +34,26 @@ install-release: polars-src
 	$(UV_SYNC)
 
 WHEEL_SRC := target/wheel-src
-DOCS_SRC := target/docs-src
-
-# Copy the tracked files into $(1), with the `@doc` docstrings filled in.
-define expanded_source
-	rm -rf $(1) && mkdir -p $(1)
-	git ls-files -z | tar --null -T - -cf - | tar -xf - -C $(1)
-	python3 scripts/expand_docstrings.py $(1)/geopolars/geopolars
-endef
+DOCS_PKG := target/docs-pkg
 
 ## Build a release wheel into target/wheels, with the `@doc` docstrings filled in,
 ## so that editors show them.
 ## maturin cannot rewrite Python files itself, so this builds from a copy of the tracked files.
 wheel:
-	$(call expanded_source,$(WHEEL_SRC))
+	rm -rf $(WHEEL_SRC) && mkdir -p $(WHEEL_SRC)
+	git ls-files -z | tar --null -T - -cf - | tar -xf - -C $(WHEEL_SRC)
+	python3 scripts/expand_docstrings.py $(WHEEL_SRC)/geopolars/geopolars
 	cd $(WHEEL_SRC)/geopolars && CARGO_TARGET_DIR=$(CURDIR)/target \
 		$(CURDIR)/.venv/bin/maturin build --release --out $(CURDIR)/target/wheels
 
-## Build the HTML API reference into target/docs/html,
-## from a copy of the source with the `@doc` docstrings filled in, as in the wheel.
-## Importing geopolars loads the plugin, which is not tracked, so it is copied in too.
+## Build the HTML API reference into target/docs/html.
+## Sphinx imports a copy of the package with the `@doc` docstrings filled in, as in the wheel,
+## which goes before the editable install on the path.
 docs: install
-	$(call expanded_source,$(DOCS_SRC))
-	cp geopolars/geopolars/geopolars.abi3.so $(DOCS_SRC)/geopolars/geopolars/
-	.venv/bin/sphinx-build -M html $(DOCS_SRC)/geopolars/docs/source target/docs $(SPHINXOPTS)
+	rm -rf $(DOCS_PKG) && mkdir -p $(DOCS_PKG)
+	cp -r geopolars/geopolars $(DOCS_PKG)/
+	python3 scripts/expand_docstrings.py $(DOCS_PKG)/geopolars
+	PYTHONPATH=$(DOCS_PKG) .venv/bin/sphinx-build -M html geopolars/docs/source target/docs $(SPHINXOPTS)
 
 ## Check out POLARS_REV into POLARS_DIR, if it isn't already.
 polars-src: $(POLARS_STAMP)
