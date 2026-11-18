@@ -1,13 +1,6 @@
 //! Offset curves, forwarded to GEOS.
 //!
 //! GEOS builds an offset curve from a buffer in 2D, so every output is XY.
-//!
-//! # Const generic flags
-//!
-//! ## `EARLY_FINITE_CHECK`
-//!
-//! The public functions take `early_coord_check`.
-//! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{GeometryArray, LineStringArray, MultiLineStringArray};
 use geos::{Geom, GeometryTypes, JoinStyle};

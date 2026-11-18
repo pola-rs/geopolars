@@ -1,13 +1,6 @@
 //! Buffers, forwarded to GEOS.
 //!
 //! GEOS builds a buffer in 2D, so every output is XY.
-//!
-//! # Const generic flags
-//!
-//! ## `EARLY_FINITE_CHECK`
-//!
-//! The public functions take `early_coord_check`.
-//! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{GeometryArray, MultiPolygonArray, PolygonArray};
 use geos::{BufferParams, Geom, Geometry, GeometryTypes};

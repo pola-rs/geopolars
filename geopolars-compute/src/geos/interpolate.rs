@@ -1,13 +1,6 @@
 //! The point at a distance along a line, forwarded to GEOS.
 //!
 //! GEOS interpolates z and m too, so every output keeps the input's dimension.
-//!
-//! # Const generic flags
-//!
-//! ## `EARLY_FINITE_CHECK`
-//!
-//! The public functions take `early_coord_check`.
-//! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{LineStringArray, MultiLineStringArray, PointArray};
 use geos::Geom;

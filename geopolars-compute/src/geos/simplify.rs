@@ -10,11 +10,6 @@
 //! If `PRESERVE_TOPOLOGY=false`, GEOS uses Douglas-Peucker.
 //! It keeps m, but m does not reach the output yet (see the TODO).
 //! If `PRESERVE_TOPOLOGY=true`, GEOS's topology-preserving simplifier is used.
-//!
-//! ## `EARLY_FINITE_CHECK`
-//!
-//! The public functions take `early_coord_check`.
-//! See [super] for `EARLY_FINITE_CHECK`.
 
 use geopolars_views::{LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray};
 
