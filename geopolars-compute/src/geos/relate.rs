@@ -5,9 +5,8 @@ use geopolars_views::GeometryArray;
 use geos::{Geom, Geometry};
 use polars_arrow::array::{MutableBinaryViewArray, Utf8ViewArray};
 
-use super::pairs::GeosPairs;
-use super::GeosRow;
-use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
+use super::pairs::{GeosPairs, PairOperation, WhenEmpty};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 /// A DE-9IM matrix, as GEOS writes it.
 /// The Python `relate` documents its rows, columns, and cells.
@@ -29,18 +28,45 @@ impl De9im {
     }
 }
 
+/// See [`RelatePairs`].
+/// The matrix against an empty row still depends on its partner,
+/// so unlike for `intersection`, that partner goes to GEOS too.
+struct RelateOperation {
+    /// Stands in for an empty row, which never went to GEOS.
+    empty: Geometry,
+}
+
+impl PairOperation for RelateOperation {
+    type Output = De9im;
+
+    fn when_both_empty(&self) -> De9im {
+        // Only their exteriors meet, in an area.
+        De9im(*b"FFFFFFFF2")
+    }
+
+    fn when_a_empty(&self) -> WhenEmpty<Self> {
+        WhenEmpty::WithPartner(|relate, b| De9im::between(&relate.empty, b))
+    }
+
+    fn when_b_empty(&self) -> WhenEmpty<Self> {
+        WhenEmpty::WithPartner(|relate, a| De9im::between(a, &relate.empty))
+    }
+
+    fn on_geometries(&self, a: &Geometry, b: &Geometry) -> GeoComputeResult<De9im> {
+        De9im::between(a, b)
+    }
+}
+
 /// Two arrays of geometries converted to GEOS, with their rows paired up to relate.
 /// A single row on either side is paired with every row of the other,
 /// and stays on its own side, as swapping the two transposes their matrix.
 pub struct RelatePairs {
     pairs: GeosPairs,
-    /// Stands in for a row without parts, which never went to GEOS.
-    empty: Geometry,
+    operation: RelateOperation,
     on_row_error: OnRowError,
 }
 
 impl RelatePairs {
-    /// Each side is converted to GEOS in full, so a row paired with a null can still fail.
     /// A row that fails here or in [`RelatePairs::matrices`] goes to `on_row_error`.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
@@ -50,41 +76,19 @@ impl RelatePairs {
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<Self> {
-        // The matrix against an empty geometry still depends on its partner,
-        // so unlike for `intersection`, that partner goes to GEOS too.
-        Ok(Self {
-            pairs: GeosPairs::new(a, b, on_row_error, early_coord_check)?,
+        let operation = RelateOperation {
             empty: Geometry::create_empty_point()?,
+        };
+        Ok(Self {
+            pairs: GeosPairs::new(a, b, &operation, on_row_error, early_coord_check)?,
+            operation,
             on_row_error,
         })
     }
 
     /// Relates every pair lazily, as the iterator advances.
     pub fn matrices(&self) -> impl Iterator<Item = GeoComputeResult<Option<De9im>>> + '_ {
-        self.pairs
-            .iter()
-            .map(|(a, b)| row_or_null(self.relate_rows(a, b), self.on_row_error))
-    }
-
-    #[inline(always)]
-    fn relate_rows(
-        &self,
-        a: Option<&GeosRow>,
-        b: Option<&GeosRow>,
-    ) -> GeoComputeResult<Option<De9im>> {
-        let (Some(a), Some(b)) = (self.relate_rows_geometry(a), self.relate_rows_geometry(b))
-        else {
-            return Ok(None);
-        };
-        De9im::between(a, b).map(Some)
-    }
-
-    #[inline(always)]
-    fn relate_rows_geometry<'a>(&'a self, row: Option<&'a GeosRow>) -> Option<&'a Geometry> {
-        match row? {
-            GeosRow::Empty => Some(&self.empty),
-            GeosRow::Geometry { geometry, .. } => Some(geometry),
-        }
+        self.pairs.evaluate(&self.operation, self.on_row_error)
     }
 
     /// Implements the Python `relate`.

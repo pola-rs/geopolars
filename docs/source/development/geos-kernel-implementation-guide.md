@@ -64,23 +64,53 @@ fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
 
 ### Binary
 
-Both sides come in as a `&GeometryArray`
-(so both columns can have a different type, but all items in the columns are all the same type).
-`GeosPairs` converts them and gives the pairs of `GeosRow`s.
-It is also responsible for broadcasting a side of a single row against the other.
-A function per pair gives the result of that pair.
+Both sides come in as a `&GeometryArray`, so both columns can have a different type,
+but all items in the columns are all the same type.
+The operation implements `PairOperation`,
+which says what a pair of two geometries makes,
+but also what to do when either of the two sides (or both) is empty.
+`GeosPairs` does the plumbing here:
+it converts only the rows the operation needs
+(see [Trivial rows never reach GEOS](#trivial-rows-never-reach-geos)),
+broadcasts a side of a single row against the other,
+and gives null for a pair with a null row.
+So an operation never sees a row that was not converted,
+and does not handle nulls or `on_row_error` itself.
 
 ```rust
+struct TopologicallyEqual;
+
+impl PairOperation for TopologicallyEqual {
+    type Output = bool;
+
+    fn when_both_empty(&self) -> bool {
+        true
+    }
+
+    fn when_a_empty(&self) -> WhenEmpty<Self> {
+        // `Gives` needs no partner, so the partner is never converted.
+        // `WithPartner` would get it as a GEOS geometry.
+        WhenEmpty::Gives(|| false)
+    }
+
+    fn when_b_empty(&self) -> WhenEmpty<Self> {
+        WhenEmpty::Gives(|| false)
+    }
+
+    fn on_geometries(&self, a: &Geometry, b: &Geometry) -> GeoComputeResult<bool> {
+        Ok(a.equals(b)?)
+    }
+}
+
 pub fn topologically_equal(
     a: &GeometryArray,
     b: &GeometryArray,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<BooleanArray> {
-    let pairs = GeosPairs::new(a, b, on_row_error, early_coord_check)?;
+    let pairs = GeosPairs::new(a, b, &TopologicallyEqual, on_row_error, early_coord_check)?;
     let tested = pairs
-        .iter()
-        .map(|(a, b)| row_or_null(rows_are_topologically_equal(a, b), on_row_error))
+        .evaluate(&TopologicallyEqual, on_row_error)
         .collect::<GeoComputeResult<Vec<_>>>()?;
     Ok(optional_bool_array(&tested))
 }
@@ -88,6 +118,9 @@ pub fn topologically_equal(
 
 A binary operation with several kinds of output keeps the pairs in a struct,
 with one `into_*` method per output kind (see `OverlayPairs` in `geos/overlay.rs`).
+Its operation gives the result before it is narrowed down to the output kind,
+as the empty rows decide what is converted before that kind is known.
+Each `into_*` method then narrows the result of every pair.
 
 ### Predicates on the parts
 

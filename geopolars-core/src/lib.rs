@@ -80,7 +80,7 @@ pub use remove_repeats_in_succession::without_repeats_in_succession;
 pub use reverse::reverse;
 pub use rings::{exteriors, interiors};
 pub use rings_overlap::{pairwise_rings_overlap, rings_overlap_one};
-pub use shortest_line_between::{pairwise_shortest_lines, shortest_lines_to_one};
+pub use shortest_line_between::shortest_lines;
 pub use simplify::simplify;
 pub use snap_to_grid::snap_to_grid;
 pub use sort_parts::sort_parts;

@@ -3,7 +3,7 @@
 
 use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
 use geopolars_compute::{EarlyCoordCheck, OnRowError};
-use geopolars_core::{pairwise_shortest_lines, shortest_lines_to_one};
+use geopolars_core::shortest_lines;
 use geopolars_views::{GeoDimension, Kind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
@@ -55,37 +55,10 @@ fn shortest_line_between(
     let (a, b) = (&inputs[0], &inputs[1]);
     let lines = shortest_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
-    let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
-    let (on_row_error, early) = (kwargs.on_row_error, kwargs.early_coord_check);
-    let against_one =
-        |one: ArrayRef, one_kind: Kind, many: Vec<ArrayRef>, many_kind: Kind, one_is_a| {
-            many.iter()
-                .map(|many| {
-                    shortest_lines_to_one(
-                        one.as_ref(),
-                        one_kind,
-                        many.as_ref(),
-                        many_kind,
-                        one_is_a,
-                        on_row_error,
-                        early,
-                    )
-                })
-                .collect::<PolarsResult<Vec<_>>>()
-        };
-    let chunks = match single_chunk_masked_pairs(a, b)? {
-        GeometryPairs::Pairwise(pairs) => pairs
-            .iter()
-            .map(|(a, b)| {
-                pairwise_shortest_lines(a.as_ref(), a_kind, b.as_ref(), b_kind, on_row_error, early)
-            })
-            .collect::<PolarsResult<Vec<_>>>()?,
-        GeometryPairs::OneAgainstMany { a: one, b: many } => {
-            against_one(one, a_kind, many, b_kind, true)?
-        }
-        GeometryPairs::ManyAgainstOne { a: many, b: one } => {
-            against_one(one, b_kind, many, a_kind, false)?
-        }
+    let chunk_pairs = match single_chunk_masked_pairs(a, b)? {
+        GeometryPairs::Pairwise(pairs) => pairs,
+        GeometryPairs::OneAgainstMany { a, b } => b.into_iter().map(|b| (a.clone(), b)).collect(),
+        GeometryPairs::ManyAgainstOne { a, b } => a.into_iter().map(|a| (a, b.clone())).collect(),
         GeometryPairs::AllNull(lengths) => {
             return Ok(Series::full_null(
                 name,
@@ -94,5 +67,11 @@ fn shortest_line_between(
             ));
         }
     };
+    let (a_kind, b_kind) = (kind_of(a)?, kind_of(b)?);
+    let (on_row_error, early) = (kwargs.on_row_error, kwargs.early_coord_check);
+    let chunks = chunk_pairs
+        .iter()
+        .map(|(a, b)| shortest_lines(a.as_ref(), a_kind, b.as_ref(), b_kind, on_row_error, early))
+        .collect::<PolarsResult<Vec<_>>>()?;
     geometry_series(name, lines, chunks)
 }

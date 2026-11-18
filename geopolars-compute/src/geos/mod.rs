@@ -79,7 +79,7 @@ pub use offset_curve::{
 pub use overlay::{Overlay, OverlayPairs};
 pub use relate::{De9im, RelatePairs};
 pub use rings_overlap::{rings_overlap_against_one, rings_overlap_pairwise};
-pub use shortest_line::{shortest_lines_against_one, shortest_lines_pairwise};
+pub use shortest_line::shortest_lines;
 pub use simplify::{
     simplify_line_strings, simplify_multi_line_strings, simplify_multi_polygons, simplify_polygons,
 };
