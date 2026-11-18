@@ -34,6 +34,14 @@
 //! which `reversed_rings` sets from `new_ring_orientation` and `new_holes`.
 //! `CoordsBuilder::push` takes one of them as `REVERSED`, for the ring it copies.
 //! A reversed ring is copied in reverse order, which flips its orientation.
+//!
+//! ## `CHECK_FLAGGED_ORIENTATION`
+//!
+//! `CHECK_FLAGGED_ORIENTATION=true` unless `new_ring_orientation="keep"`.
+//! If set, every ring of a row with `maybe_wrong_orientation` is checked,
+//! and reversed if it runs the wrong way.
+//! If `CHECK_FLAGGED_ORIENTATION=false`, this check is omitted,
+//! and orientations can be whatever.
 
 mod buffer;
 mod convex_hull;
@@ -611,15 +619,14 @@ pub enum GeosRow {
     },
 }
 
-/// Whether to reverse the exterior and the holes of a polygon in a column of `orientation`.
-/// A ring of [`Orientation::Unknown`] is never reversed.
-fn reversed_rings(
-    orientation: GeometryOrientation,
+/// The orientation `new_ring_orientation` and `new_holes` ask for.
+/// `None` if they keep the rings as they are.
+fn target_orientation(
     new_ring_orientation: NewRingOrientation,
     new_holes: NewHoles,
-) -> (bool, bool) {
+) -> Option<GeometryOrientation> {
     let (outer, opposite) = match new_ring_orientation {
-        NewRingOrientation::Keep => return (false, false),
+        NewRingOrientation::Keep => return None,
         NewRingOrientation::Ccw => (Orientation::Ccw, Orientation::Cw),
         NewRingOrientation::Cw => (Orientation::Cw, Orientation::Ccw),
     };
@@ -627,10 +634,17 @@ fn reversed_rings(
         NewHoles::Opposite => opposite,
         NewHoles::Same => outer,
     };
+    Some(GeometryOrientation { outer, holes })
+}
+
+/// Whether to reverse the exterior and the holes of a polygon in a column of `orientation`,
+/// for them to run as `target`.
+/// A ring of [`Orientation::Unknown`] is never reversed.
+fn reversed_rings(orientation: GeometryOrientation, target: GeometryOrientation) -> (bool, bool) {
     let differs = |current, target| current != Orientation::Unknown && current != target;
     (
-        differs(orientation.outer, outer),
-        differs(orientation.holes, holes),
+        differs(orientation.outer, target.outer),
+        differs(orientation.holes, target.holes),
     )
 }
 
@@ -752,13 +766,42 @@ impl CoordsBuilder {
         &mut self,
         geometry: &impl Geom,
     ) -> GeoComputeResult<()> {
+        self.push_coord_seq::<Z, REVERSED>(&geometry.get_coord_seq()?)
+    }
+
+    /// Appends `ring`, reversed if it does not run as `target`.
+    /// A ring that is empty, or of an `Unknown` target, is appended as it is.
+    fn push_running<const Z: bool>(
+        &mut self,
+        ring: &impl Geom,
+        target: Orientation,
+    ) -> GeoComputeResult<()> {
+        let seq = ring.get_coord_seq()?;
+        // GEOS can't tell the orientation of an empty ring, and refuses rings of 1 to 3 vertices.
+        let reversed = match target {
+            Orientation::Unknown => false,
+            _ if seq.size()? == 0 => false,
+            Orientation::Ccw => !seq.is_ccw()?,
+            Orientation::Cw => seq.is_ccw()?,
+        };
+        if reversed {
+            self.push_coord_seq::<Z, true>(&seq)
+        } else {
+            self.push_coord_seq::<Z, false>(&seq)
+        }
+    }
+
+    fn push_coord_seq<const Z: bool, const REVERSED: bool>(
+        &mut self,
+        seq: &CoordSeq,
+    ) -> GeoComputeResult<()> {
         debug_assert_eq!(Z, self.has_z, "pushed with the wrong z");
         let dim = if Z {
             GeoDimension::XYZ
         } else {
             GeoDimension::XY
         };
-        let buffer = geometry.get_coord_seq()?.as_buffer(Some(coord_type(dim)))?;
+        let buffer = seq.as_buffer(Some(coord_type(dim)))?;
         let width = dim.field_names().len();
         let push = |coord: &[f64]| {
             self.x.push(coord[0]);

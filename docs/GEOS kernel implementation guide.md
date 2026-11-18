@@ -131,5 +131,6 @@ Every operation must set the `orientation` of its output `GeosGeometries`.
 This should be the value that the operation gives *most of the time*.
 Exceptions, or rows that are passed through unchanged,
 can be marked per-row on `GeosRow::Geometry::maybe_wrong_orientation` to override this.
+When an orientation is asked for, the rings of such a row are checked on the way back, and reversed where needed.
 
 Test it before assuming anything!
