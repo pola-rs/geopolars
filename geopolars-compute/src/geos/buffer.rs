@@ -119,6 +119,7 @@ fn buffer_via_geos(
     by_distance_via_geos(
         geometries,
         distance,
+        // GEOS builds every ring of a buffer anew, whatever way the input's rings run.
         GeometryOrientation::GEOS_BUILT,
         on_row_error,
         |distance| geos_distance(distance, style.side),

@@ -67,6 +67,7 @@ fn interpolate_via_geos(
     mode: InterpolateMode,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<GeosGeometries> {
+    // The orientation is `UNKNOWN`, as points have no rings.
     match mode {
         InterpolateMode::Absolute => by_distance_via_geos(
             geometries,

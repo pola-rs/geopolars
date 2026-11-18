@@ -262,6 +262,7 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
             coords: coords.len() + rows.len(),
             parts: [rows.len(), 0],
         },
+        // GEOS builds every hull anew, from a linestring of the row's coordinates.
         orientation: GeometryOrientation::GEOS_BUILT,
     })
 }

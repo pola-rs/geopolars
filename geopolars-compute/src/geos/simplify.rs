@@ -129,8 +129,8 @@ fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
     tolerance: f64,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<()> {
-    // Douglas-Peucker can turn a ring around where GEOS repairs it.
-    // The topology-preserving simplifier keeps the input's orientation, which is unknown.
+    // Both simplifiers keep the rings of the input, whose orientation is unknown.
+    // Only an invalid Douglas-Peucker result is rebuilt, with buffer(0).
     geometries.replace_geometries(GeometryOrientation::UNKNOWN, on_row_error, |_, input| {
         let simplified = if PRESERVE_TOPOLOGY {
             input.topology_preserve_simplify(tolerance)

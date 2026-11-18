@@ -62,6 +62,7 @@ fn shortest_lines_into_array(
     GeosGeometries {
         geometries,
         size_hint,
+        // Lines have no rings.
         orientation: GeometryOrientation::UNKNOWN,
     }
     .into_line_string_array::<false>(on_row_error)

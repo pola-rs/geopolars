@@ -125,13 +125,15 @@ foregoing the need to convert its partner in the other column.
 
 GEOS sometimes changes the directions of rings.
 Most of the time, it gives clockwise shells and counter-clockwise holes for anything new that it constructs.
-It is not 100% consistent though, so be sure to check this thoroughly.
+This is not always the case though!
 
 Every operation must set the `orientation` of its output `GeosGeometries`.
-This should be the value that the operation gives *most of the time*.
-Exceptions, or rows that are passed through unchanged,
-can be marked per-row on `GeosRow::Geometry::maybe_wrong_orientation` to override this.
-When an orientation is asked for, the rings of such a row are checked on the way back, and reversed where needed.
+Every row of the column runs in that direction,
+unless its `GeosRow::Geometry::maybe_wrong_orientation` is set.
+When an orientation is asked for, a row without the flag is reversed on the column's word alone,
+without its rings being checked.
+So a row that may run otherwise, such as one passed through unchanged, must have the flag.
+The rings of a row with the flag are checked on the way back, and reversed where needed.
 In a column of `UNKNOWN` orientation, every row is checked this way.
 
 Test it before assuming anything!

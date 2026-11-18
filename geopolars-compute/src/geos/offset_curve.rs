@@ -84,6 +84,7 @@ fn offset_curves_via_geos(
     by_distance_via_geos(
         geometries,
         distance,
+        // Lines have no rings.
         GeometryOrientation::UNKNOWN,
         on_row_error,
         finite_distance,
