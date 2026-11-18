@@ -133,10 +133,10 @@ An untyped null (`pl.lit(None)`) as `{parts}` is null on every row.
 This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",
     "on_row_error": """\
-This expression handles errors per row, following the `OnRowError` rules.
+This expression can error on individual rows. How these are handled is determined by `on_row_error`.
 See `on_row_error` on the Common arguments page (`docs/Common arguments.md`).""",
     "geos_errors": """\
-A geometry GEOS fails on raises GEOS's error, failing the query.""",
+If GEOS returns an errow for a row, it is handled through `on_row_error`.""",
     "geos_non_finite": """\
 GEOS supports neither empty points inside a geometry (a vertex with NaN on every axis)
 nor any other NaN or infinite x or y.
