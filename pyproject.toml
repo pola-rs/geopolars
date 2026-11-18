@@ -19,8 +19,6 @@ dependencies = [
 # The root is a "virtual" project: it exists to pin the dev environment, and is
 # never built or published itself.
 package = false
-# Install the docs tooling on every sync, so `make install` does not remove it again.
-default-groups = ["dev", "docs"]
 
 # Mirrors the Python members of the [workspace] in the root Cargo.toml.
 [tool.uv.workspace]

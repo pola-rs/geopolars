@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: install install-release wheel docs polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet rebuild test test-rust test-python clean
+.PHONY: help install install-release wheel docs polars-src test test-all test-rust test-python test-python-all clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -15,7 +15,7 @@ UV_SYNC = if [ -e $(POLARS_DIR)/.reinstall ]; then \
 	fi; \
 	uv sync $$reinstall $(UV_SYNC_ARGS) && rm -f $(POLARS_DIR)/.reinstall
 
-# Sync the venv, building the plugin unoptimized (fast edit-compile loop).
+## Sync the venv, building the plugin unoptimized (fast edit-compile loop).
 # this builds polars as debug.
 #
 # uv can take the plugin to be up to date after Rust edits, and keep a stale build,
@@ -29,38 +29,40 @@ install: UV_SYNC_ARGS = --reinstall-package geopolars \
 install: polars-src
 	export MATURIN_PEP517_ARGS="--profile dev"; $(UV_SYNC)
 
-# Sync the venv, building the plugin optimized.
+## Sync the venv, building the plugin optimized.
 install-release: polars-src
 	$(UV_SYNC)
 
 WHEEL_SRC := target/wheel-src
-DOCS_SRC := target/docs-src
-
-# Copy the tracked files into $(1), with the `@doc` docstrings filled in.
-define expanded_source
-	rm -rf $(1) && mkdir -p $(1)
-	git ls-files -z | tar --null -T - -cf - | tar -xf - -C $(1)
-	python3 scripts/expand_docstrings.py $(1)/geopolars/geopolars
-endef
+DOCS_PKG := target/docs-pkg
 
 ## Build a release wheel into target/wheels, with the `@doc` docstrings filled in,
 ## so that editors show them.
-## maturin cannot rewrite Python files itself, so this builds from a copy of the tracked files.
-wheel:
-	$(call expanded_source,$(WHEEL_SRC))
+# maturin cannot rewrite Python files itself, so this builds from a copy of the tracked files.
+wheel: | .venv/bin/maturin
+	rm -rf $(WHEEL_SRC) && mkdir -p $(WHEEL_SRC)
+	git ls-files -z | tar --null -T - -cf - | tar -xf - -C $(WHEEL_SRC)
+	.venv/bin/python scripts/expand_docstrings.py $(WHEEL_SRC)/geopolars/geopolars
 	cd $(WHEEL_SRC)/geopolars && CARGO_TARGET_DIR=$(CURDIR)/target \
 		$(CURDIR)/.venv/bin/maturin build --release --out $(CURDIR)/target/wheels
 
-## Build the HTML API reference into target/docs/html,
-## from a copy of the source with the `@doc` docstrings filled in, as in the wheel.
-## Importing geopolars loads the plugin, which is not tracked, so it is copied in too.
+## Build the HTML API reference into target/docs/html.
+# Sphinx imports a copy of the package with the `@doc` docstrings filled in, as in the wheel,
+# which goes before the editable install on the path.
+# The docs tooling is not a default group, so `install` leaves it out
 docs: install
-	$(call expanded_source,$(DOCS_SRC))
-	cp geopolars/geopolars/geopolars.abi3.so $(DOCS_SRC)/geopolars/geopolars/
-	.venv/bin/sphinx-build -M html $(DOCS_SRC)/geopolars/docs/source target/docs $(SPHINXOPTS)
+	uv sync --inexact --only-group docs
+	rm -rf $(DOCS_PKG) && mkdir -p $(DOCS_PKG)
+	cp -r geopolars/geopolars $(DOCS_PKG)/
+	.venv/bin/python scripts/expand_docstrings.py $(DOCS_PKG)/geopolars
+	PYTHONPATH=$(DOCS_PKG) .venv/bin/sphinx-build -M html geopolars/docs/source target/docs $(SPHINXOPTS)
 
 ## Check out POLARS_REV into POLARS_DIR, if it isn't already.
 polars-src: $(POLARS_STAMP)
+
+# The wheel needs maturin from the venv, but not an up-to-date plugin.
+.venv/bin/maturin: | polars-src
+	$(UV_SYNC)
 
 # Fetches only the one commit, not the whole polars history.
 $(POLARS_STAMP):
@@ -71,48 +73,35 @@ $(POLARS_STAMP):
 	@rm -f $(POLARS_DIR)/.rev-*
 	@touch $(POLARS_DIR)/.reinstall $@
 
-## Force a rebuild of just the plugin, ignoring uv's cache.
-rebuild: polars-src
-	uv sync --reinstall-package geopolars
-
+## Python tests, without the slow ones.
 # Rust tests can be a bit slower, so only run them if we ask specifically.
 test: test-python
 
-test-all: test-rust test-python
+## Rust and Python tests, including the slow ones.
+test-all: test-rust test-python-all
 
-## Rust unit tests. 
-## Run with --no-default-features  so pyo3's `extension-module` is dropped
+## Rust unit tests.
+# Run with --no-default-features so pyo3's `extension-module` is dropped
 test-rust:
 	cargo test -p geopolars -p geopolars-views -p geopolars-compute -p geopolars-core --no-default-features
 
-## Python tests. Delegates to the package Makefile, which builds first.
-test-python:
-	@$(MAKE) -s -C geopolars test
+# pytest runs from the package, so that it picks up the config in its pyproject.toml.
+PYTEST := cd geopolars && $(CURDIR)/.venv/bin/pytest -n auto
 
-## Run the geoarrow.point proof of concept.
-run-geo: install
-	uv run examples/run_geo.py
+## Python tests, without the slow ones.
+test-python: install
+	$(PYTEST) $(PYTEST_ARGS)
 
-## Run the geoarrow.linestring proof of concept.
-run-line: install
-	uv run examples/run_line.py
+## All Python tests, including the slow ones.
+test-python-all: install
+	$(PYTEST) -m "slow or not slow" $(PYTEST_ARGS)
 
-## Run the CRS reprojection example, for points and lines.
-run-crs: install
-	uv run examples/run_crs.py
-
-## Run the GeoParquet reading and writing example.
-run-parquet: install
-	uv run examples/run_parquet.py
-
-## Run the mean coordinate proof of concept.
-run-mean-coordinate: install
-	uv run examples/run_mean_coordinate.py
-
-## Run the same mean coordinate written by hand, in plain Polars.
-run-mean-coordinate-manual: install
-	uv run examples/run_mean_coordinate_manual.py
-
+## Remove the venv and all build output.
 clean:
-	-@rm -rf .venv target
-	-@rm -f uv.lock
+	-@rm -rf .venv target geopolars/.pytest_cache
+	-@find geopolars -type f -name '*.py[co]' -delete -or -type d -name __pycache__ -exec rm -r {} +
+
+## Show the targets and what they do.
+help:
+	@awk '/^## /{doc = doc (doc ? "\n" sprintf("%28s", "") : "") substr($$0, 4); next} /^#/{next} \
+		/^[a-z-]+:/ && doc {printf "%-28s%s\n", substr($$0, 1, index($$0, ":") - 1), doc} {doc = ""}' $(MAKEFILE_LIST)
