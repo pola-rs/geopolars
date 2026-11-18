@@ -213,10 +213,7 @@ fn intersect_rows(
         // (see `GeosPairs::new_skipping_partners_of_empty`).
         // Either way, their intersection is empty.
         (GeosRow::Empty, _) | (_, GeosRow::Empty) => return Ok(Some(GeosRow::Empty)),
-        (
-            GeosRow::Geometry(a) | GeosRow::Unchanged(a),
-            GeosRow::Geometry(b) | GeosRow::Unchanged(b),
-        ) => a
+        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => a
             .intersection(b)
             .map_err(GeoComputeError::from)
             .and_then(|intersection| kept_parts(intersection, kept_dimension, multi)),
@@ -245,7 +242,7 @@ fn difference_rows(
         // The difference is `a` as it is, so it is copied without computing a difference.
         // The copy fits the output kind, as the `into_multi_*` methods take a single geometry as one part.
         // A copy is needed, as the pairs only lend their rows, and a single `a` is shared by every row.
-        (GeosRow::Geometry(a) | GeosRow::Unchanged(a), GeosRow::Empty) => {
+        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Empty) => {
             // A copy refuses a non-finite x or y whatever `early_coord_check` is,
             // so that the option never changes a copied row.
             // With `early_coord_check=`[EarlyCoordCheck::FiniteAndEmpty],
@@ -260,14 +257,16 @@ fn difference_rows(
             } else {
                 difference_rows_xy_is_finite_or_error(a)
             };
-            finite.and_then(|()| Ok(GeosRow::Unchanged(Geom::clone(a)?)))
+            finite.and_then(|()| {
+                Ok(GeosRow::Geometry {
+                    geometry: Geom::clone(a)?,
+                    maybe_wrong_orientation: true,
+                })
+            })
         }
         // TODO: Also give `a` as it is when `b` does not touch it, as for an empty `b`.
         // GEOS now re-orients and nodes `a` even then, so it can differ from a copy, and even split.
-        (
-            GeosRow::Geometry(a) | GeosRow::Unchanged(a),
-            GeosRow::Geometry(b) | GeosRow::Unchanged(b),
-        ) => a
+        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => a
             .difference(b)
             .map_err(GeoComputeError::from)
             .and_then(|difference| kept_parts(difference, kept_dimension, multi)),
@@ -323,7 +322,10 @@ fn kept_parts(
     let found = overlay.geometry_type()?;
     // The common cases: GEOS gave the kept dimension only, so nothing is copied.
     if found == single_type || (found == multi_type && multi) {
-        return Ok(GeosRow::Geometry(overlay));
+        return Ok(GeosRow::Geometry {
+            geometry: overlay,
+            maybe_wrong_orientation: false,
+        });
     }
     if found != multi_type && found != GeometryTypes::GeometryCollection {
         return Ok(GeosRow::Empty);
@@ -340,8 +342,14 @@ fn kept_parts(
     }
     match kept.len() {
         0 => Ok(GeosRow::Empty),
-        _ if multi => Ok(GeosRow::Geometry(kept_dimension.create_multi(kept)?)),
-        1 => Ok(GeosRow::Geometry(kept.pop().expect("one part"))),
+        _ if multi => Ok(GeosRow::Geometry {
+            geometry: kept_dimension.create_multi(kept)?,
+            maybe_wrong_orientation: false,
+        }),
+        1 => Ok(GeosRow::Geometry {
+            geometry: kept.pop().expect("one part"),
+            maybe_wrong_orientation: false,
+        }),
         // This counts the parts as GEOS gives them.
         // WARNING: Only since GEOS 3.15 are line pieces that join end to end
         // merged into one linestring.

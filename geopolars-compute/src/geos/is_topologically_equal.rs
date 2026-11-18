@@ -21,14 +21,21 @@ fn rows_are_topologically_equal(
     Ok(Some(match (a, b) {
         (GeosRow::Empty, GeosRow::Empty) => true,
         // An empty row never went to GEOS, so it can't be compared there.
-        (GeosRow::Empty, GeosRow::Geometry(other) | GeosRow::Unchanged(other))
-        | (GeosRow::Geometry(other) | GeosRow::Unchanged(other), GeosRow::Empty) => {
-            other.is_empty()?
-        }
         (
-            GeosRow::Geometry(a) | GeosRow::Unchanged(a),
-            GeosRow::Geometry(b) | GeosRow::Unchanged(b),
-        ) => a.equals(b)?,
+            GeosRow::Empty,
+            GeosRow::Geometry {
+                geometry: other, ..
+            },
+        )
+        | (
+            GeosRow::Geometry {
+                geometry: other, ..
+            },
+            GeosRow::Empty,
+        ) => other.is_empty()?,
+        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => {
+            a.equals(b)?
+        }
     }))
 }
 

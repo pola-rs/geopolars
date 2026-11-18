@@ -22,13 +22,12 @@ fn shortest_line_between_rows(
     };
     match (a, b) {
         (GeosRow::Empty, _) | (_, GeosRow::Empty) => Ok(Some(GeosRow::Empty)),
-        (
-            GeosRow::Geometry(a) | GeosRow::Unchanged(a),
-            GeosRow::Geometry(b) | GeosRow::Unchanged(b),
-        ) => row_or_null(
-            shortest_line_between_geometries(a, b).map(Some),
-            on_row_error,
-        ),
+        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => {
+            row_or_null(
+                shortest_line_between_geometries(a, b).map(Some),
+                on_row_error,
+            )
+        }
     }
 }
 
@@ -40,7 +39,10 @@ fn shortest_line_between_geometries(a: &Geometry, b: &Geometry) -> GeoComputeRes
         return Ok(GeosRow::Empty);
     }
     let line = Geometry::create_line_string(a.nearest_points(b)?)?;
-    Ok(GeosRow::Geometry(line))
+    Ok(GeosRow::Geometry {
+        geometry: line,
+        maybe_wrong_orientation: false,
+    })
 }
 
 fn shortest_lines_into_array(
@@ -125,7 +127,7 @@ pub fn shortest_lines_against_one(
             return shortest_lines_into_array(lines, on_row_error);
         }
         Some(GeosRow::Empty) => true,
-        Some(GeosRow::Geometry(one) | GeosRow::Unchanged(one)) => one.is_empty()?,
+        Some(GeosRow::Geometry { geometry: one, .. }) => one.is_empty()?,
     };
     if one_is_empty {
         let lines =

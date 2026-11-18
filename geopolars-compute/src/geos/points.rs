@@ -24,18 +24,18 @@ impl GeosGeometries {
         for geometry in rows {
             match geometry {
                 GeosRow::Empty => push(&empty),
-                GeosRow::Geometry(point) | GeosRow::Unchanged(point) => {
-                    match point.geometry_type()? {
-                        GeometryTypes::Point if point.is_empty()? => push(&empty),
-                        GeometryTypes::Point => {
-                            push(&point.get_coord_seq()?.as_buffer(Some(coord_type(dim)))?);
-                        }
-                        other => {
-                            let message = format!("expected a point, got a {other:?}");
-                            return Err(geos::Error::ConversionError(message).into());
-                        }
+                GeosRow::Geometry {
+                    geometry: point, ..
+                } => match point.geometry_type()? {
+                    GeometryTypes::Point if point.is_empty()? => push(&empty),
+                    GeometryTypes::Point => {
+                        push(&point.get_coord_seq()?.as_buffer(Some(coord_type(dim)))?);
                     }
-                }
+                    other => {
+                        let message = format!("expected a point, got a {other:?}");
+                        return Err(geos::Error::ConversionError(message).into());
+                    }
+                },
             }
         }
         let mut axes = axes.into_iter();
@@ -74,7 +74,7 @@ impl GeosGeometries {
         for (i, geometry) in geometries.into_iter().enumerate() {
             let is_valid = match geometry {
                 GeosRow::Empty => true,
-                GeosRow::Geometry(geometry) | GeosRow::Unchanged(geometry) => {
+                GeosRow::Geometry { geometry, .. } => {
                     match geometry.geometry_type()? {
                         // An empty point has no coordinates, so it adds no part.
                         GeometryTypes::Point => {

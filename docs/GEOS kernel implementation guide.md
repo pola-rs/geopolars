@@ -97,8 +97,6 @@ not in a container of its own.
 
 A `GeosRow` is `Empty` or a `Geometry` (null is described with the validity bitmask.
 We can just plonk `Empty` there, it should not matter).
-Two more are planned, `LeftUnchanged` and `RightUnchanged`,
-for a binary operation that gives one of its inputs back as it is.
 
 ## Trivial rows never reach GEOS
 

@@ -210,16 +210,20 @@ fn into_multi_polygon_array_with<
     for (i, geometry) in geometries.into_iter().enumerate() {
         let is_valid = match geometry {
             GeosRow::Empty => true,
-            GeosRow::Geometry(geometry) => {
-                push_multi_polygon::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(
-                    &mut coords,
-                    &mut rings,
-                    &mut polygons,
-                    &geometry,
-                    on_row_error,
-                )?
-            }
-            GeosRow::Unchanged(geometry) => push_multi_polygon::<Z, false, false>(
+            GeosRow::Geometry {
+                geometry,
+                maybe_wrong_orientation: false,
+            } => push_multi_polygon::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(
+                &mut coords,
+                &mut rings,
+                &mut polygons,
+                &geometry,
+                on_row_error,
+            )?,
+            GeosRow::Geometry {
+                geometry,
+                maybe_wrong_orientation: true,
+            } => push_multi_polygon::<Z, false, false>(
                 &mut coords,
                 &mut rings,
                 &mut polygons,
@@ -262,15 +266,19 @@ fn into_polygon_array_with<
     for (i, geometry) in geometries.into_iter().enumerate() {
         let is_valid = match geometry {
             GeosRow::Empty => true,
-            GeosRow::Geometry(polygon) => push_polygon::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(
+            GeosRow::Geometry {
+                geometry: polygon,
+                maybe_wrong_orientation: false,
+            } => push_polygon::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(
                 &mut coords,
                 &mut rings,
                 &polygon,
                 on_row_error,
             )?,
-            GeosRow::Unchanged(polygon) => {
-                push_polygon::<Z, false, false>(&mut coords, &mut rings, &polygon, on_row_error)?
-            }
+            GeosRow::Geometry {
+                geometry: polygon,
+                maybe_wrong_orientation: true,
+            } => push_polygon::<Z, false, false>(&mut coords, &mut rings, &polygon, on_row_error)?,
         };
         if !is_valid {
             validity.set_null(i);

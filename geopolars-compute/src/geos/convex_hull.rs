@@ -246,7 +246,12 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
             0 => Some(GeosRow::Empty),
             // A single coordinate encloses nothing, and GEOS can't build a linestring of it.
             1 => None,
-            _ => row_or_null(hull(&row_x, &row_y, &row_z), on_row_error)?.map(GeosRow::Geometry),
+            _ => row_or_null(hull(&row_x, &row_y, &row_z), on_row_error)?.map(|hull| {
+                GeosRow::Geometry {
+                    geometry: hull,
+                    maybe_wrong_orientation: false,
+                }
+            }),
         });
     }
     Ok(GeosGeometries {

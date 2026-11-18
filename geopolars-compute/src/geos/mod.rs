@@ -218,7 +218,11 @@ fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
             continue;
         }
         let point = point_to_geos::<EARLY_FINITE_CHECK>(coords, i, len, coord_type);
-        geometries.push(row_or_null(point, on_row_error)?.map(GeosRow::Geometry));
+        let point = row_or_null(point, on_row_error)?;
+        geometries.push(point.map(|point| GeosRow::Geometry {
+            geometry: point,
+            maybe_wrong_orientation: true,
+        }));
     }
     Ok(geometries)
 }
@@ -394,7 +398,10 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
                     coords_pass_early_check::<EARLY_COORD_CHECK>(&x[coords.clone()], &y[coords])
                         .and_then(|()| to_geos(parts))
                 };
-            row_or_null(geometry.map(Some), on_row_error)?.map(GeosRow::Geometry)
+            row_or_null(geometry.map(Some), on_row_error)?.map(|geometry| GeosRow::Geometry {
+                geometry,
+                maybe_wrong_orientation: true,
+            })
         });
     }
     Ok(geometries)
@@ -523,11 +530,19 @@ impl GeosRows {
         mut op: impl FnMut(usize, &Geometry) -> GeoComputeResult<Geometry>,
     ) -> GeoComputeResult<()> {
         for (i, row) in self.rows.iter_mut().enumerate() {
-            let (GeosRow::Geometry(input) | GeosRow::Unchanged(input)) = row else {
+            let GeosRow::Geometry {
+                geometry: input, ..
+            } = row
+            else {
                 continue;
             };
             match row_or_null(op(i, input).map(Some), on_row_error)? {
-                Some(output) => *row = GeosRow::Geometry(output),
+                Some(output) => {
+                    *row = GeosRow::Geometry {
+                        geometry: output,
+                        maybe_wrong_orientation: false,
+                    }
+                }
                 None => {
                     *row = GeosRow::Empty;
                     self.validity.set_null(i);
@@ -548,11 +563,16 @@ impl GeosRows {
 pub enum GeosRow {
     /// Empty, without a GEOS geometry. Valid for every kind.
     Empty,
-    Geometry(Geometry),
-    /// A copy of an input row, whose rings are not new, so they are never re-oriented.
-    // FIXME: add two arms: 'LeftUnchanged' and 'RightUnchanged',
-    // which copy straight from the input arrays rather than out of a GEOS copy.
-    Unchanged(Geometry),
+    /// The GEOS representation of a geometry.
+    Geometry {
+        geometry: Geometry,
+        /// All geometries *created* by GEOS are ccw with holes cw.
+        /// We shortcut some operations though, which means that you can end up with a column with mixed
+        /// orientations.
+        /// Mark something like this with `maybe_wrong_orientation=true`,
+        /// so that it can be checked and corrected when converting back to geoarrow.
+        maybe_wrong_orientation: bool,
+    },
 }
 
 /// Whether to reverse the exterior and the holes of a polygon GEOS built.
