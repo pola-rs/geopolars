@@ -40,7 +40,7 @@ use super::coordinate_selection::{is_empty_point, is_non_finite_value};
 use super::{selected_coords, CoordinateSelection, NonFinite};
 use crate::passing::rows_passing;
 use crate::utils::with_null_at;
-use crate::{GeoComputeError, GeoComputeResult, OnRowError};
+use crate::{row_or_null, GeoComputeError, GeoComputeResult, OnRowError};
 
 fn search_leaves_out_non_finite(failing: NonFinite) -> bool {
     !(failing.select_non_finite && failing.select_empty)
@@ -535,9 +535,9 @@ fn lines_between<const SKIP: bool>(
             .as_ref()
             .is_none_or(|validity| validity.get_bit(row))
         {
-            match push_line::<SKIP>(&mut lines, a, i, b, j) {
-                Err(_) if on_row_error == OnRowError::Null => lines.failed.push(row),
-                line => line?,
+            let line = push_line::<SKIP>(&mut lines, a, i, b, j).map(Some);
+            if row_or_null(line, on_row_error)?.is_none() {
+                lines.failed.push(row);
             }
         }
         lines.end_row();

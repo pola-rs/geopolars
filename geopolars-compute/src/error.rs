@@ -47,12 +47,12 @@ pub enum GeoComputeError {
 pub type GeoComputeResult<T> = Result<T, GeoComputeError>;
 
 /// The result of one row, or `None` if it failed and `on_row_error=`[OnRowError::Null].
-#[cfg(any(feature = "geos", feature = "rsgeo"))]
+#[cfg(any(feature = "native", feature = "geos", feature = "rsgeo"))]
 #[inline(always)]
-pub(crate) fn row_or_null<T>(
-    result: GeoComputeResult<Option<T>>,
+pub(crate) fn row_or_null<T, E>(
+    result: Result<Option<T>, E>,
     on_row_error: OnRowError,
-) -> GeoComputeResult<Option<T>> {
+) -> Result<Option<T>, E> {
     match result {
         Err(_) if on_row_error == OnRowError::Null => Ok(None),
         result => result,

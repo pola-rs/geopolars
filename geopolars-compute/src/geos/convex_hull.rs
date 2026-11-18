@@ -49,7 +49,9 @@ use geopolars_views::{
 use geos::{CoordSeq, Geom, Geometry, GeometryTypes};
 
 use super::{axes, coords_pass_early_check, GeosGeometries, GeosRow, GeosRows};
-use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
+use crate::{
+    row_or_null, EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
+};
 
 // TODO: a geometry crossing the antimeridian is hulled the long way round.
 // We could add a flag that checks if the input crosses it (>180°),
@@ -209,7 +211,7 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
     let mut row_z = Vec::new();
 
     // `None` if it is not a polygon (the hull collapsed)
-    let hull = |row_x: &[f64], row_y: &[f64], row_z: &[f64]| {
+    let hull = |row_x: &[f64], row_y: &[f64], row_z: &[f64]| -> GeoComputeResult<_> {
         coords_pass_early_check::<EARLY_COORD_CHECK>(row_x, row_y)?;
         let seq = CoordSeq::new_from_arrays(row_x, row_y, Z.then_some(row_z), None)?;
         let hull = Geometry::create_line_string(seq)?.convex_hull()?;
@@ -244,11 +246,7 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
             0 => Some(GeosRow::Empty),
             // A single coordinate encloses nothing, and GEOS can't build a linestring of it.
             1 => None,
-            _ => match hull(&row_x, &row_y, &row_z) {
-                Ok(hull) => hull.map(GeosRow::Geometry),
-                Err(e) if on_row_error == OnRowError::Raise => return Err(e),
-                Err(_) => None,
-            },
+            _ => row_or_null(hull(&row_x, &row_y, &row_z), on_row_error)?.map(GeosRow::Geometry),
         });
     }
     Ok(GeosGeometries {

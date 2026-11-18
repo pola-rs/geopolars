@@ -62,13 +62,13 @@ def hausdorff_line_between(
     {empty_point}
     `non_finite` sets what happens to such a vertex.
 
-    - `"raise"`: a geometry with such a vertex raises.
+    - `"raise"`: a geometry with such a vertex fails.
     - `"drop"`: such a vertex is left out.
       A line or ring then runs straight from the vertex before it to the vertex after it.
       A ring that loses its first vertex also loses its last one, and is no longer closed.
       It is then measured as a line up to the last vertex it keeps.
     - `"drop_empty"`: the empty point is left out, as with `"drop"`.
-      Any other vertex that is not finite raises.
+      Non-finite vertices still fail (as with `"raise"`).
 
     A geometry that `"drop"` or `"drop_empty"` leaves without vertices counts as empty.
 

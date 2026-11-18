@@ -39,7 +39,7 @@ use std::ops::Range;
 use super::is_valid::is_closed_or_empty;
 use super::rings::offsets_of;
 use crate::utils::{copy_ranges, gathered, with_null_at};
-use crate::{GeoComputeError, GeoComputeResult, OnRowError};
+use crate::{row_or_null, GeoComputeError, GeoComputeResult, OnRowError};
 use geopolars_views::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
     ScalarLineString, ScalarMultiLineString, ScalarMultiPoint, ScalarMultiPolygon, ScalarPolygon,
@@ -672,11 +672,10 @@ fn rows_null_where_not_closed<const Z: bool, L: Iterator<Item = Range<usize>>>(
     for i in (0..rows.len()).filter(|&i| rows.is_valid(i)) {
         let not_closed = rings_of(i).find(|ring| !is_closed_or_empty::<Z>(coords, ring.clone()));
         if let Some(ring) = not_closed {
-            if on_row_error == OnRowError::Raise {
-                return Err(GeoComputeError::NotClosed {
-                    vertices: ring.len(),
-                });
-            }
+            let not_closed = Err(GeoComputeError::NotClosed {
+                vertices: ring.len(),
+            });
+            row_or_null::<(), _>(not_closed, on_row_error)?;
             failed.push(i);
         }
     }

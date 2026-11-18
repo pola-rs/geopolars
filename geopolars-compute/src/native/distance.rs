@@ -21,7 +21,9 @@ use geopolars_views::output::{f64_array, f64_array_masked};
 use geopolars_views::PointArray;
 use polars_arrow::array::PrimitiveArray;
 
-use crate::{BaseMetric, GeoComputeError, GeodesicMetric, OnRowError, Planar, WithHeight};
+use crate::{
+    row_or_null, BaseMetric, GeoComputeError, GeodesicMetric, OnRowError, Planar, WithHeight,
+};
 
 /// How a segment is measured: on the plane, or along an ellipsoid.
 /// Generic, so every metric and dimension gets a loop of its own.
@@ -150,10 +152,9 @@ where
             let distance = metric
                 .vertex(here)
                 .and_then(|here| Ok(metric.segment::<Z>(here, metric.vertex(there)?)));
-            match distance {
-                Ok(distance) => *value = distance,
-                Err(e) if on_row_error == OnRowError::Raise => return Err(e),
-                Err(_) => failed.push(i),
+            match row_or_null(distance.map(Some), on_row_error)? {
+                Some(distance) => *value = distance,
+                None => failed.push(i),
             }
         }
         // A null point keeps its 0.0, which the validity masks out.
@@ -182,10 +183,9 @@ pub fn against_one<const Z: bool, M: DistanceMetric>(
             many.coords.validity(),
         ));
     }
-    let one = match metric.vertex(one) {
-        Ok(one) => one,
-        Err(e) if on_row_error == OnRowError::Raise => return Err(e),
-        Err(_) => {
+    let one = match row_or_null(metric.vertex(one).map(Some), on_row_error)? {
+        Some(one) => one,
+        None => {
             let every_row = (0..many.coords.len()).collect::<Vec<_>>();
             return Ok(f64_array_masked(
                 vec![0.0; many.coords.len()],
@@ -227,10 +227,9 @@ where
         // An empty point (NaN coordinates) does go through, and comes out as a NaN distance:
         // empty points are assumed rare enough not to warrant an extra check on every valid point.
         if let Some(there) = many.get(i).position::<NULLS, Z>() {
-            match metric.vertex(there) {
-                Ok(there) => *value = metric.segment::<Z>(one, there),
-                Err(e) if on_row_error == OnRowError::Raise => return Err(e),
-                Err(_) => failed.push(i),
+            match row_or_null(metric.vertex(there).map(Some), on_row_error)? {
+                Some(there) => *value = metric.segment::<Z>(one, there),
+                None => failed.push(i),
             }
         }
         // A null point keeps its 0.0, which the validity masks out.

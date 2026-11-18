@@ -55,11 +55,19 @@ due to GEOS handling invalid states differently (and sometimes inconsistently).
 An example would be GEOS silently returning (4, 0) for a distance of 0.5 on a line with a NaN vertex.
 
 With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
-What GEOS does with it depends on the operation.
-For example, `buffer`, `simplify`, and `offset_curve` leave it out,
-while `intersection`, `difference`, and `relate` raise.
-`convex_hull` gives a null if it comes first,
-and `line_interpolate_point` gives a wrong point.
+What GEOS does with it depends on the operation, and often on where the point is:
+
+| Operation | An empty point inside a geometry |
+| - | - |
+| `buffer`, `offset_curve` | is left out |
+| `simplify` | is left out, but kept as the first vertex |
+| `simplify` with `preserve_topology=True` | fails the row |
+| `intersection`, `difference`, `shortest_line_between` | fails the row |
+| `relate` | fails the row, unless it is the first vertex |
+| `convex_hull` | is left out, but gives a null as the first vertex |
+| `line_interpolate_point` | gives a wrong point |
+| `is_topologically_equal` | gives a wrong answer |
+
 A geometry that is itself the empty point passes either check,
 and works as you'd expect it to, as it is a standard GEOS type.
 
