@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: help install install-release wheel docs polars-src run-geo run-line run-mean-coordinate run-mean-coordinate-manual run-crs run-parquet test test-all test-rust test-python test-python-all clean
+.PHONY: help install install-release wheel docs polars-src test test-all test-rust test-python test-python-all clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -93,30 +93,6 @@ test-python: install
 ## All Python tests, including the slow ones.
 test-python-all: install
 	$(PYTEST) -m "slow or not slow" $(PYTEST_ARGS)
-
-## Run the geoarrow.point proof of concept.
-run-geo: install
-	uv run examples/run_geo.py
-
-## Run the geoarrow.linestring proof of concept.
-run-line: install
-	uv run examples/run_line.py
-
-## Run the CRS reprojection example, for points and lines.
-run-crs: install
-	uv run examples/run_crs.py
-
-## Run the GeoParquet reading and writing example.
-run-parquet: install
-	uv run examples/run_parquet.py
-
-## Run the mean coordinate proof of concept.
-run-mean-coordinate: install
-	uv run examples/run_mean_coordinate.py
-
-## Run the same mean coordinate written by hand, in plain Polars.
-run-mean-coordinate-manual: install
-	uv run examples/run_mean_coordinate_manual.py
 
 ## Remove the venv and all build output.
 clean:
