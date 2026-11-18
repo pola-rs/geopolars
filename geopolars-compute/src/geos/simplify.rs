@@ -13,7 +13,7 @@
 
 use geopolars_views::{LineStringArray, MultiLineStringArray, MultiPolygonArray, PolygonArray};
 
-use super::{GeosGeometries, GeosRows, ToGeosRows};
+use super::{GeometryOrientation, GeosGeometries, ToGeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
 /// Simplifies every linestring to within `tolerance` through GEOS.
@@ -112,7 +112,7 @@ fn simplify_via_geos(
     with_const_flags!(
         PRESERVE_TOPOLOGY = preserve_topology;
         simplify_via_geos_with::<PRESERVE_TOPOLOGY>(
-            &mut geometries.geometries,
+            &mut geometries,
             tolerance,
             on_row_error,
         )
@@ -125,11 +125,13 @@ fn simplify_via_geos(
 /// See [`simplify_via_geos`].
 /// Errors are the exception, so `on_row_error` is checked per row rather than made const.
 fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
-    geometries: &mut GeosRows,
+    geometries: &mut GeosGeometries,
     tolerance: f64,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<()> {
-    geometries.replace_geometries(on_row_error, |_, input| {
+    // Douglas-Peucker can turn a ring around where GEOS repairs it.
+    // The topology-preserving simplifier keeps the input's orientation, which is unknown.
+    geometries.replace_geometries(GeometryOrientation::UNKNOWN, on_row_error, |_, input| {
         let simplified = if PRESERVE_TOPOLOGY {
             input.topology_preserve_simplify(tolerance)
         } else {

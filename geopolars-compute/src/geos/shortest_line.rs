@@ -8,7 +8,9 @@ use geos::{Geom, Geometry};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::{combine_validities_and, combine_validities_and_not};
 
-use super::{rows_without_vertices, GeosGeometries, GeosRow, GeosRows, ToGeosRows};
+use super::{
+    rows_without_vertices, GeometryOrientation, GeosGeometries, GeosRow, GeosRows, ToGeosRows,
+};
 use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
 
 #[inline(always)]
@@ -60,6 +62,7 @@ fn shortest_lines_into_array(
     GeosGeometries {
         geometries,
         size_hint,
+        orientation: GeometryOrientation::UNKNOWN,
     }
     .into_line_string_array::<false>(on_row_error)
 }

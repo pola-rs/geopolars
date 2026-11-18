@@ -123,21 +123,13 @@ foregoing the need to convert its partner in the other column.
 
 ## Orientation of new rings
 
-GEOS operations that build new rings always give clockwise shells and counter-clockwise holes,
-whatever the orientation of the input. This held for (among others):
+GEOS sometimes changes the directions of rings.
+Most of the time, it gives clockwise shells and counter-clockwise holes for anything new that it constructs.
+It is not 100% consistent though, so be sure to check this thoroughly.
 
-- intersection, union, difference and unary_union
-- buffer, including buffer(0) and Point.buffer
-- normalize
-- make_valid on invalid input (the bowtie came back as two polygons, both with clockwise shells)
+Every operation must set the `orientation` of its output `GeosGeometries`.
+This should be the value that the operation gives *most of the time*.
+Exceptions, or rows that are passed through unchanged,
+can be marked per-row on `GeosRow::Geometry::maybe_wrong_orientation` to override this.
 
-For these, the output already has a known orientation,
-so `new_ring_orientation="cw"` with `new_holes="opposite"` is a no-op, and can be skipped.
-
-Operations that leave the rings alone keep the orientation of the input though:
-
-- simplify returned a counter-clockwise shell with a counter-clockwise hole unchanged.
-- make_valid on input that is already valid returns it as is, even when the hole has the wrong orientation.
-  A valid polygon doesn't need any particular orientation, so this case passes straight through.
-
-Test it before assuming anything.
+Test it before assuming anything!

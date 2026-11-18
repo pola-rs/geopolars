@@ -9,7 +9,7 @@ use geopolars_views::{
 use geos::{CoordType, Geom, Geometry, GeometryTypes};
 
 use super::pairs::GeosPairs;
-use super::{GeosGeometries, GeosRow, GeosRows};
+use super::{GeometryOrientation, GeosGeometries, GeosRow, GeosRows};
 use crate::{
     row_or_null, EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation,
     OnRowError,
@@ -166,6 +166,7 @@ impl OverlayPairs {
         Ok(GeosGeometries {
             geometries,
             size_hint: summed_size_hint(self.pairs.size_hints()),
+            orientation: GeometryOrientation::GEOS_BUILT,
         })
     }
 

@@ -14,8 +14,8 @@ use geos::{Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::Bitmap;
 
 use super::{
-    axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries, GeosRow,
-    GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
+    axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeometryOrientation,
+    GeosGeometries, GeosRow, GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
 };
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
@@ -51,6 +51,7 @@ impl ToGeosRows for LineStringArray {
         Ok(GeosGeometries {
             geometries,
             size_hint,
+            orientation: GeometryOrientation::UNKNOWN,
         })
     }
 }
@@ -101,6 +102,7 @@ pub(super) fn multi_line_strings_to_geos_rows(
     Ok(GeosGeometries {
         geometries,
         size_hint,
+        orientation: GeometryOrientation::UNKNOWN,
     })
 }
 

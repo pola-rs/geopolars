@@ -198,6 +198,7 @@ impl ToGeosRows for PointArray {
                 coords: self.coords.len(),
                 parts: [0, 0],
             },
+            orientation: GeometryOrientation::UNKNOWN,
         })
     }
 }
@@ -251,6 +252,7 @@ impl ToGeosRows for MultiPointArray {
         Ok(GeosGeometries {
             geometries,
             size_hint,
+            orientation: GeometryOrientation::UNKNOWN,
         })
     }
 }
@@ -493,6 +495,37 @@ pub struct GeosGeometries {
     /// Sized for the deepest kind, a multipolygon:
     /// rings (or lines), then polygons.
     pub size_hint: SizeHint<2>,
+    /// Holds for every row, except one with `maybe_wrong_orientation=true`.
+    pub orientation: GeometryOrientation,
+}
+
+/// Which way the rings of a polygon run.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Orientation {
+    Cw,
+    Ccw,
+    Unknown,
+}
+
+/// Which way the exteriors and the holes of the polygons in a [`GeosGeometries`] run.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct GeometryOrientation {
+    pub outer: Orientation,
+    pub holes: Orientation,
+}
+
+impl GeometryOrientation {
+    pub const UNKNOWN: Self = Self {
+        outer: Orientation::Unknown,
+        holes: Orientation::Unknown,
+    };
+
+    /// The orientation of the rings GEOS builds itself
+    /// (see "Orientation of new rings" in `docs/GEOS kernel implementation guide.md`).
+    pub const GEOS_BUILT: Self = Self {
+        outer: Orientation::Cw,
+        holes: Orientation::Ccw,
+    };
 }
 
 /// One [`GeosRow`] per row, and which rows are null.
@@ -520,16 +553,28 @@ impl GeosRows {
         self.rows.push(row.unwrap_or(GeosRow::Empty));
     }
 
+    fn iter(&self) -> impl ExactSizeIterator<Item = Option<&GeosRow>> + Clone {
+        let validity = &self.validity;
+        let valid = move |(i, row)| validity.is_valid(i).then_some(row);
+        self.rows.iter().enumerate().map(valid)
+    }
+}
+
+impl GeosGeometries {
     /// Replaces every GEOS geometry with what `op` makes of it, given its row index.
-    /// This includes an `Unchanged` row, which then no longer counts as unchanged.
+    /// This includes a row with `maybe_wrong_orientation`, which then no longer has it.
+    /// `op` gives geometries of `orientation`, which the column takes on.
     /// A row `op` fails on goes to `on_row_error`.
     #[inline(always)]
     fn replace_geometries(
         &mut self,
+        orientation: GeometryOrientation,
         on_row_error: OnRowError,
         mut op: impl FnMut(usize, &Geometry) -> GeoComputeResult<Geometry>,
     ) -> GeoComputeResult<()> {
-        for (i, row) in self.rows.iter_mut().enumerate() {
+        self.orientation = orientation;
+        let GeosRows { rows, validity } = &mut self.geometries;
+        for (i, row) in rows.iter_mut().enumerate() {
             let GeosRow::Geometry {
                 geometry: input, ..
             } = row
@@ -545,17 +590,11 @@ impl GeosRows {
                 }
                 None => {
                     *row = GeosRow::Empty;
-                    self.validity.set_null(i);
+                    validity.set_null(i);
                 }
             }
         }
         Ok(())
-    }
-
-    fn iter(&self) -> impl ExactSizeIterator<Item = Option<&GeosRow>> + Clone {
-        let validity = &self.validity;
-        let valid = move |(i, row)| validity.is_valid(i).then_some(row);
-        self.rows.iter().enumerate().map(valid)
     }
 }
 
@@ -566,24 +605,33 @@ pub enum GeosRow {
     /// The GEOS representation of a geometry.
     Geometry {
         geometry: Geometry,
-        /// All geometries *created* by GEOS are ccw with holes cw.
-        /// We shortcut some operations though, which means that you can end up with a column with mixed
-        /// orientations.
-        /// Mark something like this with `maybe_wrong_orientation=true`,
-        /// so that it can be checked and corrected when converting back to geoarrow.
+        /// The row may not follow [`GeosGeometries::orientation`],
+        /// such as a copy of an input row in a column GEOS otherwise built.
         maybe_wrong_orientation: bool,
     },
 }
 
-/// Whether to reverse the exterior and the holes of a polygon GEOS built.
-/// No ring needs testing, as GEOS builds a clockwise exterior with counter-clockwise holes
-/// (see "Orientation of new rings" in `docs/GEOS kernel implementation guide.md`).
-fn reversed_rings(new_ring_orientation: NewRingOrientation, new_holes: NewHoles) -> (bool, bool) {
-    match new_ring_orientation {
-        NewRingOrientation::Keep => (false, false),
-        NewRingOrientation::Ccw => (true, new_holes == NewHoles::Opposite),
-        NewRingOrientation::Cw => (false, new_holes == NewHoles::Same),
-    }
+/// Whether to reverse the exterior and the holes of a polygon in a column of `orientation`.
+/// A ring of [`Orientation::Unknown`] is never reversed.
+fn reversed_rings(
+    orientation: GeometryOrientation,
+    new_ring_orientation: NewRingOrientation,
+    new_holes: NewHoles,
+) -> (bool, bool) {
+    let (outer, opposite) = match new_ring_orientation {
+        NewRingOrientation::Keep => return (false, false),
+        NewRingOrientation::Ccw => (Orientation::Ccw, Orientation::Cw),
+        NewRingOrientation::Cw => (Orientation::Cw, Orientation::Ccw),
+    };
+    let holes = match new_holes {
+        NewHoles::Opposite => opposite,
+        NewHoles::Same => outer,
+    };
+    let differs = |current, target| current != Orientation::Unknown && current != target;
+    (
+        differs(orientation.outer, outer),
+        differs(orientation.holes, holes),
+    )
 }
 
 /// Combines the validity of the geometries with that of the distances.

@@ -14,8 +14,8 @@ use geos::{Geom, Geometry, GeometryTypes};
 use polars_arrow::bitmap::Bitmap;
 
 use super::{
-    axes, coord_seq, reversed_rings, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeosGeometries,
-    GeosRow, GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
+    axes, coord_seq, reversed_rings, rows_to_geos, wrong_kind, Axes, CoordsBuilder,
+    GeometryOrientation, GeosGeometries, GeosRow, GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
 };
 use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
@@ -51,6 +51,7 @@ impl ToGeosRows for PolygonArray {
         Ok(GeosGeometries {
             geometries,
             size_hint,
+            orientation: GeometryOrientation::UNKNOWN,
         })
     }
 }
@@ -92,6 +93,7 @@ impl ToGeosRows for MultiPolygonArray {
         Ok(GeosGeometries {
             geometries,
             size_hint,
+            orientation: GeometryOrientation::UNKNOWN,
         })
     }
 }
@@ -153,7 +155,7 @@ impl GeosGeometries {
     /// Every GEOS geometry is freed once it is copied.
     /// A geometry that is not a polygon goes to `on_row_error`.
     /// The rings are oriented as `new_ring_orientation` and `new_holes` ask,
-    /// except in an `Unchanged` row, which keeps its rings as they were.
+    /// except in a row with `maybe_wrong_orientation`, which keeps its rings as they were.
     pub fn into_polygon_array(
         self,
         z: bool,
@@ -161,7 +163,7 @@ impl GeosGeometries {
         new_ring_orientation: NewRingOrientation,
         new_holes: NewHoles,
     ) -> GeoComputeResult<PolygonArray> {
-        let (exterior, holes) = reversed_rings(new_ring_orientation, new_holes);
+        let (exterior, holes) = reversed_rings(self.orientation, new_ring_orientation, new_holes);
         with_const_flags!(
             Z = z, REVERSED_EXTERIOR = exterior, REVERSED_HOLES = holes;
             into_polygon_array_with::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(self, on_row_error)
@@ -179,7 +181,7 @@ impl GeosGeometries {
         new_ring_orientation: NewRingOrientation,
         new_holes: NewHoles,
     ) -> GeoComputeResult<MultiPolygonArray> {
-        let (exterior, holes) = reversed_rings(new_ring_orientation, new_holes);
+        let (exterior, holes) = reversed_rings(self.orientation, new_ring_orientation, new_holes);
         with_const_flags!(
             Z = z, REVERSED_EXTERIOR = exterior, REVERSED_HOLES = holes;
             into_multi_polygon_array_with::<Z, REVERSED_EXTERIOR, REVERSED_HOLES>(self, on_row_error)
@@ -202,6 +204,7 @@ fn into_multi_polygon_array_with<
             mut validity,
         },
         size_hint,
+        ..
     } = geometries;
     let mut coords = CoordsBuilder::with_capacity(Z, size_hint.coords);
     let mut rings = OffsetsBuilder::with_capacity(size_hint.parts[0]);
@@ -259,6 +262,7 @@ fn into_polygon_array_with<
             mut validity,
         },
         size_hint,
+        ..
     } = geometries;
     let mut coords = CoordsBuilder::with_capacity(Z, size_hint.coords);
     let mut rings = OffsetsBuilder::with_capacity(size_hint.parts[0]);

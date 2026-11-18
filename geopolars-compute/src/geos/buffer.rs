@@ -7,7 +7,9 @@ use geos::{BufferParams, Geom, Geometry, GeometryTypes};
 pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
-use super::{unless_split, validity_with_distances, GeosGeometries, ToGeosRows};
+use super::{
+    unless_split, validity_with_distances, GeometryOrientation, GeosGeometries, ToGeosRows,
+};
 use crate::{
     EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
 };
@@ -117,6 +119,7 @@ fn buffer_via_geos(
     by_distance_via_geos(
         geometries,
         distance,
+        GeometryOrientation::GEOS_BUILT,
         on_row_error,
         |distance| geos_distance(distance, style.side),
         |input, distance| {
@@ -130,6 +133,7 @@ fn buffer_via_geos(
 }
 
 /// Passes every geometry to `op` with its distance, which `geos_distance` checks and converts.
+/// `op` gives geometries of `orientation`.
 /// A row that fails goes to `on_row_error`.
 /// A constant distance that fails would fail every row, so its error is always returned.
 ///
@@ -138,26 +142,27 @@ fn buffer_via_geos(
 pub(super) fn by_distance_via_geos(
     mut geometries: GeosGeometries,
     distance: BufferDistance,
+    orientation: GeometryOrientation,
     on_row_error: OnRowError,
     geos_distance: impl Fn(f64) -> GeoComputeResult<f64>,
     op: impl Fn(&Geometry, f64) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<GeosGeometries> {
-    let rows = &mut geometries.geometries;
     match distance {
         BufferDistance::Constant(distance) => {
             let distance = geos_distance(distance)?;
-            rows.replace_geometries(on_row_error, |_, input| op(input, distance))?;
+            geometries
+                .replace_geometries(orientation, on_row_error, |_, input| op(input, distance))?;
         }
         BufferDistance::PerRow(distances) => {
-            debug_assert_eq!(distances.len(), rows.len());
+            debug_assert_eq!(distances.len(), geometries.geometries.len());
             debug_assert!(
                 distances.validity().is_none_or(|has_distance| {
-                    let mut rows = rows.iter().enumerate();
+                    let mut rows = geometries.geometries.iter().enumerate();
                     rows.all(|(i, row)| row.is_none() || has_distance.get_bit(i))
                 }),
                 "a row with a null distance must already be null",
             );
-            rows.replace_geometries(on_row_error, |i, input| {
+            geometries.replace_geometries(orientation, on_row_error, |i, input| {
                 op(input, geos_distance(distances.value(i))?)
             })?;
         }
