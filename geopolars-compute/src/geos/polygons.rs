@@ -155,10 +155,9 @@ impl GeosGeometries {
     /// Our polygon array of the geometries, one row each.
     /// Every GEOS geometry is freed once it is copied.
     /// A geometry that is not a polygon goes to `on_row_error`.
-    /// The rings are oriented as `new_ring_orientation` and `new_holes` ask.
-    /// Each ring of a row with `maybe_wrong_orientation` is checked first,
-    /// and only reversed if it runs the wrong way.
-    /// If `orientation` is even partly unknown, every row is checked this way.
+    /// The rings are oriented as `new_ring_orientation` and `new_holes` ask,
+    /// which relies on `orientation` and `maybe_wrong_orientation` being set
+    /// (see "Orientation of new rings" in `docs/source/development/geos-kernel-implementation-guide.md`).
     pub fn into_polygon_array(
         mut self,
         z: bool,

@@ -135,6 +135,8 @@ without its rings being checked.
 A row that may run otherwise, such as one passed through unchanged, must therefore have the flag.
 The rings of a row with the flag are checked when they are copied out of GEOS,
 and only reversed where needed.
-In a column of `UNKNOWN` orientation, every row is checked this way.
+In a column whose `orientation` is even partly `Unknown`, every row is checked this way.
+With `new_ring_orientation="keep"`, you indicate that you don't care about the orientation.
+This bypasses checking and reversing, which is faster.
 
 Test it before assuming anything!
