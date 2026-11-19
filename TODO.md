@@ -16,18 +16,18 @@
 
 Follow the order of the Polars README.
 
-- [ ] Logo (`static/logo.svg` from `main`), badges, and links to the API reference and user guide.
-- [ ] A two-sentence pitch, followed by a tightened feature list.
-- [ ] An end-to-end example: read GeoParquet, build points from lon/lat, `to_crs`, `area`, write.
+- [x] badges, and links to the API reference and user guide.
+- [x] A two-sentence pitch, followed by a tightened feature list.
+- [x] An end-to-end example: read GeoParquet, build points from lon/lat, `to_crs`, `area`, write.
   `examples/run_crs.py` is a good starting point.
-- [ ] Installation instructions that work, including building from source with `make install`.
-- [ ] One line on stability, instead of the "HIGHLY unstable" banner.
-- [ ] Contributing and licence sections.
-- [ ] Remove the empty "CRS awareness" and "Geometry Operations" headings, and the two TODOs.
+- [x] Installation instructions that work, including building from source with `make install`.
+- [x] One line on stability, instead of the "HIGHLY unstable" banner.
+- [x] Contributing and licence sections.
+- [x] Remove the empty "CRS awareness" and "Geometry Operations" headings, and the two TODOs.
 - [x] Move the validity explanation and table to the user guide.
 - [x] Move the UDF section to the user guide.
 - [x] Move the winding order conventions to the user guide.
-- [ ] Move the developer doc links to the contributing guide.
+- [x] Move the developer doc links to the contributing guide.
 
 ## Docs
 
