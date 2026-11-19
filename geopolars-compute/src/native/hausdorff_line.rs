@@ -9,13 +9,13 @@
 //!
 //! GEOS has the same search as `GEOSHausdorffDistanceWithPoints`, but we cannot use it here.
 //! 1. The `geos` crate does not wrap it, nor give out the raw pointers to call it ourselves.
-//! We could make it ourselves, or contribute upstream, but...
+//!    We could make it ourselves, or contribute upstream, but...
 //! 2. Its points come in the order of whichever direction gave the larger distance,
-//! not of its inputs, so the line would not reliably run from `a` to `b`.
+//!    not of its inputs, so the line would not reliably run from `a` to `b`.
 //! 3. It also drops z and m
 //! 4. it's a relatively simple kernel, so re-implementing it here is not so bad.
-//! GEOS searches by brute force too (without stopping early),
-//! so there is no tested algorithm here that we would have to re-implement.
+//!    GEOS searches by brute force too (without stopping early),
+//!    so there is no tested algorithm here that we would have to re-implement.
 //!
 //! # Const generic flags
 //!

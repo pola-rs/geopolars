@@ -2,13 +2,15 @@
 
 ## Licence, CI and metadata
 
-- [ ] Restore `LICENSE` from `main` (MIT, © 2022 Kyle Barron), possibly adding "GeoPolars contributors".
-- [ ] Add `.github/workflows`: tests (`make test-all`), lint (ruff, clippy, rustfmt) and a docs build. Wheels can wait.
-- [ ] Add `.github/dependabot.yml`.
-- [ ] Bump the Python package version above `0.1.0a4`, which is already on PyPI.
-- [ ] Check the `polars>=1.44` floor: the pinned Polars commit first appears in `py-2.0.0`.
-- [ ] Fill in description, readme, licence, authors and URLs in `geopolars/pyproject.toml`.
-- [ ] Point the GitHub link in `geopolars/docs/source/conf.py` at `pola-rs/geopolars`.
+- [x] Restore `LICENSE` from `main` (MIT, © 2022 Kyle Barron), possibly adding "GeoPolars contributors".
+- [x] Add `.github/workflows`: tests (`make test-all`), lint (ruff, clippy, rustfmt) and a docs build. Wheels can wait.
+- [ ] When adding a wheels workflow: on Windows, run `git config --global core.symlinks true` before checkout,
+  as `geopolars/LICENSE` is a symlink.
+- [x] Add `.github/dependabot.yml`.
+- [x] Bump the Python package version above `0.1.0a4`, which is already on PyPI.
+- [x] Check the `polars>=1.44` floor: the pinned Polars commit first appears in `py-2.0.0`.
+- [x] Fill in description, readme, licence, authors and URLs in `geopolars/pyproject.toml`.
+- [x] Point the GitHub link in `geopolars/docs/source/conf.py` at `pola-rs/geopolars`.
 
 ## README
 

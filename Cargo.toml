@@ -5,7 +5,7 @@ members = ["geopolars", "geopolars-views", "geopolars-compute", "geopolars-core"
 exclude = [".polars"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 edition = "2021"
 license = "MIT"
 

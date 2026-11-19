@@ -71,7 +71,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/geopolars/geopolars",
+            "url": "https://github.com/pola-rs/geopolars",
             "icon": "fa-brands fa-github",
         },
     ],

@@ -7,7 +7,7 @@ dependencies = [
     "geopandas>=1.1.4",
     "geopolars",
     "maturin>=1.12.4",
-    "polars>=1.44",
+    "polars>=2.0.0rc2",
     # uv ignores sources for transitive dependencies,
     # but polars pulls this in.
     "polars-runtime-32",

@@ -93,7 +93,9 @@ def test_a_polygon_keeps_its_dimension(
 
     assert out.schema["polygon"] == dimension.point_dtype()
     # z and m don't move the centroid in xy.
-    assert _centroids(df) == pytest.approx(_centroids(XY.polygons(ring_coords)))
+    assert _centroids(df) == [
+        pytest.approx(c) for c in _centroids(XY.polygons(ring_coords))
+    ]
 
 
 def _polygon_xyzm(
@@ -178,7 +180,12 @@ def test_rows_line_up_across_chunks_and_slices() -> None:
 
     got = _centroids(df.slice(1, 4))
 
-    assert got == pytest.approx([(5 / 6, 5 / 6), None, (11.0, 11.0), (0.5, 0.5)])
+    assert got == [
+        pytest.approx((5 / 6, 5 / 6)),
+        None,
+        pytest.approx((11.0, 11.0)),
+        pytest.approx((0.5, 0.5)),
+    ]
 
 
 # Linestrings
@@ -289,7 +296,12 @@ def test_line_rows_line_up_across_chunks_and_slices() -> None:
 
     got = _line_centroids(df.slice(1, 4))
 
-    assert got == pytest.approx([(4 / 3, 1 / 6), None, (11.0, 10.0), (4 / 3, 1 / 6)])
+    assert got == [
+        pytest.approx((4 / 3, 1 / 6)),
+        None,
+        pytest.approx((11.0, 10.0)),
+        pytest.approx((4 / 3, 1 / 6)),
+    ]
 
 
 # Multi-geometries: one centroid, of the parts weighted by their length or area
