@@ -36,7 +36,7 @@ The API reference (Sphinx, in `geopolars/docs/`) is built separately,
 but is also hosted on the Polars domain.
 
 - [x] Decide on the tooling: the user guide goes into the Polars user guide, the API reference stays in Sphinx.
-- [x] Mirror the Polars layout: `docs/source/user-guide/` and `docs/source/development/`.
+- [x] Mirror the Polars layout: `docs/source/user-guide/geo/` and `docs/source/development/`.
 - [x] Move the developer docs into `development/`.
 - [x] Rename doc files to kebab-case, which also fixes the broken README links.
 - [x] Move the vendored GeoParquet specs out of the docs source, into `docs/ref/`.
@@ -44,9 +44,9 @@ but is also hosted on the Polars domain.
 
 ### User guide
 
-- [ ] Rewrite the pages in the Polars conventions:
-  code in `docs/source/src/python/`, included with `{{code_block(...)}}` so it runs during the build,
-  Material admonitions, and links into the API reference.
+- [x] Rewrite the pages in the Polars conventions:
+  code in `docs/source/src/python/user-guide/geo/`, included with `{{code_block(...)}}` so it runs during the build,
+  Material admonitions, and links into the API reference (`docs/source/_build/API_REFERENCE_LINKS.yml`).
 - [ ] Flesh out the stubs: `concepts/crs.md` and `concepts/winding-order.md`,
   and resolve the TODO in `udfs.md`.
 - [ ] Write the missing pages: installation, geometry types (GeoArrow, dimensions), nulls, NaN and empty geometries,

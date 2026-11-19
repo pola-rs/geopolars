@@ -19,7 +19,7 @@
   <b>Documentation</b>:
   <a href="https://github.com/pola-rs/geopolars/tree/main/geopolars/docs/source/reference">API reference</a>
   |
-  <a href="https://github.com/pola-rs/geopolars/tree/main/docs/source/user-guide">User guide</a>
+  <a href="https://github.com/pola-rs/geopolars/tree/main/docs/source/user-guide/geo">User guide</a>
 </p>
 
 ## GeoPolars: geospatial data types and operations for Polars
@@ -39,7 +39,7 @@ so they work in lazy queries and the streaming engine like any other.
   and area and distance are measured on their ellipsoid for longitude/latitude.
 - **GeoParquet**: read and write it with Polars' own Parquet readers and writers.
 
-To learn more, read the [user guide](https://github.com/pola-rs/geopolars/tree/main/docs/source/user-guide).
+To learn more, read the [user guide](https://github.com/pola-rs/geopolars/tree/main/docs/source/user-guide/geo).
 
 ## GeoPolars in action
 

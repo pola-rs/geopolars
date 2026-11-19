@@ -39,15 +39,32 @@ For example, a GPS track can pass the same crossing twice.
 
 Checking OGC validity is much more expensive, as it has to compare pairs of segments, and pairs of parts.
 
-OGC allows some geometries that might still surprise you!
-An empty geometry is valid by OGC (find them with `geo.is_empty`),
-and so is the same vertex twice in a row (`geo.has_repeats_in_succession`).
+!!! note
+
+    OGC allows some geometries that might still surprise you!
+    An empty geometry is valid by OGC (find them with `geo.is_empty`),
+    and so is the same vertex twice in a row (`geo.has_repeats_in_succession`).
+
+Below, we check some parcels against both levels.
+The bowtie crosses itself, and the sliver goes back and forth, so neither is valid by OGC.
+The empty polygon is valid by both.
+
+{{code_block('user-guide/geo/concepts/validity','df',['DataFrame','geo.from_wkt','PolygonXY'])}}
+
+{{code_block('user-guide/geo/concepts/validity','checks',['geo.is_valid_geoarrow','geo.is_valid_ogc','geo.is_empty','geo.has_repeats_in_succession'])}}
+
+```python exec="on" result="text" session="user-guide/geo/concepts/validity"
+--8<-- "python/user-guide/geo/concepts/validity.py:df"
+--8<-- "python/user-guide/geo/concepts/validity.py:checks"
+```
 
 `geo.null_out_invalid_geoarrow` and `geo.null_out_invalid_ogc` replace invalid geometries with nulls.
-See `is_valid_geoarrow` and `is_valid_ogc` for all the rules.
+See `is_valid_geoarrow` and `is_valid_ogc` in the API reference for all the rules.
 
-```python
-df.select(geo.null_out_invalid_ogc("parcel"))
+{{code_block('user-guide/geo/concepts/validity','null_out',['geo.null_out_invalid_ogc','geo.to_wkt'])}}
+
+```python exec="on" result="text" session="user-guide/geo/concepts/validity"
+--8<-- "python/user-guide/geo/concepts/validity.py:null_out"
 ```
 
 The table below lists every check, the geometries it applies to,
