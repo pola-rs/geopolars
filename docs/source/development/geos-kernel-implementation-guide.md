@@ -1,6 +1,6 @@
 # GEOS kernel implementation guide
 
-This document extends the [Kernel implementation guide](<Kernel implementation guide.md>),
+This document extends the [Kernel implementation guide](kernel-implementation-guide.md),
 for kernels in `geos` that convert to GEOS and call it.
 
 ## Shapes
@@ -114,7 +114,7 @@ foregoing the need to convert its partner in the other column.
 - A GEOS kernel defaults to `early_coord_check="finite_and_empty"`.
   The check runs during the conversion to GEOS.
 - `"finite"` lets an empty point inside a geometry through to GEOS.
-  What GEOS then does is described under `early_coord_check` in [Common arguments](<../../../geopolars/docs/source/reference/common_arguments.rst>).
+  What GEOS then does is described under `early_coord_check` in [Common arguments](../../../geopolars/docs/source/reference/common_arguments.rst).
 - If the check can be turned off,
   the module documents what GEOS does with non-finite input then,
   as `geos/convex_hull.rs` does.

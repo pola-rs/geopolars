@@ -18,7 +18,7 @@ These should always be named `kernel_output_type_*`.
 Functions that wrap these should be `kernel_output_type_wrapper_*`
 
 An expression that takes kwargs uses `output_type_func_with_kwargs`,
-so that a bad argument already fails at plan time (see Dispatch in the [Kernel implementation guide](<Kernel implementation guide.md>)).
+so that a bad argument already fails at plan time (see Dispatch in the [Kernel implementation guide](kernel-implementation-guide.md)).
 
 ## Kernels live in `geopolars-compute`
 
@@ -64,7 +64,7 @@ This functionality has a dedicated Rust kernel in `geopolars-compute`'s `native`
 working directly on our storage.
 This makes them very fast, but they cannot be subdivided at plan-time.
 These are ideally element-wise if possible.
-Before implementing one, read the [Native kernel implementation guide](<Native kernel implementation guide.md>) first.
+Before implementing one, read the [Native kernel implementation guide](native-kernel-implementation-guide.md) first.
 
 ### B. Forward to external
 
@@ -74,7 +74,7 @@ This usually means at least one allocation and copy pass
 for every item processed this way, so prefer A-tier where it is feasible.
 In return we don't have to re-implement (and maintain) well-tested algorithms.
 Kernels forwarding to GEOS live in `geopolars-compute`'s `geos` module.
-Before implementing one, read the [GEOS kernel implementation guide](<GEOS kernel implementation guide.md>) first.
+Before implementing one, read the [GEOS kernel implementation guide](geos-kernel-implementation-guide.md) first.
 
 Examples are:
 

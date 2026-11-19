@@ -3,8 +3,8 @@
 This document is a guide for implementing compute kernels in `geopolars-compute`.
 It holds what goes for every kernel.
 Native kernels and GEOS kernels each have a guide of their own on top of this one:
-the [Native kernel implementation guide](<Native kernel implementation guide.md>)
-and the [GEOS kernel implementation guide](<GEOS kernel implementation guide.md>).
+the [Native kernel implementation guide](native-kernel-implementation-guide.md)
+and the [GEOS kernel implementation guide](geos-kernel-implementation-guide.md).
 Kernels forwarding to PROJ follow this guide alone.
 
 ## The target, and legacy names
@@ -22,12 +22,12 @@ Read them as follows:
 | `unique_z`, `unique_m` | `include_z`, `include_m` |
 | `NULLS` | `ALL_VALID`, which is its opposite |
 
-The arguments are described in [Common arguments](<../../../geopolars/docs/source/reference/common_arguments.rst>).
+The arguments are described in [Common arguments](../../../geopolars/docs/source/reference/common_arguments.rst).
 
 ## The entry point
 
 A kernel has one public function for each geometry kind it accepts,
-which takes the [view](<View Types.md>) of that kind:
+which takes the [view](view-types.md) of that kind:
 `&PointArray`, `&LineStringArray`, `&Untrimmed<PolygonArray>`, and so on.
 Avoid using a type-erased `Box<dyn Array>`! We use these nice types to show intent.
 `geopolars-core` picks which of these to call (see [Dispatch](#dispatch)).
@@ -130,7 +130,7 @@ use or write the variant.
 ## Trimmed and untrimmed views
 
 Views from `new` are trimmed, and a view a kernel builds has to be too
-(see [Trimming](<View Types.md#trimming>)).
+(see [Trimming](view-types.md#trimming)).
 
 - A kernel that walks a whole level (e.g. every coordinate) takes a trimmed view,
   as an untrimmed one holds the items of rows outside the chunk too.
@@ -153,7 +153,7 @@ Where a helper goes depends on what it costs:
   O(1) per call, without allocating or writing
   (accessors, ranges, spans, O(1) checks such as `is_ring`).
   Building a view (constructors, trimming) belongs there too
-  See [View Types](<View Types.md#methods-on-the-views>).
+  See [View Types](view-types.md#methods-on-the-views).
 - `utils` in `geopolars-compute` holds every other helper that kernels share
   and that any backend could use, as it only needs the views,
   directly in that module, without sub-modules.

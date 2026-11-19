@@ -42,7 +42,7 @@ fn ends_before(ends: &[i64], item: usize) -> usize {
 fn lists_passing(lists: &ValidList, items: &Bitmap) -> Bitmap {
     debug_assert!(
         lists.spans_all_of(items.len()),
-        "the lists have to be trimmed (see \"Trimming\" in docs/source/development/View Types.md)"
+        "the lists have to be trimmed (see \"Trimming\" in docs/source/development/view-types.md)"
     );
     if items.unset_bits() * SPARSE_RATIO < lists.len() {
         lists_passing_sparse(lists, items)
