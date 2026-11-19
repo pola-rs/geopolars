@@ -1,7 +1,7 @@
 // Visualisation of a typical expression call.
 // See DEVELOPERS.md for a text companion of this ^-^
 //
-// Render with: dot -Tsvg docs/expression-flow.dot -o expression-flow.svg
+// Render with: dot -Tsvg docs/source/development/expression-flow.dot -o expression-flow.svg
 //
 // This diagram contains only code that is part of this plugin.
 // Whatever Polars does in between is left out.

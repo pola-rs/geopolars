@@ -1,4 +1,6 @@
-# Common Arguments
+================
+Common arguments
+================
 
 There are a few arguments that show up in many expressions.
 Rather than repeating them everywhere (and risking doc drift), they are all described here.
@@ -9,9 +11,13 @@ The sections describe the target API.
 A *Legacy* note names the argument a section replaces (from the old/current design).
 The table at the end lists arguments that only a few expressions share, as they are now.
 
-## Errors
+Errors
+~~~~~~
 
-### `on_row_error: Literal["null", "raise"] = "raise"`
+.. _arg-on_row_error:
+
+`on_row_error: Literal["null", "raise"] = "raise"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some kernels can error depending on the data in a row.
 Something could be out of bounds, or a line might cross itself where an expression requires it not to.
@@ -26,10 +32,14 @@ With the `on_row_error` variable, you can set what to do if that happens.
 This parameter does not affect how error handling outside the per-row part is done.
 If there is an error in the setup, it can still fail the entire query even if `on_row_error="null"` is set.
 
-> [!NOTE]
-> Legacy: this replaces `ignore_per_row_errors: bool = False`.
+.. note::
 
-### `early_coord_check: Literal["finite", "off", "finite_and_empty"]`
+   Legacy: this replaces `ignore_per_row_errors: bool = False`.
+
+.. _arg-early_coord_check:
+
+`early_coord_check: Literal["finite", "off", "finite_and_empty"]`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Most operations will return a non-finite result if the input is also non-finite.
 This argument controls an early check for this in this kernel.
@@ -57,16 +67,27 @@ An example would be GEOS silently returning (4, 0) for a distance of 0.5 on a li
 With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
 What GEOS does with it depends on the operation, and often on where the point is:
 
-| Operation | An empty point inside a geometry |
-| - | - |
-| `buffer`, `offset_curve` | is left out |
-| `simplify` | is left out, but kept as the first vertex |
-| `simplify` with `preserve_topology=True` | fails the row |
-| `intersection`, `difference`, `shortest_line_between` | fails the row |
-| `relate` | fails the row, unless it is the first vertex |
-| `convex_hull` | is left out, but gives a null as the first vertex |
-| `line_interpolate_point` | gives a wrong point |
-| `is_topologically_equal` | gives a wrong answer |
+.. list-table::
+   :header-rows: 1
+
+   * - Operation
+     - An empty point inside a geometry
+   * - `buffer`, `offset_curve`
+     - is left out
+   * - `simplify`
+     - is left out, but kept as the first vertex
+   * - `simplify` with `preserve_topology=True`
+     - fails the row
+   * - `intersection`, `difference`, `shortest_line_between`
+     - fails the row
+   * - `relate`
+     - fails the row, unless it is the first vertex
+   * - `convex_hull`
+     - is left out, but gives a null as the first vertex
+   * - `line_interpolate_point`
+     - gives a wrong point
+   * - `is_topologically_equal`
+     - gives a wrong answer
 
 A geometry that is itself the empty point passes either check,
 and works as you'd expect it to, as it is a standard GEOS type.
@@ -74,12 +95,17 @@ and works as you'd expect it to, as it is a standard GEOS type.
 If this is a function that also takes `include_m`/`include_z`,
 the check only includes the coordinates that these flags specify.
 
-> [!NOTE]
-> Legacy: this replaces `early_finite_check: bool = False`.
+.. note::
 
-## CRS
+   Legacy: this replaces `early_finite_check: bool = False`.
 
-### `crs: str | None = None`
+CRS
+~~~
+
+.. _arg-crs:
+
+`crs: str | None = None`
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 The CRS to label the output with, in any form PROJ accepts
 (PROJJSON, WKT or an `AUTH:CODE` such as `"EPSG:4326"`).
@@ -91,7 +117,10 @@ It only labels, and never reprojects (except for the kernel that actually projec
 Related: `shortest_line_between(in_crs=None)` reprojects both sides to `in_crs` before measuring.
 It is marked experimental.
 
-### `distance_method: Literal["auto", "planar", "geodesic"] = "auto"`
+.. _arg-distance_method:
+
+`distance_method: Literal["auto", "planar", "geodesic"] = "auto"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Passed to functions that *measure* a distance.
 A CRS that uses degrees would get distances in degrees, which is most of the time not what you want.
@@ -107,14 +136,18 @@ A CRS that uses degrees would get distances in degrees, which is most of the tim
   On a projected CRS, the geodesic and planar distances are usually very close enough,
   so it makes sense to use the faster option.
 
-> [!NOTE]
-> this replaces `unique_z: bool = True`, `unique_m: bool = False`,
-> as well as `ignore_z` and `ignore_m`.
-> It replaces method: Literal["planar", "geodesic"] | None = None.
-> None becomes "auto".
-> Today's default sends any declared CRS through "geodesic", so the result changes for a projected CRS.
+.. note::
 
-### `allow_geographic: bool = False`
+   this replaces `unique_z: bool = True`, `unique_m: bool = False`,
+   as well as `ignore_z` and `ignore_m`.
+   It replaces method: Literal["planar", "geodesic"] | None = None.
+   None becomes "auto".
+   Today's default sends any declared CRS through "geodesic", so the result changes for a projected CRS.
+
+.. _arg-allow_geographic:
+
+`allow_geographic: bool = False`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Passed to kernels that take a distance as an *input*.
 Some methods really only make sense to do in a planar reference frame.
@@ -126,9 +159,13 @@ By default, we want to be strict. Raising an error at plan-time is clear.
 - `allow_geographic = True` shows that you know what you are doing,
   and intentionally want to express distances in degrees.
 
-## Comparing coordinates
+Comparing coordinates
+~~~~~~~~~~~~~~~~~~~~~
 
-### `abs_tol: float | None = None`, `rel_tol: float | None = None`
+.. _arg-abs_tol:
+
+`abs_tol: float | None = None`, `rel_tol: float | None = None`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 These are used to denote tolerances for equality/coincidence checks.
 These are modelled after Polars' arguments of the same name.
@@ -137,7 +174,10 @@ By default (both `None`), they have to be *exactly* equal (`0.0`).
 Values are compared *on every axis*, not as a vector magnitude.
 Neither value can be negative or NaN. This will return an error at plan time.
 
-### `include_z: bool = True`, `include_m: bool = False`
+.. _arg-include_z:
+
+`include_z: bool = True`, `include_m: bool = False`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 These flags control whether a certain axis is included in a comparison
 (e.g. equality, distance).
@@ -148,19 +188,27 @@ Either flag is ignored for a geometry without that axis.
 
 This also ties into `early_coord_check`. See its description for more details.
 
-> [!NOTE]
-> Legacy: this replaces `unique_z: bool = True`, `unique_m: bool = False`,
-> as well as `ignore_z` and `ignore_m`.
+.. note::
 
-## Building and repairing geometries
+   Legacy: this replaces `unique_z: bool = True`, `unique_m: bool = False`,
+   as well as `ignore_z` and `ignore_m`.
 
-### `close: CloseRings | None = None`
+Building and repairing geometries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. _arg-close:
+
+`close: CloseRings | None = None`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Closes open rings before they are checked, as `close_rings` does.
 `CloseRings(snap_z=False, snap_m=False)` carries the flags of `close_rings`.
 With `close=None`, an open ring is not a ring, so its polygon is null.
 
-### `null_parts: Literal["drop", "null"] = "null"`
+.. _arg-null_parts:
+
+`null_parts: Literal["drop", "null"] = "null"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This argument is used in constructors and functions that add to a geometry like `add_parts`.
 It determines what happens when one of the parts or a coordinate is null.
@@ -169,9 +217,12 @@ It determines what happens when one of the parts or a coordinate is null.
   What happens to linestrings and rings that are now too short is set by `short_lines`.
 - `null_parts="null"` makes the resulting row null.
 
-(TODO: maybe add an 'empty' option here too? not a priority)
+.. TODO: maybe add an 'empty' option here too? not a priority
 
-### `short_lines: Literal["null", "keep", "empty"] = "null"`
+.. _arg-short_lines:
+
+`short_lines: Literal["null", "keep", "empty"] = "null"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some operations remove coordinates. This can leave a linestring too short (single vertex),
 or a ring that does not enclose any area (<4 vertices, due to needing to repeat the last vertex).
@@ -186,30 +237,46 @@ This argument says what should happen to such a thing.
   If there are still non-empty holes,
   what is done to an empty outer ring depends on the `empty_polygon_exterior` value.
 
-> [!NOTE]
-> Legacy: this replaces `too_short: Literal["null", "keep", "empty"] = "null"`.
+.. note::
 
-### `empty_polygon_exterior: Literal["keep", "null", "error", "empty"] = "null"`
+   Legacy: this replaces `too_short: Literal["null", "keep", "empty"] = "null"`.
+
+.. _arg-empty_polygon_exterior:
+
+`empty_polygon_exterior: Literal["keep", "null", "error", "empty"] = "null"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 GeoArrow allows you to have an empty polygon exterior but a non-empty hole.
 Most of the time this is not a meaningful polygon though.
 
-| `empty_polygon_exterior` | a polygon a kernel would give an empty exterior and a hole with vertices |
-| - | - |
-| `"null"` (the default) | is null |
-| `"error"` | goes to `on_row_error` |
-| `"empty"` | loses its holes, so it is the empty polygon |
-| `"keep"` | keeps its holes: valid GeoArrow, but not valid OGC |
+.. list-table::
+   :header-rows: 1
+
+   * - `empty_polygon_exterior`
+     - a polygon a kernel would give an empty exterior and a hole with vertices
+   * - `"null"` (the default)
+     - is null
+   * - `"error"`
+     - goes to `on_row_error`
+   * - `"empty"`
+     - loses its holes, so it is the empty polygon
+   * - `"keep"`
+     - keeps its holes: valid GeoArrow, but not valid OGC
 
 With `"keep"`, running such a polygon through other expressions might give unexpected results.
 
-> [!NOTE]
-> Legacy: this replaces `empty_exterior: Literal["null", "keep"] = "null"`.
-> Its `"keep"` is now `"empty"`.
+.. note::
 
-## Output geometry
+   Legacy: this replaces `empty_exterior: Literal["null", "keep"] = "null"`.
+   Its `"keep"` is now `"empty"`.
 
-### `new_ring_orientation: Literal["keep", "ccw", "cw"] = "keep"`
+Output geometry
+~~~~~~~~~~~~~~~
+
+.. _arg-new_ring_orientation:
+
+`new_ring_orientation: Literal["keep", "ccw", "cw"] = "keep"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some functions add new rings.
 These might be in a different orientation from the rest of your geometry.
@@ -225,11 +292,15 @@ What counts as a new ring:
 - Constructors: all rings.
 - add_holes: only the added holes.
 
-> [!NOTE]
-> Legacy: this replaces `ccw_outer: bool = False`.
-> `ccw_outer=True` is now `new_ring_orientation="ccw"`.
+.. note::
 
-### `new_holes: Literal["opposite", "same"] = "opposite"`
+   Legacy: this replaces `ccw_outer: bool = False`.
+   `ccw_outer=True` is now `new_ring_orientation="ccw"`.
+
+.. _arg-new_holes:
+
+`new_holes: Literal["opposite", "same"] = "opposite"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This complements the `new_ring_orientation` argument,
 so it only affects newly transformed/built/converted rings.
@@ -238,7 +309,10 @@ I.e. if `new_ring_orientation="ccw"`, then the holes are made to go clockwise.
 
 This option does nothing if `new_ring_orientation="keep"`
 
-### `promote_to_multi: Literal["never", "always"] = "never"`
+.. _arg-promote_to_multi:
+
+`promote_to_multi: Literal["never", "always"] = "never"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some operations can result in a shape falling into several parts.
 For example, taking the difference between two polygons can cause the polygon to be cut into two.
@@ -256,26 +330,36 @@ This is mostly a concern when using GEOS kernels.
 If the input geometry is already a `Multi*` (e.g. `MultiPolygon`), this argument has no effect.
 These will always output a `Multi*`.
 
-> [!NOTE]
-> Legacy: this replaces `allow_splitting: bool = False`.
+.. note::
 
-## Affine transformations
+   Legacy: this replaces `allow_splitting: bool = False`.
 
-### `origin: Origin | IntoExprColumn = (0.0, 0.0, 0.0)`
+Affine transformations
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. _arg-origin:
+
+`origin: Origin | IntoExprColumn = (0.0, 0.0, 0.0)`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The point an affine transformation is done about:
 one point for the whole column, as `(x, y)` or `(x, y, z)` (a `z` left out being 0),
 or a `geoarrow.point` column with a point for every geometry.
 
-### `unit: Literal["deg", "rad"] = "deg"`
+.. _arg-unit:
+
+`unit: Literal["deg", "rad"] = "deg"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The unit of an angle: degrees or radians.
 
-> [!NOTE]
-> Legacy: this replaces `unit: Literal["deg", "pi"] = "deg"`,
-> where `"pi"` meant multiples of π radians rather than radians.
+.. note::
 
-## Arguments that come together
+   Legacy: this replaces `unit: Literal["deg", "pi"] = "deg"`,
+   where `"pi"` meant multiples of π radians rather than radians.
+
+Arguments that come together
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Some arguments make another one necessary.
 
@@ -293,17 +377,45 @@ Some arguments make another one necessary.
 - An expression that takes `empty_polygon_exterior` takes `on_row_error` too,
   as `empty_polygon_exterior="error"` hands the error to it.
 
-## Shared by two or three expressions
+Shared by two or three expressions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 These are not (yet) common, but already share a name and meaning across expressions.
 They are described as they are now.
 
-| argument | default | taken by | meaning |
-| - | - | - | - |
-| `allow_non_polygons` | `False` | `area`, `area_planar`, `area_geodesic` | give a non-polygon `0.0` rather than refusing it |
-| `allow_non_lines` | `False` | `length` | as `allow_non_polygons`, for non-lines |
-| `action` | `"drop"` | `filter_coordinates`, `fix_out_of_bounds` (inside `OutOfBounds`) | what happens to a selected coordinate: `"drop"`, `"set_empty"`, `"set_null"`, and `"clamp"` for `fix_out_of_bounds` |
-| `out_of_bounds` | `None` | `is_valid_geoarrow`, `is_valid_ogc`, and their `null_out_invalid_*` | check coordinates against the bounds `fix_out_of_bounds` would fix |
-| `check_null_coordinates` | `True` | `is_valid_geoarrow`, `is_valid_ogc`, and their `null_out_invalid_*` | look for null values below the row |
-| `quadrant_segments`, `join_style`, `mitre_limit` | `8`, `"round"`, `None` | `buffer`, `offset_curve` | the shape of the curve GEOS draws |
-| `dtype` | required | `from_wkb`, `from_wkt` | the concrete geometry type to decode into |
+.. list-table::
+   :header-rows: 1
+
+   * - argument
+     - default
+     - taken by
+     - meaning
+   * - `allow_non_polygons`
+     - `False`
+     - `area`, `area_planar`, `area_geodesic`
+     - give a non-polygon `0.0` rather than refusing it
+   * - `allow_non_lines`
+     - `False`
+     - `length`
+     - as `allow_non_polygons`, for non-lines
+   * - `action`
+     - `"drop"`
+     - `filter_coordinates`, `fix_out_of_bounds` (inside `OutOfBounds`)
+     - what happens to a selected coordinate: `"drop"`, `"set_empty"`, `"set_null"`,
+       and `"clamp"` for `fix_out_of_bounds`
+   * - `out_of_bounds`
+     - `None`
+     - `is_valid_geoarrow`, `is_valid_ogc`, and their `null_out_invalid_*`
+     - check coordinates against the bounds `fix_out_of_bounds` would fix
+   * - `check_null_coordinates`
+     - `True`
+     - `is_valid_geoarrow`, `is_valid_ogc`, and their `null_out_invalid_*`
+     - look for null values below the row
+   * - `quadrant_segments`, `join_style`, `mitre_limit`
+     - `8`, `"round"`, `None`
+     - `buffer`, `offset_curve`
+     - the shape of the curve GEOS draws
+   * - `dtype`
+     - required
+     - `from_wkb`, `from_wkt`
+     - the concrete geometry type to decode into

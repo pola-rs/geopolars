@@ -530,7 +530,7 @@ impl GeometryOrientation {
     };
 
     /// A clockwise exterior with counter-clockwise holes, as GEOS gives most rings it builds itself
-    /// (see "Orientation of new rings" in `docs/GEOS kernel implementation guide.md`).
+    /// (see "Orientation of new rings" in `docs/source/development/GEOS kernel implementation guide.md`).
     pub const GEOS_BUILT: Self = Self {
         outer: Orientation::Cw,
         holes: Orientation::Ccw,

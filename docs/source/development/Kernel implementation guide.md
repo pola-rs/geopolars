@@ -22,7 +22,7 @@ Read them as follows:
 | `unique_z`, `unique_m` | `include_z`, `include_m` |
 | `NULLS` | `ALL_VALID`, which is its opposite |
 
-The arguments are described in [Common arguments](<Common arguments.md>).
+The arguments are described in [Common arguments](<../../../geopolars/docs/source/reference/common_arguments.rst>).
 
 ## The entry point
 

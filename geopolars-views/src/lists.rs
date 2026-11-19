@@ -64,7 +64,7 @@ impl ValidList {
     }
 
     /// Whether these lists hold all `items` of the child array, from the first one on.
-    /// See "Trimming" in docs/View Types.md.
+    /// See "Trimming" in docs/source/development/View Types.md.
     #[inline]
     pub fn spans_all_of(&self, items: usize) -> bool {
         *self.offsets.first() == 0 && *self.offsets.last() as usize == items

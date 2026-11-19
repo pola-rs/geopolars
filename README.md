@@ -29,13 +29,13 @@ In addition, GeoPolars aims to be a modern GeoSpatial toolset, offering:
 If you are interested in the design paradigm and architecture used for this plugin,
 See the `Docs` directory for more information about the internals of this plugin.
 
-- [A high-level overview of the architecture of the plugin](./docs/Architecture.md)
-- [A document that describes what happens when you call an expression, at plan and execution time](./docs/Typical expression flow.md).
-  This is accompanied by [a diagram](./docs/expression-flow.dot).
-- [What to consider when implementing new or editing existing expressions](./docs/Expression implementation guide.md)
+- [A high-level overview of the architecture of the plugin](./docs/source/development/Architecture.md)
+- [A document that describes what happens when you call an expression, at plan and execution time](./docs/source/development/Typical expression flow.md).
+  This is accompanied by [a diagram](./docs/source/development/expression-flow.dot).
+- [What to consider when implementing new or editing existing expressions](./docs/source/development/Expression implementation guide.md)
 - [The views kernels take, in `geopolars-views`](./geopolars-views/README.md)
 - [What to consider when writing kernels, in `geopolars-compute`](./geopolars-compute/README.md)
-- [An overview of which expression is implemented at which *tier*](./docs/Tier per expression.md)
+- [An overview of which expression is implemented at which *tier*](./docs/source/development/Tier per expression.md)
 
 ## Quickstart
 

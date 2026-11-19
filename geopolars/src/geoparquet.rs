@@ -1,7 +1,7 @@
 //! The GeoParquet metadata: the JSON under a Parquet file's `geo` key,
 //!
 //! GeoParquet keeps per column what GeoArrow keeps in a dtype's metadata,
-//! but in its own format (see `docs/geoparquet-1.1.0p1.md`).
+//! but in its own format (see `docs/source/development/geoparquet-1.1.0p1.md`).
 //! This module converts between our metadata representation and GeoParquet's.
 //! Only GeoParquet 1.x is supported, as 2.0rc breaks with upstream
 

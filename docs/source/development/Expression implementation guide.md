@@ -28,7 +28,7 @@ They take the views of `../geopolars-views`.
 That way, the 'geo' logic is separated from the Polars plugin layer.
 Write new kernels there.
 Some kernels still live in `src/expr/` until they are migrated.
-See [its README](../geopolars-compute/README.md) for how to write a kernel.
+See [its README](../../../geopolars-compute/README.md) for how to write a kernel.
 
 What remains in the plugin is a thin layer per expression in `src/expr/`.
 

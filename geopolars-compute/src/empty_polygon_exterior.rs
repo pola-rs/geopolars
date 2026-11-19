@@ -1,6 +1,6 @@
 const_enum!(
     /// What a kernel does with a polygon it makes with an empty exterior but a hole with vertices.
-    /// Implements `empty_polygon_exterior`, which `docs/Common arguments.md` documents.
+    /// Implements `empty_polygon_exterior`, which `geopolars/docs/source/reference/common_arguments.rst` documents.
     #[derive(Default)]
     pub enum EmptyPolygonExterior {
         Keep,

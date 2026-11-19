@@ -156,7 +156,7 @@ This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",
     "on_row_error": """\
 This expression can error on individual rows. How these are handled is determined by `on_row_error`.
-See `on_row_error` on the Common arguments page (`docs/Common arguments.md`).""",
+See :ref:`on_row_error <arg-on_row_error>` on the Common arguments page.""",
     "geos_errors": """\
 If GEOS returns an error for a row, it is handled through `on_row_error`.""",
     "geos_non_finite": """\
@@ -165,17 +165,17 @@ nor any other NaN or infinite x or y.
 With `early_coord_check="off"`, they go to GEOS as they are.""",
     "early_coord_check": """\
 This expression can check for NaNs and nested empty points early.
-See `early_coord_check` on the Common arguments page (`docs/Common arguments.md`).""",
+See :ref:`early_coord_check <arg-early_coord_check>` on the Common arguments page.""",
     "empty_polygon_exterior": """\
 A polygon with an empty exterior and a hole with vertices is not valid OGC.
 What this expression does when it would make one is set by `empty_polygon_exterior`.
-See `empty_polygon_exterior` on the Common arguments page (`docs/Common arguments.md`).""",
+See :ref:`empty_polygon_exterior <arg-empty_polygon_exterior>` on the Common arguments page.""",
     "new_ring_orientation": """\
 By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them:
 the exterior clockwise, and the holes counter-clockwise.
 With `"ccw"` or `"cw"`, the exterior runs that way instead, at a minimal performance cost.
 The holes then run against it with `new_holes="opposite"` (the default), or along it with `"same"`.
-See `new_ring_orientation` on the Common arguments page (`docs/Common arguments.md`).""",
+See :ref:`new_ring_orientation <arg-new_ring_orientation>` on the Common arguments page.""",
     "overlay_splitting": """\
 A row whose result has several parts then raises.
 With `allow_splitting=True`, the result is the multi kind instead, which holds every part.""",
