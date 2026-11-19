@@ -21,6 +21,8 @@ with `replace_geometries`.
 It also takes the orientation of what GEOS gives
 (see [Orientation of new rings](#orientation-of-new-rings)),
 so that the column's orientation always matches its rows.
+Every other row stays as it is,
+and a row GEOS fails on under `on_row_error="null"` becomes `Null`.
 Then, an `into_*_array` conversion gives the view of the output kind.
 So something that looks like this:
 
@@ -74,7 +76,10 @@ it converts only the rows the operation needs
 (see [Trivial rows never reach GEOS](#trivial-rows-never-reach-geos)),
 broadcasts a side of a single row against the other,
 and gives null for a pair with a null row.
-So an operation never sees a row that was not converted,
+A row that failed to convert under `on_row_error="null"` only nulls the pairs that need it.
+Paired with an empty row whose result needs no partner (`WhenEmpty::Gives`),
+it still gives that result.
+An operation therefore never sees a row that was not converted,
 and does not handle nulls or `on_row_error` itself.
 
 ```rust
@@ -129,23 +134,40 @@ Can use the same mechanism as any of the other GEOS things, so that they can the
 
 ## One container for GEOS geometries
 
-The geometries in a column of every GEOS kernel go in one `GeosGeometries`.
-The kind of the output lives in the `into_*_array` conversion,
-not in a container of its own.
+The geometries in a column of every GEOS kernel go in one `GeosGeometries`,
+which is made up of `GeosRow`s.
+These can hold several variants so that empty and invalid cases can be handled consistently:
 
-A `GeosRow` is `Empty` or a `Geometry` (null is described with the validity bitmask.
-We can just plonk `Empty` there, it should not matter).
+| `GeosRow` | The row | Made by | In the output |
+| --- | --- | --- | --- |
+| `Geometry` | holds a GEOS geometry | the conversion, or the kernel | that geometry |
+| `Empty` | has no vertices (see [Trivial rows never reach GEOS](#trivial-rows-never-reach-geos)) | the conversion, or the kernel | an empty geometry |
+| `Null` | is null | the conversion, or the kernel | null |
+| `Failed` | failed to convert under `on_row_error="null"` | the conversion | null |
+| `Skipped` | was not converted, as its partner decides result | `GeosPairs` | never gets there |
+
+A kernel only ever makes `Geometry`, `Empty` or `Null` itself.
+`Failed` and `Skipped` only exist in intermediate stages.
+In a binary operation, having a null or an empty row on either side can decide the result
+without even needing to look at the other side.
+Take for example an intersection operation:
+If one side is empty, then we don't even need to look at the other (valid) side,
+as we already know that the output will be empty too.
+In such a case, the other side will be set to `Skipped`.
+`Failed` holds the `on_row_error="null"` verdict back until a result needs the row,
+so that a binary operation can null only the pairs that need it.
+A result row that GEOS fails on has had its verdict, so it is `Null`, not `Failed`.
+`Null` also covers a result that is null by definition,
+such as the convex hull of a single coordinate.
 
 ## Trivial rows never reach GEOS
 
 Converting a geometry to GEOS and calling GEOS on it is expensive.
-A kernel that can tell the result of a row without GEOS gives it before converting.
-Null rows are unset in the validity of `GeosRows`, and empty rows become `GeosRow::Empty`.
-These are much cheaper to create,
+For trivial cases, it is much cheaper to bypass it if we already know the answer.
+The conversion already does this for null rows and rows that are empty (without vertices, or no parts).
+which become `GeosRow::Null` and `GeosRow::Empty` without going to GEOS.
+These rows are much cheaper to create,
 and let us switch what we do without inspecting the GEOS data.
-
-In a binary operation, a null or an empty on either side should short-circuits the pair,
-foregoing the need to convert its partner in the other column.
 
 ## Coordinate checks and GEOS errors
 
