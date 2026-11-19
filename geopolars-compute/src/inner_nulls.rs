@@ -131,7 +131,7 @@ pub fn multi_polygons_with_null_parts_marked(
     MaskedParts { view, keep }
 }
 
-/// A view with a mask of the parts to read (see "Valid input" in the README).
+/// A view with a mask of the parts to read (see "Valid input" in the kernel implementation guide).
 /// The parts holding a null value in the input are unset in the mask.
 /// [without_empty_parts](crate::native::WithoutEmptyParts::without_empty_parts) unsets the empty ones too.
 pub struct MaskedParts<T> {

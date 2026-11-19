@@ -45,5 +45,5 @@ See the `Docs` directory for more information about the internals of this plugin
 - [CRS awareness](./docs/source/user-guide/concepts/crs.md)
 - [User-defined functions](./docs/source/user-guide/udfs.md)
 
-TODO: setting for accepting/refusing trivial cases (e.g. 'remove duplicate points' for single point)?
-or an envvar? or not at all?
+> [!TODO] the relative links in this README break on PyPI, which uses it as the package description.
+Make them absolute once the docs are hosted.
