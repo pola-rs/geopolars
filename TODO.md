@@ -24,9 +24,9 @@ Follow the order of the Polars README.
 - [ ] One line on stability, instead of the "HIGHLY unstable" banner.
 - [ ] Contributing and licence sections.
 - [ ] Remove the empty "CRS awareness" and "Geometry Operations" headings, and the two TODOs.
-- [ ] Move the validity explanation and table to the user guide.
-- [ ] Move the UDF section to the user guide.
-- [ ] Move the winding order conventions to the user guide.
+- [x] Move the validity explanation and table to the user guide.
+- [x] Move the UDF section to the user guide.
+- [x] Move the winding order conventions to the user guide.
 - [ ] Move the developer doc links to the contributing guide.
 
 ## Docs
