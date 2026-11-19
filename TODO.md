@@ -31,40 +31,47 @@ Follow the order of the Polars README.
 
 ## Docs
 
-We want to have everything in sphinx.
+The user guide is embedded into the Polars user guide (zensical).
+The API reference (Sphinx, in `geopolars/docs/`) is built separately,
+but is also hosted on the Polars domain.
 
-OUTDATED:
-Mirror Polars: a user guide and contributor guide under `docs/source/`,
-and the Sphinx API reference in `geopolars/docs/` (already in place).
+- [x] Decide on the tooling: the user guide goes into the Polars user guide, the API reference stays in Sphinx.
+- [x] Mirror the Polars layout: `docs/source/user-guide/` and `docs/source/development/`.
+- [x] Move the developer docs into `development/`.
+- [x] Rename doc files to kebab-case, which also fixes the broken README links.
+- [x] Move the vendored GeoParquet specs out of the docs source, into `docs/ref/`.
+- [x] Move the common arguments into the API reference (`reference/common_arguments.rst`).
 
-```text
-docs/
-  source/
-    user-guide/
-      getting-started.md, installation.md
-      concepts/  geometry-types.md (GeoArrow, dimensions), crs.md,
-                 validity.md (from README), nulls-nan-empty.md
-      io/        geoparquet.md, wkb-wkt.md
-      udfs.md (from README), migrating-from-geopandas.md
-    development/
-      contributing/  index.md (setup, make targets), test.md, code-style.md
-      architecture/  architecture.md, expression-flow.md (+ rendered diagram),
-                     view-types.md, common-arguments.md, tier-per-expression.md
-      kernels/       kernel-guide.md, native-kernels.md, geos-kernels.md
-  assets/          logo, rendered diagrams
-```
+### User guide
 
-- [ ] Decide whether the user guide gets its own tool (zensical, like Polars) or goes into the Sphinx site as MyST pages.
-- [ ] Write the user guide pages.
-- [ ] Move the developer docs into `development/`.
-- [ ] Rename doc files to kebab-case, which also fixes the broken README links.
+- [ ] Rewrite the pages in the Polars conventions:
+  code in `docs/source/src/python/`, included with `{{code_block(...)}}` so it runs during the build,
+  Material admonitions, and links into the API reference.
+- [ ] Flesh out the stubs: `concepts/crs.md` and `concepts/winding-order.md`,
+  and resolve the TODO in `udfs.md`.
+- [ ] Write the missing pages: installation, geometry types (GeoArrow, dimensions), nulls, NaN and empty geometries,
+  IO (GeoParquet, WKB/WKT), and migrating from GeoPandas.
+
+### API reference
+
+- [ ] Add a workflow that deploys the Sphinx build to the Polars domain, next to the Polars API reference.
+- [ ] Decide on versioning (stable and dev), as the Polars API reference does.
+- [ ] Match the look of the Polars API reference, and link it to and from the user guide.
+- [ ] `common_arguments.rst`: drop the *Legacy* notes once the migration is done,
+  as this is now a user-facing page.
+
+### Developer docs
+
+- [ ] Decide where the developer docs are read: on GitHub, or published somewhere.
 - [ ] Render `expression-flow.dot` to SVG, or convert it to Mermaid.
-- [ ] Replace the vendored GeoParquet specs with links to upstream.
-- [ ] Turn `Roadmap.md` into GitHub issues or milestones, or trim it to a user-facing roadmap.
-- [ ] `Common arguments.md`: drop the legacy notes once the migration is done, or mark it as a design doc.
-- [ ] `View Types.md`: rewrite (it has a TODO saying so).
-- [ ] `Architecture.md`: fix the undefined `[Typical program flow]` link.
-- [ ] Replace or take down the 2023 mkdocs docs on `gh-pages` once the new docs deploy.
+- [ ] Turn `roadmap.md` into GitHub issues or milestones, or trim it to a user-facing roadmap.
+- [ ] `view-types.md`: rewrite (it has a TODO saying so).
+- [ ] `architecture.md`: fix the undefined `[Typical program flow]` link.
+
+### Once deployed
+
+- [ ] Point the README links to the user guide and API reference at the hosted pages, instead of GitHub.
+- [ ] Replace or take down the 2023 mkdocs docs on `gh-pages`.
 
 ## Examples
 
