@@ -107,8 +107,8 @@ CRS
 `crs: str | None = None`
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The CRS to label the output with, in any form PROJ accepts
-(PROJJSON, WKT or an `AUTH:CODE` such as `"EPSG:4326"`).
+The CRS to label the output with,
+in any form described under "Declaring a CRS" in `docs/source/user-guide/geo/concepts/crs.md`.
 
 For a constructor built from parts, it sets the CRS of parts that declare none,
 and refuses parts that already declare another (`MetadataKwargs::apply` in `src/geoarrow/crs.rs`).
@@ -123,13 +123,13 @@ It is marked experimental.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Passed to functions that *measure* a distance.
-A CRS that uses degrees would get distances in degrees, which is most of the time not what you want.
+Why distances in degrees are rarely what you want is described under "Geographic and projected"
+in `docs/source/user-guide/geo/concepts/crs.md`.
 
 - `distance_method="planar"` naively looks at the coordinate data as-is.
   This makes sense if the CRS already defines its distances in a linear unit (e.g. metres, feet),
   but otherwise you might end up with distances in degrees.
 - `distance_method="geodesic"` gets the distances on the CRS-defined ellipsoid.
-  This is a much more expensive operation.
 - `distance_method="auto"` (default) looks at the CRS to switch between the other two modes.
   If the CRS is a geographic one, it uses the `"geodesic"` option,
   while it uses `"planar"` on anything that has a projected CRS, or no CRS at all.
@@ -278,8 +278,9 @@ Output geometry
 `new_ring_orientation: Literal["keep", "ccw", "cw"] = "keep"`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Some functions add new rings.
-These might be in a different orientation from the rest of your geometry.
+Some functions add new rings,
+which might run another way than the rest of your geometry
+(see "New rings" in `docs/source/user-guide/geo/concepts/winding-order.md`).
 In these cases, you can ask what should be done with the newly added rings:
 
 - `new_ring_orientation="keep"` keeps the rings as-is. This is the cheapest option.

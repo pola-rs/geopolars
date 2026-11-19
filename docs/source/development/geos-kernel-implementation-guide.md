@@ -123,11 +123,10 @@ foregoing the need to convert its partner in the other column.
 
 ## Orientation of new rings
 
-GEOS sometimes changes the directions of rings.
-Most of the time, it gives clockwise shells and counter-clockwise holes for anything new that it constructs.
-This is not always the case though!
+Which way GEOS runs the rings it builds is described under [New rings](../user-guide/geo/concepts/winding-order.md#new-rings) in the user guide.
 
-Every operation must therefore set the `orientation` of its output `GeosGeometries`.
+The takeaway is that it is not consistent,
+which is why every operation must therefore set the `orientation` of its output `GeosGeometries`.
 Every row of the column runs in that direction,
 unless its `GeosRow::Geometry::maybe_wrong_orientation` is set.
 

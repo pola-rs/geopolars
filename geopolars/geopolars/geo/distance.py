@@ -1,10 +1,7 @@
-"""How far apart two points are.
+"""How far apart two points are, on the plane or along the ellipsoid of their CRS.
 
-Points that declare a CRS are measured along the ellipsoid, in the unit of the CRS
-(metres for a CRS in longitude/latitude).
-Points without one are measured on the flat plane their coordinates lie in,
-in whatever units those are: for longitude/latitude that is degrees,
-which shrink east-west towards the poles. Declare the CRS to get metres.
+Which of the two is picked by default, and why,
+is described under "Geographic and projected" in `docs/source/user-guide/geo/concepts/crs.md`.
 """
 
 from __future__ import annotations

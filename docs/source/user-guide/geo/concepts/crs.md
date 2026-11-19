@@ -85,6 +85,7 @@ Doing the same for these two cities that are very far north shows that this rati
 TODO: Give an example comparing the distance in degrees and km somewhere very far up north.
 
 In some cases, the planar area is still useful.
+Measuring on the plane is also much cheaper than measuring along the ellipsoid.
 That is why operations like `area`, `length`,
 and `distance` allow you to choose which distance metric to use.
 

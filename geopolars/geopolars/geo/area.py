@@ -1,10 +1,8 @@
 """The area a geometry encloses.
 
-`area_planar` measures on the flat plane the coordinates lie in,
-in whatever units those are squared.
-`area_geodesic` measures along the ellipsoid of the CRS, in the unit of the CRS squared
-(square metres for a CRS in longitude/latitude).
-`area` picks between them by the CRS.
+`area_planar` measures on the plane, and `area_geodesic` along the ellipsoid of the CRS.
+`area` picks between them by the CRS,
+as described under "Geographic and projected" in `docs/source/user-guide/geo/concepts/crs.md`.
 """
 
 from __future__ import annotations

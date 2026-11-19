@@ -171,8 +171,8 @@ A polygon with an empty exterior and a hole with vertices is not valid OGC.
 What this expression does when it would make one is set by `empty_polygon_exterior`.
 See :ref:`empty_polygon_exterior <arg-empty_polygon_exterior>` on the Common arguments page.""",
     "new_ring_orientation": """\
-By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them:
-the exterior clockwise, and the holes counter-clockwise.
+By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them.
+This is usually the exterior clockwise, with the holes counter-clockwise, but not always!
 With `"ccw"` or `"cw"`, the exterior runs that way instead, at a minimal performance cost.
 The holes then run against it with `new_holes="opposite"` (the default), or along it with `"same"`.
 See :ref:`new_ring_orientation <arg-new_ring_orientation>` on the Common arguments page.""",
