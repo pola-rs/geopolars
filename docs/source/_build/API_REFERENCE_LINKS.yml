@@ -1,13 +1,23 @@
 # Merged into the Polars `docs/source/_build/API_REFERENCE_LINKS.yml`.
 python:
+  geo.area: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.area.html
+  geo.bounds: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.bounds.html
+  geo.buffer: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.buffer.html
+  geo.distance: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.distance.html
   geo.from_wkt: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.from_wkt.html
   geo.has_repeats_in_succession: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.has_repeats_in_succession.html
+  geo.is_ccw: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.is_ccw.html
   geo.is_empty: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.is_empty.html
   geo.is_valid_geoarrow: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.is_valid_geoarrow.html
   geo.is_valid_ogc: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.is_valid_ogc.html
   geo.null_out_invalid_ogc: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.null_out_invalid_ogc.html
+  geo.point: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.point.html
+  geo.set_crs: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.set_crs.html
+  geo.to_ccw: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.to_ccw.html
+  geo.to_crs: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.to_crs.html
   geo.to_wkt: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.to_wkt.html
   geo.translate: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.translate.html
+  geo.wrap_longitude: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.wrap_longitude.html
   gpl.col: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.col.html
   LineStringXY: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.datatypes.LineStringXY.html
   PolygonXY: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.datatypes.PolygonXY.html

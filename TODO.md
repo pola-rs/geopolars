@@ -47,7 +47,7 @@ but is also hosted on the Polars domain.
 - [x] Rewrite the pages in the Polars conventions:
   code in `docs/source/src/python/user-guide/geo/`, included with `{{code_block(...)}}` so it runs during the build,
   Material admonitions, and links into the API reference (`docs/source/_build/API_REFERENCE_LINKS.yml`).
-- [ ] Flesh out the stubs: `concepts/crs.md` and `concepts/winding-order.md`,
+- [x] Flesh out the stubs: `concepts/crs.md` and `concepts/winding-order.md`,
   and resolve the TODO in `udfs.md`.
 - [ ] Write the missing pages: installation, geometry types (GeoArrow, dimensions), nulls, NaN and empty geometries,
   IO (GeoParquet, WKB/WKT), and migrating from GeoPandas.

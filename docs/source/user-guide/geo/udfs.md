@@ -35,7 +35,6 @@ Below, we stretch a polygon to twice its width:
     - `return_dtype` must be an instance.
       Passing the class, like `return_dtype=PolygonXY`, raises a TypeError.
     - The CRS can be lost.
-      `PolygonXY()` produces a polygon column with no CRS.
-      Use `df.schema["parcel"]` to keep the existing CRS.
-
-TODO: add helper function to set the CRS of the original column and describe it here.
+      `PolygonXY()` produces a polygon column with no [CRS](concepts/crs.md).
+      Use `df.schema["parcel"]` to keep the existing CRS,
+      or declare it again afterwards with `geo.set_crs`.
