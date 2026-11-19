@@ -7,7 +7,7 @@
 //!
 //! [`GeosPairs`] uses this to convert only the rows the operation needs.
 //! An empty row never goes to GEOS.
-//! A row is empty when it has no vertices, as `is_empty` sees it.
+//! A row is empty when it has no vertices (see [`rows_without_vertices`]).
 //! Its partner only does when the operation needs it for the result ([`WhenEmpty::WithPartner`]).
 //! A pair with a null row is null, so its other row is not converted either.
 //!

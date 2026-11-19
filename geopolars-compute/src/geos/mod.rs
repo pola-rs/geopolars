@@ -110,8 +110,7 @@ pub trait ToGeos {
 }
 
 /// Converts an array into one [`GeosRow`] per row.
-/// A row without vertices (no parts, or parts without vertices, as `is_empty` without
-/// `check_nested` sees it) is `Empty`, and never goes to GEOS.
+/// A row without vertices (see `rows_without_vertices`) is `Empty`, and never goes to GEOS.
 /// A row that fails `early_coord_check`, or that GEOS fails to build, goes to `on_row_error`.
 /// The size hint is that of the array itself.
 pub trait ToGeosRows {
@@ -583,7 +582,7 @@ impl GeosGeometries {
 pub enum GeosRow {
     /// Null in the output, whether the input row was null, or `on_row_error="null"` made it so.
     Null,
-    /// Without vertices, as `is_empty` without `check_nested` sees it. Never went to GEOS.
+    /// Without vertices (see `rows_without_vertices`). Never went to GEOS.
     /// Valid for every kind.
     Empty,
     Geometry {

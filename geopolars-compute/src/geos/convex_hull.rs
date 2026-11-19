@@ -254,10 +254,10 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
                     geometry: hull,
                     maybe_wrong_orientation: false,
                 },
-                // A hull that encloses nothing is the null polygon the Python `convex_hull`
-                // documents, not a failure.
-                Some(None) => GeosRow::Null,
-                None => GeosRow::Null,
+                // A hull that encloses nothing is the null polygon
+                // the Python `convex_hull` documents.
+                // A failure has had its `on_row_error` verdict applied, as in `replace_geometries`.
+                _ => GeosRow::Null,
             },
         });
     }
