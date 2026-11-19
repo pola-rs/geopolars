@@ -207,7 +207,8 @@ impl OverlayPairs {
         let mut geometries = GeosRows::with_capacity(self.pairs.len());
         for overlay in self.pairs.evaluate(&self.operation, self.on_row_error) {
             let narrowed = overlay?.map(|overlay| narrowed(overlay, kept_dimension, multi));
-            geometries.push(row_or_null(narrowed.transpose(), self.on_row_error)?);
+            let narrowed = row_or_null(narrowed.transpose(), self.on_row_error)?;
+            geometries.push(narrowed.unwrap_or(GeosRow::Null));
         }
         Ok(GeosGeometries {
             geometries,
@@ -274,6 +275,7 @@ fn narrowed(
             geometry,
             maybe_wrong_orientation,
         } => kept_parts(geometry, maybe_wrong_orientation, kept_dimension, multi),
+        _ => unreachable!("an overlay is empty or a geometry"),
     }
 }
 

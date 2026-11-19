@@ -254,6 +254,23 @@ def test_a_chunked_column_is_compared_against_a_single_geometry() -> None:
     assert out.to_series().to_list() == expected
 
 
+def test_a_single_failing_geometry_only_nulls_the_pairs_that_need_it() -> None:
+    many = _chunked(
+        [
+            _wkt("many", PolygonXY(), ["POLYGON EMPTY"]),
+            _wkt("many", PolygonXY(), ["POLYGON EMPTY", _SQUARE]),
+        ]
+    )
+    # GEOS fails to build a linestring of a single vertex.
+    one = _series("one", LineStringXY(), [_xy((0, 0))])
+
+    out = pl.DataFrame(many).select(
+        geo.is_topologically_equal("many", one, on_row_error="null")
+    )
+
+    assert out["many"].to_list() == [False, False, None]
+
+
 def test_m_is_not_compared() -> None:
     a = (PolygonXYZM(), ["POLYGON ZM ((0 0 1 1, 1 0 1 2, 1 1 1 3, 0 1 1 4, 0 0 1 1))"])
     b = (MultiPolygonXY(), [f"MULTIPOLYGON ({_SQUARE[7:]})"])

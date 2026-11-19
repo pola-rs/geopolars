@@ -7,9 +7,12 @@
 //!
 //! [`GeosPairs`] uses this to convert only the rows the operation needs.
 //! An empty row never goes to GEOS.
+//! A row is empty when it has no vertices, as `is_empty` sees it.
 //! Its partner only does when the operation needs it for the result ([`WhenEmpty::WithPartner`]).
 //! A pair with a null row is null, so its other row is not converted either.
-//! An operation is therefore never handed a row that was not converted.
+//!
+//! A row that fails to convert (with `on_row_error="null"`) makes null only the pairs that need its geometry.
+//! Its pair with an empty row still gives what [`WhenEmpty::Gives`] gives, whatever the chunking.
 
 use geopolars_views::output::SizeHint;
 use geopolars_views::GeometryArray;
@@ -48,10 +51,6 @@ pub(super) struct GeosPairs {
     // With glibc's malloc, that makes `is_topologically_equal` on 50k polygons ~20% faster.
     b: GeosGeometries,
     a: GeosGeometries,
-    /// The rows of `a` without vertices.
-    a_empty: Bitmap,
-    /// The rows of `b` without vertices.
-    b_empty: Bitmap,
     rows: usize,
 }
 
@@ -78,13 +77,9 @@ impl GeosPairs {
         let a_skipped = &a_empty | &paired_with(&b_decides, a.len());
         let b_skipped = &b_empty | &paired_with(&a_decides, b.len());
         let early = early_coord_check;
-        let a_rows = a.to_geos_rows_taking_as_empty(Some(&a_skipped), on_row_error, early)?;
-        let b_rows = b.to_geos_rows_taking_as_empty(Some(&b_skipped), on_row_error, early)?;
         Ok(Self {
-            b: b_rows,
-            a: a_rows,
-            a_empty,
-            b_empty,
+            a: a.to_geos_rows_skipping(Some(&a_skipped), on_row_error, early)?,
+            b: b.to_geos_rows_skipping(Some(&b_skipped), on_row_error, early)?,
             rows,
         })
     }
@@ -96,21 +91,23 @@ impl GeosPairs {
         operation: &'a Op,
         on_row_error: OnRowError,
     ) -> impl Iterator<Item = GeoComputeResult<Option<Op::Output>>> + 'a {
-        let a = broadcast(self.a.geometries.iter(), self.rows)
-            .zip(broadcast(self.a_empty.iter(), self.rows));
-        let b = broadcast(self.b.geometries.iter(), self.rows)
-            .zip(broadcast(self.b_empty.iter(), self.rows));
-        a.zip(b).map(move |((a, a_empty), (b, b_empty))| {
-            let (Some(a), Some(b)) = (a, b) else {
-                return Ok(None);
+        let a = broadcast(self.a.geometries.iter(), self.rows);
+        let b = broadcast(self.b.geometries.iter(), self.rows);
+        a.zip(b).map(move |(a, b)| {
+            let result = match (a, b) {
+                (GeosRow::Null, _) | (_, GeosRow::Null) => Ok(None),
+                (GeosRow::Empty, GeosRow::Empty) => Ok(Some(operation.when_both_empty())),
+                (GeosRow::Empty, b) => when_empty(operation, operation.when_a_empty(), b),
+                (a, GeosRow::Empty) => when_empty(operation, operation.when_b_empty(), a),
+                (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => {
+                    operation.on_geometries(a, b).map(Some)
+                }
+                (GeosRow::Failed, _) | (_, GeosRow::Failed) => Ok(None),
+                (GeosRow::Skipped, _) | (_, GeosRow::Skipped) => {
+                    unreachable!("a row with vertices that an operation needs is converted")
+                }
             };
-            let result = match (a_empty, b_empty) {
-                (true, true) => Ok(operation.when_both_empty()),
-                (true, false) => when_empty(operation, operation.when_a_empty(), b),
-                (false, true) => when_empty(operation, operation.when_b_empty(), a),
-                (false, false) => operation.on_geometries(converted(a), converted(b)),
-            };
-            row_or_null(result.map(Some), on_row_error)
+            row_or_null(result, on_row_error)
         })
     }
 
@@ -123,24 +120,22 @@ impl GeosPairs {
     }
 }
 
+/// `None` if the operation needs `partner`, which failed to convert.
 #[inline(always)]
 fn when_empty<Op: PairOperation>(
     operation: &Op,
     rule: WhenEmpty<Op>,
     partner: &GeosRow,
-) -> GeoComputeResult<Op::Output> {
-    match rule {
-        WhenEmpty::Gives(result) => Ok(result()),
-        WhenEmpty::WithPartner(result) => result(operation, converted(partner)),
-    }
-}
-
-/// The GEOS geometry of a row that [`GeosPairs::new`] converted.
-#[inline(always)]
-fn converted(row: &GeosRow) -> &Geometry {
-    match row {
-        GeosRow::Geometry { geometry, .. } => geometry,
-        GeosRow::Empty => unreachable!("a row with vertices that an operation needs is converted"),
+) -> GeoComputeResult<Option<Op::Output>> {
+    match (rule, partner) {
+        (WhenEmpty::Gives(result), _) => Ok(Some(result())),
+        (WhenEmpty::WithPartner(result), GeosRow::Geometry { geometry, .. }) => {
+            result(operation, geometry).map(Some)
+        }
+        (WhenEmpty::WithPartner(_), GeosRow::Failed) => Ok(None),
+        (WhenEmpty::WithPartner(_), _) => {
+            unreachable!("a row with vertices that an operation needs is converted")
+        }
     }
 }
 

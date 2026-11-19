@@ -15,7 +15,7 @@ use polars_arrow::bitmap::Bitmap;
 
 use super::{
     axes, coord_seq, rows_to_geos, wrong_kind, Axes, CoordsBuilder, GeometryOrientation,
-    GeosGeometries, GeosRow, GeosRows, OffsetsBuilder, ToGeos, ToGeosRows,
+    GeosGeometries, GeosRow, OffsetsBuilder, ToGeos, ToGeosRows, ValidityBuilder,
 };
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
@@ -28,9 +28,9 @@ impl ToGeos for ScalarLineString<'_> {
 }
 
 impl ToGeosRows for LineStringArray {
-    fn to_geos_rows_taking_as_empty(
+    fn to_geos_rows_skipping(
         &self,
-        as_empty: Option<&Bitmap>,
+        skipped: Option<&Bitmap>,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
@@ -42,7 +42,7 @@ impl ToGeosRows for LineStringArray {
         let geometries = rows_to_geos(
             &self.rows,
             &axes,
-            as_empty,
+            skipped,
             on_row_error,
             early_coord_check,
             |vertices| vertices,
@@ -65,23 +65,23 @@ impl ToGeos for ScalarMultiLineString<'_> {
 }
 
 impl ToGeosRows for MultiLineStringArray {
-    fn to_geos_rows_taking_as_empty(
+    fn to_geos_rows_skipping(
         &self,
-        as_empty: Option<&Bitmap>,
+        skipped: Option<&Bitmap>,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let early = early_coord_check;
-        multi_line_strings_to_geos_rows(self, false, as_empty, on_row_error, early)
+        multi_line_strings_to_geos_rows(self, false, skipped, on_row_error, early)
     }
 }
 
-/// See [`ToGeosRows::to_geos_rows_taking_as_empty`].
+/// See [`ToGeosRows::to_geos_rows_skipping`].
 /// A part without vertices is left out if `drop_empty_parts=true`.
 pub(super) fn multi_line_strings_to_geos_rows(
     array: &MultiLineStringArray,
     drop_empty_parts: bool,
-    as_empty: Option<&Bitmap>,
+    skipped: Option<&Bitmap>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<GeosGeometries> {
@@ -93,7 +93,7 @@ pub(super) fn multi_line_strings_to_geos_rows(
     let geometries = rows_to_geos(
         &array.rows,
         &axes,
-        as_empty,
+        skipped,
         on_row_error,
         early_coord_check,
         |parts| array.lines.span(parts),
@@ -145,15 +145,15 @@ impl GeosGeometries {
         self,
         on_row_error: OnRowError,
     ) -> GeoComputeResult<LineStringArray> {
-        let GeosRows {
-            rows: geometries,
-            mut validity,
-        } = self.geometries;
+        let geometries = self.geometries;
+        let mut validity = ValidityBuilder::with_capacity(geometries.len());
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
         let mut rows = OffsetsBuilder::with_capacity(geometries.len());
-        for (i, geometry) in geometries.into_iter().enumerate() {
+        for geometry in geometries {
             let is_valid = match geometry {
+                GeosRow::Null | GeosRow::Failed => false,
                 GeosRow::Empty => true,
+                GeosRow::Skipped => unreachable!("a skipped row never reaches an output"),
                 GeosRow::Geometry {
                     geometry: line_string,
                     ..
@@ -165,9 +165,7 @@ impl GeosGeometries {
                     other => wrong_kind("linestring", other, on_row_error)?,
                 },
             };
-            if !is_valid {
-                validity.set_null(i);
-            }
+            validity.push(is_valid);
             rows.push(coords.len());
         }
         Ok(LineStringArray::from_parts(
@@ -184,16 +182,16 @@ impl GeosGeometries {
         self,
         on_row_error: OnRowError,
     ) -> GeoComputeResult<MultiLineStringArray> {
-        let GeosRows {
-            rows: geometries,
-            mut validity,
-        } = self.geometries;
+        let geometries = self.geometries;
+        let mut validity = ValidityBuilder::with_capacity(geometries.len());
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
         let mut lines = OffsetsBuilder::with_capacity(self.size_hint.parts[0]);
         let mut rows = OffsetsBuilder::with_capacity(geometries.len());
-        for (i, geometry) in geometries.into_iter().enumerate() {
+        for geometry in geometries {
             let is_valid = match geometry {
+                GeosRow::Null | GeosRow::Failed => false,
                 GeosRow::Empty => true,
+                GeosRow::Skipped => unreachable!("a skipped row never reaches an output"),
                 GeosRow::Geometry { geometry, .. } => match geometry.geometry_type()? {
                     GeometryTypes::LineString if geometry.is_empty()? => true,
                     GeometryTypes::LineString => {
@@ -211,9 +209,7 @@ impl GeosGeometries {
                     other => wrong_kind("multilinestring", other, on_row_error)?,
                 },
             };
-            if !is_valid {
-                validity.set_null(i);
-            }
+            validity.push(is_valid);
             rows.push(lines.len());
         }
         Ok(MultiLineStringArray::from_parts(

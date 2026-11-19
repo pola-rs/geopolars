@@ -228,7 +228,7 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
     for i in 0..rows.len() {
         // A null row's offsets point anywhere, so it is not converted.
         if !ALL_VALID && !rows.is_valid(i) {
-            hulls.push(None);
+            hulls.push(GeosRow::Null);
             continue;
         }
         ranges.clear();
@@ -245,15 +245,20 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
         }
         hulls.push(match row_x.len() {
             // An empty row has an empty hull, without a trip to GEOS.
-            0 => Some(GeosRow::Empty),
+            0 => GeosRow::Empty,
             // A single coordinate encloses nothing, and GEOS can't build a linestring of it.
-            1 => None,
-            _ => row_or_null(hull(&row_x, &row_y, &row_z), on_row_error)?.map(|hull| {
-                GeosRow::Geometry {
+            // The Python `convex_hull` documents its null polygon, so it is not a failure.
+            1 => GeosRow::Null,
+            _ => match row_or_null(hull(&row_x, &row_y, &row_z).map(Some), on_row_error)? {
+                Some(Some(hull)) => GeosRow::Geometry {
                     geometry: hull,
                     maybe_wrong_orientation: false,
-                }
-            }),
+                },
+                // A hull that encloses nothing is the null polygon the Python `convex_hull`
+                // documents, not a failure.
+                Some(None) => GeosRow::Null,
+                None => GeosRow::Null,
+            },
         });
     }
     Ok(GeosGeometries {

@@ -54,7 +54,7 @@ fn shortest_lines_into_array(
 ) -> GeoComputeResult<LineStringArray> {
     let mut geometries = GeosRows::with_capacity(len);
     for line in lines {
-        geometries.push(line?);
+        geometries.push(line?.unwrap_or(GeosRow::Null));
     }
     let size_hint = SizeHint {
         coords: 2 * geometries.len(),

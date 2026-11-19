@@ -2,7 +2,7 @@ use geopolars_views::{Coords, GeoDimension, List, MultiPointArray, PointArray, V
 use geos::{Geom, GeometryTypes};
 
 use super::{
-    coord_type, wrong_kind, CoordsBuilder, GeosGeometries, GeosRow, GeosRows, OffsetsBuilder,
+    coord_type, wrong_kind, CoordsBuilder, GeosGeometries, GeosRow, OffsetsBuilder, ValidityBuilder,
 };
 use crate::{GeoComputeResult, OnRowError};
 
@@ -11,9 +11,10 @@ impl GeosGeometries {
     /// An empty row or point gives an empty point (NaN on every axis).
     /// A geometry that is not a point is an error.
     pub fn into_point_array(self, dim: GeoDimension) -> GeoComputeResult<PointArray> {
-        let GeosRows { rows, validity } = self.geometries;
+        let rows = self.geometries;
+        let mut validity = ValidityBuilder::with_capacity(rows.len());
         let width = dim.field_names().len();
-        // Also what a null row gets, as it holds `Empty`.
+        // Also what a null row gets.
         let empty = [f64::NAN; 4];
         let mut axes: Vec<Vec<f64>> = (0..width).map(|_| Vec::with_capacity(rows.len())).collect();
         let mut push = |coord: &[f64]| {
@@ -22,8 +23,10 @@ impl GeosGeometries {
             }
         };
         for geometry in rows {
+            let is_valid = !matches!(geometry, GeosRow::Null | GeosRow::Failed);
             match geometry {
-                GeosRow::Empty => push(&empty),
+                GeosRow::Null | GeosRow::Failed | GeosRow::Empty => push(&empty),
+                GeosRow::Skipped => unreachable!("a skipped row never reaches an output"),
                 GeosRow::Geometry {
                     geometry: point, ..
                 } => match point.geometry_type()? {
@@ -37,6 +40,7 @@ impl GeosGeometries {
                     }
                 },
             }
+            validity.push(is_valid);
         }
         let mut axes = axes.into_iter();
         let mut next = || axes.next().expect("one axis per field of `dim`");
@@ -65,15 +69,15 @@ impl GeosGeometries {
         self,
         on_row_error: OnRowError,
     ) -> GeoComputeResult<MultiPointArray> {
-        let GeosRows {
-            rows: geometries,
-            mut validity,
-        } = self.geometries;
+        let geometries = self.geometries;
+        let mut validity = ValidityBuilder::with_capacity(geometries.len());
         let mut coords = CoordsBuilder::with_capacity(Z, self.size_hint.coords);
         let mut rows = OffsetsBuilder::with_capacity(geometries.len());
-        for (i, geometry) in geometries.into_iter().enumerate() {
+        for geometry in geometries {
             let is_valid = match geometry {
+                GeosRow::Null | GeosRow::Failed => false,
                 GeosRow::Empty => true,
+                GeosRow::Skipped => unreachable!("a skipped row never reaches an output"),
                 GeosRow::Geometry { geometry, .. } => {
                     match geometry.geometry_type()? {
                         // An empty point has no coordinates, so it adds no part.
@@ -91,9 +95,7 @@ impl GeosGeometries {
                     }
                 }
             };
-            if !is_valid {
-                validity.set_null(i);
-            }
+            validity.push(is_valid);
             rows.push(coords.len());
         }
         Ok(MultiPointArray::from_parts(

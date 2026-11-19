@@ -14,8 +14,7 @@
 //! It is an error instead, which `on_row_error` treats like a GEOS error.
 //!
 //! Converting points takes a bool `EARLY_FINITE_CHECK` instead, which is set unless [EarlyCoordCheck::Off].
-//! The two checks are the same for a point,
-//! as a point that is itself the empty point passes either check.
+//! An empty point is `Empty` before either check, so the two checks are the same for a point.
 //!
 //! ## `ALL_VALID`
 //!
@@ -111,7 +110,8 @@ pub trait ToGeos {
 }
 
 /// Converts an array into one [`GeosRow`] per row.
-/// A row without parts is `Empty`, so it never goes to GEOS.
+/// A row without vertices (no parts, or parts without vertices, as `is_empty` without
+/// `check_nested` sees it) is `Empty`, and never goes to GEOS.
 /// A row that fails `early_coord_check`, or that GEOS fails to build, goes to `on_row_error`.
 /// The size hint is that of the array itself.
 pub trait ToGeosRows {
@@ -120,45 +120,45 @@ pub trait ToGeosRows {
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
-        self.to_geos_rows_taking_as_empty(None, on_row_error, early_coord_check)
+        self.to_geos_rows_skipping(None, on_row_error, early_coord_check)
     }
 
     /// See [`ToGeosRows::to_geos_rows`].
-    /// A row that is set in `as_empty` and not null is also `Empty`, without going to GEOS.
-    fn to_geos_rows_taking_as_empty(
+    /// A row that is set in `skipped`, and is not null or empty, is `Skipped`, without going to GEOS.
+    fn to_geos_rows_skipping(
         &self,
-        as_empty: Option<&Bitmap>,
+        skipped: Option<&Bitmap>,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries>;
 }
 
 impl ToGeosRows for GeometryArray {
-    fn to_geos_rows_taking_as_empty(
+    fn to_geos_rows_skipping(
         &self,
-        as_empty: Option<&Bitmap>,
+        skipped: Option<&Bitmap>,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let early = early_coord_check;
         match self {
             GeometryArray::Point(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
+                array.to_geos_rows_skipping(skipped, on_row_error, early)
             }
             GeometryArray::LineString(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
+                array.to_geos_rows_skipping(skipped, on_row_error, early)
             }
             GeometryArray::Polygon(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
+                array.to_geos_rows_skipping(skipped, on_row_error, early)
             }
             GeometryArray::MultiPoint(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
+                array.to_geos_rows_skipping(skipped, on_row_error, early)
             }
             GeometryArray::MultiLineString(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
+                array.to_geos_rows_skipping(skipped, on_row_error, early)
             }
             GeometryArray::MultiPolygon(array) => {
-                array.to_geos_rows_taking_as_empty(as_empty, on_row_error, early)
+                array.to_geos_rows_skipping(skipped, on_row_error, early)
             }
         }
     }
@@ -178,26 +178,29 @@ impl ToGeos for ScalarPoint<'_> {
     type Geos = Option<Geometry>;
 
     fn to_geos(&self) -> GeoComputeResult<Option<Geometry>> {
+        let Some((x, y)) = self.coords.xy(self.index) else {
+            return Ok(None);
+        };
+        if is_geoarrow_empty_point(x, y) {
+            return Ok(Some(Geometry::create_empty_point()?));
+        }
         let dim = self.coords.dim();
-        point_to_geos::<false>(
-            self.coords,
-            self.index,
-            dim.field_names().len(),
-            coord_type(dim),
-        )
+        let len = dim.field_names().len();
+        let point = point_to_geos::<false>(self.coords, self.index, len, coord_type(dim))?;
+        Ok(Some(point))
     }
 }
 
 impl ToGeosRows for PointArray {
-    fn to_geos_rows_taking_as_empty(
+    fn to_geos_rows_skipping(
         &self,
-        as_empty: Option<&Bitmap>,
+        skipped: Option<&Bitmap>,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
         let geometries = with_const_flags!(
             EARLY_FINITE_CHECK = early_coord_check != EarlyCoordCheck::Off;
-            points_to_geos::<EARLY_FINITE_CHECK>(&self.coords, as_empty, on_row_error)
+            points_to_geos::<EARLY_FINITE_CHECK>(&self.coords, skipped, on_row_error)
         )?;
         Ok(GeosGeometries {
             geometries,
@@ -212,7 +215,7 @@ impl ToGeosRows for PointArray {
 
 fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
     coords: &Coords,
-    as_empty: Option<&Bitmap>,
+    skipped: Option<&Bitmap>,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<GeosRows> {
     // GEOS has no batch constructor, so only the per-column work is shared.
@@ -221,24 +224,29 @@ fn points_to_geos<const EARLY_FINITE_CHECK: bool>(
     let coord_type = coord_type(dim);
     let mut geometries = GeosRows::with_capacity(coords.len());
     for i in 0..coords.len() {
-        if is_taken_as_empty(as_empty, i) && coords.is_valid(i) {
-            geometries.push(Some(GeosRow::Empty));
-            continue;
-        }
-        let point = point_to_geos::<EARLY_FINITE_CHECK>(coords, i, len, coord_type);
-        let point = row_or_null(point, on_row_error)?;
-        geometries.push(point.map(|point| GeosRow::Geometry {
-            geometry: point,
-            maybe_wrong_orientation: true,
-        }));
+        geometries.push(match coords.xy(i) {
+            None => GeosRow::Null,
+            Some((x, y)) if is_geoarrow_empty_point(x, y) => GeosRow::Empty,
+            Some(_) if is_skipped(skipped, i) => GeosRow::Skipped,
+            Some(_) => {
+                let point = point_to_geos::<EARLY_FINITE_CHECK>(coords, i, len, coord_type);
+                match row_or_null(point.map(Some), on_row_error)? {
+                    Some(point) => GeosRow::Geometry {
+                        geometry: point,
+                        maybe_wrong_orientation: true,
+                    },
+                    None => GeosRow::Failed,
+                }
+            }
+        });
     }
     Ok(geometries)
 }
 
 impl ToGeosRows for MultiPointArray {
-    fn to_geos_rows_taking_as_empty(
+    fn to_geos_rows_skipping(
         &self,
-        as_empty: Option<&Bitmap>,
+        skipped: Option<&Bitmap>,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
@@ -250,7 +258,7 @@ impl ToGeosRows for MultiPointArray {
         let geometries = rows_to_geos(
             &self.rows,
             &axes,
-            as_empty,
+            skipped,
             on_row_error,
             early_coord_check,
             |vertices| vertices,
@@ -327,38 +335,33 @@ fn valid_rows_without_vertices(
 }
 
 /// Point `i` of `coords`, which carry `len` axes of `coord_type`.
-/// `None` if it is null.
+///
+/// The point must be neither null nor empty.
 #[inline(always)]
 fn point_to_geos<const EARLY_FINITE_CHECK: bool>(
     coords: &Coords,
     i: usize,
     len: usize,
     coord_type: CoordType,
-) -> GeoComputeResult<Option<Geometry>> {
-    let Some((x, y)) = coords.xy(i) else {
-        return Ok(None);
-    };
-    if is_geoarrow_empty_point(x, y) {
-        return Ok(Some(Geometry::create_empty_point()?));
-    }
-    if EARLY_FINITE_CHECK {
-        xy_is_finite_or_error(&[x], &[y])?;
-    }
+) -> GeoComputeResult<Geometry> {
     let mut buffer = [0.0; 4];
     for (n, value) in buffer[..len].iter_mut().enumerate() {
         *value = coords.nth(i, n);
     }
+    if EARLY_FINITE_CHECK {
+        xy_is_finite_or_error(&buffer[..1], &buffer[1..2])?;
+    }
     let seq = CoordSeq::new_from_buffer(&buffer[..len], 1, coord_type)?;
-    Ok(Some(Geometry::create_point(seq)?))
+    Ok(Geometry::create_point(seq)?)
 }
 
-/// Converts every row of a list array to GEOS, for [`ToGeosRows::to_geos_rows_taking_as_empty`].
+/// Converts every row of a list array to GEOS, for [`ToGeosRows::to_geos_rows_skipping`].
 /// `to_geos` builds one geometry from the range of a row's parts.
 /// `span` gives where the coordinates of those parts sit in `axes`.
 fn rows_to_geos(
     rows: &List,
     axes: &Axes,
-    as_empty: Option<&Bitmap>,
+    skipped: Option<&Bitmap>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
     span: impl Fn(Range<usize>) -> Range<usize>,
@@ -369,7 +372,7 @@ fn rows_to_geos(
         rows_to_geos_with::<ALL_VALID, EARLY_COORD_CHECK>(
             rows,
             axes,
-            as_empty,
+            skipped,
             on_row_error,
             span,
             to_geos,
@@ -382,7 +385,7 @@ fn rows_to_geos(
 fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
     rows: &List,
     axes: &Axes,
-    as_empty: Option<&Bitmap>,
+    skipped: Option<&Bitmap>,
     on_row_error: OnRowError,
     span: impl Fn(Range<usize>) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
@@ -392,33 +395,39 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
     for i in 0..rows.len() {
         // A null row's offsets point anywhere, so it is not converted.
         if !ALL_VALID && !rows.is_valid(i) {
-            geometries.push(None);
+            geometries.push(GeosRow::Null);
             continue;
         }
         let parts = rows.range(i);
-        geometries.push(if parts.is_empty() || is_taken_as_empty(as_empty, i) {
-            Some(GeosRow::Empty)
+        // No vertices is empty, as `is_empty` says, so it never goes to GEOS.
+        let coords = span(parts.clone());
+        geometries.push(if coords.is_empty() {
+            GeosRow::Empty
+        } else if is_skipped(skipped, i) {
+            GeosRow::Skipped
         } else {
             let geometry =
                 if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
                     to_geos(parts)
                 } else {
-                    let coords = span(parts.clone());
                     coords_pass_early_check::<EARLY_COORD_CHECK>(&x[coords.clone()], &y[coords])
                         .and_then(|()| to_geos(parts))
                 };
-            row_or_null(geometry.map(Some), on_row_error)?.map(|geometry| GeosRow::Geometry {
-                geometry,
-                maybe_wrong_orientation: true,
-            })
+            match row_or_null(geometry.map(Some), on_row_error)? {
+                Some(geometry) => GeosRow::Geometry {
+                    geometry,
+                    maybe_wrong_orientation: true,
+                },
+                None => GeosRow::Failed,
+            }
         });
     }
     Ok(geometries)
 }
 
 #[inline(always)]
-fn is_taken_as_empty(as_empty: Option<&Bitmap>, i: usize) -> bool {
-    as_empty.is_some_and(|as_empty| as_empty.get_bit(i))
+fn is_skipped(skipped: Option<&Bitmap>, i: usize) -> bool {
+    skipped.is_some_and(|skipped| skipped.get_bit(i))
 }
 
 /// The x, y, z and m values of every coordinate, as [`CoordSeq::new_from_arrays`] takes them.
@@ -535,37 +544,8 @@ impl GeometryOrientation {
     };
 }
 
-/// One [`GeosRow`] per row, and which rows are null.
-pub struct GeosRows {
-    /// A null row holds `Empty`, so that a conversion copies nothing for it.
-    rows: Vec<GeosRow>,
-    validity: ValidityBuilder,
-}
-
-impl GeosRows {
-    fn with_capacity(rows: usize) -> Self {
-        Self {
-            rows: Vec::with_capacity(rows),
-            validity: ValidityBuilder::with_capacity(rows),
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.rows.len()
-    }
-
-    #[inline(always)]
-    fn push(&mut self, row: Option<GeosRow>) {
-        self.validity.push(row.is_some());
-        self.rows.push(row.unwrap_or(GeosRow::Empty));
-    }
-
-    fn iter(&self) -> impl ExactSizeIterator<Item = Option<&GeosRow>> + Clone {
-        let validity = &self.validity;
-        let valid = move |(i, row)| validity.is_valid(i).then_some(row);
-        self.rows.iter().enumerate().map(valid)
-    }
-}
+/// One [`GeosRow`] per row.
+pub type GeosRows = Vec<GeosRow>;
 
 impl GeosGeometries {
     /// Replaces every GEOS geometry with what `op` makes of it, given its row index.
@@ -580,26 +560,20 @@ impl GeosGeometries {
         mut op: impl FnMut(usize, &Geometry) -> GeoComputeResult<Geometry>,
     ) -> GeoComputeResult<()> {
         self.orientation = orientation;
-        let GeosRows { rows, validity } = &mut self.geometries;
-        for (i, row) in rows.iter_mut().enumerate() {
+        for (i, row) in self.geometries.iter_mut().enumerate() {
             let GeosRow::Geometry {
                 geometry: input, ..
             } = row
             else {
                 continue;
             };
-            match row_or_null(op(i, input).map(Some), on_row_error)? {
-                Some(output) => {
-                    *row = GeosRow::Geometry {
-                        geometry: output,
-                        maybe_wrong_orientation: false,
-                    }
-                }
-                None => {
-                    *row = GeosRow::Empty;
-                    validity.set_null(i);
-                }
-            }
+            *row = match row_or_null(op(i, input).map(Some), on_row_error)? {
+                Some(output) => GeosRow::Geometry {
+                    geometry: output,
+                    maybe_wrong_orientation: false,
+                },
+                None => GeosRow::Null,
+            };
         }
         Ok(())
     }
@@ -607,7 +581,10 @@ impl GeosGeometries {
 
 /// One row of [`GeosRows`].
 pub enum GeosRow {
-    /// Empty, without a GEOS geometry. Valid for every kind.
+    /// Null in the output, whether the input row was null, or `on_row_error="null"` made it so.
+    Null,
+    /// Without vertices, as `is_empty` without `check_nested` sees it. Never went to GEOS.
+    /// Valid for every kind.
     Empty,
     Geometry {
         geometry: Geometry,
@@ -615,6 +592,11 @@ pub enum GeosRow {
         /// such as a copy of an input row in a column GEOS otherwise built.
         maybe_wrong_orientation: bool,
     },
+    /// An input row that was not converted, as the kernel does not need it (see `geos/pairs.rs`).
+    Skipped,
+    /// An input row that failed to convert with `on_row_error="null"`.
+    /// The verdict is still pending: a binary operation nulls only the pairs that need the row.
+    Failed,
 }
 
 /// The orientation `new_ring_orientation` and `new_holes` ask for.
@@ -711,21 +693,6 @@ impl ValidityBuilder {
                 self.bitmap = Some(bitmap);
             }
         }
-    }
-
-    /// Row `i` must have been pushed already.
-    fn set_null(&mut self, i: usize) {
-        let bitmap = self.bitmap.get_or_insert_with(|| {
-            let mut bitmap = MutableBitmap::with_capacity(self.rows);
-            bitmap.extend_constant(self.valid, true);
-            bitmap
-        });
-        bitmap.set(i, false);
-    }
-
-    #[inline(always)]
-    fn is_valid(&self, i: usize) -> bool {
-        self.bitmap.as_ref().is_none_or(|bitmap| bitmap.get(i))
     }
 
     /// `None` when every row is there.

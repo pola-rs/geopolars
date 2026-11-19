@@ -8,7 +8,7 @@ pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
 use super::{
-    unless_split, validity_with_distances, GeometryOrientation, GeosGeometries, ToGeosRows,
+    unless_split, validity_with_distances, GeometryOrientation, GeosGeometries, GeosRow, ToGeosRows,
 };
 use crate::{
     EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
@@ -159,7 +159,7 @@ pub(super) fn by_distance_via_geos(
             debug_assert!(
                 distances.validity().is_none_or(|has_distance| {
                     let mut rows = geometries.geometries.iter().enumerate();
-                    rows.all(|(i, row)| row.is_none() || has_distance.get_bit(i))
+                    rows.all(|(i, row)| matches!(row, GeosRow::Null) || has_distance.get_bit(i))
                 }),
                 "a row with a null distance must already be null",
             );

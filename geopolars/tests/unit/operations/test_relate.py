@@ -196,6 +196,22 @@ def test_a_chunked_column_is_related_to_a_single_geometry() -> None:
     assert out["many"].to_list() == ["2FF1FF212", None, "2FFF1FFF2"]
 
 
+def test_a_single_failing_geometry_nulls_every_pair_that_needs_it() -> None:
+    many = _chunked(
+        [
+            _wkt("many", PolygonXY(), ["POLYGON EMPTY"]),
+            _wkt("many", PolygonXY(), ["POLYGON EMPTY", _SQUARE]),
+        ]
+    )
+    # GEOS fails to build a linestring of a single vertex.
+    one = _series("one", LineStringXY(), [_xy((0, 0))])
+
+    out = pl.DataFrame(many).select(geo.relate("many", one, on_row_error="null"))
+
+    # The relation of an empty row still needs its partner.
+    assert out["many"].to_list() == [None, None, None]
+
+
 # GEOS raises on this one, but not on every geometry that is not finite.
 _NOT_FINITE_LINE = _xy((0, 0), (math.nan, 1), (2, 2))
 _FINITE_LINE = _xy((0, 0), (1, 0), (1, 1))
