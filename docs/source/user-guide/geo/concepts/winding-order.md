@@ -28,8 +28,8 @@ GeoPolars also keeps rings in the order they come in, wherever it can,
 as reversing them means copying more data.
 
 GeoPolars leverages GEOS for many operations, which does have a winding order.
-GEOS generally tends to return winding orders that agree with the OGC,
-but not always.
+The rings GEOS builds usually run the other way from the OGC convention,
+but not always (see [New rings](#new-rings)).
 
 If winding order is important to you,
 you can always inspect the current winding order of a geometry row,

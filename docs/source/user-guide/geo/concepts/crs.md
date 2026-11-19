@@ -7,7 +7,7 @@ distance in metres away from some datum point on a national grid,
 or feet on a state plane.
 
 In GeoPolars, every geometry *column* carries its CRS in its data type.
-This means that the CRS is the same for It is the same for every row in that column.
+This means that the CRS is the same for every row in that column.
 This makes it possible for GeoPolars to check it,
 and pick the right way to measure before your query runs.
 
@@ -70,7 +70,7 @@ which gives metres (or the unit of a projected CRS).
 A geometry without one is measured on the plane, in whatever unit its coordinates have.
 (`area` also measures on the plane for an equal-area CRS, as that plane keeps areas.)
 
-For example, these are the *planar* (in degrees) and *projected* (in km, on the ellipsoid) distances
+For example, these are the *planar* (in degrees) and *geodesic* (in metres, on the ellipsoid) distances
 between Amsterdam and Utrecht:
 
 {{code_block('user-guide/geo/concepts/crs','measure',['geo.distance'])}}
@@ -105,11 +105,9 @@ Reproject one of them with `to_crs` first.
 
 !!! warning "CRSs are compared by how they are written"
 
-```text
-`"EPSG:4326"` and `"epsg:4326"` are the same CRS to PROJ,
-but GeoPolars compares the label as written, so they count as different.
-Write every CRS the same way, for example always as `"EPSG:<code>"`.
-```
+    `"EPSG:4326"` and `"epsg:4326"` are the same CRS to PROJ,
+    but GeoPolars compares the label as written, so they count as different.
+    Write every CRS the same way, for example always as `"EPSG:<code>"`.
 
 ## CRS of expressions
 
@@ -142,11 +140,9 @@ and only geometries that lie entirely past the edge are moved:
 
 !!! tip "Data from 0° to 360°"
 
-```text
-Some data, such as many climate and ocean grids, runs from 0° to 360° instead.
-EPSG:4326 covers both conventions, so the CRS cannot tell you which one data uses.
-Pass `start=0` to wrap into `[0, 360]` instead.
-```
+    Some data, such as many climate and ocean grids, runs from 0° to 360° instead.
+    EPSG:4326 covers both conventions, so the CRS cannot tell you which one data uses.
+    Pass `start=0` to wrap into `[0, 360]` instead.
 
 A bounding box that crosses the antimeridian has `xmin > xmax`.
 `bounds` gives such a box for geometries that go past the edge:
