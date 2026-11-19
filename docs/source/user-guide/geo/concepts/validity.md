@@ -19,10 +19,8 @@ The second is the OGC Simple Features standard, checked by `geo.is_valid_ogc`.
 This is the same standard as followed by GEOS (and therefore shapely, and GeoPandas).
 In GeoPolars, a geometry valid by OGC has to be valid by GeoArrow as well.
 
-- Every coordinate is finite. A NaN or an infinity makes every area, length and distance NaN too.
-  It also makes it impossible to tell if two shapes cross.
-  The empty point is the exception, as a point or in a multipoint.
-  GeoArrow writes it as NaN in x and y.
+- Every coordinate is finite (see [NaN and infinity](nulls-nan-and-empty.md#nan-and-infinity) for why).
+  The [empty point](nulls-nan-and-empty.md#empty-geometries) is the exception, as a point or in a multipoint.
 - A linestring has at least 2 different vertices (or none, making it empty).
 - A ring has at least 4 different vertices
   (A ring with fewer vertices can only go back and forth, so it has no area).
@@ -39,7 +37,7 @@ Checking OGC validity is much more expensive, as it has to compare pairs of segm
 !!! note
 
     OGC allows some geometries that might still surprise you!
-    An empty geometry is valid by OGC (find them with `geo.is_empty`),
+    An [empty geometry](nulls-nan-and-empty.md#empty-geometries) is valid by OGC (find them with `geo.is_empty`),
     and so is the same vertex twice in a row (`geo.has_repeats_in_succession`).
 
 Below, we check some parcels against both levels.

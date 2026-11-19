@@ -47,7 +47,7 @@ class PointXYZ(PointType):
 class PointXYM(PointType):
     """A 2D point with a measure: `Struct<x: f64, y: f64, m: f64>`.
 
-    {point_measure}
+    {measure}
     """
 
     _dimension: ClassVar[Dimension] = XYM
@@ -57,7 +57,7 @@ class PointXYM(PointType):
 class PointXYZM(PointType):
     """A 3D point with a measure: `Struct<x: f64, y: f64, z: f64, m: f64>`.
 
-    {point_measure}
+    {measure}
     """
 
     _dimension: ClassVar[Dimension] = XYZM

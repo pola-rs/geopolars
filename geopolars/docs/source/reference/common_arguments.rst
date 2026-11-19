@@ -56,7 +56,8 @@ you might be better off leaving this one as this can skip expensive calculations
   but also goes to `on_row_error` for an empty point inside a geometry.
 
 This argument serves an important purpose for kernels that forward to GEOS.
-GEOS supports neither empty points inside a geometry nor any other NaN or infinite x or y.
+GEOS supports neither empty points inside a geometry nor any other NaN or infinite x or y
+(see "NaN and infinity" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`).
 Here the check is embedded into the conversion into a GEOS geometry.
 With checking, it will will trigger `on_row_error`,
 while on skipping it might give some unexpected result.
@@ -317,7 +318,8 @@ This option does nothing if `new_ring_orientation="keep"`
 
 Some operations can result in a shape falling into several parts.
 For example, taking the difference between two polygons can cause the polygon to be cut into two.
-GeoPolars does not have an 'any geometry' datatype (yet),
+A column holds a single kind of geometry
+(see "One kind per column" in `docs/source/user-guide/geo/concepts/geometry-types.md`),
 so this argument decides what happens in such a case.
 This is mostly a concern when using GEOS kernels.
 

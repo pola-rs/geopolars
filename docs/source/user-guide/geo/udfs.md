@@ -5,7 +5,7 @@ you can use Polars' `map_elements` for a user-defined function (UDF)
 like you would for other Polars data types.
 There are some small extra things to consider though!
 
-Inside a Python UDF, what the function receives depends on the geometry type.
+Inside a Python UDF, what the function receives depends on the [geometry type](concepts/geometry-types.md).
 
 | Type | Value passed to the function |
 | - | - |

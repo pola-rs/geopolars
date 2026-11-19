@@ -3,21 +3,37 @@ python:
   geo.area: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.area.html
   geo.bounds: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.bounds.html
   geo.buffer: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.buffer.html
+  geo.centroid: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.centroid.html
   geo.distance: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.distance.html
+  geo.filter_coordinates: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.filter_coordinates.html
+  geo.force_2d: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.force_2d.html
+  geo.from_wkb: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.from_wkb.html
   geo.from_wkt: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.from_wkt.html
   geo.has_repeats_in_succession: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.has_repeats_in_succession.html
   geo.is_ccw: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.is_ccw.html
   geo.is_empty: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.is_empty.html
   geo.is_valid_geoarrow: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.is_valid_geoarrow.html
   geo.is_valid_ogc: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.is_valid_ogc.html
+  geo.length: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.length.html
+  geo.line_string_from_columns: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.line_string_from_columns.html
   geo.null_out_invalid_ogc: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.null_out_invalid_ogc.html
   geo.point: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.point.html
   geo.set_crs: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.set_crs.html
+  geo.simplify: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.simplify.html
   geo.to_ccw: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.to_ccw.html
   geo.to_crs: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.to_crs.html
+  geo.to_polygon: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.to_polygon.html
+  geo.to_wkb: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.to_wkb.html
   geo.to_wkt: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.to_wkt.html
   geo.translate: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.translate.html
   geo.wrap_longitude: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.wrap_longitude.html
+  geo.z: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.z.html
   gpl.col: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.col.html
+  from_geoparquet: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.from_geoparquet.html
+  geoparquet_metadata: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.geoparquet_metadata.html
+  sink_parquet: https://docs.pola.rs/api/python/stable/reference/api/polars.LazyFrame.sink_parquet.html
+  with_covering: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.with_covering.html
   LineStringXY: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.datatypes.LineStringXY.html
+  LineStringXYZ: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.datatypes.LineStringXYZ.html
+  MultiPolygonXY: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.datatypes.MultiPolygonXY.html
   PolygonXY: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.datatypes.PolygonXY.html

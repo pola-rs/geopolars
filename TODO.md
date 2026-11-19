@@ -49,7 +49,7 @@ but is also hosted on the Polars domain.
   Material admonitions, and links into the API reference (`docs/source/_build/API_REFERENCE_LINKS.yml`).
 - [x] Flesh out the stubs: `concepts/crs.md` and `concepts/winding-order.md`,
   and resolve the TODO in `udfs.md`.
-- [ ] Write the missing pages: installation, geometry types (GeoArrow, dimensions), nulls, NaN and empty geometries,
+- [x] Write the missing pages: installation, geometry types (GeoArrow, dimensions), nulls, NaN and empty geometries,
   IO (GeoParquet, WKB/WKT), and migrating from GeoPandas.
 
 ### API reference

@@ -91,6 +91,8 @@ pip install geopolars
 ```
 
 GeoPolars is in alpha: expect breaking changes between releases.
+See [installation](https://github.com/pola-rs/geopolars/blob/main/docs/source/user-guide/geo/installation.md)
+in the user guide for what it requires and comes with.
 
 <details>
 <summary><b>Compile GeoPolars from source</b></summary>

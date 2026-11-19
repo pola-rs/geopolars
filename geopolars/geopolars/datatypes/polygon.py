@@ -30,8 +30,8 @@ class PolygonType(GeoArrowType):
 class PolygonXY(PolygonType):
     """A 2D polygon: `geoarrow.polygon` over `List<List<Struct<x, y: f64>>>`.
 
-    One list of rings per polygon. That list may be empty: like a linestring,
-    and unlike a point, an empty polygon is a geometry this layout can hold.
+    One list of rings per polygon, which is empty for an empty polygon
+    (see "Empty geometries" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`).
     """
 
     _dimension: ClassVar[Dimension] = XY
@@ -50,7 +50,7 @@ class PolygonXYZ(PolygonType):
 class PolygonXYM(PolygonType):
     """A 2D polygon with a measure: `List<List<Struct<x, y, m: f64>>>`.
 
-    {polygon_measure}
+    {measure}
     """
 
     _dimension: ClassVar[Dimension] = XYM
@@ -60,7 +60,7 @@ class PolygonXYM(PolygonType):
 class PolygonXYZM(PolygonType):
     """A 3D polygon with a measure: `List<List<Struct<x, y, z, m: f64>>>`.
 
-    {polygon_measure}
+    {measure}
     """
 
     _dimension: ClassVar[Dimension] = XYZM

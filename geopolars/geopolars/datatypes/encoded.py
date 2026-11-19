@@ -2,9 +2,9 @@
 Mirrors `Encoded` in `src/geoarrow/encoded.rs`.
 
 These hold geometries serialised one value per row.
-They are for exchange only (e.g. GeoParquet): no operation works on them,
-other than converting them to and from the native geometries.
-That is why they are not a `GeoArrowType`.
+They are for exchange only,
+as described under "WKT and WKB" in `docs/source/user-guide/geo/concepts/geometry-types.md`,
+which is why they are not a `GeoArrowType`.
 """
 
 from __future__ import annotations

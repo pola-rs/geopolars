@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
 class Wkt(EncodedGeometry):
     """Geometries encoded as WKT: `geoarrow.wkt` over `String`.
-    WKT is supported for exchange, but all operations require it to be in arrow format.
-    You'll likely want to convert this using `from_wkt`.
+    Operations only work on it once it is decoded with `from_wkt`,
+    as described under "WKT and WKB" in `docs/source/user-guide/geo/concepts/geometry-types.md`.
     """
 
     _extension_name: ClassVar[str] = "geoarrow.wkt"
