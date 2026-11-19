@@ -24,7 +24,7 @@
 
 ## GeoPolars: geospatial data types and operations for Polars
 
-GeoPolars adds first-class geospatial data types to GeoPolars.
+GeoPolars adds first-class geospatial data types to Polars.
 On top of being compatible with many existing Polars functionality,
 these data types also come with a suite of geo-specific expressions.
 They are regular Polars expressions,
@@ -100,8 +100,9 @@ which `make install` checks out into `.polars` and builds as well.
 
 1. Install the latest [Rust compiler](https://www.rust-lang.org/tools/install)
    and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-2. Install a C++ compiler, CMake and SQLite (both the library and the `sqlite3` binary),
-   which the bundled PROJ and GEOS need.
+2. Install what the bundled PROJ and GEOS are built with:
+   - a C++ compiler and CMake, for both.
+   - SQLite, both the library and the `sqlite3` binary, for PROJ only.
    On Debian or Ubuntu: `sudo apt-get install build-essential cmake sqlite3 libsqlite3-dev`.
 3. From the root of the repository, choose one of the following:
    - `make install`, an unoptimised build, with fast compile times.
