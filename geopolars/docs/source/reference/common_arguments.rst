@@ -139,11 +139,8 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
 
 .. note::
 
-   this replaces `unique_z: bool = True`, `unique_m: bool = False`,
-   as well as `ignore_z` and `ignore_m`.
-   It replaces method: Literal["planar", "geodesic"] | None = None.
-   None becomes "auto".
-   Today's default sends any declared CRS through "geodesic", so the result changes for a projected CRS.
+   Legacy: this replaces `method: Literal["planar", "geodesic"] | None = None`.
+   Its `None` measured any declared CRS geodesically, a projected one included.
 
 .. _arg-allow_geographic:
 

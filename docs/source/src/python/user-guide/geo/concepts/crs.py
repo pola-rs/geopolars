@@ -33,7 +33,7 @@ amsterdam = geo.point(pl.lit(4.9041), pl.lit(52.3676), crs="EPSG:4326")
 result = cities.select(
     "city",
     geodesic=geo.distance(amsterdam, "geometry"),
-    planar=geo.distance(amsterdam, "geometry", method="planar"),
+    planar=geo.distance(amsterdam, "geometry", distance_method="planar"),
 )
 print(result)
 # --8<-- [end:measure]

@@ -13,6 +13,7 @@ from polars.testing import assert_series_equal
 
 import geopolars as gpl
 from geopolars import geo
+from geopolars._typing import DistanceMethod
 from geopolars.datatypes import PointType, PointXY
 from tests.unit.conftest import XY, Dimension
 
@@ -39,8 +40,14 @@ def _pairs(
     return pl.DataFrame({"a": column(a), "b": column(b)})
 
 
-def _distances(df: pl.DataFrame) -> list[float | None]:
-    return df.select(geo.distance("a", "b")).to_series().to_list()
+def _distances(
+    df: pl.DataFrame, distance_method: DistanceMethod = "auto"
+) -> list[float | None]:
+    return (
+        df.select(geo.distance("a", "b", distance_method=distance_method))
+        .to_series()
+        .to_list()
+    )
 
 
 def test_without_a_crs_it_is_pythagoras() -> None:
@@ -126,21 +133,21 @@ def test_with_a_crs_in_feet_the_distance_is_in_feet() -> None:
     # by the projection's scale factor, well under a part in ten thousand here.
     df = _pairs([(984_000.0, 200_000.0)], [(987_000.0, 204_000.0)], crs=NY_FEET)
 
-    assert _distances(df) == pytest.approx([5000.0], rel=1e-4)
+    assert _distances(df, "geodesic") == pytest.approx([5000.0], rel=1e-4)
 
 
 def test_with_a_crs_in_feet_the_height_is_in_feet() -> None:
     df = _heights((984_000.0, 200_000.0, 0.0), (984_000.0, 200_000.0, 1000.0), NY_FEET)
 
-    assert _distances(df) == pytest.approx([1000.0])
+    assert _distances(df, "geodesic") == pytest.approx([1000.0])
 
 
 def test_with_a_crs_in_feet_the_height_is_added_to_the_geodesic() -> None:
     a, b = (984_000.0, 200_000.0), (987_000.0, 204_000.0)
     df = _heights((*a, 0.0), (*b, 12_000.0), NY_FEET)
-    (flat,) = _distances(_pairs([a], [b], crs=NY_FEET))
+    (flat,) = _distances(_pairs([a], [b], crs=NY_FEET), "geodesic")
 
-    (got,) = _distances(df)
+    (got,) = _distances(df, "geodesic")
 
     assert got == pytest.approx(math.hypot(flat, 12_000.0))
 
@@ -220,9 +227,19 @@ def test_a_projected_crs_is_measured_on_its_own_ellipsoid() -> None:
     rd = lonlat.select(geo.to_crs(pl.all(), "EPSG:28992"))
 
     (expected,) = _distances(lonlat)
-    (got,) = _distances(rd)
+    (got,) = _distances(rd, "geodesic")
 
     assert got == pytest.approx(expected, abs=1e-3)
+
+
+def test_auto_measures_a_projected_crs_on_the_plane() -> None:
+    amsterdam, utrecht = (4.9041, 52.3676), (5.1214, 52.0907)
+    rd = _pairs([amsterdam], [utrecht], crs="EPSG:4289").select(
+        geo.to_crs(pl.all(), "EPSG:28992")
+    )
+
+    assert _distances(rd) == _distances(rd, "planar")
+    assert _distances(rd) != _distances(rd, "geodesic")
 
 
 def test_the_ellipsoid_is_the_one_the_crs_declares() -> None:
@@ -261,7 +278,11 @@ def test_metadata_without_a_crs_is_still_planar() -> None:
 def test_planar_ignores_the_crs() -> None:
     df = _pairs([(0.0, 0.0)], [(3.0, 4.0)], crs=WGS84)
 
-    out = df.select(geo.distance("a", "b", method="planar")).to_series().to_list()
+    out = (
+        df.select(geo.distance("a", "b", distance_method="planar"))
+        .to_series()
+        .to_list()
+    )
 
     assert out == [5.0]
 
@@ -270,7 +291,7 @@ def test_geodesic_without_a_crs_is_refused() -> None:
     lf = _pairs([NEW_YORK], [LONDON]).lazy()
 
     with pytest.raises(TypeError, match="neither point declares one"):
-        lf.select(geo.distance("a", "b", method="geodesic")).collect_schema()
+        lf.select(geo.distance("a", "b", distance_method="geodesic")).collect_schema()
 
 
 def test_points_in_different_crss_are_refused_while_resolving_the_schema() -> None:
@@ -300,7 +321,7 @@ def test_a_crs_not_on_longitude_latitude_is_refused_while_resolving_the_schema()
     lf = _pairs([NEW_YORK], [LONDON], crs="EPSG:4978").lazy()
 
     with pytest.raises(ComputeError, match="not defined on longitude/latitude"):
-        lf.select(geo.distance("a", "b")).collect_schema()
+        lf.select(geo.distance("a", "b", distance_method="geodesic")).collect_schema()
 
 
 def test_only_points_are_measured(line_coords: pl.DataFrame) -> None:
@@ -327,13 +348,13 @@ def test_the_result_is_named_after_the_first_point(crs: str | None) -> None:
 
 
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
-@pytest.mark.parametrize("method", [None, "planar"])
+@pytest.mark.parametrize("method", ["auto", "planar"])
 def test_the_namespace_matches_the_function(
-    crs: str | None, method: Literal["planar"] | None
+    crs: str | None, method: Literal["auto", "planar"]
 ) -> None:
     df = _pairs([NEW_YORK, (0.0, 0.0)], [LONDON, (3.0, 4.0)], crs=crs)
 
     assert_series_equal(
-        df.select(gpl.col("a").geo.distance("b", method=method)).to_series(),
-        df.select(geo.distance("a", "b", method=method)).to_series(),
+        df.select(gpl.col("a").geo.distance("b", distance_method=method)).to_series(),
+        df.select(geo.distance("a", "b", distance_method=method)).to_series(),
     )

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from geopolars._typing import (
+        DistanceMethod,
         EarlyCoordCheck,
         EmptyPolygonExterior,
         IntoExprColumn,
@@ -798,16 +799,16 @@ class ExprGeoNameSpace:
         self,
         other: IntoExprColumn,
         *,
-        method: Literal["planar", "geodesic"] | None = None,
+        distance_method: DistanceMethod = "auto",
     ) -> pl.Expr:
         from geopolars.geo.distance import distance
 
-        return distance(self._expr, other, method=method)
+        return distance(self._expr, other, distance_method=distance_method)
 
     def length(
         self,
         *,
-        method: Literal["planar", "geodesic"] | None = None,
+        distance_method: DistanceMethod = "auto",
         allow_non_lines: bool = False,
         ignore_nan: bool = False,
     ) -> pl.Expr:
@@ -815,7 +816,7 @@ class ExprGeoNameSpace:
 
         return length(
             self._expr,
-            method=method,
+            distance_method=distance_method,
             allow_non_lines=allow_non_lines,
             ignore_nan=ignore_nan,
         )

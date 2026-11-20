@@ -1,13 +1,13 @@
 """How long a linestring is, on the plane or along the ellipsoid of its CRS.
 
-Without a `method`, it is picked by the CRS,
-as described under "Geographic and projected" in `docs/source/user-guide/geo/concepts/crs.md`.
+Which of the two is picked by default
+is described under "Geographic and projected" in `docs/source/user-guide/geo/concepts/crs.md`.
 """
 
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import polars as pl
 from polars.plugins import register_plugin_function
@@ -17,7 +17,7 @@ from geopolars.datatypes import LineStringType, MultiLineStringType
 from geopolars.geo._dispatch import on_geometry
 
 if TYPE_CHECKING:
-    from geopolars._typing import IntoExprColumn
+    from geopolars._typing import DistanceMethod, IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
 
@@ -42,15 +42,14 @@ def _length(
     column: pl.Expr,
     geometry: GeoArrowType,
     *,
-    method: Literal["planar", "geodesic"] | None,
+    distance_method: DistanceMethod,
     allow_non_lines: bool,
     ignore_nan: bool,
 ) -> pl.Expr:
-    # No projection keeps lengths everywhere, so every CRS is measured on its ellipsoid.
-    declares_crs = geometry._declares_crs()
-    if method is None:
-        method = "geodesic" if declares_crs else "planar"
-    elif method == "geodesic" and not declares_crs:
+    if distance_method == "auto":
+        is_geographic = geometry._longitude_turn() is not None
+        distance_method = "geodesic" if is_geographic else "planar"
+    elif distance_method == "geodesic" and not geometry._declares_crs():
         msg = "a geodesic length needs a CRS to measure on, but the geometry declares none"
         raise TypeError(msg)
     zero = _has_no_length(column, geometry, allow_non_lines=allow_non_lines)
@@ -61,7 +60,7 @@ def _length(
         plugin_path=LIB,
         args=[column],
         function_name="length",
-        kwargs={"method": method, "ignore_nan": ignore_nan},
+        kwargs={"distance_method": distance_method, "ignore_nan": ignore_nan},
         is_elementwise=True,
     )
 
@@ -69,12 +68,12 @@ def _length(
 def length(
     geometry: IntoExprColumn,
     *,
-    method: Literal["planar", "geodesic"] | None = None,
+    distance_method: DistanceMethod = "auto",
     allow_non_lines: bool = False,
     ignore_nan: bool = False,
 ) -> pl.Expr:
     """How long a linestring is, as an `f64`.
-    For details on `method`, see the description in `distance`.
+    For details on `distance_method`, see the description in `distance`.
 
     A multilinestring gets the sum of the lengths of its parts.
     For a line with a `z`, every segment counts its difference in height too
@@ -105,13 +104,13 @@ def length(
     .. code-block:: python
 
         df.select(geo.length("route"))
-        df.select(geo.length("route", method="planar"))
+        df.select(geo.length("route", distance_method="planar"))
     """
     return on_geometry(
         geometry,
         partial(
             _length,
-            method=method,
+            distance_method=distance_method,
             allow_non_lines=allow_non_lines,
             ignore_nan=ignore_nan,
         ),

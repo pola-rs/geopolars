@@ -65,9 +65,10 @@ Because the earth is (approximately) an ellipsoid,
 a degree east is generally not as long as a degree north.
 How far away that is depends on your location!
 Because of this, measuring degrees as if they lie on a plane gives numbers that mean very little.
-A geometry with a CRS is measured *geodesically*, along the ellipsoid of its CRS,
-which gives metres (or the unit of a projected CRS).
-A geometry without one is measured on the plane, in whatever unit its coordinates have.
+A geometry in a geographic CRS is therefore measured *geodesically* by default,
+along the ellipsoid of its CRS, which gives metres.
+A geometry in a projected CRS, or without one, is measured on the plane,
+in whatever unit its coordinates have.
 (`area` also measures on the plane for an equal-area CRS, as that plane keeps areas.)
 
 For example, these are the *planar* (in degrees) and *geodesic* (in metres, on the ellipsoid) distances
