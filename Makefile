@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: help install install-release wheel docs docs-html docs-guide docs-guide-build polars-src test test-all test-rust test-python test-python-all clean
+.PHONY: help install install-release wheel docs docs-api docs-api-build docs-guide docs-guide-build polars-src test test-all test-rust test-python test-python-all clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -46,16 +46,19 @@ wheel: | .venv/bin/maturin
 	cd $(WHEEL_SRC)/geopolars && CARGO_TARGET_DIR=$(CURDIR)/target \
 		$(CURDIR)/.venv/bin/maturin build --release --out $(CURDIR)/target/wheels
 
-## Build the HTML API reference into target/docs/html.
-# The docs tooling is not a default group, so `install` leaves it out
-docs: install
-	uv sync --inexact --only-group docs
-	$(MAKE) docs-html
+## Build the API reference and the guides.
+docs: docs-api docs-guide
 
-## Build the HTML API reference into target/docs/html, with the venv as it is.
+## Build the HTML API reference with Sphinx into target/docs/html.
+# The docs tooling is not a default group, so `install` leaves it out
+docs-api: install
+	uv sync --inexact --only-group docs
+	$(MAKE) docs-api-build
+
+## Build the HTML API reference with Sphinx, with the venv as it is.
 # Sphinx imports a copy of the package with the `@doc` docstrings filled in, as in the wheel,
 # which goes before the editable install on the path.
-docs-html:
+docs-api-build:
 	rm -rf $(DOCS_PKG) && mkdir -p $(DOCS_PKG)
 	cp -r geopolars/geopolars $(DOCS_PKG)/
 	.venv/bin/python scripts/expand_docstrings.py $(DOCS_PKG)/geopolars
