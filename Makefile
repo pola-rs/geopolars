@@ -66,7 +66,7 @@ docs-api-build:
 
 GUIDE_DIR := target/docs-guide
 INSTALL_GUIDE_DEPS = grep -E '^(zensical|markdown-exec)==' $(POLARS_DIR)/docs/source/requirements.txt \
-	| uv pip install tomli-w -r -
+	| uv pip install --python .venv/bin/python tomli-w -r -
 
 ## Build the user and developer guides with zensical into target/docs-guide/site.
 ## It fails on broken links and failing examples, as the Polars docs CI does,
