@@ -1,20 +1,25 @@
-"""Stage the user and developer guides in a tree laid out like the Polars repo, for zensical to build.
+"""Build or serve the user and developer guides with zensical, as the Polars docs build would.
 
+The guides are staged in a tree laid out like the Polars repo, for zensical to build.
 The zensical config (apart from its nav, which comes from `docs/nav.toml`) and `docs/source/_build` come from a Polars checkout,
 so the build runs as it does in Polars.
 Only our pages are staged, as building the Polars pages would run all of their examples.
 
-With `--watch`, it keeps an existing staged copy in sync with our pages until it is stopped,
-for `zensical serve` to rebuild them as they change.
+Both commands fail on what the strict Polars build fails on,
+and on what zensical only logs: a failing example, or an unknown API key in a `code_block`.
+`build` reports every problem before it fails, and `serve` stops after the first rebuild with one.
 
-Usage: `python3 stage_docs_guide.py [--watch] <polars dir> <output dir>`
+Usage: `python3 docs_guide.py build|serve <polars dir> <output dir>`
 """
 
 from __future__ import annotations
 
 import filecmp
+import re
 import shutil
+import subprocess
 import sys
+import threading
 import time
 import tomllib
 from pathlib import Path
@@ -24,6 +29,77 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 LINKS = Path("docs/source/_build/API_REFERENCE_LINKS.yml")
+ZENSICAL = Path(sys.executable).parent / "zensical"
+
+COLOUR = re.compile(r"\x1b\[[0-9;]*m")
+PROBLEM = re.compile(
+    r"^(Warning|Error)\b|^\d+ issues? found"
+    r"|Execution of python code block exited with errors|Could not find "
+)
+# zensical ends every build or rebuild with this line.
+BUILD_SUMMARY = re.compile(r"^(No|\d+) issues? found")
+
+
+def build_guides(polars_dir: Path, out_dir: Path) -> None:
+    stage_guides(polars_dir, out_dir)
+    zensical = start_zensical("build", out_dir)
+    has_problem = False
+    with (out_dir / "build.log").open("w") as log:
+        for line in zensical.stdout:
+            print(line, end="", flush=True)
+            log.write(line)
+            has_problem |= bool(PROBLEM.search(COLOUR.sub("", line)))
+    if zensical.wait() or has_problem:
+        sys.exit("The guides have problems, see the build log above.")
+
+
+def serve_guides(polars_dir: Path, out_dir: Path) -> None:
+    stage_guides(polars_dir, out_dir)
+    zensical = start_zensical("serve", out_dir)
+    sync_errors = []
+    threading.Thread(
+        target=serve_guides_sync_until_error,
+        args=(polars_dir, out_dir, zensical, sync_errors),
+        daemon=True,
+    ).start()
+    has_problem = False
+    try:
+        for line in zensical.stdout:
+            print(line, end="", flush=True)
+            plain = COLOUR.sub("", line)
+            has_problem |= bool(PROBLEM.search(plain))
+            if has_problem and BUILD_SUMMARY.search(plain):
+                break
+    finally:
+        zensical.terminate()
+        zensical.wait()
+    if sync_errors:
+        sys.exit(str(sync_errors[0]))
+    if has_problem:
+        sys.exit("Stopped serving, as the guides have problems: see above.")
+
+
+def serve_guides_sync_until_error(
+    polars_dir: Path, out_dir: Path, zensical: subprocess.Popen, errors: list
+) -> None:
+    while True:
+        time.sleep(0.5)
+        try:
+            sync_guides(polars_dir, out_dir)
+        except (ValueError, yaml.YAMLError) as error:
+            errors.append(error)
+            zensical.terminate()
+            return
+
+
+def start_zensical(command: str, out_dir: Path) -> subprocess.Popen:
+    return subprocess.Popen(
+        [ZENSICAL, command],
+        cwd=out_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
 
 
 def stage_guides(polars_dir: Path, out_dir: Path) -> None:
@@ -32,20 +108,6 @@ def stage_guides(polars_dir: Path, out_dir: Path) -> None:
     # The examples write their data files here, as in Polars.
     (out_dir / "docs/assets/data").mkdir(parents=True)
     sync_guides(polars_dir, out_dir)
-
-
-def watch_guides(polars_dir: Path, out_dir: Path) -> None:
-    last_error = None
-    while True:
-        time.sleep(0.5)
-        try:
-            sync_guides(polars_dir, out_dir)
-            last_error = None
-        except (ValueError, yaml.YAMLError) as error:
-            # A file that is broken mid-edit should neither stop the watch, nor be reported on every pass.
-            if str(error) != last_error:
-                print(error, file=sys.stderr)
-            last_error = str(error)
 
 
 def sync_guides(polars_dir: Path, out_dir: Path) -> None:
@@ -105,17 +167,12 @@ def sync_guides_config(polars_dir: Path) -> dict:
 
 
 if __name__ == "__main__":
-    args = sys.argv[1:]
-    watch = args[:1] == ["--watch"]
-    if watch:
-        args = args[1:]
-    if len(args) != 2:
+    commands = {"build": build_guides, "serve": serve_guides}
+    if len(sys.argv) != 4 or sys.argv[1] not in commands:
         sys.exit(__doc__)
-    polars_dir, out_dir = map(Path, args)
     try:
-        if watch:
-            watch_guides(polars_dir, out_dir)
-        else:
-            stage_guides(polars_dir, out_dir)
+        commands[sys.argv[1]](Path(sys.argv[2]), Path(sys.argv[3]))
     except ValueError as error:
         sys.exit(str(error))
+    except KeyboardInterrupt:
+        sys.exit(130)
