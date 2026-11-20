@@ -97,7 +97,7 @@ jobs:
         run: |
           uv pip install --group dev polars
           grep -E '^(zensical|markdown-exec)==' .polars/docs/source/requirements.txt \
-            | uv pip install tomli-w -r -
+            | uv pip install -r -
 
       # https://github.com/marketplace/actions/rust-cache
       - name: Set up Rust cache
