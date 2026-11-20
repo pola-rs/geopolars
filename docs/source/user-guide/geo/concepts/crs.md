@@ -69,6 +69,9 @@ A geometry in a geographic CRS is therefore measured *geodesically* by default,
 along the ellipsoid of its CRS, which gives metres.
 A geometry in a projected CRS, or without one, is measured on the plane,
 in whatever unit its coordinates have.
+That is close for a CRS made for measuring, such as a UTM zone or a national grid,
+but not for Web Mercator (EPSG:3857), which stretches distances away from the equator.
+It's probably better to pass `distance_method="geodesic"` there!
 (`area` also measures on the plane for an equal-area CRS, as that plane keeps areas.)
 
 For example, these are the *planar* (in degrees) and *geodesic* (in metres, on the ellipsoid) distances

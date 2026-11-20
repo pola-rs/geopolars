@@ -90,6 +90,9 @@ def distance(
     A CRS that is not defined on longitude/latitude, such as a geocentric one, has no ellipsoid
     to measure along, so `"geodesic"` and `"auto"` refuse it while the plan is built.
     Ask for `"planar"` to measure it on its `x` and `y` anyway.
+    Planar is close to geodesic in a projected CRS made for measuring, such as a UTM zone,
+    but Web Mercator (EPSG:3857) stretches distances by 1/cos(latitude):
+    pass `"geodesic"` for such a CRS.
     With any method, points in different CRSs, or a CRS on only one of them, are refused:
     reproject one onto the other with `to_crs` first.
     **Planar** ignores the CRS: for longitude/latitude it comes out in degrees,

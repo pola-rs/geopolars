@@ -128,8 +128,12 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
   and `"geodesic"` on any other CRS.
   A CRS that is not defined on longitude/latitude, such as a geocentric one,
   has no ellipsoid to measure along, so it is refused at plan time unless `"planar"` is asked for.
-  On a projected CRS, the geodesic and planar distances are usually very close enough,
-  so it makes sense to use the faster option.
+  A projected CRS made for measuring such as a UTM zone or a national grid like EPSG:28992
+  keeps distances to within about 0.1% inside its area of use,
+  so the faster planar distance is close enough there.
+  Others do not: Web Mercator (EPSG:3857) stretches distances by 1/cos(latitude),
+  about 1.6 times at 52°N.
+  Pass `distance_method="geodesic"` for such a CRS.
 
 .. _arg-allow_geographic:
 
