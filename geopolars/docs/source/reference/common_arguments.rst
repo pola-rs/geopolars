@@ -32,10 +32,6 @@ With the `on_row_error` variable, you can set what to do if that happens.
 This parameter does not affect how error handling outside the per-row part is done.
 If there is an error in the setup, it can still fail the entire query even if `on_row_error="null"` is set.
 
-.. note::
-
-   Legacy: this replaces `ignore_per_row_errors: bool = False`.
-
 .. _arg-early_coord_check:
 
 `early_coord_check: Literal["finite", "off", "finite_and_empty"]`
@@ -96,10 +92,6 @@ and works as you'd expect it to, as it is a standard GEOS type.
 If this is a function that also takes `include_m`/`include_z`,
 the check only includes the coordinates that these flags specify.
 
-.. note::
-
-   Legacy: this replaces `early_finite_check: bool = False`.
-
 CRS
 ~~~
 
@@ -136,11 +128,6 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
   while it uses `"planar"` on anything that has a projected CRS, or no CRS at all.
   On a projected CRS, the geodesic and planar distances are usually very close enough,
   so it makes sense to use the faster option.
-
-.. note::
-
-   Legacy: this replaces `method: Literal["planar", "geodesic"] | None = None`.
-   Its `None` measured any declared CRS geodesically, a projected one included.
 
 .. _arg-allow_geographic:
 
@@ -235,10 +222,6 @@ This argument says what should happen to such a thing.
   If there are still non-empty holes,
   what is done to an empty outer ring depends on the `empty_polygon_exterior` value.
 
-.. note::
-
-   Legacy: this replaces `too_short: Literal["null", "keep", "empty"] = "null"`.
-
 .. _arg-empty_polygon_exterior:
 
 `empty_polygon_exterior: Literal["keep", "null", "error", "empty"] = "null"`
@@ -263,11 +246,6 @@ Most of the time this is not a meaningful polygon though.
 
 With `"keep"`, running such a polygon through other expressions might give unexpected results.
 
-.. note::
-
-   Legacy: this replaces `empty_exterior: Literal["null", "keep"] = "null"`.
-   Its `"keep"` is now `"empty"`.
-
 Output geometry
 ~~~~~~~~~~~~~~~
 
@@ -290,11 +268,6 @@ What counts as a new ring:
 - GEOS output: all rings.
 - Constructors: all rings.
 - add_holes: only the added holes.
-
-.. note::
-
-   Legacy: this replaces `ccw_outer: bool = False`.
-   `ccw_outer=True` is now `new_ring_orientation="ccw"`.
 
 .. _arg-new_holes:
 
