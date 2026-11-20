@@ -35,6 +35,8 @@ polars-runtime-32 = { path = ".polars/py-polars/runtime/polars-runtime-32" }
 [tool.ruff]
 # resolve first-party imports (`geopolars`, `tests`) from here
 src = ["geopolars"]
+# the docs' fenced blocks hold snippet includes (`--8<--`), not Python
+extend-exclude = ["*.md"]
 
 [dependency-groups]
 dev = [
