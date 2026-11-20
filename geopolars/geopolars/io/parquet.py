@@ -104,6 +104,11 @@ def from_geoparquet(
             raise pl.exceptions.SchemaError(msg)
 
     assert first is not None
+    # BUG: the CRS comes back as the PROJJSON of the file,
+    # and CRSs are compared as written,
+    # so a column written as "EPSG:4326" no longer combines with one that still says "EPSG:4326".
+    # Once fixed, update the warning in `docs/source/user-guide/geo/io.md`
+    # and the CRS section of `docs/source/user-guide/geo/migration/geopandas.md`.
     return frame.with_columns(
         _storage_of(name, dtype).ext.to(dtype)
         for name, dtype in first.items()

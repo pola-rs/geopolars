@@ -164,6 +164,8 @@ class GeoArrowType(pl.datatypes.BaseExtension):
                 f"this version supports separated f64 coordinates only, "
                 f"as {shape} {supported}"
             )
+            # BUG: Polars unwraps this error (`crates/polars-python/src/extension.rs`),
+            # so `pl.from_arrow` on interleaved coordinates (GeoPandas' default) panics instead of raising.
             raise ValueError(msg)
 
         # Bypasses __init__ on purpose, so `metadata` is carried through
