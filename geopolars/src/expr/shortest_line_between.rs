@@ -10,7 +10,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_masked_pairs, Geo,
+    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_pairs, Geo,
     GeometryPairs,
 };
 
@@ -55,7 +55,7 @@ fn shortest_line_between(
     let (a, b) = (&inputs[0], &inputs[1]);
     let lines = shortest_line_between_type(a.dtype(), b.dtype())?;
     let name = a.name().clone();
-    let chunk_pairs = match single_chunk_masked_pairs(a, b)? {
+    let chunk_pairs = match single_chunk_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs,
         GeometryPairs::OneAgainstMany { a, b } => b.into_iter().map(|b| (a.clone(), b)).collect(),
         GeometryPairs::ManyAgainstOne { a, b } => a.into_iter().map(|a| (a, b.clone())).collect(),

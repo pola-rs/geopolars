@@ -1,7 +1,6 @@
 //! Lining up two geometry columns for a kernel (see [`GeometryPairs`]).
 
 use polars::prelude::*;
-use polars_arrow::compute::utils::combine_validities_and;
 use polars_core::utils::align_chunks_binary;
 
 use super::storage_as_single_chunk;
@@ -43,17 +42,13 @@ pub fn aligned_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
 
 /// Lines up `a` and `b`, rechunking columns of the same length into a single chunk each,
 /// so they can be of any two kinds.
-/// A row that is null on one side is made null on the other too,
-/// so a kernel that converts every row up front (e.g. to GEOS) cannot fail on a row paired with a null.
-pub fn single_chunk_masked_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
+pub fn single_chunk_pairs(a: &Series, b: &Series) -> PolarsResult<GeometryPairs> {
     if a.len() != b.len() {
         return against_one_pairs(a, b);
     }
-    let (a, b) = (storage_as_single_chunk(a)?, storage_as_single_chunk(b)?);
-    let validity = combine_validities_and(a.validity(), b.validity());
     Ok(GeometryPairs::Pairwise(vec![(
-        a.with_validity(validity.clone()),
-        b.with_validity(validity),
+        storage_as_single_chunk(a)?,
+        storage_as_single_chunk(b)?,
     )]))
 }
 

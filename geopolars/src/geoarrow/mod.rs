@@ -14,7 +14,7 @@ mod geo;
 mod pairs;
 
 pub use geo::Geo;
-pub use pairs::{aligned_pairs, single_chunk_masked_pairs, GeometryPairs};
+pub use pairs::{aligned_pairs, single_chunk_pairs, GeometryPairs};
 
 use std::any::Any;
 use std::sync::Arc;

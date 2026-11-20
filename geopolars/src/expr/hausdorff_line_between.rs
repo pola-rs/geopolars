@@ -11,7 +11,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_masked_pairs, Geo,
+    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_pairs, Geo,
     GeometryPairs,
 };
 
@@ -86,7 +86,7 @@ fn hausdorff_line_between(
                 })
                 .collect::<PolarsResult<Vec<_>>>()
         };
-    let chunks = match single_chunk_masked_pairs(a, b)? {
+    let chunks = match single_chunk_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs
             .iter()
             .map(|(a, b)| {

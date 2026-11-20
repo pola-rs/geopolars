@@ -252,6 +252,24 @@ def test_the_early_coord_check_raises_before_geos(
     ]
 
 
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
+def test_a_row_paired_with_a_null_never_reaches_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
+    # GEOS fails to build a linestring of a single vertex.
+    failing = [_xy((0, 0)), _NOT_FINITE_LINE]
+    df = pl.DataFrame(
+        [
+            _series("a", LineStringXY(), [None, None, _FINITE_LINE]),
+            _series("b", LineStringXY(), [*failing, _FINITE_LINE]),
+        ]
+    )
+
+    out = df.select(geo.relate("a", "b", early_coord_check=early_coord_check))
+
+    assert out["a"].to_list() == [None, None, "1FFF0FFF2"]
+
+
 def test_the_namespace_method_passes_its_options_on() -> None:
     rows = [_NOT_FINITE_LINE, _FINITE_LINE]
     df = pl.DataFrame(

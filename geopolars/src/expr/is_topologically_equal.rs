@@ -11,7 +11,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::geoarrow::{
-    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, GeometryPairs,
+    describe, ensure_same_crs, kind_of, single_chunk_pairs, GeometryPairs,
 };
 
 /// The keyword arguments of the Python `is_topologically_equal`.
@@ -42,7 +42,7 @@ fn is_topologically_equal(
 ) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let (on_row_error, early) = (kwargs.on_row_error, kwargs.early_coord_check);
-    let chunk_pairs = match single_chunk_masked_pairs(a, b)? {
+    let chunk_pairs = match single_chunk_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs,
         GeometryPairs::OneAgainstMany { a, b } => b.into_iter().map(|b| (a.clone(), b)).collect(),
         GeometryPairs::ManyAgainstOne { a, b } => a.into_iter().map(|a| (a, b.clone())).collect(),
