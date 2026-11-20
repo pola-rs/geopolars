@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: help install install-release wheel docs docs-api docs-api-build docs-guide docs-guide-build polars-src test test-all test-rust test-python test-python-all clean
+.PHONY: help install install-release wheel docs docs-api docs-api-build docs-guide docs-guide-build docs-guide-serve polars-src test test-all test-rust test-python test-python-all clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -65,13 +65,23 @@ docs-api-build:
 	PYTHONPATH=$(DOCS_PKG) .venv/bin/sphinx-build -M html geopolars/docs/source target/docs $(SPHINXOPTS)
 
 GUIDE_DIR := target/docs-guide
+INSTALL_GUIDE_DEPS = grep -E '^(zensical|markdown-exec)==' $(POLARS_DIR)/docs/source/requirements.txt \
+	| uv pip install tomli-w -r -
 
 ## Build the user and developer guides with zensical into target/docs-guide/site.
 ## It fails on broken links, unknown API keys, and failing examples, as the Polars docs build would.
 docs-guide: install
-	grep -E '^(zensical|markdown-exec)==' $(POLARS_DIR)/docs/source/requirements.txt \
-		| uv pip install tomli-w -r -
+	$(INSTALL_GUIDE_DEPS)
 	$(MAKE) docs-guide-build
+
+## Serve the guides with zensical on localhost:8000, and rebuild them as the pages change.
+# zensical only watches the staged copy, so the staging script runs alongside it to keep that copy in sync.
+docs-guide-serve: install
+	$(INSTALL_GUIDE_DEPS)
+	.venv/bin/python scripts/stage_docs_guide.py $(POLARS_DIR) $(GUIDE_DIR)
+	.venv/bin/python scripts/stage_docs_guide.py --watch $(POLARS_DIR) $(GUIDE_DIR) & \
+		trap 'kill $$!' EXIT; \
+		cd $(GUIDE_DIR) && $(CURDIR)/.venv/bin/zensical serve
 
 ## Build the user and developer guides with zensical, with the venv as it is.
 # zensical only logs a failing example, or an unknown API key in a `code_block`, so the build log is checked for them.
