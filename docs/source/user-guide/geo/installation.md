@@ -8,7 +8,7 @@ pip install geopolars
 ```
 
 This also installs Polars, if you do not have it yet.
-GeoPolars needs Python 3.10 or newer, and Polars 2.0 or newer.
+GeoPolars needs Python 3.11 or newer, and Polars 2.0 or newer.
 
 You do not need to install anything else.
 GeoPolars uses [GEOS](https://libgeos.org/) for operations such as `buffer` and `intersection`,

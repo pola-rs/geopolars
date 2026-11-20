@@ -172,16 +172,15 @@ For example, an intersection with an empty row is empty, whatever its partner is
 - A GEOS kernel defaults to `early_coord_check="finite_and_empty"`.
   The check runs during the conversion to GEOS.
 - `"finite"` lets an empty point inside a geometry through to GEOS.
-  What GEOS then does is described under `early_coord_check` in [Common arguments](../../../geopolars/docs/source/reference/common_arguments.rst).
-- If the check can be turned off,
-  the module documents what GEOS does with non-finite input then,
+  What GEOS then does is described under `early_coord_check` in [Common arguments](https://docs.pola.rs/api/geopolars/stable/reference/common_arguments.html).
+- A module whose check can be turned off documents what GEOS does with non-finite input,
   as `geos/convex_hull.rs` does.
 - An error from GEOS goes through `on_row_error` (e.g. with `row_or_null`),
   never straight to a null.
 
 ## Orientation of new rings
 
-Which way GEOS runs the rings it builds is described under [New rings](../user-guide/geo/concepts/winding-order.md#new-rings) in the user guide.
+Which way GEOS runs the rings it builds is described under [New rings](../../user-guide/geo/concepts/winding-order.md#new-rings) in the user guide.
 
 The takeaway is that it is not consistent,
 which is why every operation must therefore set the `orientation` of its output `GeosGeometries`.

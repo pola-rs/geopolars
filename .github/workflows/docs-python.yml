@@ -51,3 +51,46 @@ jobs:
 
       - name: Build docs
         run: make docs-html SPHINXOPTS="--fail-on-warning"
+
+  docs-guide:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install SQLite
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+
+      - name: Create virtual environment
+        run: |
+          python -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+
+      # The Polars checkout holds the zensical setup that the guides are built with.
+      - name: Check out Polars
+        run: make polars-src
+
+      # Takes polars from PyPI, rather than building it from the pinned commit as `make install` does.
+      - name: Install Python dependencies
+        run: |
+          pip install uv
+          uv pip install --group dev polars
+          grep -E '^(zensical|markdown-exec)==' .polars/docs/source/requirements.txt \
+            | uv pip install tomli-w -r -
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name == 'push' }}
+
+      - name: Install GeoPolars
+        working-directory: geopolars
+        run: maturin develop --uv
+
+      - name: Build guides
+        run: make docs-guide-build

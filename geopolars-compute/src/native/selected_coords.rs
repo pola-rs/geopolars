@@ -30,7 +30,7 @@ use geopolars_views::{
     same_place, Coords, LineStringArray, List, MultiLineStringArray, MultiPointArray,
     MultiPolygonArray, PointArray, PolygonArray, ValidCoords, ValidList, MIN_RING_VERTICES,
 };
-use polars_arrow::bitmap::iterator::TrueIdxIter;
+use polars_arrow::bitmap::iterator::ExactTrueIdxIter;
 use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::OffsetsBuffer;
@@ -79,13 +79,13 @@ enum Lists {
     Rings,
 }
 
-/// Pushes the runs of `vertices` without a vertex from `selected` onto `runs`,
-/// and returns how many vertices they hold.
-/// `selected` yields the selected vertices in order, and this takes those before `vertices.end`.
-/// So it must be called on every list of a trimmed level in turn, with the same `selected`.
+/// Pushes the runs of unselected vertices in `vertices` onto `runs`, and returns how many vertices they hold.
+///
+/// As it takes every vertex before `vertices.end` from `selected`,
+/// it must be called on every list in turn, with the same `selected`.
 #[inline(always)]
 fn push_kept_runs(
-    selected: &mut Peekable<TrueIdxIter<'_>>,
+    selected: &mut Peekable<ExactTrueIdxIter<'_>>,
     vertices: Range<usize>,
     runs: &mut Vec<Range<usize>>,
 ) -> usize {
@@ -150,11 +150,10 @@ fn is_too_short<const CHECK_CLOSED: bool, const Z: bool>(
     }
 }
 
-/// The offsets of what each of `lists` keeps, and the coordinates it keeps.
-/// A list keeps the vertices that are not `selected`, unless it is then [too short](is_too_short).
-/// Last, a mask of the lists that pass:
-/// unset where a list is too short with [ShortLines::Null], which keeps none.
-/// `None` when every list passes.
+/// Drops the `selected` vertices from every one of `lists`,
+/// and handles a list that is then [too short](is_too_short) as `short_lines` says.
+/// Returns the new offsets and coordinates, with a mask of the lists that pass.
+/// Only a list that is too short with [ShortLines::Null] fails, and it keeps no vertices.
 fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
     lists: &ValidList,
     kind: Lists,
@@ -164,7 +163,7 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
 ) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     debug_assert!(
         lists.spans_all_of(coords.len()),
-        "the lists have to be trimmed (see \"Trimming\" in docs/source/development/view-types.md)"
+        "the lists have to be trimmed (see \"Trimming\" in docs/source/development/geo/view-types.md)"
     );
     let (mut runs, mut passing) = (Vec::new(), None);
     let mut selected = selected.true_idx_iter().peekable();

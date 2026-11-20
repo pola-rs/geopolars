@@ -1,6 +1,3 @@
-//! Views that may hold lists and coordinates outside their rows, and trimming them.
-//! See "Trimming" in docs/source/development/view-types.md.
-
 use std::ops::Range;
 
 use crate::{
@@ -9,9 +6,8 @@ use crate::{
     ValidCoords, ValidList,
 };
 
-/// A view that may hold lists and coordinates outside its rows (see "Trimming" in docs/source/development/view-types.md).
-/// A kernel reaches the levels below the rows only through the offsets of the rows.
-/// It reads the view part by part, so it cannot pass it on as a plain one.
+/// A view that may hold lists and coordinates outside its rows (see "Trimming" in docs/source/development/geo/view-types.md).
+/// A kernel has to read it part by part, and can only pass it on as a plain view once it is `trimmed`.
 pub struct Untrimmed<T>(pub(crate) T);
 
 /// A trimmed view is an untrimmed one too.
