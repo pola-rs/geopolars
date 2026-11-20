@@ -217,12 +217,12 @@ def test_empty_geometries_of_other_kinds_are_equal(dtype: GeoArrowType) -> None:
     assert _is_equal(dtype, [[]], [[]]) == [True]
 
 
-def test_m_is_only_compared_when_included() -> None:
+def test_m_is_compared_unless_left_out() -> None:
     a = {"x": 1.0, "y": 2.0, "m": 0.0}
     b = a | {"m": 5.0}
 
-    assert _is_close(PointXYM(), [a], [b]) == [True]
-    assert _is_close(PointXYM(), [a], [b], include_m=True) == [False]
+    assert _is_close(PointXYM(), [a], [b]) == [False]
+    assert _is_close(PointXYM(), [a], [b], include_m=False) == [True]
 
 
 def test_z_is_compared_unless_ignored() -> None:

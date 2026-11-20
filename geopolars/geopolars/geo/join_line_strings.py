@@ -25,7 +25,7 @@ def join_line_strings(
     abs_tol: float | None = None,
     rel_tol: float | None = None,
     include_z: bool = True,
-    include_m: bool = False,
+    include_m: bool = True,
 ) -> pl.Expr:
     """Joins the linestrings of each row into one, each one's end to the next one's start.
 

@@ -450,7 +450,7 @@ class ExprGeoNameSpace:
         abs_tol: float | None = None,
         rel_tol: float | None = None,
         include_z: bool = True,
-        include_m: bool = False,
+        include_m: bool = True,
     ) -> pl.Expr:
         from geopolars.geo.join_line_strings import join_line_strings
 
@@ -498,7 +498,7 @@ class ExprGeoNameSpace:
         rel_tol: float | None = None,
         nans_equal: bool = False,
         include_z: bool = True,
-        include_m: bool = False,
+        include_m: bool = True,
     ) -> pl.Expr:
         from geopolars.geo.is_equal import is_equal
 
@@ -614,7 +614,7 @@ class ExprGeoNameSpace:
         *,
         non_finite: Literal["raise", "drop", "drop_empty"] = "raise",
         include_z: bool = True,
-        include_m: bool = False,
+        include_m: bool = True,
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         from geopolars.geo.hausdorff_line_between import hausdorff_line_between
@@ -654,7 +654,7 @@ class ExprGeoNameSpace:
         select_non_finite: bool = True,
         select_empty: bool = True,
         include_z: bool = True,
-        include_m: bool = False,
+        include_m: bool = True,
         action: NonFiniteAction = "drop",
         short_lines: ShortLines = "null",
     ) -> pl.Expr:
@@ -761,7 +761,7 @@ class ExprGeoNameSpace:
         abs_tol: float | None = None,
         rel_tol: float | None = None,
         include_z: bool = True,
-        include_m: bool = False,
+        include_m: bool = True,
     ) -> pl.Expr:
         from geopolars.geo.has_repeats_in_succession import has_repeats_in_succession
 
@@ -779,7 +779,7 @@ class ExprGeoNameSpace:
         abs_tol: float | None = None,
         rel_tol: float | None = None,
         include_z: bool = True,
-        include_m: bool = False,
+        include_m: bool = True,
         collapsed_lines: Literal["keep_ends", "single_vertex"] = "keep_ends",
         short_lines: ShortLines = "null",
     ) -> pl.Expr:

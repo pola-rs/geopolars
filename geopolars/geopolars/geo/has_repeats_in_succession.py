@@ -24,7 +24,7 @@ def has_repeats_in_succession(
     abs_tol: float | None = None,
     rel_tol: float | None = None,
     include_z: bool = True,
-    include_m: bool = False,
+    include_m: bool = True,
 ) -> pl.Expr:
     """Whether each geometry has two points in a row that lie at the same place.
     One `bool` per row, a multi-geometry included. A null geometry gives a null result.

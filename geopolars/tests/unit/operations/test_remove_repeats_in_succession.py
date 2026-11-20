@@ -242,13 +242,14 @@ def test_only_a_multipoint_point_in_a_row_is_removed() -> None:
     assert _remove(MultiPointXY(), [a, a, b, a]) == [[a, b, a]]
 
 
-def test_z_is_compared_and_m_is_not() -> None:
+def test_m_is_compared_unless_left_out() -> None:
     """Of a run, the first vertex is kept, with its m."""
     a = {"x": 1.0, "y": 1.0, "z": 0.0, "m": 0.0}
     b = a | {"m": 1.0}
     c = a | {"z": 1.0}
 
-    assert _remove(LineStringXYZM(), [a, b, c]) == [[a, c]]
+    assert _remove(LineStringXYZM(), [a, b, c]) == [[a, b, c]]
+    assert _remove(LineStringXYZM(), [a, b, c], include_m=False) == [[a, c]]
 
 
 _P = {"x": 1.0, "y": 1.0, "z": 0.0, "m": 0.0}

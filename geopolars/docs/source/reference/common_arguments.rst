@@ -161,14 +161,14 @@ Neither value can be negative or NaN. This will return an error at plan time.
 
 .. _arg-include_z:
 
-`include_z: bool = True`, `include_m: bool = False`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+`include_z: bool = True`, `include_m: bool = True`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 These flags control whether a certain axis is included in a comparison
 (e.g. equality, distance).
 The x and y axes are always included, but sometimes it is better to leave the z and m values out.
 
-z is compared by default, m is not (being a measure rather than a position).
+Both are included by default.
 Either flag is ignored for a geometry without that axis.
 
 This also ties into `early_coord_check`. See its description for more details.

@@ -27,7 +27,7 @@ def remove_repeats_in_succession(
     abs_tol: float | None = None,
     rel_tol: float | None = None,
     include_z: bool = True,
-    include_m: bool = False,
+    include_m: bool = True,
     collapsed_lines: CollapsedLines = "keep_ends",
     short_lines: ShortLines = "null",
 ) -> pl.Expr:

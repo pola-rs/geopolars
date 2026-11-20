@@ -24,10 +24,10 @@ This operation drops z and m.""",
 Computed by GEOS.
 This operation keeps z, but drops m.""",
     "coincidence_axes": """\
-Coordinates are compared in x and y.
-With `include_z=True`, the default, they also have to match in z.
-With `include_m=True`, they also have to match in m.
-m is a measure rather than a position, so it is not compared by default.
+Coordinates are compared in x and y, and by default in z and m too,
+if they have those dimensions.
+With `include_z=False`, they do not have to match in z,
+and with `include_m=False`, not in m.
 Either flag is ignored for a geometry without that axis.""",
     "coincidence_tolerance": """\
 By default, the coordinates have to be exactly equal.

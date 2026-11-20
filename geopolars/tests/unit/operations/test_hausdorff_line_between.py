@@ -581,10 +581,10 @@ def test_an_m_that_is_not_finite_only_counts_with_include_m() -> None:
     b = _wkt("b", PointXYM(), ["POINT M (0 1 2)"])
     df = pl.DataFrame([a.ext.to(LineStringXYM()), b])
 
-    out = df.select(geo.hausdorff_line_between("a", "b"))
-    assert _as_wkt(out["a"]) == ["LINESTRING M(10 0 1,0 1 2)"]
     with pytest.raises(ComputeError, match="expects finite coordinates"):
-        df.select(geo.hausdorff_line_between("a", "b", include_m=True))
+        df.select(geo.hausdorff_line_between("a", "b"))
+    out = df.select(geo.hausdorff_line_between("a", "b", include_m=False))
+    assert _as_wkt(out["a"]) == ["LINESTRING M(10 0 1,0 1 2)"]
 
 
 def test_a_failing_row_gives_null_with_on_row_error_null() -> None:

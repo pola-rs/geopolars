@@ -27,7 +27,7 @@ def hausdorff_line_between(
     *,
     non_finite: HausdorffNonFinite = "raise",
     include_z: bool = True,
-    include_m: bool = False,
+    include_m: bool = True,
     on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """The line spanning the Hausdorff distance between two geometries, row by row.
@@ -72,8 +72,8 @@ def hausdorff_line_between(
 
     A geometry that `"drop"` or `"drop_empty"` leaves without vertices counts as empty.
 
-    Whether a vertex is finite depends on its x and y.
-    Its z also counts with `include_z=True` (the default), and its m with `include_m=True`.
+    Whether a vertex is finite depends on its x and y, and by default on its z and m too.
+    `include_z=False` leaves z out, and `include_m=False` leaves m out.
     Neither changes which vertex is the empty point.
     A point row that is the empty point is an empty geometry, not a geometry with an empty vertex.
     It therefore never raises.

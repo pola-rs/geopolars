@@ -114,14 +114,14 @@ _ALL_NAN = _xyzm(NAN, NAN, NAN, NAN)
 @pytest.mark.parametrize(
     ("kwargs", "kept"),
     [
-        ({}, [_FINITE, _INF_M]),
-        ({"include_m": True}, [_FINITE]),
-        ({"include_z": False}, [_FINITE, _NAN_Z, _INF_M]),
-        ({"include_z": False, "include_m": True}, [_FINITE, _NAN_Z]),
+        ({}, [_FINITE]),
+        ({"include_z": False}, [_FINITE, _NAN_Z]),
+        ({"include_m": False}, [_FINITE, _INF_M]),
+        ({"include_z": False, "include_m": False}, [_FINITE, _NAN_Z, _INF_M]),
         ({"select_non_finite": False}, [_FINITE, _NAN_Z, _INF_M, _ONLY_Z_AND_M]),
-        ({"select_empty": False}, [_FINITE, _INF_M, _ALL_NAN]),
+        ({"select_empty": False}, [_FINITE, _ALL_NAN]),
         (
-            {"select_empty": False, "include_z": False},
+            {"select_empty": False, "include_z": False, "include_m": False},
             [_FINITE, _NAN_Z, _INF_M, _ALL_NAN],
         ),
     ],

@@ -179,16 +179,15 @@ def test_a_tolerance_cannot_be_negative_or_nan(name: str, value: float) -> None:
         geo.has_repeats_in_succession("g", **{name: value})
 
 
-def test_vertices_in_a_row_that_differ_only_in_m_are_repeated_unless_m_is_included() -> (
+def test_vertices_in_a_row_that_differ_only_in_m_are_not_repeated_unless_m_is_left_out() -> (
     None
 ):
-    """m is a measure along the line, not a place on it."""
     a = {"x": 1.0, "y": 1.0, "z": 0.0, "m": 0.0}
     b = a | {"m": 1.0}
 
-    assert _has_repeats_in_succession(LineStringXYZM(), [a, b]) == [True]
-    assert _has_repeats_in_succession(LineStringXYZM(), [a, b], include_m=True) == [
-        False
+    assert _has_repeats_in_succession(LineStringXYZM(), [a, b]) == [False]
+    assert _has_repeats_in_succession(LineStringXYZM(), [a, b], include_m=False) == [
+        True
     ]
 
 
