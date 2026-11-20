@@ -10,7 +10,9 @@ The ones you'll find yourself needing most:
 
 - `make test`: the Python tests, without the slow ones.
 - `make test-all`: the Rust and Python tests, including the slow ones.
-- `make docs`: the API reference, into `target/docs/html`.
+- `make docs-api`: the API reference, into `target/docs/html`.
+- `make docs-guide`: the user and developer guides, into `target/docs-guide/site`.
+- `make docs`: both.
 
 ## Developer documentation
 

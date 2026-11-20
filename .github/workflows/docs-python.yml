@@ -50,7 +50,7 @@ jobs:
         run: maturin develop --uv
 
       - name: Build docs
-        run: make docs-html SPHINXOPTS="--fail-on-warning"
+        run: make docs-api-build SPHINXOPTS="--fail-on-warning"
 
   docs-guide:
     runs-on: ubuntu-latest

@@ -58,7 +58,7 @@ target/
 !/docs/assets/data/reddit.csv
 /docs/assets/people.md
 docs/expression-flow.svg
-# autosummary stubs, should Sphinx run on the tree rather than on the copy `make docs` makes.
+# autosummary stubs, should Sphinx run on the tree rather than on the copy `make docs-api` makes.
 /geopolars/docs/source/reference/**/api/
 
 # User specific source setups
