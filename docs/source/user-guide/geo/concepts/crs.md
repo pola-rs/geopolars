@@ -72,7 +72,9 @@ in whatever unit its coordinates have.
 That is close for a CRS made for measuring, such as a UTM zone or a national grid,
 but not for Web Mercator (EPSG:3857), which stretches distances away from the equator.
 It's probably better to pass `distance_method="geodesic"` there!
-(`area` also measures on the plane for an equal-area CRS, as that plane keeps areas.)
+`area` decides differently.
+It measures on the plane only without a CRS, or in an equal-area CRS, whose plane keeps areas.
+In every other CRS, it measures along the ellipsoid.
 
 For example, these are the *planar* (in degrees) and *geodesic* (in metres, on the ellipsoid) distances
 between Amsterdam and Utrecht:

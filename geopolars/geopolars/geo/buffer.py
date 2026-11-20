@@ -78,7 +78,8 @@ def buffer(
     A null distance gives a null polygon.
     A NaN or infinite distance in a column raises, as does a negative one with `side`.
 
-    A point, linestring or polygon gives a polygon, unless its buffer can split (see below).
+    A point, linestring, or polygon gives a polygon,
+    or a multipolygon where `promote_to_multi` asks for one (see the table below).
     Their multi-variants give a multipolygon,
     in which parts whose buffers overlap are merged into one.
     The output is always XY:

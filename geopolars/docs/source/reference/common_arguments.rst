@@ -297,15 +297,19 @@ This is mostly a concern when using GEOS kernels.
 - `promote_to_multi="never"` expects every output to be a single geometry.
   Anything that results in multiple geometries is considered an error.
   How this error is then handled depends on the setting of the `on_row_error` argument.
-- `promote_to_multi="auto"` (default) outputs a `Multi*` only for inputs whose result can fall into several parts.
-  Which inputs those are differs per expression (a point never splits, for example),
-  so each expression documents what `"auto"` means for it.
+- `promote_to_multi="auto"` (default) outputs a `Multi*` where the result can fall into several parts.
+  This is decided while the plan is built, from the input kinds and the other arguments, not row by row.
+  `buffer`, for example, only looks at `distance`.
+  A `distance` column, or one of at most 0, gives a `MultiPolygon` for every input.
+  That includes a point, which never splits.
+  Each expression documents what `"auto"` means for it.
 - `promote_to_multi="always"` always outputs a `Multi*` (e.g. a `MultiPolygon` instead of a `Polygon`,
   even if the input types are only polygons). This is more flexible,
   but in many cases might make your data harder to work with.
 
-If the input geometry is already a `Multi*` (e.g. `MultiPolygon`), this argument has no effect.
-These will always output a `Multi*`.
+An input that is already a `Multi*` (e.g. `MultiPolygon`) always gives a `Multi*`, whatever this argument says.
+`intersection` is the exception, as its output kind depends on both inputs.
+Its docstring gives the output kind for every pair of inputs.
 
 Affine transformations
 ~~~~~~~~~~~~~~~~~~~~~~
