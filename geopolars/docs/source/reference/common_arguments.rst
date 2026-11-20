@@ -124,8 +124,10 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
   but otherwise you might end up with distances in degrees.
 - `distance_method="geodesic"` gets the distances on the CRS-defined ellipsoid.
 - `distance_method="auto"` (default) looks at the CRS to switch between the other two modes.
-  If the CRS is a geographic one, it uses the `"geodesic"` option,
-  while it uses `"planar"` on anything that has a projected CRS, or no CRS at all.
+  It uses `"planar"` on anything that has a projected CRS, or no CRS at all,
+  and `"geodesic"` on any other CRS.
+  A CRS that is not defined on longitude/latitude, such as a geocentric one,
+  has no ellipsoid to measure along, so it is refused at plan time unless `"planar"` is asked for.
   On a projected CRS, the geodesic and planar distances are usually very close enough,
   so it makes sense to use the faster option.
 

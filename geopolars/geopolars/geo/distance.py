@@ -7,7 +7,7 @@ is described under "Geographic and projected" in `docs/source/user-guide/geo/con
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 from polars.plugins import register_plugin_function
@@ -23,6 +23,15 @@ if TYPE_CHECKING:
 
 # TODO: add expr for things with multiple points, get the 'closest distance'.
 # with flag to also interpolate between points / line?
+
+
+def _auto_distance_method(dtype: GeoArrowType) -> Literal["planar", "geodesic"]:
+    """Planar only without a CRS or in a projected one.
+    Any other CRS, such as a geocentric one, goes geodesic, which refuses it if it has no ellipsoid.
+    """
+    if not dtype._declares_crs() or dtype._is_projected():
+        return "planar"
+    return "geodesic"
 
 
 def _distance(
@@ -44,8 +53,7 @@ def _distance(
     # Asking one side is enough, as the kernel refuses points that do not share a CRS.
     crs_side = a_dtype if a_dtype._declares_crs() else b_dtype
     if distance_method == "auto":
-        is_geographic = crs_side._longitude_turn() is not None
-        distance_method = "geodesic" if is_geographic else "planar"
+        distance_method = _auto_distance_method(crs_side)
     elif distance_method == "geodesic" and not crs_side._declares_crs():
         msg = "a geodesic distance needs a CRS to measure on, but neither point declares one"
         raise TypeError(msg)
@@ -77,8 +85,11 @@ def distance(
     `"geodesic"`       along the CRS's ellipsoid  CRS units
     =================  =========================  ================
 
-    The default, `distance_method="auto"`, measures points in a geographic CRS `"geodesic"`,
-    and points in a projected CRS, or without one, `"planar"`.
+    The default, `distance_method="auto"`, measures points in a projected CRS, or without one, `"planar"`,
+    and points in any other CRS `"geodesic"`.
+    A CRS that is not defined on longitude/latitude, such as a geocentric one, has no ellipsoid
+    to measure along, so `"geodesic"` and `"auto"` refuse it while the plan is built.
+    Ask for `"planar"` to measure it on its `x` and `y` anyway.
     With any method, points in different CRSs, or a CRS on only one of them, are refused:
     reproject one onto the other with `to_crs` first.
     **Planar** ignores the CRS: for longitude/latitude it comes out in degrees,

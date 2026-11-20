@@ -15,6 +15,7 @@ from polars.plugins import register_plugin_function
 from geopolars._utils import LIB
 from geopolars.datatypes import LineStringType, MultiLineStringType
 from geopolars.geo._dispatch import on_geometry
+from geopolars.geo.distance import _auto_distance_method
 
 if TYPE_CHECKING:
     from geopolars._typing import DistanceMethod, IntoExprColumn
@@ -47,8 +48,7 @@ def _length(
     ignore_nan: bool,
 ) -> pl.Expr:
     if distance_method == "auto":
-        is_geographic = geometry._longitude_turn() is not None
-        distance_method = "geodesic" if is_geographic else "planar"
+        distance_method = _auto_distance_method(geometry)
     elif distance_method == "geodesic" and not geometry._declares_crs():
         msg = "a geodesic length needs a CRS to measure on, but the geometry declares none"
         raise TypeError(msg)

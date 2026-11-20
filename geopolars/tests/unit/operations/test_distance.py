@@ -314,14 +314,22 @@ def test_a_crs_on_only_one_point_is_refused_while_resolving_the_schema() -> None
         lf.collect_schema()
 
 
-def test_a_crs_not_on_longitude_latitude_is_refused_while_resolving_the_schema() -> (
-    None
-):
+@pytest.mark.parametrize("distance_method", ["auto", "geodesic"])
+def test_a_crs_not_on_longitude_latitude_is_refused_while_resolving_the_schema(
+    distance_method: DistanceMethod,
+) -> None:
     """Earth-centred XYZ has no ellipsoid surface to measure a distance on."""
     lf = _pairs([NEW_YORK], [LONDON], crs="EPSG:4978").lazy()
+    distance = geo.distance("a", "b", distance_method=distance_method)
 
     with pytest.raises(ComputeError, match="not defined on longitude/latitude"):
-        lf.select(geo.distance("a", "b", distance_method="geodesic")).collect_schema()
+        lf.select(distance).collect_schema()
+
+
+def test_a_crs_not_on_longitude_latitude_is_measured_on_the_plane_when_asked() -> None:
+    df = _pairs([(0.0, 0.0)], [(3.0, 4.0)], crs="EPSG:4978")
+
+    assert _distances(df, "planar") == [5.0]
 
 
 def test_only_points_are_measured(line_coords: pl.DataFrame) -> None:
