@@ -7,6 +7,7 @@ Only our pages are staged, as building the Polars pages would run all of their e
 
 Both commands fail on what the strict Polars build fails on,
 and on what zensical only logs: a failing example, or an unknown API key in a `code_block`.
+They also fail on a macro that raises, which zensical otherwise leaves as text on the page.
 `build` reports every problem before it fails, and `serve` stops after the first rebuild with one.
 
 Usage: `python3 docs_guide.py build|serve <polars dir> <output dir>`
@@ -34,7 +35,7 @@ ZENSICAL = Path(sys.executable).parent / "zensical"
 COLOUR = re.compile(r"\x1b\[[0-9;]*m")
 PROBLEM = re.compile(
     r"^(Warning|Error)\b|^\d+ issues? found"
-    r"|Execution of python code block exited with errors|Could not find "
+    r"|Execution of \w+ code block .*exited with|Could not find "
 )
 # zensical ends every build or rebuild with this line.
 BUILD_SUMMARY = re.compile(r"^(No|\d+) issues? found")
@@ -163,6 +164,8 @@ def sync_guides_config(polars_dir: Path) -> dict:
         config["project"]["nav"] = tomllib.load(f)["nav"]
     # Its redirects lead to Polars pages, which are not staged.
     del config["project"]["plugins"]["redirects"]
+    # Otherwise a page whose macro raises keeps its `{{code_block(...)}}` as text, without a word in the log.
+    config["project"]["plugins"]["macros"]["on_error_fail"] = True
     return config
 
 
