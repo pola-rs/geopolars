@@ -1,3 +1,5 @@
+# Run the Rust unit tests.
+
 name: Test Rust
 
 on:
@@ -6,34 +8,53 @@ on:
     branches:
       - main
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   RUSTFLAGS: -C debuginfo=0  # Do not produce debug symbols to keep memory usage down
   RUST_BACKTRACE: 1
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test-rust:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      # https://github.com/marketplace/actions/checkout
+      - name: Check out codebase
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       # Without `extension-module`, the tests link libpython.
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      # https://github.com/marketplace/actions/astral-sh-setup-uv
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d
         with:
           python-version: '3.14'
+          activate-environment: true
 
       # The bundled PROJ links SQLite, and generates its database with the sqlite3 binary.
       - name: Install SQLite
-        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+        run: |
+          sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
+      # https://github.com/marketplace/actions/rust-cache
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           save-if: ${{ github.event_name == 'push' }}
 
+      # The test binaries load libpython at runtime, so it must be on the loader path.
       - name: Run tests
-        run: make test-rust
+        run: |
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(python -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')
+          make test-rust
