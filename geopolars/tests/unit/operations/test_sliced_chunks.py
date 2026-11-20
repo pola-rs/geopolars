@@ -112,7 +112,7 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         {MultiPointXY, PolygonXY, MultiLineStringXY, MultiPolygonXY},
     ),
     "intersection": (
-        lambda g: geo.intersection(g, g, allow_splitting=True, on_row_error="null"),
+        lambda g: geo.intersection(g, g, promote_to_multi="auto", on_row_error="null"),
         set(),
     ),
     "difference": (
@@ -120,7 +120,7 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
         lambda g: geo.difference(
             g,
             geo.translate(g, (0.5, 0.0)),
-            allow_splitting=True,
+            promote_to_multi="auto",
             on_row_error="null",
         ),
         set(),

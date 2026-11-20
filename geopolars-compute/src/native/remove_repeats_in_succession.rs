@@ -66,12 +66,13 @@ fn keep_last_vertices(lists: &ValidList, repeated: &mut MutableBitmap, keeps_bot
 pub fn line_strings_without_repeats_in_succession(
     array: &LineStringArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     options: LineOptions,
 ) -> LineStringArray {
     let rows = array.rows.ignoring_validity();
-    let mut repeated = repeats_in_succession(rows, &array.coords, coincidence, unique_z, unique_m);
+    let mut repeated =
+        repeats_in_succession(rows, &array.coords, coincidence, include_z, include_m);
     keep_last_vertices(
         rows,
         &mut repeated,
@@ -85,11 +86,11 @@ pub fn line_strings_without_repeats_in_succession(
 pub fn multi_points_without_repeats_in_succession(
     array: &MultiPointArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 ) -> MultiPointArray {
     let rows = array.rows.ignoring_validity();
-    let repeated = repeats_in_succession(rows, &array.coords, coincidence, unique_z, unique_m);
+    let repeated = repeats_in_succession(rows, &array.coords, coincidence, include_z, include_m);
     multi_points_without_selected(array, &repeated.freeze(), ShortLines::Keep)
 }
 
@@ -97,12 +98,13 @@ pub fn multi_points_without_repeats_in_succession(
 pub fn polygons_without_repeats_in_succession(
     array: &PolygonArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     short_lines: ShortLines,
 ) -> PolygonArray {
     let rings = &array.rings;
-    let mut repeated = repeats_in_succession(rings, &array.coords, coincidence, unique_z, unique_m);
+    let mut repeated =
+        repeats_in_succession(rings, &array.coords, coincidence, include_z, include_m);
     keep_last_vertices(rings, &mut repeated, true);
     polygons_without_selected(array, &repeated.freeze(), short_lines, false)
 }
@@ -110,12 +112,13 @@ pub fn polygons_without_repeats_in_succession(
 pub fn multi_line_strings_without_repeats_in_succession(
     array: &MultiLineStringArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     options: LineOptions,
 ) -> MultiLineStringArray {
     let lines = &array.lines;
-    let mut repeated = repeats_in_succession(lines, &array.coords, coincidence, unique_z, unique_m);
+    let mut repeated =
+        repeats_in_succession(lines, &array.coords, coincidence, include_z, include_m);
     keep_last_vertices(
         lines,
         &mut repeated,
@@ -128,12 +131,13 @@ pub fn multi_line_strings_without_repeats_in_succession(
 pub fn multi_polygons_without_repeats_in_succession(
     array: &MultiPolygonArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     short_lines: ShortLines,
 ) -> MultiPolygonArray {
     let rings = &array.rings;
-    let mut repeated = repeats_in_succession(rings, &array.coords, coincidence, unique_z, unique_m);
+    let mut repeated =
+        repeats_in_succession(rings, &array.coords, coincidence, include_z, include_m);
     keep_last_vertices(rings, &mut repeated, true);
     multi_polygons_without_selected(array, &repeated.freeze(), short_lines, false)
 }

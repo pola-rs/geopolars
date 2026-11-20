@@ -17,7 +17,7 @@ use crate::geoarrow::describe;
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LengthKwargs {
-    method: DistanceMethod,
+    distance_method: DistanceMethod,
     ignore_nan: bool,
 }
 
@@ -29,7 +29,7 @@ fn length_dtype(field: &Field) -> PolarsResult<Field> {
 }
 
 fn kernel_output_type_length(input_fields: &[Field], kwargs: LengthKwargs) -> PolarsResult<Field> {
-    if let DistanceMethod::Geodesic = kwargs.method {
+    if let DistanceMethod::Geodesic = kwargs.distance_method {
         // So a CRS PROJ cannot measure in fails while the plan is built.
         geodesic_metric_of(&input_fields[0])?;
     }
@@ -53,7 +53,7 @@ fn measure(
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_length)]
 fn length(inputs: &[Series], kwargs: LengthKwargs) -> PolarsResult<Series> {
-    match kwargs.method {
+    match kwargs.distance_method {
         DistanceMethod::Planar => measure(&Planar, &inputs[0], kwargs.ignore_nan),
         DistanceMethod::Geodesic => {
             let metric = geodesic_metric_of(&inputs[0].field())?;

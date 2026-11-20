@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
@@ -87,7 +89,7 @@ def test_bad_arguments_are_refused() -> None:
     with pytest.raises(ValueError, match="quarter turn"):
         geo.skew_about_centroid("line", 90)
     with pytest.raises(ValueError, match="`unit`"):
-        geo.skew_about_centroid("line", 30, unit="rad")  # type: ignore[arg-type]
+        geo.skew_about_centroid("line", 30, unit="pi")  # type: ignore[arg-type]
 
 
 def test_a_geometry_without_a_centroid_comes_out_null() -> None:
@@ -118,6 +120,8 @@ def test_the_namespace_forwards(line_coords: pl.DataFrame) -> None:
     df = XY.lines(line_coords)
 
     assert_frame_equal(
-        df.select(gpl.col("line").geo.skew_about_centroid(0.125, -0.25, "pi")),
+        df.select(
+            gpl.col("line").geo.skew_about_centroid(math.pi / 8, -math.pi / 4, "rad")
+        ),
         df.select(geo.skew_about_centroid("line", 22.5, -45)),
     )

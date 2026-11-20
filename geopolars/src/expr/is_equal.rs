@@ -17,8 +17,8 @@ pub struct IsEqualKwargs {
     abs_tol: Option<f64>,
     rel_tol: Option<f64>,
     nans_equal: bool,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 }
 
 fn kernel_output_type_is_equal(
@@ -49,8 +49,8 @@ fn is_equal(inputs: &[Series], kwargs: IsEqualKwargs) -> PolarsResult<Series> {
             b,
             kind,
             coincidence,
-            kwargs.unique_z,
-            kwargs.unique_m,
+            kwargs.include_z,
+            kwargs.include_m,
             kwargs.nans_equal,
         )
     };

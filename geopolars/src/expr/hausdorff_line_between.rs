@@ -22,8 +22,8 @@ use crate::geoarrow::{
 pub struct HausdorffLineBetweenKwargs {
     select_non_finite: bool,
     select_empty: bool,
-    ignore_z: bool,
-    ignore_m: bool,
+    include_z: bool,
+    include_m: bool,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
 }
@@ -33,8 +33,8 @@ impl HausdorffLineBetweenKwargs {
         NonFinite {
             select_non_finite: self.select_non_finite,
             select_empty: self.select_empty,
-            ignore_z: self.ignore_z,
-            ignore_m: self.ignore_m,
+            include_z: self.include_z,
+            include_m: self.include_m,
         }
     }
 }

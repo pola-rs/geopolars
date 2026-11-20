@@ -18,8 +18,8 @@ pub fn without_repeats_in_succession(
     chunk: &dyn Array,
     kind: Kind,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     options: LineOptions,
 ) -> PolarsResult<GeometryArray> {
     let rows = || downcast::<ListArray<i64>>(chunk, "a list of parts");
@@ -28,29 +28,29 @@ pub fn without_repeats_in_succession(
         Kind::LineString => GeometryArray::LineString(line_strings_without_repeats_in_succession(
             &LineStringArray::new(rows()?)?,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
             options,
         )),
         Kind::MultiPoint => GeometryArray::MultiPoint(multi_points_without_repeats_in_succession(
             &MultiPointArray::new(rows()?)?,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
         )),
         Kind::Polygon => GeometryArray::Polygon(polygons_without_repeats_in_succession(
             &PolygonArray::new(rows()?)?,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
             options.short_lines,
         )),
         Kind::MultiLineString => {
             GeometryArray::MultiLineString(multi_line_strings_without_repeats_in_succession(
                 &MultiLineStringArray::new(rows()?)?,
                 coincidence,
-                unique_z,
-                unique_m,
+                include_z,
+                include_m,
                 options,
             ))
         }
@@ -58,8 +58,8 @@ pub fn without_repeats_in_succession(
             GeometryArray::MultiPolygon(multi_polygons_without_repeats_in_succession(
                 &MultiPolygonArray::new(rows()?)?,
                 coincidence,
-                unique_z,
-                unique_m,
+                include_z,
+                include_m,
                 options.short_lines,
             ))
         }

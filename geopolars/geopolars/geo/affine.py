@@ -24,7 +24,7 @@ from geopolars.geo.construct.point import point
 if TYPE_CHECKING:
     from typing import TypeAlias
 
-    from geopolars._typing import IntoExprColumn
+    from geopolars._typing import AngleUnit, IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
     Offset: TypeAlias = (
@@ -151,15 +151,15 @@ Origin = tuple[float, float] | tuple[float, float, float]
 _ZERO = (0.0, 0.0, 0.0)
 
 
-def _degrees(amount: float, unit: Literal["deg", "pi"], name: str) -> float:
+def _degrees(amount: float, unit: AngleUnit, name: str) -> float:
     """`amount` in degrees, refused while the expression is built if it is not a number."""
-    if unit not in ("deg", "pi"):
-        msg = f'`unit` has to be "deg" or "pi", got: {unit!r}'
+    if unit not in ("deg", "rad"):
+        msg = f'`unit` has to be "deg" or "rad", got: {unit!r}'
         raise ValueError(msg)
     if not math.isfinite(amount):
         msg = f"`{name}` has to be a finite number, got: {amount!r}"
         raise ValueError(msg)
-    return amount * 180.0 if unit == "pi" else amount
+    return math.degrees(amount) if unit == "rad" else amount
 
 
 def _origin(origin: Origin) -> tuple[float, float, float]:
@@ -326,18 +326,18 @@ def _rotate_about(
     return build
 
 
-@doc(verb="turn")
+@doc(verb="turn", angles="`amount` is")
 def rotate(
     geometry: IntoExprColumn,
     amount: float,
-    unit: Literal["deg", "pi"] = "deg",
+    unit: AngleUnit = "deg",
     axis: Literal["x", "y", "z"] = "z",
     origin: Origin | IntoExprColumn = (0.0, 0.0, 0.0),
 ) -> pl.Expr:
     """Turn every position of a geometry about an axis through `origin`.
 
-    `amount` is in degrees, or with `unit="pi"` in multiples of π radians:
-    `rotate("shape", 90)` and `rotate("shape", 0.5, unit="pi")` are the same quarter turn.
+    {angle_unit}
+    `rotate("shape", 90)` and `rotate("shape", math.pi / 2, unit="rad")` are the same quarter turn.
     A positive amount turns counter-clockwise, looking down the axis from its positive end
     towards the origin (the right-hand rule).
 
@@ -367,7 +367,7 @@ def rotate(
 def rotate_about_centroid(
     geometry: IntoExprColumn,
     amount: float,
-    unit: Literal["deg", "pi"] = "deg",
+    unit: AngleUnit = "deg",
     axis: Literal["x", "y", "z"] = "z",
 ) -> pl.Expr:
     """Turn every geometry about an axis through its own centroid.
@@ -390,7 +390,7 @@ def rotate_about_centroid(
 
 
 def _shear(
-    xs: float, ys: float, unit: Literal["deg", "pi"]
+    xs: float, ys: float, unit: AngleUnit
 ) -> tuple[tuple[float, float, float], ...]:
     tan_x = _tan(_degrees(xs, unit, "xs"), "xs")
     tan_y = _tan(_degrees(ys, unit, "ys"), "ys")
@@ -415,12 +415,12 @@ def _skew_about(
     return build
 
 
-@doc(verb="skew")
+@doc(verb="skew", angles="The angles are")
 def skew(
     geometry: IntoExprColumn,
     xs: float = 0.0,
     ys: float = 0.0,
-    unit: Literal["deg", "pi"] = "deg",
+    unit: AngleUnit = "deg",
     origin: Origin | IntoExprColumn = (0.0, 0.0, 0.0),
 ) -> pl.Expr:
     """Shear every position of a geometry in the plane, by an angle along each axis.
@@ -437,7 +437,7 @@ def skew(
         x' = x + tan(xs)·(y - origin_y)
         y' = y + tan(ys)·(x - origin_x)
 
-    The angles are in degrees, or with `unit="pi"` in multiples of π radians.
+    {angle_unit}
     A quarter turn (±90°) has no tangent and is refused.
 
     This works on any geometry: `z` stays as it is,
@@ -462,7 +462,7 @@ def skew_about_centroid(
     geometry: IntoExprColumn,
     xs: float = 0.0,
     ys: float = 0.0,
-    unit: Literal["deg", "pi"] = "deg",
+    unit: AngleUnit = "deg",
 ) -> pl.Expr:
     """Shear every geometry in the plane about its own centroid.
 

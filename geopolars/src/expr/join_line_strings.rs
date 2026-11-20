@@ -25,8 +25,8 @@ enum JoinGapsDef {
 pub struct JoinLineStringsKwargs {
     abs_tol: Option<f64>,
     rel_tol: Option<f64>,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     #[serde(with = "JoinGapsDef")]
     gaps: JoinGaps,
     drop_repeated_joins: bool,
@@ -73,8 +73,8 @@ fn join_line_strings(inputs: &[Series], kwargs: JoinLineStringsKwargs) -> Polars
             geopolars_core::join_line_strings(
                 chunk.as_ref(),
                 coincidence,
-                kwargs.unique_z,
-                kwargs.unique_m,
+                kwargs.include_z,
+                kwargs.include_m,
                 kwargs.gaps,
                 kwargs.drop_repeated_joins,
             )

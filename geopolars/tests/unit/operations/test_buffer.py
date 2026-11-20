@@ -45,8 +45,15 @@ def _column(
     return pl.DataFrame(storage.ext.to(dtype(crs=crs)))
 
 
-def _buffered(df: pl.DataFrame, distance: float, **kwargs: object) -> list:
-    out = df.select(geo.buffer("geom", distance, **kwargs))  # type: ignore[arg-type]
+def _buffered(
+    df: pl.DataFrame,
+    distance: float,
+    promote_to_multi: str = "never",
+    **kwargs: object,
+) -> list:
+    out = df.select(
+        geo.buffer("geom", distance, promote_to_multi=promote_to_multi, **kwargs)  # type: ignore[arg-type]
+    )
     return out.to_series().ext.storage().to_list()
 
 
@@ -95,10 +102,16 @@ def test_the_output_is_xy_polygons_or_multipolygons(
 
 
 @pytest.mark.parametrize(
-    ("distance", "single"),
-    [(-1.0, MultiPolygonXY()), (0.0, MultiPolygonXY()), (1.0, PolygonXY())],
+    ("promote_to_multi", "distance", "single"),
+    [
+        ("auto", -1.0, MultiPolygonXY()),
+        ("auto", 0.0, MultiPolygonXY()),
+        ("auto", 1.0, PolygonXY()),
+        ("always", 1.0, MultiPolygonXY()),
+    ],
 )
-def test_allow_splitting_gives_multipolygons_for_a_negative_distance(
+def test_promote_to_multi_gives_multipolygons_where_a_buffer_can_split(
+    promote_to_multi: str,
     distance: float,
     single: GeoArrowType,
     dimension: Dimension,
@@ -116,7 +129,10 @@ def test_allow_splitting_gives_multipolygons_for_a_negative_distance(
         (dimension.multipolygons(multipolygon_coords), MultiPolygonXY()),
     ):
         buffered = geo.buffer(
-            df.columns[0], distance, allow_splitting=True, on_row_error="null"
+            df.columns[0],
+            distance,
+            promote_to_multi=promote_to_multi,
+            on_row_error="null",
         )
 
         assert df.select(buffered).schema[df.columns[0]] == expected
@@ -213,17 +229,17 @@ def test_a_multipolygon_split_in_two_gets_both_parts() -> None:
     assert len(parts) == 2
 
 
-def test_a_polygon_split_in_two_gets_both_parts_with_allow_splitting() -> None:
+def test_a_polygon_split_in_two_gets_both_parts_with_promote_to_multi() -> None:
     df = _column(PolygonXY, [_DUMBBELL], [_SQUARE])
 
-    [split, square] = _buffered(df, -0.5, allow_splitting=True)
+    [split, square] = _buffered(df, -0.5, promote_to_multi="auto")
 
     assert len(split) == 2
     assert len(square) == 1
 
 
-def test_a_point_shrunk_with_allow_splitting_is_an_empty_multipolygon() -> None:
-    assert _buffered(_column(PointXY, _ORIGIN), -1.0, allow_splitting=True) == [[]]
+def test_a_point_shrunk_with_promote_to_multi_is_an_empty_multipolygon() -> None:
+    assert _buffered(_column(PointXY, _ORIGIN), -1.0, promote_to_multi="auto") == [[]]
 
 
 def test_multipoints_that_overlap_merge() -> None:
@@ -370,10 +386,10 @@ def test_one_side_is_refused_without_lines(
         _buffered(_column(dtype, geometry), 1.0, side="left")
 
 
-def test_a_ring_touching_itself_splits_at_zero_with_allow_splitting() -> None:
+def test_a_ring_touching_itself_splits_at_zero_with_promote_to_multi() -> None:
     df = _column(PolygonXY, [_TOUCHING_ITSELF])
 
-    [parts] = _buffered(df, 0.0, allow_splitting=True)
+    [parts] = _buffered(df, 0.0, promote_to_multi="auto")
 
     assert len(parts) == 2
 
@@ -415,25 +431,28 @@ def test_an_integer_distance_works() -> None:
 
     assert (
         _buffered(df, 1)
-        == df.select(geo.buffer("geom", "d")).to_series().ext.storage().to_list()
+        == df.select(geo.buffer("geom", "d", promote_to_multi="never"))
+        .to_series()
+        .ext.storage()
+        .to_list()
     )
 
 
-def test_a_distance_column_with_allow_splitting_always_gives_multipolygons() -> None:
+def test_a_distance_column_with_promote_to_multi_always_gives_multipolygons() -> None:
     df = _points_with_distances(1.0, 2.0)
 
-    out = df.select(geo.buffer("geom", "d", allow_splitting=True))
+    out = df.select(geo.buffer("geom", "d", promote_to_multi="auto"))
 
     assert out.schema["geom"] == MultiPolygonXY()
     assert [len(parts) for parts in out.to_series().ext.storage().to_list()] == [1, 1]
 
 
-def test_a_distance_column_splits_a_polygon_with_allow_splitting() -> None:
+def test_a_distance_column_splits_a_polygon_with_promote_to_multi() -> None:
     df = _column(PolygonXY, [_DUMBBELL], [_SQUARE]).with_columns(
         d=pl.Series([-0.5, 1.0])
     )
 
-    out = df.select(geo.buffer("geom", "d", allow_splitting=True))
+    out = df.select(geo.buffer("geom", "d", promote_to_multi="auto"))
 
     assert [len(parts) for parts in out.to_series().ext.storage().to_list()] == [2, 1]
 
@@ -466,7 +485,7 @@ def test_an_invalid_row_distance_raises_or_is_null(
 def test_one_side_by_column_matches_one_side_by_constant(side: str) -> None:
     df = _column(LineStringXY, _SEGMENT).with_columns(d=pl.lit(1.0))
 
-    by_column = df.select(geo.buffer("geom", "d", side=side))  # type: ignore[arg-type]
+    by_column = df.select(geo.buffer("geom", "d", side=side, promote_to_multi="never"))  # type: ignore[arg-type]
 
     assert by_column.to_series().ext.storage().to_list() == _buffered(
         df, 1.0, side=side

@@ -52,9 +52,10 @@ def _multilines(
     return pl.DataFrame(storage.ext.to(MultiLineStringXY(crs=crs)))
 
 
-def _lengths(df: pl.DataFrame) -> list:
+def _lengths(df: pl.DataFrame, distance_method: Method = "auto") -> list:
     (name,) = df.columns
-    return df.select(geo.length(name)).to_series().to_list()
+    out = df.select(geo.length(name, distance_method=distance_method))
+    return out.to_series().to_list()
 
 
 def _segment_by_segment(df: pl.DataFrame, crs: str | None) -> list[float | None]:
@@ -205,7 +206,7 @@ def test_a_projected_crs_is_measured_on_its_own_ellipsoid() -> None:
     lonlat = _lines([route], crs="EPSG:4289")
     rd = lonlat.select(geo.to_crs("line", "EPSG:28992"))
 
-    assert _lengths(rd) == pytest.approx(_lengths(lonlat), abs=1e-3)
+    assert _lengths(rd, "geodesic") == pytest.approx(_lengths(lonlat), abs=1e-3)
 
 
 @pytest.mark.parametrize("crs", [None, UNIT_SPHERE], ids=["planar", "geodesic"])
@@ -270,21 +271,27 @@ def test_metadata_without_a_crs_is_still_planar() -> None:
     assert _lengths(df) == [5.0]
 
 
-def test_a_crs_not_on_longitude_latitude_is_refused_while_resolving_the_schema() -> (
-    None
-):
+@pytest.mark.parametrize("distance_method", ["auto", "geodesic"])
+def test_a_crs_not_on_longitude_latitude_is_refused_while_resolving_the_schema(
+    distance_method: Method,
+) -> None:
     """Earth-centred XYZ has no ellipsoid surface to measure a length on."""
     lf = _lines([[(0.0, 0.0), (3.0, 4.0)]], crs="EPSG:4978").lazy()
+    length = geo.length("line", distance_method=distance_method)
 
     with pytest.raises(ComputeError, match="not defined on longitude/latitude"):
-        lf.select(geo.length("line")).collect_schema()
+        lf.select(length).collect_schema()
 
 
-Method = Literal["planar", "geodesic"] | None
+def test_a_crs_not_on_longitude_latitude_is_measured_on_the_plane_when_asked() -> None:
+    df = _lines([[(0.0, 0.0), (3.0, 4.0)]], crs="EPSG:4978")
 
-_ALL_METHODS = pytest.mark.parametrize(
-    "method", [None, "planar", "geodesic"], ids=["by-crs", "planar", "geodesic"]
-)
+    assert _lengths(df, "planar") == [5.0]
+
+
+Method = Literal["auto", "planar", "geodesic"]
+
+_ALL_METHODS = pytest.mark.parametrize("method", ["auto", "planar", "geodesic"])
 
 
 def _declaring(
@@ -330,7 +337,7 @@ def test_other_geometries_are_refused_while_resolving_the_schema(
         pytest.skip("refused for having no CRS instead")
 
     for df in _non_lines(crs, coords, line_coords, ring_coords, multipolygon_coords):
-        lf = df.lazy().select(geo.length(df.columns[0], method=method))
+        lf = df.lazy().select(geo.length(df.columns[0], distance_method=method))
         with pytest.raises(
             TypeError, match="a length is measured on a `geoarrow.linestring`"
         ):
@@ -353,7 +360,7 @@ def test_with_allow_non_lines_they_have_no_length(
     for df in _non_lines(crs, coords, line_coords, ring_coords, multipolygon_coords):
         (name,) = df.columns
         got = df.select(
-            geo.length(name, method=method, allow_non_lines=True)
+            geo.length(name, distance_method=method, allow_non_lines=True)
         ).to_series()
 
         assert got.dtype == pl.Float64
@@ -367,7 +374,7 @@ def test_with_allow_non_lines_geodesic_still_needs_a_crs(
 
     with pytest.raises(TypeError, match="declares none"):
         lf.select(
-            geo.length("point", method="geodesic", allow_non_lines=True)
+            geo.length("point", distance_method="geodesic", allow_non_lines=True)
         ).collect_schema()
 
 
@@ -387,50 +394,53 @@ def test_the_namespace_passes_method_and_allow_non_lines_on(
     df = _declaring(coords.select(XY.point()), PointXY, WGS84)
 
     assert df.select(
-        pl.col("point").geo.length(method=method, allow_non_lines=True)
-    ).equals(df.select(geo.length("point", method=method, allow_non_lines=True)))
+        pl.col("point").geo.length(distance_method=method, allow_non_lines=True)
+    ).equals(
+        df.select(geo.length("point", distance_method=method, allow_non_lines=True))
+    )
 
 
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
 def test_length_forwards_by_the_crs(crs: str | None) -> None:
-    """No projection keeps lengths, so any CRS is measured on its ellipsoid."""
     df = _lines([[(0.0, 0.0), (3.0, 4.0)], [NEW_YORK, LONDON]], crs=crs)
     explicit = "geodesic" if crs else "planar"
 
     assert_series_equal(
         df.select(geo.length("line")).to_series(),
-        df.select(geo.length("line", method=explicit)).to_series(),
+        df.select(geo.length("line", distance_method=explicit)).to_series(),
     )
 
 
 @pytest.mark.parametrize(
     "crs", ["EPSG:3857", "ESRI:54009"], ids=["mercator", "mollweide"]
 )
-def test_a_projected_crs_is_still_measured_on_the_ellipsoid(crs: str) -> None:
-    """Not even an equal-area one keeps lengths."""
+def test_auto_measures_a_projected_crs_on_the_plane(crs: str) -> None:
     df = _lines([[(500_000.0, 0.0), (500_000.0, 4_000_000.0)]], crs=crs)
 
-    got = _lengths(df)
-
-    assert got == df.select(geo.length("line", method="geodesic")).to_series().to_list()
-    assert got != df.select(geo.length("line", method="planar")).to_series().to_list()
+    assert _lengths(df) == _lengths(df, "planar")
+    assert _lengths(df) != _lengths(df, "geodesic")
 
 
 def test_planar_ignores_the_crs() -> None:
     """Degrees: the space the coordinates lie in, not the ellipsoid."""
     df = _lines([[(0.0, 0.0), (3.0, 4.0)]], crs=WGS84)
 
-    out = df.select(geo.length("line", method="planar")).to_series().to_list()
+    out = df.select(geo.length("line", distance_method="planar")).to_series().to_list()
 
     assert out == [5.0]
 
 
 def test_geodesic_refuses_a_geometry_without_a_crs_at_plan_time() -> None:
     lf = _lines([[(0.0, 0.0), (3.0, 4.0)]]).lazy()
-    lf = lf.select(geo.length("line", method="geodesic"))
+    lf = lf.select(geo.length("line", distance_method="geodesic"))
 
     with pytest.raises(TypeError, match="declares none"):
         lf.collect_schema()
+
+
+def test_an_unknown_distance_method_is_refused() -> None:
+    with pytest.raises(ValueError, match="`distance_method` must be one of"):
+        geo.length("line", distance_method="Geodesic")  # type: ignore[arg-type]
 
 
 def test_planar_lines_up_across_chunks_and_slices() -> None:
@@ -452,7 +462,9 @@ def test_planar_lines_up_across_chunks_and_slices() -> None:
 
     def planar(df: pl.DataFrame) -> list:
         (name,) = df.columns
-        return df.select(geo.length(name, method="planar")).to_series().to_list()
+        return (
+            df.select(geo.length(name, distance_method="planar")).to_series().to_list()
+        )
 
     assert planar(lines.slice(1)) == [10.0, None, 2.0]
     assert planar(multis.slice(1)) == [None, 12.0]

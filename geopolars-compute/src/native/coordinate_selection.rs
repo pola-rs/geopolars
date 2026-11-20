@@ -18,8 +18,8 @@ pub type Bounds = [f64; 4];
 pub struct NonFinite {
     pub select_non_finite: bool,
     pub select_empty: bool,
-    pub ignore_z: bool,
-    pub ignore_m: bool,
+    pub include_z: bool,
+    pub include_m: bool,
 }
 
 /// Which coordinates to select.
@@ -53,7 +53,7 @@ pub(crate) fn is_empty_point(coords: &ValidCoords, i: usize) -> bool {
 }
 
 /// Whether a coordinate has a NaN or infinite value.
-/// Pass `None` for an axis that is not there, or that is ignored.
+/// Pass `None` for an axis that is not there, or that is left out.
 #[inline(always)]
 pub(crate) fn is_non_finite_value(x: f64, y: f64, z: Option<f64>, m: Option<f64>) -> bool {
     !(x.is_finite() & y.is_finite() & z.is_none_or(f64::is_finite) & m.is_none_or(f64::is_finite))
@@ -132,13 +132,13 @@ fn selected_coords_with<
     let NonFinite {
         select_non_finite,
         select_empty,
-        ignore_z,
-        ignore_m,
+        include_z,
+        include_m,
     } = filter;
     let z_of = |i: usize| Z.then(|| z[i]);
     let m_of = |i: usize| M.then(|| m[i]);
     let is_non_finite = |i: usize| {
-        let (z, m) = (z_of(i).filter(|_| !ignore_z), m_of(i).filter(|_| !ignore_m));
+        let (z, m) = (z_of(i).filter(|_| include_z), m_of(i).filter(|_| include_m));
         CHECK_NON_FINITE & is_non_finite_value(x[i], y[i], z, m)
     };
     let is_out_of_bounds = |i: usize| CHECK_BOUNDS & !is_within(bounds, x[i], y[i]);

@@ -17,8 +17,8 @@ pub fn have_repeats_in_succession(
     chunk: &dyn Array,
     kind: Kind,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 ) -> PolarsResult<BooleanArray> {
     let rows = || downcast::<ListArray<i64>>(chunk, "a list of parts");
     Ok(match kind {
@@ -26,32 +26,32 @@ pub fn have_repeats_in_succession(
         Kind::LineString => line_strings_have_repeats_in_succession(
             &LineStringArray::new(rows()?)?,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
         ),
         Kind::MultiPoint => multi_points_have_repeats_in_succession(
             &MultiPointArray::new(rows()?)?,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
         ),
         Kind::MultiLineString => multi_line_strings_have_repeats_in_succession(
             &MultiLineStringArray::new(rows()?)?,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
         ),
         Kind::Polygon => polygons_have_repeats_in_succession(
             &PolygonArray::new(rows()?)?,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
         ),
         Kind::MultiPolygon => multi_polygons_have_repeats_in_succession(
             &MultiPolygonArray::new(rows()?)?,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
         ),
     })
 }

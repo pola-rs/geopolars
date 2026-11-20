@@ -32,10 +32,6 @@ With the `on_row_error` variable, you can set what to do if that happens.
 This parameter does not affect how error handling outside the per-row part is done.
 If there is an error in the setup, it can still fail the entire query even if `on_row_error="null"` is set.
 
-.. note::
-
-   Legacy: this replaces `ignore_per_row_errors: bool = False`.
-
 .. _arg-early_coord_check:
 
 `early_coord_check: Literal["finite", "off", "finite_and_empty"]`
@@ -96,10 +92,6 @@ and works as you'd expect it to, as it is a standard GEOS type.
 If this is a function that also takes `include_m`/`include_z`,
 the check only includes the coordinates that these flags specify.
 
-.. note::
-
-   Legacy: this replaces `early_finite_check: bool = False`.
-
 CRS
 ~~~
 
@@ -132,18 +124,16 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
   but otherwise you might end up with distances in degrees.
 - `distance_method="geodesic"` gets the distances on the CRS-defined ellipsoid.
 - `distance_method="auto"` (default) looks at the CRS to switch between the other two modes.
-  If the CRS is a geographic one, it uses the `"geodesic"` option,
-  while it uses `"planar"` on anything that has a projected CRS, or no CRS at all.
-  On a projected CRS, the geodesic and planar distances are usually very close enough,
-  so it makes sense to use the faster option.
-
-.. note::
-
-   this replaces `unique_z: bool = True`, `unique_m: bool = False`,
-   as well as `ignore_z` and `ignore_m`.
-   It replaces method: Literal["planar", "geodesic"] | None = None.
-   None becomes "auto".
-   Today's default sends any declared CRS through "geodesic", so the result changes for a projected CRS.
+  It uses `"planar"` on anything that has a projected CRS, or no CRS at all,
+  and `"geodesic"` on any other CRS.
+  A CRS that is not defined on longitude/latitude, such as a geocentric one,
+  has no ellipsoid to measure along, so it is refused at plan time unless `"planar"` is asked for.
+  A projected CRS made for measuring such as a UTM zone or a national grid like EPSG:28992
+  keeps distances to within about 0.1% inside its area of use,
+  so the faster planar distance is close enough there.
+  Others do not: Web Mercator (EPSG:3857) stretches distances by 1/cos(latitude),
+  about 1.6 times at 52°N.
+  Pass `distance_method="geodesic"` for such a CRS.
 
 .. _arg-allow_geographic:
 
@@ -177,22 +167,17 @@ Neither value can be negative or NaN. This will return an error at plan time.
 
 .. _arg-include_z:
 
-`include_z: bool = True`, `include_m: bool = False`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+`include_z: bool = True`, `include_m: bool = True`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 These flags control whether a certain axis is included in a comparison
 (e.g. equality, distance).
 The x and y axes are always included, but sometimes it is better to leave the z and m values out.
 
-z is compared by default, m is not (being a measure rather than a position).
+Both are included by default.
 Either flag is ignored for a geometry without that axis.
 
 This also ties into `early_coord_check`. See its description for more details.
-
-.. note::
-
-   Legacy: this replaces `unique_z: bool = True`, `unique_m: bool = False`,
-   as well as `ignore_z` and `ignore_m`.
 
 Building and repairing geometries
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -238,10 +223,6 @@ This argument says what should happen to such a thing.
   If there are still non-empty holes,
   what is done to an empty outer ring depends on the `empty_polygon_exterior` value.
 
-.. note::
-
-   Legacy: this replaces `too_short: Literal["null", "keep", "empty"] = "null"`.
-
 .. _arg-empty_polygon_exterior:
 
 `empty_polygon_exterior: Literal["keep", "null", "error", "empty"] = "null"`
@@ -266,11 +247,6 @@ Most of the time this is not a meaningful polygon though.
 
 With `"keep"`, running such a polygon through other expressions might give unexpected results.
 
-.. note::
-
-   Legacy: this replaces `empty_exterior: Literal["null", "keep"] = "null"`.
-   Its `"keep"` is now `"empty"`.
-
 Output geometry
 ~~~~~~~~~~~~~~~
 
@@ -294,11 +270,6 @@ What counts as a new ring:
 - Constructors: all rings.
 - add_holes: only the added holes.
 
-.. note::
-
-   Legacy: this replaces `ccw_outer: bool = False`.
-   `ccw_outer=True` is now `new_ring_orientation="ccw"`.
-
 .. _arg-new_holes:
 
 `new_holes: Literal["opposite", "same"] = "opposite"`
@@ -313,8 +284,8 @@ This option does nothing if `new_ring_orientation="keep"`
 
 .. _arg-promote_to_multi:
 
-`promote_to_multi: Literal["never", "always"] = "never"`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+`promote_to_multi: Literal["never", "auto", "always"] = "auto"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some operations can result in a shape falling into several parts.
 For example, taking the difference between two polygons can cause the polygon to be cut into two.
@@ -326,16 +297,19 @@ This is mostly a concern when using GEOS kernels.
 - `promote_to_multi="never"` expects every output to be a single geometry.
   Anything that results in multiple geometries is considered an error.
   How this error is then handled depends on the setting of the `on_row_error` argument.
+- `promote_to_multi="auto"` (default) outputs a `Multi*` where the result can fall into several parts.
+  This is decided while the plan is built, from the input kinds and the other arguments, not row by row.
+  `buffer`, for example, only looks at `distance`.
+  A `distance` column, or one of at most 0, gives a `MultiPolygon` for every input.
+  That includes a point, which never splits.
+  Each expression documents what `"auto"` means for it.
 - `promote_to_multi="always"` always outputs a `Multi*` (e.g. a `MultiPolygon` instead of a `Polygon`,
   even if the input types are only polygons). This is more flexible,
   but in many cases might make your data harder to work with.
 
-If the input geometry is already a `Multi*` (e.g. `MultiPolygon`), this argument has no effect.
-These will always output a `Multi*`.
-
-.. note::
-
-   Legacy: this replaces `allow_splitting: bool = False`.
+An input that is already a `Multi*` (e.g. `MultiPolygon`) always gives a `Multi*`, whatever this argument says.
+`intersection` is the exception, as its output kind depends on both inputs.
+Its docstring gives the output kind for every pair of inputs.
 
 Affine transformations
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -355,11 +329,6 @@ or a `geoarrow.point` column with a point for every geometry.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The unit of an angle: degrees or radians.
-
-.. note::
-
-   Legacy: this replaces `unit: Literal["deg", "pi"] = "deg"`,
-   where `"pi"` meant multiples of π radians rather than radians.
 
 Arguments that come together
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -1,7 +1,7 @@
 //! The offset curve of a linestring or multilinestring, forwarded to GEOS.
 //! Implements the Python `offset_curve`.
 
-use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef, PromoteToMulti};
 use geopolars_compute::geos::{JoinStyle, OffsetCurveStyle};
 use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_core::{offset_curves, LineKind};
@@ -24,7 +24,7 @@ fn offset_curve_type(
     let geo = describe(dtype)?;
     let line_kind = LineKind::new("offset_curve", geo.kind)?;
     let into_multi = match line_kind {
-        LineKind::LineString => kwargs.allow_splitting,
+        LineKind::LineString => kwargs.promote_to_multi != PromoteToMulti::Never,
         LineKind::MultiLineString => true,
     };
     let kind = if into_multi {
@@ -54,7 +54,7 @@ pub struct OffsetCurveKwargs {
     #[serde(with = "JoinStyleDef")]
     join_style: JoinStyle,
     mitre_limit: f64,
-    allow_splitting: bool,
+    promote_to_multi: PromoteToMulti,
     #[serde(with = "OnRowErrorDef")]
     on_row_error: OnRowError,
     #[serde(with = "EarlyCoordCheckDef")]
@@ -69,7 +69,7 @@ fn offset_curve(inputs: &[Series], kwargs: OffsetCurveKwargs) -> PolarsResult<Se
         quadrant_segments,
         join_style,
         mitre_limit,
-        allow_splitting: _,
+        promote_to_multi: _,
         on_row_error,
         early_coord_check,
     } = kwargs;

@@ -15,8 +15,8 @@ use crate::geoarrow::describe;
 pub struct HasRepeatsInSuccessionKwargs {
     abs_tol: Option<f64>,
     rel_tol: Option<f64>,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 }
 
 fn kernel_output_type_has_repeats_in_succession(
@@ -42,8 +42,8 @@ fn has_repeats_in_succession(
             chunk.as_ref(),
             kind,
             coincidence,
-            kwargs.unique_z,
-            kwargs.unique_m,
+            kwargs.include_z,
+            kwargs.include_m,
         )
     });
     Ok(BooleanChunked::try_from_chunk_iter(geometries.name().clone(), chunks)?.into_series())
