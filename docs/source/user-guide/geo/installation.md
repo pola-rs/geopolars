@@ -19,9 +19,7 @@ or the ones that come with shapely or pyproj.
 
 !!! warning "Alpha"
 
-```text
-GeoPolars is in alpha: expect breaking changes between releases.
-```
+    GeoPolars is in alpha: expect breaking changes between releases.
 
 [Getting started](getting-started.md) shows how the two fit together.
 
