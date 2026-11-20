@@ -63,11 +63,11 @@ impl ValidList {
         (0..self.len()).map(move |i| self.range(i))
     }
 
-    /// Whether these lists hold all `items` of the child array, from the first one on.
-    /// See "Trimming" in docs/source/development/view-types.md.
+    /// Whether these lists hold every item of the child array, from the first one on
+    /// (see "Trimming" in docs/source/development/geo/view-types.md).
     #[inline]
-    pub fn spans_all_of(&self, items: usize) -> bool {
-        *self.offsets.first() == 0 && *self.offsets.last() as usize == items
+    pub fn spans_all_of(&self, child_len: usize) -> bool {
+        *self.offsets.first() == 0 && *self.offsets.last() as usize == child_len
     }
 
     /// The lists in range `lists`, with their offsets rebased to start at zero.

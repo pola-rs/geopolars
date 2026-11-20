@@ -35,9 +35,8 @@ The user guide is embedded into the Polars user guide (zensical).
 The API reference (Sphinx, in `geopolars/docs/`) is built separately,
 but is also hosted on the Polars domain.
 
-- [x] Decide on the tooling: the user guide goes into the Polars user guide, the API reference stays in Sphinx.
-- [x] Mirror the Polars layout: `docs/source/user-guide/geo/` and `docs/source/development/`.
-- [x] Move the developer docs into `development/`.
+- [x] Decide on the tooling.
+- [x] Mirror the Polars layout, with `docs/source/user-guide/geo/` and `docs/source/development/geo/`.
 - [x] Rename doc files to kebab-case, which also fixes the broken README links.
 - [x] Move the vendored GeoParquet specs out of the docs source, into `docs/ref/`.
 - [x] Move the common arguments into the API reference (`reference/common_arguments.rst`).

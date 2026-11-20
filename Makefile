@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 
-.PHONY: help install install-release wheel docs docs-html polars-src test test-all test-rust test-python test-python-all clean
+.PHONY: help install install-release wheel docs docs-html docs-guide docs-guide-build polars-src test test-all test-rust test-python test-python-all clean
 
 # The polars commit we build against. Cargo.toml is the source of truth;
 # this checks out the same commit for uv to build Python polars from.
@@ -60,6 +60,24 @@ docs-html:
 	cp -r geopolars/geopolars $(DOCS_PKG)/
 	.venv/bin/python scripts/expand_docstrings.py $(DOCS_PKG)/geopolars
 	PYTHONPATH=$(DOCS_PKG) .venv/bin/sphinx-build -M html geopolars/docs/source target/docs $(SPHINXOPTS)
+
+GUIDE_DIR := target/docs-guide
+
+## Build the user and developer guides with zensical into target/docs-guide/site.
+## It fails on broken links, unknown API keys, and failing examples, as the Polars docs build would.
+docs-guide: install
+	grep -E '^(zensical|markdown-exec)==' $(POLARS_DIR)/docs/source/requirements.txt \
+		| uv pip install tomli-w -r -
+	$(MAKE) docs-guide-build
+
+## Build the user and developer guides with zensical, with the venv as it is.
+# zensical only logs a failing example, or an unknown API key in a `code_block`, so the build log is checked for them.
+docs-guide-build: polars-src
+	.venv/bin/python scripts/stage_docs_guide.py $(POLARS_DIR) $(GUIDE_DIR)
+	set -o pipefail; cd $(GUIDE_DIR) && $(CURDIR)/.venv/bin/zensical build 2>&1 | tee build.log
+	@if grep -E 'Execution of python code block exited with errors|Could not find' $(GUIDE_DIR)/build.log; then \
+		echo "A code block failed, or names an unknown API key, see the build log above." >&2; exit 1; \
+	fi
 
 ## Check out POLARS_REV into POLARS_DIR, if it isn't already.
 polars-src: $(POLARS_STAMP)

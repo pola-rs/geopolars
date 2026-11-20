@@ -50,15 +50,13 @@ you might be better off leaving this one as this can skip expensive calculations
 - `early_coord_check="finite_and_empty"` (default for GEOS kernels) does the same as the above,
   but also goes to `on_row_error` for an empty point inside a geometry.
 
-This argument serves an important purpose for kernels that forward to GEOS.
-GEOS supports neither empty points inside a geometry nor any other NaN or infinite x or y
-(see "NaN and infinity" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`).
-Here the check is embedded into the conversion into a GEOS geometry.
-With checking, it will will trigger `on_row_error`,
-while on skipping it might give some unexpected result.
-You read that right, setting `early_coord_check="off"` can also silently affect the results,
-due to GEOS handling invalid states differently (and sometimes inconsistently).
-An example would be GEOS silently returning (4, 0) for a distance of 0.5 on a line with a NaN vertex.
+This argument matters most for kernels that forward to GEOS.
+GEOS cannot handle an empty point inside a geometry, nor any other NaN or infinite x or y
+(see `Non-finite and inner empties in GEOS-backed kernels <https://github.com/pola-rs/geopolars/blob/main/docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md#non-finite-and-inner-empties-in-geos-backed-kernels>`_ in the user guide).
+These kernels run the check while they convert a row into a GEOS geometry.
+Skipping the check with `early_coord_check="off"` can silently change the results, which may come as a surprise.
+GEOS handles such input in different ways, and sometimes inconsistently.
+For example, it silently returns (4, 0) for a distance of 0.5 along a line with a NaN vertex.
 
 With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
 What GEOS does with it depends on the operation, and often on where the point is:

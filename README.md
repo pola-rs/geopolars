@@ -117,7 +117,7 @@ Run `make help` to see the other targets.
 
 ## Contributing
 
-Want to contribute? Read our [contributing guide](https://github.com/pola-rs/geopolars/blob/main/docs/source/development/contributing/index.md)
+Want to contribute? Read our [contributing guide](https://github.com/pola-rs/geopolars/blob/main/docs/source/development/geo/contributing/index.md)
 and check the [issue tracker](https://github.com/pola-rs/geopolars/issues).
 
 ## License

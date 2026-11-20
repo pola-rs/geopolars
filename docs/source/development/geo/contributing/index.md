@@ -3,9 +3,7 @@
 ## Setting up
 
 Build GeoPolars from source, as described under *Compile GeoPolars from source* in the
-[README](../../../../README.md#installation).
-`make install` sets up a virtual environment in `.venv`,
-and builds GeoPolars and the Polars commit it is pinned to into it.
+[README](https://github.com/pola-rs/geopolars/blob/main/README.md#installation).
 
 Run `make help` for every target.
 The ones you'll find yourself needing most:
@@ -20,10 +18,10 @@ These describe the design and the architecture of GeoPolars.
 
 - [A high-level overview of the architecture](../architecture.md)
 - [What happens when you call an expression, at plan and execution time](../typical-expression-flow.md),
-  accompanied by [a diagram](../expression-flow.dot)
+  accompanied by [a diagram](https://github.com/pola-rs/geopolars/blob/main/docs/source/development/geo/expression-flow.dot)
 - [What to consider when implementing new or editing existing expressions](../expression-implementation-guide.md)
-- [The views kernels take, in `geopolars-views`](../../../../geopolars-views/README.md)
-- [What to consider when writing kernels, in `geopolars-compute`](../../../../geopolars-compute/README.md),
+- [The views kernels take, in `geopolars-views`](https://github.com/pola-rs/geopolars/blob/main/geopolars-views/README.md)
+- [What to consider when writing kernels, in `geopolars-compute`](https://github.com/pola-rs/geopolars/blob/main/geopolars-compute/README.md),
   with separate guides for [native kernels](../native-kernel-implementation-guide.md)
   and [kernels forwarding to GEOS](../geos-kernel-implementation-guide.md)
   on top of the [general kernel guide](../kernel-implementation-guide.md)

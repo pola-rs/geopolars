@@ -38,11 +38,11 @@ fn ends_before(ends: &[i64], item: usize) -> usize {
 }
 
 /// Which of `lists` hold only items set in `items`.
-/// `lists` have to span all of `items` (be trimmed): the sparse way finds an item's list by the offsets.
+/// `lists` have to span all of `items` (be trimmed).
 fn lists_passing(lists: &ValidList, items: &Bitmap) -> Bitmap {
     debug_assert!(
         lists.spans_all_of(items.len()),
-        "the lists have to be trimmed (see \"Trimming\" in docs/source/development/view-types.md)"
+        "the lists have to be trimmed (see \"Trimming\" in docs/source/development/geo/view-types.md)"
     );
     if items.unset_bits() * SPARSE_RATIO < lists.len() {
         lists_passing_sparse(lists, items)

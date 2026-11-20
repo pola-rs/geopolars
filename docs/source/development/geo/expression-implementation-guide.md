@@ -23,12 +23,10 @@ so that a bad argument already fails at plan time (see Dispatch in the [Kernel i
 ## Kernels live in `geopolars-compute`
 
 Kernels used to work directly on Polars' Arrow arrays.
-We are moving them to the `../geopolars-compute` crate.
-They take the views of `../geopolars-views`.
+We are moving them to the `geopolars-compute` crate, where they take the views of `geopolars-views`.
 That way, the 'geo' logic is separated from the Polars plugin layer.
-Write new kernels there.
+Write new kernels in `geopolars-compute`, as described in [its README](https://github.com/pola-rs/geopolars/blob/main/geopolars-compute/README.md).
 Some kernels still live in `src/expr/` until they are migrated.
-See [its README](../../../geopolars-compute/README.md) for how to write a kernel.
 
 What remains in the plugin is a thin layer per expression in `src/expr/`.
 
