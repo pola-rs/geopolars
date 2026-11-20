@@ -198,6 +198,9 @@ The result has the CRS of `a`.""",
   such as `geo.mean_coordinate("shape")` to {verb} each geometry about its own middle.
   A geometry whose origin is null comes out null.
   An origin column that declares a CRS has to declare the geometry's.""",
+    "angle_unit": """\
+{angles} in degrees, or in radians with `unit="rad"`.
+See :ref:`unit <arg-unit>` on the Common arguments page.""",
     "about_centroid_accepts": """\
 Only linestrings and polygons are accepted:
 a multi-geometry has a centroid per part rather than one,

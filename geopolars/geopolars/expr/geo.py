@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from geopolars._typing import (
+        AngleUnit,
         DistanceMethod,
         EarlyCoordCheck,
         EmptyPolygonExterior,
@@ -149,7 +150,7 @@ class ExprGeoNameSpace:
     def rotate(
         self,
         amount: float,
-        unit: Literal["deg", "pi"] = "deg",
+        unit: AngleUnit = "deg",
         axis: Literal["x", "y", "z"] = "z",
         origin: tuple[float, float] | tuple[float, float, float] | IntoExprColumn = (
             0.0,
@@ -162,7 +163,7 @@ class ExprGeoNameSpace:
     def rotate_about_centroid(
         self,
         amount: float,
-        unit: Literal["deg", "pi"] = "deg",
+        unit: AngleUnit = "deg",
         axis: Literal["x", "y", "z"] = "z",
     ) -> pl.Expr:
         return affine.rotate_about_centroid(self._expr, amount, unit=unit, axis=axis)
@@ -171,7 +172,7 @@ class ExprGeoNameSpace:
         self,
         xs: float = 0.0,
         ys: float = 0.0,
-        unit: Literal["deg", "pi"] = "deg",
+        unit: AngleUnit = "deg",
         origin: tuple[float, float] | tuple[float, float, float] | IntoExprColumn = (
             0.0,
             0.0,
@@ -181,7 +182,7 @@ class ExprGeoNameSpace:
         return affine.skew(self._expr, xs=xs, ys=ys, unit=unit, origin=origin)
 
     def skew_about_centroid(
-        self, xs: float = 0.0, ys: float = 0.0, unit: Literal["deg", "pi"] = "deg"
+        self, xs: float = 0.0, ys: float = 0.0, unit: AngleUnit = "deg"
     ) -> pl.Expr:
         return affine.skew_about_centroid(self._expr, xs=xs, ys=ys, unit=unit)
 

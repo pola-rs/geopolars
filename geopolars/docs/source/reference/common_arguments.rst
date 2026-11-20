@@ -320,11 +320,6 @@ or a `geoarrow.point` column with a point for every geometry.
 
 The unit of an angle: degrees or radians.
 
-.. note::
-
-   Legacy: this replaces `unit: Literal["deg", "pi"] = "deg"`,
-   where `"pi"` meant multiples of π radians rather than radians.
-
 Arguments that come together
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

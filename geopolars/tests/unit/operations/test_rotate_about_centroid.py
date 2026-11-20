@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 import polars as pl
@@ -47,7 +48,7 @@ def test_a_line_turns_about_its_centroid(
 
 def test_the_centroid_stays_where_it_is(ring_coords: pl.DataFrame) -> None:
     df = XY.polygons(ring_coords)
-    turned = df.select(geo.rotate_about_centroid("polygon", 0.25, unit="pi"))
+    turned = df.select(geo.rotate_about_centroid("polygon", math.pi / 4, unit="rad"))
 
     assert_frame_equal(
         coordinates(turned.select(geo.centroid("polygon")), "polygon"),
@@ -100,7 +101,7 @@ def test_bad_arguments_are_refused() -> None:
     with pytest.raises(ValueError, match="`axis`"):
         geo.rotate_about_centroid("line", 30, axis="w")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="`unit`"):
-        geo.rotate_about_centroid("line", 30, unit="rad")  # type: ignore[arg-type]
+        geo.rotate_about_centroid("line", 30, unit="pi")  # type: ignore[arg-type]
 
 
 def test_a_geometry_without_a_centroid_comes_out_null() -> None:
@@ -131,6 +132,6 @@ def test_the_namespace_forwards(line_coords: pl.DataFrame) -> None:
     df = XYZ.lines(line_coords)
 
     assert_frame_equal(
-        df.select(gpl.col("line").geo.rotate_about_centroid(0.25, "pi", "x")),
+        df.select(gpl.col("line").geo.rotate_about_centroid(math.pi / 4, "rad", "x")),
         df.select(geo.rotate_about_centroid("line", 45, axis="x")),
     )

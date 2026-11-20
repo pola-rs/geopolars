@@ -61,18 +61,14 @@ def test_any_angle_leans_by_its_tangent() -> None:
     assert_frame_equal(coordinates(out), expected)
 
 
-@pytest.mark.parametrize(
-    ("degrees", "pis"),
-    [(45, 0.25), (-45, -0.25), (135, 0.75), (30, 1 / 6)],
-)
-def test_degrees_and_multiples_of_pi_agree(
-    coords: pl.DataFrame, degrees: float, pis: float
-) -> None:
+@pytest.mark.parametrize("degrees", [45, -45, 135, 30])
+def test_degrees_and_radians_agree(coords: pl.DataFrame, degrees: float) -> None:
     df = coords.select(XY.point())
+    radians = math.radians(degrees)
 
     assert_frame_equal(
         df.select(geo.skew("point", xs=degrees, ys=degrees)),
-        df.select(geo.skew("point", xs=pis, ys=pis, unit="pi")),
+        df.select(geo.skew("point", xs=radians, ys=radians, unit="rad")),
     )
 
 
@@ -108,10 +104,10 @@ def test_the_origin_itself_stays_where_it_is() -> None:
         ({"xs": 90}, "`xs` cannot be a quarter turn"),
         ({"ys": -90}, "`ys` cannot be a quarter turn"),
         ({"xs": 270}, "`xs` cannot be a quarter turn"),
-        ({"xs": 0.5, "unit": "pi"}, "`xs` cannot be a quarter turn"),
+        ({"xs": math.pi / 2, "unit": "rad"}, "`xs` cannot be a quarter turn"),
         ({"xs": math.nan}, "`xs`"),
         ({"ys": math.inf}, "`ys`"),
-        ({"unit": "rad"}, "`unit`"),
+        ({"unit": "pi"}, "`unit`"),
         ({"origin": (1.0,)}, "`origin`"),
     ],
 )
@@ -157,7 +153,11 @@ def test_the_namespace_forwards(coords: pl.DataFrame) -> None:
     df = coords.select(XY.point())
 
     assert_frame_equal(
-        df.select(gpl.col("point").geo.skew(0.1, -0.2, "pi", (1.0, 2.0))),
+        df.select(
+            gpl.col("point").geo.skew(
+                math.radians(18), math.radians(-36), "rad", (1.0, 2.0)
+            )
+        ),
         df.select(geo.skew("point", xs=18, ys=-36, origin=(1.0, 2.0))),
     )
 
