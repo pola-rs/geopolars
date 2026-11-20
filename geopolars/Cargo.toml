@@ -46,7 +46,7 @@ polars-core = { workspace = true, features = [
 polars-arrow = { workspace = true }
 
 pyo3-polars = { workspace = true, features = ["derive"] }
-# abi3-py311 gives one wheel for 3.11+, matching the requires-python of polars.
+# abi3-py311 gives one wheel for 3.11+, matching the requires-python of the polars we build against.
 # extension-module is behind the default feature above, not set here.
 pyo3 = { workspace = true, features = ["abi3-py311"] }
 

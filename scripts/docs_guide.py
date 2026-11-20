@@ -5,10 +5,12 @@ The zensical config (apart from its nav, which comes from `docs/nav.toml`) and `
 so the build runs as it does in Polars.
 Only our pages are staged, as building the Polars pages would run all of their examples.
 
-Both commands fail on what the strict Polars build fails on,
-and on what zensical only logs: a failing example, or an unknown API key in a `code_block`.
-They also fail on a macro that raises, which zensical otherwise leaves as text on the page.
-`build` reports every problem before it fails, and `serve` stops after the first rebuild with one.
+Both commands fail on what the Polars docs CI fails on:
+what strict zensical fails on, and a failing example, which zensical only logs.
+They also fail on what Polars lets through:
+an unknown API key in a `code_block`, which is only logged,
+and a macro that raises, which zensical otherwise leaves as text on the page.
+`build` reports every problem before it fails, and `serve` stops after the first build or rebuild with one.
 
 Usage: `python3 docs_guide.py build|serve <polars dir> <output dir>`
 """

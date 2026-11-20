@@ -24,8 +24,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: GIS",
   "Typing :: Typed",
 ]
-# `Expr.pipe_with_dtype` is new in 2.0.
-# The floor is 2.0.0rc2, as that is the version of the polars built from the pinned commit.
+# The floor is 2.0.0rc2, but we build against a later commit (see the root Cargo.toml), and do not test against the floor.
 dependencies = ["polars>=2.0.0rc2"]
 
 [project.urls]
