@@ -3,7 +3,7 @@
 This document gives a rough overview of the architecture of the GeoPolars plugin.
 I hope this helps you understand the outline a little better, and tells you who's who,
 and where to find certain functionality!
-It might be useful to also read [Typical program flow],
+It might be useful to also read [Typical flow of a plugin expression evaluation](typical-expression-flow.md),
 which describes the typical flow of an expression evaluation.
 
 ## A Polars plugin

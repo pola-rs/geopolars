@@ -44,6 +44,26 @@ SPEC_GEOMETRIES: dict[str, type[GeoArrowType]] = {
 }
 
 
+#: Dtypes of columns next to the geometries, that the plugin's Polars needs a feature for.
+OTHER_DTYPES: list[pl.DataType] = [
+    pl.Int8(),
+    pl.Int16(),
+    pl.Int128(),
+    pl.UInt8(),
+    pl.UInt16(),
+    pl.UInt128(),
+    pl.Float16(),
+    pl.Decimal(10, 2),
+    pl.Date(),
+    pl.Datetime("us", "Europe/Amsterdam"),
+    pl.Duration(),
+    pl.Time(),
+    pl.Categorical(),
+    pl.Enum(["a", "b"]),
+    pl.Array(pl.Int64, 2),
+]
+
+
 def _read(source: Any, **kwargs: Any) -> pl.DataFrame:
     return pl.read_parquet(source).pipe(gpl.from_geoparquet, source, **kwargs)
 
@@ -165,6 +185,18 @@ def test_wkb_stays_wkb_with_the_crs(tmp_path: Path) -> None:
     assert_frame_equal(
         points.select(pl.col("geometry").ext.storage()), POINTS.select("geometry")
     )
+
+
+@pytest.mark.parametrize("dtype", OTHER_DTYPES, ids=repr)
+def test_reads_next_to_a_column_of_any_dtype(
+    tmp_path: Path, dtype: pl.DataType
+) -> None:
+    df = pl.DataFrame(schema={"other": dtype, "geometry": POINTS.schema["geometry"]})
+    path = _write(tmp_path / "points.parquet", _geo(), df)
+    back = _read(path)
+
+    assert back.schema["other"] == dtype
+    assert back.schema["geometry"] == PointXY(crs="OGC:CRS84")
 
 
 def test_a_file_polars_wrote_keeps_its_dtype(tmp_path: Path) -> None:

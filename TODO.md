@@ -66,7 +66,7 @@ but is also hosted on the Polars domain.
 - [ ] Render `expression-flow.dot` to SVG, or convert it to Mermaid.
 - [ ] Turn `roadmap.md` into GitHub issues or milestones, or trim it to a user-facing roadmap.
 - [ ] `view-types.md`: rewrite (it has a TODO saying so).
-- [ ] `architecture.md`: fix the undefined `[Typical program flow]` link.
+- [x] `architecture.md`: fix the undefined `[Typical program flow]` link.
 
 ### Once deployed
 
@@ -75,7 +75,7 @@ but is also hosted on the Polars domain.
 
 ## Examples
 
-- [ ] Move or drop `run_mean_coordinate_cost.py` and `run_mean_coordinate_manual.py`.
+- [x] Drop `run_mean_coordinate_cost.py` and `run_mean_coordinate_manual.py`.
 - [ ] Add a module docstring to `run_geo.py` and `run_line.py`, and remove the TODO in `run_geo.py`.
 - [ ] Consider bringing back sample datasets (`geopolars.datasets` on `main`) for copy-paste examples.
 
