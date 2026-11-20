@@ -120,7 +120,6 @@ impl OverlayOperation {
 pub struct OverlayPairs {
     pairs: GeosPairs,
     operation: OverlayOperation,
-    on_row_error: OnRowError,
 }
 
 impl OverlayPairs {
@@ -145,7 +144,6 @@ impl OverlayPairs {
         Ok(Self {
             pairs: GeosPairs::new(a, b, &operation, on_row_error, early_coord_check)?,
             operation,
-            on_row_error,
         })
     }
 
@@ -162,18 +160,18 @@ impl OverlayPairs {
 
     pub fn into_multi_points(self, z: bool) -> GeoComputeResult<MultiPointArray> {
         let overlaid = self.overlaid(TopologicalDimension::Points, true)?;
-        with_const_flags!(Z = z; overlaid.into_multi_point_array::<Z>(self.on_row_error))
+        with_const_flags!(Z = z; overlaid.into_multi_point_array::<Z>(self.pairs.on_row_error()))
     }
 
     /// A row with several linestrings fails with [`GeoComputeError::Split`].
     pub fn into_line_strings(self, z: bool) -> GeoComputeResult<LineStringArray> {
         let overlaid = self.overlaid(TopologicalDimension::Lines, false)?;
-        with_const_flags!(Z = z; overlaid.into_line_string_array::<Z>(self.on_row_error))
+        with_const_flags!(Z = z; overlaid.into_line_string_array::<Z>(self.pairs.on_row_error()))
     }
 
     pub fn into_multi_line_strings(self, z: bool) -> GeoComputeResult<MultiLineStringArray> {
         let overlaid = self.overlaid(TopologicalDimension::Lines, true)?;
-        with_const_flags!(Z = z; overlaid.into_multi_line_string_array::<Z>(self.on_row_error))
+        with_const_flags!(Z = z; overlaid.into_multi_line_string_array::<Z>(self.pairs.on_row_error()))
     }
 
     /// A row with several polygons fails with [`GeoComputeError::Split`].
@@ -184,7 +182,12 @@ impl OverlayPairs {
         new_holes: NewHoles,
     ) -> GeoComputeResult<PolygonArray> {
         self.overlaid(TopologicalDimension::Polygons, false)?
-            .into_polygon_array(z, self.on_row_error, new_ring_orientation, new_holes)
+            .into_polygon_array(
+                z,
+                self.pairs.on_row_error(),
+                new_ring_orientation,
+                new_holes,
+            )
     }
 
     /// See [`OverlayPairs::into_polygons`].
@@ -195,7 +198,12 @@ impl OverlayPairs {
         new_holes: NewHoles,
     ) -> GeoComputeResult<MultiPolygonArray> {
         self.overlaid(TopologicalDimension::Polygons, true)?
-            .into_multi_polygon_array(z, self.on_row_error, new_ring_orientation, new_holes)
+            .into_multi_polygon_array(
+                z,
+                self.pairs.on_row_error(),
+                new_ring_orientation,
+                new_holes,
+            )
     }
 
     /// Overlays every pair, and narrows each overlay down with [`kept_parts`].
@@ -205,9 +213,9 @@ impl OverlayPairs {
         multi: bool,
     ) -> GeoComputeResult<GeosGeometries> {
         let mut geometries = GeosRows::with_capacity(self.pairs.len());
-        for overlay in self.pairs.evaluate(&self.operation, self.on_row_error) {
+        for overlay in self.pairs.evaluate(&self.operation) {
             let narrowed = overlay?.map(|overlay| narrowed(overlay, kept_dimension, multi));
-            let narrowed = row_or_null(narrowed.transpose(), self.on_row_error)?;
+            let narrowed = row_or_null(narrowed.transpose(), self.pairs.on_row_error())?;
             geometries.push(narrowed.unwrap_or(GeosRow::Null));
         }
         Ok(GeosGeometries {

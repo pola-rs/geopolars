@@ -81,6 +81,6 @@ pub fn shortest_lines(
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<LineStringArray> {
     let pairs = GeosPairs::new(a, b, &ShortestLine, on_row_error, early_coord_check)?;
-    let lines = pairs.evaluate(&ShortestLine, on_row_error);
+    let lines = pairs.evaluate(&ShortestLine);
     shortest_lines_into_array(pairs.len(), lines, on_row_error)
 }

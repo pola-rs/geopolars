@@ -46,7 +46,7 @@ pub fn topologically_equal(
 ) -> GeoComputeResult<BooleanArray> {
     let pairs = GeosPairs::new(a, b, &TopologicallyEqual, on_row_error, early_coord_check)?;
     let tested = pairs
-        .evaluate(&TopologicallyEqual, on_row_error)
+        .evaluate(&TopologicallyEqual)
         .collect::<GeoComputeResult<Vec<_>>>()?;
     Ok(optional_bool_array(&tested))
 }

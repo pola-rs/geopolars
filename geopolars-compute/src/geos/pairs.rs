@@ -52,6 +52,10 @@ pub(super) struct GeosPairs {
     b: GeosGeometries,
     a: GeosGeometries,
     rows: usize,
+    /// Whether an empty `a`, and an empty `b`, give their result without the partner.
+    /// [`GeosPairs::evaluate`] checks its operation against it.
+    gives_when_empty: [bool; 2],
+    on_row_error: OnRowError,
 }
 
 impl GeosPairs {
@@ -68,12 +72,16 @@ impl GeosPairs {
     ) -> GeoComputeResult<Self> {
         let rows = pair_count(a.len(), b.len());
         let (a_empty, b_empty) = (rows_without_vertices(a), rows_without_vertices(b));
-        let decides = |array: &GeometryArray, empty: &Bitmap, rule: WhenEmpty<Op>| match rule {
-            WhenEmpty::Gives(_) => &null_rows(array) | empty,
-            WhenEmpty::WithPartner(_) => null_rows(array),
+        let gives_when_empty = gives_when_empty(operation);
+        let decides = |array: &GeometryArray, empty: &Bitmap, gives: bool| {
+            if gives {
+                &null_rows(array) | empty
+            } else {
+                null_rows(array)
+            }
         };
-        let a_decides = decides(a, &a_empty, operation.when_a_empty());
-        let b_decides = decides(b, &b_empty, operation.when_b_empty());
+        let a_decides = decides(a, &a_empty, gives_when_empty[0]);
+        let b_decides = decides(b, &b_empty, gives_when_empty[1]);
         let a_skipped = &a_empty | &paired_with(&b_decides, a.len());
         let b_skipped = &b_empty | &paired_with(&a_decides, b.len());
         let early = early_coord_check;
@@ -81,16 +89,25 @@ impl GeosPairs {
             a: a.to_geos_rows_skipping(Some(&a_skipped), on_row_error, early)?,
             b: b.to_geos_rows_skipping(Some(&b_skipped), on_row_error, early)?,
             rows,
+            gives_when_empty,
+            on_row_error,
         })
     }
 
     /// The result of every pair (see the module doc), lazily, as the iterator advances.
     /// A pair that fails goes to `on_row_error`.
+    ///
+    /// `operation` must be the one the pairs were built for.
     pub(super) fn evaluate<'a, Op: PairOperation>(
         &'a self,
         operation: &'a Op,
-        on_row_error: OnRowError,
     ) -> impl Iterator<Item = GeoComputeResult<Option<Op::Output>>> + 'a {
+        debug_assert_eq!(
+            self.gives_when_empty,
+            gives_when_empty(operation),
+            "pairs evaluated with another operation than they were built for"
+        );
+        let on_row_error = self.on_row_error;
         let a = broadcast(self.a.geometries.iter(), self.rows);
         let b = broadcast(self.b.geometries.iter(), self.rows);
         a.zip(b).map(move |(a, b)| {
@@ -115,6 +132,10 @@ impl GeosPairs {
         self.rows
     }
 
+    pub(super) fn on_row_error(&self) -> OnRowError {
+        self.on_row_error
+    }
+
     pub(super) fn size_hints(&self) -> (SizeHint<2>, SizeHint<2>) {
         (self.a.size_hint, self.b.size_hint)
     }
@@ -137,6 +158,13 @@ fn when_empty<Op: PairOperation>(
             unreachable!("a row with vertices that an operation needs is converted")
         }
     }
+}
+
+fn gives_when_empty<Op: PairOperation>(operation: &Op) -> [bool; 2] {
+    [
+        matches!(operation.when_a_empty(), WhenEmpty::Gives(_)),
+        matches!(operation.when_b_empty(), WhenEmpty::Gives(_)),
+    ]
 }
 
 fn pair_count(a_rows: usize, b_rows: usize) -> usize {

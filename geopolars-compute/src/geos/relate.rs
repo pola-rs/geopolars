@@ -63,7 +63,6 @@ impl PairOperation for RelateOperation {
 pub struct RelatePairs {
     pairs: GeosPairs,
     operation: RelateOperation,
-    on_row_error: OnRowError,
 }
 
 impl RelatePairs {
@@ -82,13 +81,12 @@ impl RelatePairs {
         Ok(Self {
             pairs: GeosPairs::new(a, b, &operation, on_row_error, early_coord_check)?,
             operation,
-            on_row_error,
         })
     }
 
     /// Relates every pair lazily, as the iterator advances.
     pub fn matrices(&self) -> impl Iterator<Item = GeoComputeResult<Option<De9im>>> + '_ {
-        self.pairs.evaluate(&self.operation, self.on_row_error)
+        self.pairs.evaluate(&self.operation)
     }
 
     /// Implements the Python `relate`.
