@@ -83,14 +83,21 @@ def serve_guides(polars_dir: Path, out_dir: Path) -> None:
 def serve_guides_sync_until_error(
     polars_dir: Path, out_dir: Path, zensical: subprocess.Popen, errors: list
 ) -> None:
+    # A save can leave a file half-written or briefly missing (e.g. an editor's temporary file),
+    # so a sync only counts as failed once it fails twice in a row.
+    # Any error counts, as one that escaped would end this thread but leave zensical serving.
+    failed_before = False
     while True:
         time.sleep(0.5)
         try:
             sync_guides(polars_dir, out_dir)
-        except (ValueError, yaml.YAMLError) as error:
-            errors.append(error)
-            zensical.terminate()
-            return
+            failed_before = False
+        except Exception as error:  # noqa: BLE001
+            if failed_before:
+                errors.append(error)
+                zensical.terminate()
+                return
+            failed_before = True
 
 
 def start_zensical(command: str, out_dir: Path) -> subprocess.Popen:
@@ -122,6 +129,7 @@ def sync_guides(polars_dir: Path, out_dir: Path) -> None:
         ignore=shutil.ignore_patterns(".*", "__pycache__", LINKS.name),
         copy_function=sync_guides_copy_if_changed,
     )
+    sync_guides_remove_deleted(out_dir / "docs/source")
     sync_guides_write_if_changed(
         out_dir / LINKS, yaml.safe_dump(links, sort_keys=False)
     )
@@ -131,6 +139,18 @@ def sync_guides(polars_dir: Path, out_dir: Path) -> None:
 def sync_guides_copy_if_changed(src: str, dst: str) -> None:
     if not (Path(dst).exists() and filecmp.cmp(src, dst, shallow=False)):
         shutil.copy2(src, dst)
+
+
+def sync_guides_remove_deleted(staged: Path) -> None:
+    # `_build` comes from Polars, so it has files we do not.
+    for path in list(staged.rglob("*")):
+        relative = path.relative_to(staged)
+        if (
+            relative.parts[0] != "_build"
+            and path.is_file()
+            and not (ROOT / "docs/source" / relative).exists()
+        ):
+            path.unlink()
 
 
 def sync_guides_write_if_changed(path: Path, text: str) -> None:
