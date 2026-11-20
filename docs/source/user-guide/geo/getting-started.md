@@ -41,12 +41,10 @@ The second uses the `geo` namespace on expressions:
 
 !!! tip "Static typing"
 
-```text
-Both APIs are fully type-checked, but with an asterisk.
-Plain `pl.col("route").geo...` works at runtime,
-but a type checker cannot see namespaces that `register_expr_namespace` patches onto `pl.Expr`.
-Use `gpl.col` instead, to keep static typing.
-```
+    Both APIs are fully type-checked, but with an asterisk.
+    Plain `pl.col("route").geo...` works at runtime,
+    but a type checker cannot see namespaces that `register_expr_namespace` patches onto `pl.Expr`.
+    Use `gpl.col` instead, to keep static typing.
 
 The API reference lists every geometry operation.
 They are written under the functional API, but hold exactly the same for the namespace API.

@@ -3,6 +3,11 @@
 //! # Const generic flags
 //!
 //! See [super] for `Z`, `REVERSED_EXTERIOR` and `REVERSED_HOLES`.
+//!
+//! Copying a polygon out of GEOS is also generic over `CHECK_FLAGGED_ORIENTATION`.
+//! `CHECK_FLAGGED_ORIENTATION=true` checks the orientation of the rows with `maybe_wrong_orientation=true`
+//! (see "Orientation of new rings" in `docs/source/development/geo/geos-kernel-implementation-guide.md`).
+//! It is only `false` for `new_ring_orientation="keep"`.
 
 use std::ops::Range;
 
@@ -152,12 +157,13 @@ pub(super) fn multi_polygon_to_geos(
 }
 
 impl GeosGeometries {
-    /// Our polygon array of the geometries, one row each.
-    /// Every GEOS geometry is freed once it is copied.
+    /// Copies the GEOS geometries into a polygon array, one row each.
     /// A geometry that is not a polygon goes to `on_row_error`.
-    /// The rings are oriented as `new_ring_orientation` and `new_holes` ask,
-    /// which relies on `orientation` and `maybe_wrong_orientation` being set
-    /// (see "Orientation of new rings" in `docs/source/development/geos-kernel-implementation-guide.md`).
+    /// The rings are oriented as `new_ring_orientation` and `new_holes` ask.
+    ///
+    /// `orientation` must give the direction the rings run in,
+    /// and every row that may run otherwise must have `maybe_wrong_orientation=true`
+    /// (see "Orientation of new rings" in `docs/source/development/geo/geos-kernel-implementation-guide.md`).
     pub fn into_polygon_array(
         mut self,
         z: bool,
@@ -425,7 +431,7 @@ fn push_polygon<
 /// Appends the rings of `polygon`, each ended in `rings`.
 /// The exterior comes first, then the interiors.
 /// An empty polygon has no rings.
-/// With `CHECKED=true`, each ring is checked against `target` instead.
+/// With `CHECK_ORIENTATION=true`, each ring is copied to run as `target`, rather than reversed by `REVERSED_*`.
 #[inline(always)]
 fn push_rings<
     const Z: bool,

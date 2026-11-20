@@ -1,5 +1,5 @@
 //! Helpers shared by kernels.
-//! See "Helpers" in docs/source/development/kernel-implementation-guide.md.
+//! See "Helpers" in docs/source/development/geo/kernel-implementation-guide.md.
 
 use std::ops::Range;
 
