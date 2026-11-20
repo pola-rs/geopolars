@@ -1,3 +1,5 @@
+# Build the API reference and the guides, failing on any warning.
+
 name: Build Python docs
 
 on:
@@ -6,91 +8,108 @@ on:
     branches:
       - main
 
+env:
+  RUSTFLAGS: -C debuginfo=0  # Do not produce debug symbols to keep memory usage down
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  RUSTFLAGS: -C debuginfo=0  # Do not produce debug symbols to keep memory usage down
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   docs-python:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      # https://github.com/marketplace/actions/checkout
+      - name: Check out codebase
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      # https://github.com/marketplace/actions/astral-sh-setup-uv
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d
         with:
           python-version: '3.14'
+          activate-environment: true
 
       # The bundled PROJ links SQLite, and generates its database with the sqlite3 binary.
       - name: Install SQLite
-        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
-
-      - name: Create virtual environment
         run: |
-          python -m venv .venv
-          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
-          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+          sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
 
       # Takes polars from PyPI, rather than building it from the pinned commit as `make install` does.
       - name: Install Python dependencies
         run: |
-          pip install uv
           uv pip install --group dev --group docs polars
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
+      # https://github.com/marketplace/actions/rust-cache
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           save-if: ${{ github.event_name == 'push' }}
 
       - name: Install GeoPolars
+        run: |
+          maturin develop --uv
         working-directory: geopolars
-        run: maturin develop --uv
 
       - name: Build docs
-        run: make docs-api-build SPHINXOPTS="--fail-on-warning"
+        run: |
+          make docs-api-build SPHINXOPTS="--fail-on-warning"
 
   docs-guide:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      # https://github.com/marketplace/actions/checkout
+      - name: Check out codebase
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      # https://github.com/marketplace/actions/astral-sh-setup-uv
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d
         with:
           python-version: '3.14'
+          activate-environment: true
 
       - name: Install SQLite
-        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
-
-      - name: Create virtual environment
         run: |
-          python -m venv .venv
-          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
-          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+          sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
 
       # The Polars checkout holds the zensical setup that the guides are built with.
       - name: Check out Polars
-        run: make polars-src
+        run: |
+          make polars-src
 
       # Takes polars from PyPI, rather than building it from the pinned commit as `make install` does.
       - name: Install Python dependencies
         run: |
-          pip install uv
           uv pip install --group dev polars
           grep -E '^(zensical|markdown-exec)==' .polars/docs/source/requirements.txt \
             | uv pip install tomli-w -r -
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
+      # https://github.com/marketplace/actions/rust-cache
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           save-if: ${{ github.event_name == 'push' }}
 
       - name: Install GeoPolars
+        run: |
+          maturin develop --uv
         working-directory: geopolars
-        run: maturin develop --uv
 
       - name: Build guides
-        run: make docs-guide-build
+        run: |
+          make docs-guide-build
