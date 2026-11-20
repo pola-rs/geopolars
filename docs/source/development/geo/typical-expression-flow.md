@@ -4,8 +4,8 @@
 This section describes what happens when you add a typical expression
 (in this case, `geo.area`) to a query.
 This should give you a good idea of how the plugin works.
-This is a written description of `docs/source/development/expression-flow.dot`
-(which you can render with `dot -Tsvg docs/source/development/expression-flow.dot -o flow.svg`).
+This is a written description of `docs/source/development/geo/expression-flow.dot`
+(which you can render with `dot -Tsvg docs/source/development/geo/expression-flow.dot -o flow.svg`).
 
 At two points, the paths diverge depending on which tier the operation is implemented at.
 The numbering here is the same as before.
@@ -15,7 +15,7 @@ What happens inside Polars itself (in-between) is left out.
 
 ## Adding an expression
 
-( The top half of `docs/source/development/expression-flow.dot` )
+( The top half of `docs/source/development/geo/expression-flow.dot` )
 
 This code mostly lives in the Python part of GeoPolars.
 
@@ -66,7 +66,7 @@ The forwarding kernel is named like any other (A10), and picks up again at P13.
 
 ## Planning an expression
 
-( The bottom half of `docs/source/development/expression-flow.dot` )
+( The bottom half of `docs/source/development/geo/expression-flow.dot` )
 
 Type level checking is implemented on this level as much as possible,
 so that they can raise while the plan is being built, rather than during execution.

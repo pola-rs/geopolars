@@ -69,13 +69,14 @@ INSTALL_GUIDE_DEPS = grep -E '^(zensical|markdown-exec)==' $(POLARS_DIR)/docs/so
 	| uv pip install tomli-w -r -
 
 ## Build the user and developer guides with zensical into target/docs-guide/site.
-## It fails on broken links, unknown API keys, and failing examples, as the Polars docs build would.
+## It fails on broken links and failing examples, as the Polars docs CI does,
+## and also on unknown API keys and macros that raise, which Polars lets through.
 docs-guide: install
 	$(INSTALL_GUIDE_DEPS)
 	$(MAKE) docs-guide-build
 
 ## Serve the guides with zensical on localhost:8000, and rebuild them as the pages change.
-## It stops after the first rebuild with a problem the build would fail on.
+## It stops after the first build or rebuild with a problem the build would fail on.
 docs-guide-serve: install
 	$(INSTALL_GUIDE_DEPS)
 	.venv/bin/python scripts/docs_guide.py serve $(POLARS_DIR) $(GUIDE_DIR)

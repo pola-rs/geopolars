@@ -7,7 +7,8 @@ use crate::{
 };
 
 /// A view that may hold lists and coordinates outside its rows (see "Trimming" in docs/source/development/geo/view-types.md).
-/// A kernel has to read it part by part, and can only pass it on as a plain view once it is `trimmed`.
+/// A kernel has to reach the levels below the rows through the offsets of the rows,
+/// and can only pass it on as a plain view once it is `trimmed`.
 pub struct Untrimmed<T>(pub(crate) T);
 
 /// A trimmed view is an untrimmed one too.

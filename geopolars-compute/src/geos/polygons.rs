@@ -431,7 +431,7 @@ fn push_polygon<
 /// Appends the rings of `polygon`, each ended in `rings`.
 /// The exterior comes first, then the interiors.
 /// An empty polygon has no rings.
-/// With `CHECKED=true`, each ring is checked against `target` instead.
+/// With `CHECK_ORIENTATION=true`, each ring is copied to run as `target`, rather than reversed by `REVERSED_*`.
 #[inline(always)]
 fn push_rings<
     const Z: bool,
