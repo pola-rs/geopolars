@@ -294,6 +294,11 @@ def test_geodesic_without_a_crs_is_refused() -> None:
         lf.select(geo.distance("a", "b", distance_method="geodesic")).collect_schema()
 
 
+def test_an_unknown_distance_method_is_refused() -> None:
+    with pytest.raises(ValueError, match="`distance_method` must be one of"):
+        geo.distance("a", "b", distance_method="Geodesic")  # type: ignore[arg-type]
+
+
 def test_points_in_different_crss_are_refused_while_resolving_the_schema() -> None:
     a = _pairs([NEW_YORK], [LONDON], crs=WGS84)
     lf = a.lazy().select(geo.distance("a", geo.to_crs("b", "EPSG:3857")))

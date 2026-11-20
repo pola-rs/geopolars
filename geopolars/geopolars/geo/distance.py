@@ -12,12 +12,13 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from polars.plugins import register_plugin_function
 
-from geopolars._utils import LIB
+from geopolars._typing import DistanceMethod
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import PointType
 from geopolars.geo._dispatch import on_geometry_pair
 
 if TYPE_CHECKING:
-    from geopolars._typing import DistanceMethod, IntoExprColumn
+    from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
 
@@ -120,4 +121,5 @@ def distance(
         df.select(geo.distance("home", "work"))
         df.select(geo.distance("home", "work", distance_method="planar"))
     """
+    validate_one_of("distance_method", distance_method, DistanceMethod)
     return on_geometry_pair(a, b, partial(_distance, distance_method=distance_method))

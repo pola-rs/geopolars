@@ -12,13 +12,14 @@ from typing import TYPE_CHECKING
 import polars as pl
 from polars.plugins import register_plugin_function
 
-from geopolars._utils import LIB
+from geopolars._typing import DistanceMethod
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType
 from geopolars.geo._dispatch import on_geometry
 from geopolars.geo.distance import _auto_distance_method
 
 if TYPE_CHECKING:
-    from geopolars._typing import DistanceMethod, IntoExprColumn
+    from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
 
@@ -106,6 +107,7 @@ def length(
         df.select(geo.length("route"))
         df.select(geo.length("route", distance_method="planar"))
     """
+    validate_one_of("distance_method", distance_method, DistanceMethod)
     return on_geometry(
         geometry,
         partial(

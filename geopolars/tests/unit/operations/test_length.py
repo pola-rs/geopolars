@@ -438,6 +438,11 @@ def test_geodesic_refuses_a_geometry_without_a_crs_at_plan_time() -> None:
         lf.collect_schema()
 
 
+def test_an_unknown_distance_method_is_refused() -> None:
+    with pytest.raises(ValueError, match="`distance_method` must be one of"):
+        geo.length("line", distance_method="Geodesic")  # type: ignore[arg-type]
+
+
 def test_planar_lines_up_across_chunks_and_slices() -> None:
     lines = pl.concat(
         [
