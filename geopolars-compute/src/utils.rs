@@ -23,8 +23,8 @@ pub(crate) fn with_ranges_reversed(
     ValidCoords::from_axes((
         reversed(coords.x()),
         reversed(coords.y()),
-        coords.z().map(&reversed),
-        coords.m().map(&reversed),
+        coords.z().map(reversed),
+        coords.m().map(reversed),
     ))
 }
 

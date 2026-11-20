@@ -65,8 +65,8 @@ fn emptied(coords: &ValidCoords, selected: &Bitmap) -> ValidCoords {
     ValidCoords::from_axes((
         emptied(coords.x()),
         emptied(coords.y()),
-        coords.z().map(&emptied),
-        coords.m().map(&emptied),
+        coords.z().map(emptied),
+        coords.m().map(emptied),
     ))
 }
 
