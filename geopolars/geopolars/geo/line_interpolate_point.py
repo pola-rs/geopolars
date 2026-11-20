@@ -47,8 +47,7 @@ def line_interpolate_point(
     or a column (or expression) with one distance per geometry.
     A null distance gives a null point, also for an empty geometry.
     A NaN or infinite distance in a column raises.
-    A linestring without vertices or a multilinestring without parts
-    still gives an empty point for such a distance.
+    A geometry without vertices still gives an empty point for such a distance.
 
     Only linestrings and multilinestrings are accepted.
     A multilinestring is walked part after part,

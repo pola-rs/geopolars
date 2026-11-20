@@ -577,10 +577,12 @@ impl GeosGeometries {
 
 /// One row of [`GeosRows`].
 pub enum GeosRow {
-    /// Null in the output, whether the input row was null, or `on_row_error="null"` made it so.
+    /// Null in the output: a null input row, a result GEOS failed on under `on_row_error="null"`,
+    /// or a result that is null by definition (such as the convex hull of a single coordinate).
+    /// An input row that fails to convert is [`GeosRow::Failed`] instead.
     Null,
-    /// Without vertices (see `rows_without_vertices`). Never went to GEOS.
-    /// Valid for every kind.
+    /// Without vertices: an input row that `rows_without_vertices` marks, which never goes to GEOS,
+    /// or an empty result. Valid for every kind.
     Empty,
     Geometry {
         geometry: Geometry,
@@ -590,8 +592,8 @@ pub enum GeosRow {
     },
     /// An input row that was not converted, as the kernel does not need it (see `geos/pairs.rs`).
     Skipped,
-    /// An input row that failed to convert with `on_row_error="null"`.
-    /// The verdict is still pending: a binary operation nulls only the pairs that need the row.
+    /// An input row that failed to convert under `on_row_error="null"`, which is null in the output.
+    /// It is kept apart from [`GeosRow::Null`], so that a binary operation nulls only the pairs that need it.
     Failed,
 }
 
