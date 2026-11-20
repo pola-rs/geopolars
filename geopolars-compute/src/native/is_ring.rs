@@ -17,7 +17,7 @@ use crate::EmptyPolygonExterior;
 
 pub fn line_strings_are_rings<const Z: bool>(array: &Untrimmed<LineStringArray>) -> BooleanArray {
     per_row_bool(array.rows(), |i| {
-        is_ring::<Z>(array.coords(), array.rows().range(i))
+        is_ring::<Z>(array.coords(), array.row_vertices(i))
     })
 }
 

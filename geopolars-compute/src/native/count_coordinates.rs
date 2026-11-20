@@ -62,7 +62,7 @@ pub fn line_string_coordinate_counts<const INCLUDE_EMPTY: bool>(
     array: &Untrimmed<LineStringArray>,
 ) -> PrimitiveArray<u32> {
     per_row_count(array.rows(), |i| {
-        count_vertices::<INCLUDE_EMPTY>(array.coords(), array.rows().range(i))
+        count_vertices::<INCLUDE_EMPTY>(array.coords(), array.row_vertices(i))
     })
 }
 
@@ -70,7 +70,7 @@ pub fn multi_point_coordinate_counts<const INCLUDE_EMPTY: bool>(
     array: &Untrimmed<MultiPointArray>,
 ) -> PrimitiveArray<u32> {
     per_row_count(array.rows(), |i| {
-        count_vertices::<INCLUDE_EMPTY>(array.coords(), array.rows().range(i))
+        count_vertices::<INCLUDE_EMPTY>(array.coords(), array.row_vertices(i))
     })
 }
 
@@ -78,7 +78,7 @@ pub fn multi_line_string_coordinate_counts<const INCLUDE_EMPTY: bool>(
     array: &Untrimmed<MultiLineStringArray>,
 ) -> PrimitiveArray<u32> {
     per_row_count(array.rows(), |i| {
-        count_vertices::<INCLUDE_EMPTY>(array.coords(), array.lines().span(array.rows().range(i)))
+        count_vertices::<INCLUDE_EMPTY>(array.coords(), array.row_vertices(i))
     })
 }
 

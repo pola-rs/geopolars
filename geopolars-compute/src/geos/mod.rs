@@ -260,7 +260,7 @@ impl ToGeosRows for MultiPointArray {
             skipped,
             on_row_error,
             early_coord_check,
-            |vertices| vertices,
+            |i| self.row_vertices(i),
             |vertices| multi_point_to_geos(&axes, vertices),
         )?;
         Ok(GeosGeometries {
@@ -304,33 +304,29 @@ fn rows_without_vertices(array: &GeometryArray) -> Bitmap {
             Bitmap::from_iter((0..coords.len()).map(is_empty))
         }
         GeometryArray::LineString(array) => {
-            valid_rows_without_vertices(&array.rows, |vertices| vertices)
+            valid_rows_without_vertices(&array.rows, |i| array.row_vertices(i))
         }
         GeometryArray::MultiPoint(array) => {
-            valid_rows_without_vertices(&array.rows, |points| points)
+            valid_rows_without_vertices(&array.rows, |i| array.row_vertices(i))
         }
         GeometryArray::Polygon(array) => {
-            valid_rows_without_vertices(&array.rows, |rings| array.rings.span(rings))
+            valid_rows_without_vertices(&array.rows, |i| array.row_vertices(i))
         }
         GeometryArray::MultiLineString(array) => {
-            valid_rows_without_vertices(&array.rows, |lines| array.lines.span(lines))
+            valid_rows_without_vertices(&array.rows, |i| array.row_vertices(i))
         }
         GeometryArray::MultiPolygon(array) => {
-            valid_rows_without_vertices(&array.rows, |polygons| {
-                array.rings.span(array.polygons.span(polygons))
-            })
+            valid_rows_without_vertices(&array.rows, |i| array.row_vertices(i))
         }
     }
 }
 
 fn valid_rows_without_vertices(
     rows: &List,
-    vertices: impl Fn(Range<usize>) -> Range<usize>,
+    row_vertices: impl Fn(usize) -> Range<usize>,
 ) -> Bitmap {
     // A null row's offsets point anywhere, so its validity is checked first.
-    Bitmap::from_iter(
-        (0..rows.len()).map(|i| rows.is_valid(i) && vertices(rows.range(i)).is_empty()),
-    )
+    Bitmap::from_iter((0..rows.len()).map(|i| rows.is_valid(i) && row_vertices(i).is_empty()))
 }
 
 /// Point `i` of `coords`, which carry `len` axes of `coord_type`.
@@ -356,14 +352,15 @@ fn point_to_geos<const EARLY_FINITE_CHECK: bool>(
 
 /// Converts every row of a list array to GEOS, for [`ToGeosRows::to_geos_rows_skipping`].
 /// `to_geos` builds one geometry from the range of a row's parts.
-/// `span` gives where the coordinates of those parts sit in `axes`.
+/// `row_vertices` must be the view's own `row_vertices`,
+/// so that a row is `Empty` exactly where [`rows_without_vertices`] marks it.
 fn rows_to_geos(
     rows: &List,
     axes: &Axes,
     skipped: Option<&Bitmap>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
-    span: impl Fn(Range<usize>) -> Range<usize>,
+    row_vertices: impl Fn(usize) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<GeosRows> {
     with_const_flags!(
@@ -373,7 +370,7 @@ fn rows_to_geos(
             axes,
             skipped,
             on_row_error,
-            span,
+            row_vertices,
             to_geos,
         )
     )
@@ -386,7 +383,7 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
     axes: &Axes,
     skipped: Option<&Bitmap>,
     on_row_error: OnRowError,
-    span: impl Fn(Range<usize>) -> Range<usize>,
+    row_vertices: impl Fn(usize) -> Range<usize>,
     to_geos: impl Fn(Range<usize>) -> GeoComputeResult<Geometry>,
 ) -> GeoComputeResult<GeosRows> {
     let (x, y, _, _) = axes;
@@ -397,14 +394,14 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
             geometries.push(GeosRow::Null);
             continue;
         }
-        let parts = rows.range(i);
         // No vertices is empty, as `is_empty` says, so it never goes to GEOS.
-        let coords = span(parts.clone());
+        let coords = row_vertices(i);
         geometries.push(if coords.is_empty() {
             GeosRow::Empty
         } else if is_skipped(skipped, i) {
             GeosRow::Skipped
         } else {
+            let parts = rows.range(i);
             let geometry =
                 if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
                     to_geos(parts)

@@ -27,7 +27,7 @@ pub fn points_are_simple(array: &PointArray) -> BooleanArray {
 
 pub fn multi_points_are_simple(array: &MultiPointArray) -> BooleanArray {
     per_row_bool(&array.rows, |i| {
-        !has_coinciding_points(array.rows.range(i), |i, j| {
+        !has_coinciding_points(array.row_vertices(i), |i, j| {
             coincide_exactly::<false, false>(&array.coords, i, j)
         })
     })

@@ -1,6 +1,8 @@
 //! Views that may hold lists and coordinates outside their rows, and trimming them.
 //! See "Trimming" in docs/source/development/view-types.md.
 
+use std::ops::Range;
+
 use crate::{
     LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PolygonArray,
     ScalarLineString, ScalarMultiLineString, ScalarMultiPoint, ScalarMultiPolygon, ScalarPolygon,
@@ -35,6 +37,11 @@ impl Untrimmed<LineStringArray> {
         self.0.get(i)
     }
 
+    #[inline(always)]
+    pub fn row_vertices(&self, i: usize) -> Range<usize> {
+        self.0.row_vertices(i)
+    }
+
     /// The view, with every level sliced to what its rows use.
     /// Free when it already is.
     pub fn trimmed(self) -> LineStringArray {
@@ -64,6 +71,11 @@ impl Untrimmed<MultiPointArray> {
     #[inline(always)]
     pub fn get(&self, i: usize) -> ScalarMultiPoint<'_> {
         self.0.get(i)
+    }
+
+    #[inline(always)]
+    pub fn row_vertices(&self, i: usize) -> Range<usize> {
+        self.0.row_vertices(i)
     }
 
     /// See [`Untrimmed::<LineStringArray>::trimmed`].
@@ -101,6 +113,11 @@ impl Untrimmed<PolygonArray> {
         self.0.get(i)
     }
 
+    #[inline(always)]
+    pub fn row_vertices(&self, i: usize) -> Range<usize> {
+        self.0.row_vertices(i)
+    }
+
     /// See [`Untrimmed::<LineStringArray>::trimmed`].
     pub fn trimmed(self) -> PolygonArray {
         let array = self.0;
@@ -136,6 +153,11 @@ impl Untrimmed<MultiLineStringArray> {
     #[inline(always)]
     pub fn get(&self, i: usize) -> ScalarMultiLineString<'_> {
         self.0.get(i)
+    }
+
+    #[inline(always)]
+    pub fn row_vertices(&self, i: usize) -> Range<usize> {
+        self.0.row_vertices(i)
     }
 
     /// See [`Untrimmed::<LineStringArray>::trimmed`].
@@ -178,6 +200,11 @@ impl Untrimmed<MultiPolygonArray> {
     #[inline(always)]
     pub fn get(&self, i: usize) -> ScalarMultiPolygon<'_> {
         self.0.get(i)
+    }
+
+    #[inline(always)]
+    pub fn row_vertices(&self, i: usize) -> Range<usize> {
+        self.0.row_vertices(i)
     }
 
     /// See [`Untrimmed::<LineStringArray>::trimmed`].

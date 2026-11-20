@@ -45,7 +45,7 @@ impl ToGeosRows for LineStringArray {
             skipped,
             on_row_error,
             early_coord_check,
-            |vertices| vertices,
+            |i| self.row_vertices(i),
             |vertices| line_string_to_geos(&axes, vertices),
         )?;
         Ok(GeosGeometries {
@@ -96,7 +96,7 @@ pub(super) fn multi_line_strings_to_geos_rows(
         skipped,
         on_row_error,
         early_coord_check,
-        |parts| array.lines.span(parts),
+        |i| array.row_vertices(i),
         |parts| multi_line_string_to_geos(&axes, &array.lines, parts, drop_empty_parts),
     )?;
     Ok(GeosGeometries {

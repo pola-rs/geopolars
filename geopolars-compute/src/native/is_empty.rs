@@ -57,7 +57,7 @@ pub fn line_strings_are_empty<const CHECK_NESTED: bool>(
     array: &Untrimmed<LineStringArray>,
 ) -> BooleanArray {
     per_row_bool(array.rows(), |i| {
-        has_no_points::<CHECK_NESTED>(array.coords(), array.rows().range(i))
+        has_no_points::<CHECK_NESTED>(array.coords(), array.row_vertices(i))
     })
 }
 
@@ -65,7 +65,7 @@ pub fn multi_points_are_empty<const CHECK_NESTED: bool>(
     array: &Untrimmed<MultiPointArray>,
 ) -> BooleanArray {
     per_row_bool(array.rows(), |i| {
-        has_no_points::<CHECK_NESTED>(array.coords(), array.rows().range(i))
+        has_no_points::<CHECK_NESTED>(array.coords(), array.row_vertices(i))
     })
 }
 
@@ -73,7 +73,7 @@ pub fn multi_line_strings_are_empty<const CHECK_NESTED: bool>(
     array: &Untrimmed<MultiLineStringArray>,
 ) -> BooleanArray {
     per_row_bool(array.rows(), |i| {
-        has_no_points::<CHECK_NESTED>(array.coords(), array.lines().span(array.rows().range(i)))
+        has_no_points::<CHECK_NESTED>(array.coords(), array.row_vertices(i))
     })
 }
 
@@ -81,7 +81,7 @@ pub fn polygons_are_empty<const CHECK_NESTED: bool>(
     array: &Untrimmed<PolygonArray>,
 ) -> BooleanArray {
     per_row_bool(array.rows(), |i| {
-        has_no_points::<CHECK_NESTED>(array.coords(), array.rings().span(array.rows().range(i)))
+        has_no_points::<CHECK_NESTED>(array.coords(), array.row_vertices(i))
     })
 }
 
@@ -89,9 +89,6 @@ pub fn multi_polygons_are_empty<const CHECK_NESTED: bool>(
     array: &Untrimmed<MultiPolygonArray>,
 ) -> BooleanArray {
     per_row_bool(array.rows(), |i| {
-        let vertices = array
-            .rings()
-            .span(array.polygons().span(array.rows().range(i)));
-        has_no_points::<CHECK_NESTED>(array.coords(), vertices)
+        has_no_points::<CHECK_NESTED>(array.coords(), array.row_vertices(i))
     })
 }

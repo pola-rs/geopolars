@@ -95,6 +95,12 @@ impl PolygonArray {
             parts: self.rows.range(i),
         }
     }
+
+    /// See [`LineStringArray::row_vertices`](crate::LineStringArray::row_vertices).
+    #[inline(always)]
+    pub fn row_vertices(&self, i: usize) -> Range<usize> {
+        self.rings.span(self.rows.range(i))
+    }
 }
 
 /// One multipolygon: a run of polygons.
@@ -189,5 +195,11 @@ impl MultiPolygonArray {
             coords: &self.coords,
             parts: self.rows.range(i),
         }
+    }
+
+    /// See [`LineStringArray::row_vertices`](crate::LineStringArray::row_vertices).
+    #[inline(always)]
+    pub fn row_vertices(&self, i: usize) -> Range<usize> {
+        self.rings.span(self.polygons.span(self.rows.range(i)))
     }
 }

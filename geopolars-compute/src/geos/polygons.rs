@@ -46,7 +46,7 @@ impl ToGeosRows for PolygonArray {
             skipped,
             on_row_error,
             early_coord_check,
-            |parts| self.rings.span(parts),
+            |i| self.row_vertices(i),
             |parts| polygon_to_geos(&axes, &self.rings, parts),
         )?;
         Ok(GeosGeometries {
@@ -88,7 +88,7 @@ impl ToGeosRows for MultiPolygonArray {
             skipped,
             on_row_error,
             early_coord_check,
-            |parts| self.rings.span(self.polygons.span(parts)),
+            |i| self.row_vertices(i),
             |parts| multi_polygon_to_geos(&axes, &self.polygons, &self.rings, parts),
         )?;
         Ok(GeosGeometries {
