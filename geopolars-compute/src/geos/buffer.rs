@@ -113,7 +113,7 @@ fn buffer_via_geos(
     distance: BufferDistance,
     style: &BufferStyle,
     on_row_error: OnRowError,
-    allow_splitting: bool,
+    into_multi: bool,
 ) -> GeoComputeResult<GeosGeometries> {
     let params = buffer_params(style)?;
     by_distance_via_geos(
@@ -125,7 +125,7 @@ fn buffer_via_geos(
         |distance| geos_distance(distance, style.side),
         |input, distance| {
             let buffer = input.buffer_with_params(distance, &params)?;
-            if allow_splitting {
+            if into_multi {
                 return Ok(buffer);
             }
             unless_split(buffer, GeometryTypes::MultiPolygon)

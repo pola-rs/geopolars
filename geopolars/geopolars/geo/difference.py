@@ -12,6 +12,7 @@ from geopolars._typing import (
     NewHoles,
     NewRingOrientation,
     OnRowError,
+    PromoteToMulti,
 )
 from geopolars._utils import LIB, validate_one_of
 from geopolars.geo._dispatch import ensure_same_crs, on_geometry_pair
@@ -28,7 +29,7 @@ def difference(
     a: IntoExprColumn,
     b: IntoExprColumn,
     *,
-    allow_splitting: bool = False,
+    promote_to_multi: PromoteToMulti = "auto",
     new_ring_orientation: NewRingOrientation = "keep",
     new_holes: NewHoles = "opposite",
     on_row_error: OnRowError = "raise",
@@ -45,17 +46,18 @@ def difference(
     The result is the kind of `a`, and of `a` alone.
     For a LineString or Polygon, the result can split.
     {overlay_splitting}
+    The table below gives the output kind for every `promote_to_multi`.
 
-    ===============  =====================================================
-    a                output kind
-    ===============  =====================================================
-    Point            Point
-    MultiPoint       MultiPoint
-    LineString       LineString, or MultiLineString with `allow_splitting`
-    MultiLineString  MultiLineString
-    Polygon          Polygon, or MultiPolygon with `allow_splitting`
-    MultiPolygon     MultiPolygon
-    ===============  =====================================================
+    ===============  ===============  ======================  ====================
+    a                `"never"`        `"auto"`                `"always"`
+    ===============  ===============  ======================  ====================
+    Point            Point            Point                   MultiPoint
+    MultiPoint       MultiPoint       MultiPoint              MultiPoint
+    LineString       LineString       MultiLineString         MultiLineString
+    MultiLineString  MultiLineString  MultiLineString         MultiLineString
+    Polygon          Polygon          MultiPolygon            MultiPolygon
+    MultiPolygon     MultiPolygon     MultiPolygon            MultiPolygon
+    ===============  ===============  ======================  ====================
 
     {broadcast_single_geometry}
 
@@ -77,7 +79,7 @@ def difference(
     A `b` that covers all of `a` takes everything away, so it gives an empty {output} too.
 
     {geos_errors}
-    The same goes for a result in several parts without `allow_splitting`.
+    The same goes for a result in several parts with `promote_to_multi="never"`.
     {on_row_error}
 
     {geos_non_finite}
@@ -97,14 +99,15 @@ def difference(
     .. code-block:: python
 
         df.select(geo.difference("parcel", "road_reserve"))
-        df.select(geo.difference("trail", "private_land", allow_splitting=True))
+        df.select(geo.difference("trail", "private_land", promote_to_multi="never"))
     """
+    validate_one_of("promote_to_multi", promote_to_multi, PromoteToMulti)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
     validate_one_of("new_holes", new_holes, NewHoles)
     kwargs = {
-        "allow_splitting": allow_splitting,
+        "promote_to_multi": promote_to_multi,
         "new_ring_orientation": new_ring_orientation,
         "new_holes": new_holes,
         "on_row_error": on_row_error,

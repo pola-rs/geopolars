@@ -101,7 +101,7 @@ impl fmt::Display for GeoComputeError {
             Self::Split { parts } => write!(
                 f,
                 "the result split into {parts} parts, which a single geometry cannot hold; \
-                set `allow_splitting=True` to get a multi kind"
+                set `promote_to_multi` to \"auto\" or \"always\" to get a multi kind"
             ),
             Self::HoleInEmptyExterior => write!(
                 f,

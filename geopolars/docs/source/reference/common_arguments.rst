@@ -278,8 +278,8 @@ This option does nothing if `new_ring_orientation="keep"`
 
 .. _arg-promote_to_multi:
 
-`promote_to_multi: Literal["never", "always"] = "never"`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+`promote_to_multi: Literal["never", "auto", "always"] = "auto"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some operations can result in a shape falling into several parts.
 For example, taking the difference between two polygons can cause the polygon to be cut into two.
@@ -291,16 +291,15 @@ This is mostly a concern when using GEOS kernels.
 - `promote_to_multi="never"` expects every output to be a single geometry.
   Anything that results in multiple geometries is considered an error.
   How this error is then handled depends on the setting of the `on_row_error` argument.
+- `promote_to_multi="auto"` (default) outputs a `Multi*` only for inputs whose result can fall into several parts.
+  Which inputs those are differs per expression (a point never splits, for example),
+  so each expression documents what `"auto"` means for it.
 - `promote_to_multi="always"` always outputs a `Multi*` (e.g. a `MultiPolygon` instead of a `Polygon`,
   even if the input types are only polygons). This is more flexible,
   but in many cases might make your data harder to work with.
 
 If the input geometry is already a `Multi*` (e.g. `MultiPolygon`), this argument has no effect.
 These will always output a `Multi*`.
-
-.. note::
-
-   Legacy: this replaces `allow_splitting: bool = False`.
 
 Affine transformations
 ~~~~~~~~~~~~~~~~~~~~~~

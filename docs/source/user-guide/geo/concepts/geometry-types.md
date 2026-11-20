@@ -43,7 +43,7 @@ A column cannot hold a point in one row and a polygon in the next.
 GeoPolars has no data type for a mix of kinds, such as a GeometryCollection, yet.
 An operation whose result can fall apart into several pieces,
 such as `intersection` or `difference`,
-can give the multi kind instead (see `allow_splitting`).
+gives the multi kind by default (see `promote_to_multi`).
 ```
 
 This is an important limitation to be aware of when converting from and to other formats.

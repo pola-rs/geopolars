@@ -178,8 +178,11 @@ With `"ccw"` or `"cw"`, the exterior runs that way instead, at a minimal perform
 The holes then run against it with `new_holes="opposite"` (the default), or along it with `"same"`.
 See :ref:`new_ring_orientation <arg-new_ring_orientation>` on the Common arguments page.""",
     "overlay_splitting": """\
-A row whose result has several parts then raises.
-With `allow_splitting=True`, the result is the multi kind instead, which holds every part.""",
+By default (`promote_to_multi="auto"`), the result is the multi kind wherever it can split,
+which holds every part.
+With `"never"`, a row whose result has several parts raises instead.
+`"always"` gives the multi kind for every input, even one whose result cannot split.
+See :ref:`promote_to_multi <arg-promote_to_multi>` on the Common arguments page.""",
     "overlay_z": """\
 The output has z as soon as either input has it.
 Where only one input has z, GEOS fills it in for the other.
