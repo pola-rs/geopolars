@@ -21,7 +21,27 @@ polars = { workspace = true, features = [
   "dtype-extension",
   "dtype-struct",
 ] }
-polars-core = { workspace = true, features = ["dtype-extension", "dtype-struct"] }
+polars-core = { workspace = true, features = [
+  "dtype-extension",
+  "dtype-struct",
+  # Frames cross from Python with all their columns,
+  # and a column whose dtype has no feature cannot be converted.
+  "dtype-array",
+  "dtype-categorical",
+  "dtype-date",
+  "dtype-datetime",
+  "dtype-decimal",
+  "dtype-duration",
+  "dtype-f16",
+  "dtype-i8",
+  "dtype-i16",
+  "dtype-i128",
+  "dtype-map",
+  "dtype-time",
+  "dtype-u8",
+  "dtype-u16",
+  "dtype-u128",
+] }
 # The array types under a Series. polars does not re-export them publicly.
 polars-arrow = { workspace = true }
 

@@ -65,8 +65,8 @@ fn emptied(coords: &ValidCoords, selected: &Bitmap) -> ValidCoords {
     ValidCoords::from_axes((
         emptied(coords.x()),
         emptied(coords.y()),
-        coords.z().map(&emptied),
-        coords.m().map(&emptied),
+        coords.z().map(emptied),
+        coords.m().map(emptied),
     ))
 }
 
@@ -164,7 +164,7 @@ fn without_selected<const CHECK_CLOSED: bool, const Z: bool>(
 ) -> (OffsetsBuffer<i64>, ValidCoords, Option<Bitmap>) {
     debug_assert!(
         lists.spans_all_of(coords.len()),
-        "the lists have to be trimmed (see \"Trimming\" in docs/View Types.md)"
+        "the lists have to be trimmed (see \"Trimming\" in docs/source/development/view-types.md)"
     );
     let (mut runs, mut passing) = (Vec::new(), None);
     let mut selected = selected.true_idx_iter().peekable();

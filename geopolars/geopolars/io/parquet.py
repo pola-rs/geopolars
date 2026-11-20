@@ -1,8 +1,7 @@
-"""Reading and writing GeoParquet files.
+"""Reading and writing GeoParquet files,
+as described under "GeoParquet" in `docs/source/user-guide/geo/io.md`.
 
-A GeoParquet file is a Parquet file with a `geo` key in its metadata.
-It says which columns hold geometries, how, and in which CRS.
-Reading and writing the file is done with Polars' own readers and writers.
+Polars' own readers and writers do the reading and writing.
 This module only has the steps around them:
 `from_geoparquet` gives the geometry columns their dtypes after reading,
 and `geoparquet_metadata` (with `with_covering`) gives the `geo` key to write.
@@ -42,19 +41,18 @@ def from_geoparquet(
     glob: bool = True,
     hidden_file_prefix: str | Sequence[str] | None = None,
 ) -> FrameT:
-    """
-    Geoparquet only saves metadata stuff in the geo footer.
-    Polars saves the type information (e.g. PolygonXY),
-    but other software does not.
-    We can figure out the dimensions from struct names though,
-    and we can re-read the footer (which is why we need `path`).
+    """Give the geometry columns of GeoParquet files their dtypes.
 
     `frame` is what `pl.read_parquet` or `pl.scan_parquet` read from `source`.
-    The columns get geopolars dtypes, with the metadata of the files in `source`.
+    The geometry columns get geopolars dtypes, from the `geo` metadata of the files in `source`.
     Native encodings become e.g. `PolygonXY`,
     and WKB becomes `Wkb` (which you can decode to native yourself with `geo.from_wkb`).
     A file without GeoParquet metadata leaves the frame as it is.
+    Why this is needed after reading, and how the CRS comes back,
+    is described under "Reading" in `docs/source/user-guide/geo/io.md`.
 
+    By default, every file in `source` has to describe its geometry columns the same way.
+    `check_every_file=False` only reads the metadata of the first one.
 
     .. code-block:: python
 
@@ -106,6 +104,11 @@ def from_geoparquet(
             raise pl.exceptions.SchemaError(msg)
 
     assert first is not None
+    # BUG: the CRS comes back as the PROJJSON of the file,
+    # and CRSs are compared as written,
+    # so a column written as "EPSG:4326" no longer combines with one that still says "EPSG:4326".
+    # Once fixed, update the warning in `docs/source/user-guide/geo/io.md`
+    # and the CRS section of `docs/source/user-guide/geo/migration/geopandas.md`.
     return frame.with_columns(
         _storage_of(name, dtype).ext.to(dtype)
         for name, dtype in first.items()
@@ -171,16 +174,14 @@ def geoparquet_metadata(
         df.write_parquet(path, metadata=gpl.geoparquet_metadata(df))
         lf.sink_parquet(path, metadata={**gpl.geoparquet_metadata(lf), "owner": "me"})
 
-    Polars reads its own files back with their dtypes without it,
-    but other GeoParquet readers (such as geopandas or GDAL) need it.
+    Other GeoParquet readers (such as geopandas or GDAL) need it to find the geometries.
     Every geometry column is described.
     The geometries are written in their own encoding: native, or WKB for a `Wkb` column.
     The WKB we write is modern, so some older readers may not accept it.
     A frame without geometry columns gets no metadata: `{}`.
 
-    GeoParquet 1.1 does not support M values and no WKT.
-    Columns with such data are refused.
-    CRS that cannot be written with PROJJSON are also refused.
+    A column GeoParquet 1.1 cannot store, such as one with m values, is refused,
+    as described under "Writing" in `docs/source/user-guide/geo/io.md`.
     Only the schema is needed, so this refuses before anything is written.
 
     With `covering`, every geometry column `<name>` is described with the covering

@@ -23,3 +23,4 @@ All classes and functions exposed in the ``geopolars.*`` namespace are public.
            datatypes
            functions
            io
+           common_arguments

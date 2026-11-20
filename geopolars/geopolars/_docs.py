@@ -56,8 +56,8 @@ If the geometry does not have the specific axis, the flag is ignored. """,
     "repairing_function": """\
 As a repairing function, it does not require the geometry to be valid (yet).""",
     "empty_point": """\
-The empty point has NaN on every axis it has.
-`(NaN, NaN, 1.0)` is therefore not empty, but it is not finite either.""",
+The empty point has NaN on every axis it has,
+as described under "Empty geometries" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`.""",
     "selected_coordinate_actions": """\
 `action` says what happens to a coordinate {selected}:
 
@@ -95,7 +95,8 @@ Every geometry this functions builds is valid by `is_valid_geoarrow`,
 but it might not be valid by `is_valid_ogc`, nor simple (see `is_simple`).""",
     "null_inside_row": """\
 A null anywhere inside a row (such as a null vertex, or a null coordinate value)
-makes the whole row null, as GeoArrow only allows nulls at the outermost level.""",
+makes the whole row null,
+as described under "Nulls" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`.""",
     "empty_and_null": """\
 An empty geometry gives an empty {output}, and a null one a null {output}.""",
     "keeps_type_dimension_and_crs": """\
@@ -156,26 +157,26 @@ This operation ignores empty and invalid geometries.
 Empty and invalid geometries stay empty or invalid.""",
     "on_row_error": """\
 This expression can error on individual rows. How these are handled is determined by `on_row_error`.
-See `on_row_error` on the Common arguments page (`docs/Common arguments.md`).""",
+See :ref:`on_row_error <arg-on_row_error>` on the Common arguments page.""",
     "geos_errors": """\
 If GEOS returns an error for a row, it is handled through `on_row_error`.""",
     "geos_non_finite": """\
-GEOS supports neither empty points inside a geometry (a vertex with NaN on every axis)
-nor any other NaN or infinite x or y.
+GEOS supports neither empty points inside a geometry nor any other NaN or infinite x or y
+(see "NaN and infinity" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`).
 With `early_coord_check="off"`, they go to GEOS as they are.""",
     "early_coord_check": """\
 This expression can check for NaNs and nested empty points early.
-See `early_coord_check` on the Common arguments page (`docs/Common arguments.md`).""",
+See :ref:`early_coord_check <arg-early_coord_check>` on the Common arguments page.""",
     "empty_polygon_exterior": """\
 A polygon with an empty exterior and a hole with vertices is not valid OGC.
 What this expression does when it would make one is set by `empty_polygon_exterior`.
-See `empty_polygon_exterior` on the Common arguments page (`docs/Common arguments.md`).""",
+See :ref:`empty_polygon_exterior <arg-empty_polygon_exterior>` on the Common arguments page.""",
     "new_ring_orientation": """\
-By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them:
-the exterior clockwise, and the holes counter-clockwise.
+By default (`new_ring_orientation="keep"`), the rings run as GEOS gives them.
+This is usually the exterior clockwise, with the holes counter-clockwise, but not always!
 With `"ccw"` or `"cw"`, the exterior runs that way instead, at a minimal performance cost.
 The holes then run against it with `new_holes="opposite"` (the default), or along it with `"same"`.
-See `new_ring_orientation` on the Common arguments page (`docs/Common arguments.md`).""",
+See :ref:`new_ring_orientation <arg-new_ring_orientation>` on the Common arguments page.""",
     "overlay_splitting": """\
 A row whose result has several parts then raises.
 With `allow_splitting=True`, the result is the multi kind instead, which holds every part.""",
@@ -207,9 +208,9 @@ or a polygon that encloses nothing) comes out null.""",
     "decode_into_dtype": """\
 {encoding} can mix geometries row by row, but a Polars column has one dtype,
 so `dtype` names the concrete type to decode into, e.g. `PolygonXY`.
-A single geometry is promoted into its multi geometry
-(e.g. a polygon into `MultiPolygonXY`).
-Anything else that does not fit, including a different dimension, is an error.
+A polygon also fits into `MultiPolygonXY` (and likewise for the other kinds),
+but any other geometry that does not fit is an error,
+as described under "One kind per column" in `docs/source/user-guide/geo/concepts/geometry-types.md`.
 
 The metadata of a `{encoding_dtype}` column is carried over, and `crs` labels the result
 the same way it does for the constructors.""",
@@ -241,27 +242,9 @@ Only x and y are looked at. z and m are ignored.""",
     "null_ring_input": """\
 A null {input} gives a null result,
 and so does one with a null vertex, or one that is not finite in x or y.""",
-    "point_measure": """\
-`m` stands for 'measure', an arbitrary per-vertex value.
-Typical uses:
-
-- a timestamp
-- a distance along a route
-- an airspeed measurement""",
-    "linestring_measure": """\
-`m` stands for 'measure', an arbitrary value carried per *vertex* rather
-than per linestring. Typical uses:
-
-- a timestamp, making the linestring a trajectory
-- a distance along a route
-- an airspeed measurement""",
-    "polygon_measure": """\
-`m` stands for 'measure', an arbitrary value carried per *vertex* rather
-than per ring or per polygon. Typical uses:
-
-- a timestamp
-- a distance along the boundary
-- a sensor reading taken at that vertex""",
+    "measure": """\
+`m` is a *measure*, a value carried per vertex, such as a timestamp,
+as described under "Dimensions" in `docs/source/user-guide/geo/concepts/geometry-types.md`.""",
 }
 
 

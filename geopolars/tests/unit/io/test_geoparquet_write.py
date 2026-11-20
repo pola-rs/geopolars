@@ -23,7 +23,7 @@ from geopolars.datatypes import (
     Wkb,
     Wkt,
 )
-from tests.unit.io.test_geoparquet import DATA, SPEC_GEOMETRIES, _read
+from tests.unit.io.test_geoparquet import DATA, OTHER_DTYPES, SPEC_GEOMETRIES, _read
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -147,6 +147,13 @@ def test_describes_every_geometry_column(tmp_path: Path) -> None:
 
     assert geo["primary_column"] == "a"
     assert list(geo["columns"]) == ["a", "b"]
+
+
+@pytest.mark.parametrize("dtype", OTHER_DTYPES, ids=repr)
+def test_writes_next_to_a_column_of_any_dtype(dtype: pl.DataType) -> None:
+    df = pl.DataFrame(schema={"other": dtype, "geometry": PointXY()})
+    geo = json.loads(gpl.geoparquet_metadata(df)["geo"])
+    assert list(geo["columns"]) == ["geometry"]
 
 
 def test_a_frame_without_geometry_has_no_metadata() -> None:

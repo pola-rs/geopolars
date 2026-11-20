@@ -41,9 +41,8 @@ def point(
     `z` and `m`  `PointXYZM`
     ===========  ===========
 
-    `z` is an elevation.
-    `m` is an arbitrary measure carried along with the vertex,
-    such as a timestamp or a distance along a route.
+    What `z` and `m` hold is described under "Dimensions"
+    in `docs/source/user-guide/geo/concepts/geometry-types.md`.
 
     .. code-block:: python
 

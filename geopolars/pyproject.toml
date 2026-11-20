@@ -5,14 +5,32 @@ build-backend = "maturin"
 
 [project]
 name = "geopolars"
-version = "0.0.1"
+description = "Geospatial data types and operations for Polars"
+readme = "../README.md"
+authors = [{ name = "Aida van de Wetering" }, { name = "GeoPolars contributors" }]
+version = "0.2.0a1"
+license = "MIT"
+# A symlink to the root LICENSE, as license files cannot be outside the package directory.
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
+keywords = ["dataframe", "geospatial", "gis", "geoarrow", "polars"]
 classifiers = [
-  "Programming Language :: Rust",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
+  "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering :: GIS",
+  "Typing :: Typed",
 ]
-dependencies = ["polars>=1.44"]
+# `Expr.pipe_with_dtype` is new in 2.0.
+# The floor is 2.0.0rc2, as that is the version of the polars built from the pinned commit.
+dependencies = ["polars>=2.0.0rc2"]
+
+[project.urls]
+Repository = "https://github.com/pola-rs/geopolars"
+Issues = "https://github.com/pola-rs/geopolars/issues"
 
 [tool.maturin]
 # Mixed layout: Python sources in geopolars/, Rust cdylib compiled in

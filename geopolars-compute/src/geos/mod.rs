@@ -37,12 +37,10 @@
 //!
 //! ## `CHECK_FLAGGED_ORIENTATION`
 //!
-//! `CHECK_FLAGGED_ORIENTATION=true` unless `new_ring_orientation="keep"`.
-//! If set, every ring of a row with `maybe_wrong_orientation` is checked,
-//! and reversed if it runs the wrong way.
-//! If the entire column is [Orientation::Unknown], every row is checked.
-//! If `CHECK_FLAGGED_ORIENTATION=false`, this check is omitted,
-//! and orientations can be whatever.
+//! Copying a polygon out of GEOS is also generic over `CHECK_FLAGGED_ORIENTATION`,
+//! which is `false` only for `new_ring_orientation="keep"`.
+//! It turns on the check of rows with `maybe_wrong_orientation`
+//! (see "Orientation of new rings" in `docs/source/development/geos-kernel-implementation-guide.md`).
 
 mod buffer;
 mod convex_hull;
@@ -530,7 +528,7 @@ impl GeometryOrientation {
     };
 
     /// A clockwise exterior with counter-clockwise holes, as GEOS gives most rings it builds itself
-    /// (see "Orientation of new rings" in `docs/GEOS kernel implementation guide.md`).
+    /// (see "Orientation of new rings" in `docs/source/development/geos-kernel-implementation-guide.md`).
     pub const GEOS_BUILT: Self = Self {
         outer: Orientation::Cw,
         holes: Orientation::Ccw,

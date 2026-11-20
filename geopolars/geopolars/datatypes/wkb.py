@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
 class Wkb(EncodedGeometry):
     """Geometries encoded as WKB: `geoarrow.wkb` over `Binary`.
-    WKB is supported for exchange, but all operations require it to be in arrow format.
-    You'll likely want to convert this using `from_wkb`.
+    Operations only work on it once it is decoded with `from_wkb`,
+    as described under "WKT and WKB" in `docs/source/user-guide/geo/concepts/geometry-types.md`.
     """
 
     _extension_name: ClassVar[str] = "geoarrow.wkb"

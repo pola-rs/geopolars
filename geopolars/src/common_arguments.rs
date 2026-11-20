@@ -1,4 +1,4 @@
-//! The serde mappings of the arguments that `docs/Common arguments.md` documents.
+//! The serde mappings of the arguments that `geopolars/docs/source/reference/common_arguments.rst` documents.
 
 use geopolars_compute::{
     EarlyCoordCheck, EmptyPolygonExterior, NewHoles, NewRingOrientation, NullParts, OnRowError,

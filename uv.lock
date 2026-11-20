@@ -379,7 +379,7 @@ wheels = [
 
 [[package]]
 name = "geopolars"
-version = "0.0.1"
+version = "0.2.0a1"
 source = { editable = "geopolars" }
 dependencies = [
     { name = "polars" },

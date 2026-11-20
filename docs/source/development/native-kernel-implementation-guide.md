@@ -1,6 +1,6 @@
 # Native kernel implementation guide
 
-This document extends the [Kernel implementation guide](<Kernel implementation guide.md>),
+This document extends the [Kernel implementation guide](kernel-implementation-guide.md),
 for kernels in `native` that compute their result themselves.
 
 ## Shapes
@@ -143,7 +143,7 @@ Compute over `coords.ignoring_validity()`, and give the output the validity of t
 (`combine_validities_and` for several inputs).
 See `points_with_clamped_coords` in `native/fix_out_of_bounds.rs`.
 This is only allowed when the computation is harmless on any value
-(see "Values under a null" in the [Kernel implementation guide](<Kernel implementation guide.md#nulls>)).
+(see "Values under a null" in the [Kernel implementation guide](kernel-implementation-guide.md#nulls)).
 If it is not, only take the branchless route when there are no nulls,
 with an `ALL_VALID` const generic
 (see `pairwise` in `native/distance.rs`, where it is still called `NULLS`).

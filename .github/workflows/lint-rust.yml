@@ -1,0 +1,47 @@
+name: Lint Rust
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUSTFLAGS: -C debuginfo=0  # Do not produce debug symbols to keep memory usage down
+
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Rust
+        run: rustup component add clippy
+
+      # The bundled PROJ links SQLite, and generates its database with the sqlite3 binary.
+      - name: Install SQLite
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name == 'push' }}
+
+      # Without default features, as in `make test-rust`.
+      - name: Run cargo clippy
+        run: cargo clippy --workspace --all-targets --no-default-features --locked -- -D warnings
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Rust
+        run: rustup component add rustfmt
+
+      - name: Run cargo fmt
+        run: cargo fmt --all --check

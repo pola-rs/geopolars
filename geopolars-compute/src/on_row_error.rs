@@ -1,6 +1,6 @@
 const_enum!(
     /// What a kernel does with a row it fails on.
-    /// Implements `on_row_error`, which `docs/Common arguments.md` documents.
+    /// Implements `on_row_error`, which `geopolars/docs/source/reference/common_arguments.rst` documents.
     /// Dropping the row is not an option,
     /// as the kernels are registered with `is_elementwise=True`.
     /// Dropping rows changes the length of the column,

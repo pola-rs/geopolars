@@ -848,7 +848,7 @@ dependencies = [
 
 [[package]]
 name = "geopolars"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "geo-traits",
  "geoarrow-schema",
@@ -871,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "geopolars-compute"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "geo",
  "geographiclib-rs",
@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "geopolars-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "geopolars-compute",
  "geopolars-views",
@@ -894,7 +894,7 @@ dependencies = [
 
 [[package]]
 name = "geopolars-views"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "geo-traits",
  "polars-arrow",
@@ -1910,6 +1910,7 @@ name = "polars-arrow"
 version = "0.55.1"
 source = "git+https://github.com/pola-rs/polars?rev=8a87616112e5c5ee8b862c675bed3cbaa1e202db#8a87616112e5c5ee8b862c675bed3cbaa1e202db"
 dependencies = [
+ "atoi_simd",
  "bitflags",
  "bytemuck",
  "bytes",
@@ -1922,6 +1923,7 @@ dependencies = [
  "getrandom 0.4.3",
  "half",
  "hashbrown 0.17.1",
+ "itoa",
  "lz4",
  "num-traits",
  "polars-arrow-format",
@@ -1987,6 +1989,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "fast-float2",
+ "half",
  "hashbrown 0.17.1",
  "itoa",
  "num-traits",

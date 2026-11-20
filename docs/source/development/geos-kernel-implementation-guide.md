@@ -1,6 +1,6 @@
 # GEOS kernel implementation guide
 
-This document extends the [Kernel implementation guide](<Kernel implementation guide.md>),
+This document extends the [Kernel implementation guide](kernel-implementation-guide.md),
 for kernels in `geos` that convert to GEOS and call it.
 
 ## Shapes
@@ -114,7 +114,7 @@ foregoing the need to convert its partner in the other column.
 - A GEOS kernel defaults to `early_coord_check="finite_and_empty"`.
   The check runs during the conversion to GEOS.
 - `"finite"` lets an empty point inside a geometry through to GEOS.
-  What GEOS then does is described under `early_coord_check` in [Common arguments](<Common arguments.md>).
+  What GEOS then does is described under `early_coord_check` in [Common arguments](../../../geopolars/docs/source/reference/common_arguments.rst).
 - If the check can be turned off,
   the module documents what GEOS does with non-finite input then,
   as `geos/convex_hull.rs` does.
@@ -123,11 +123,10 @@ foregoing the need to convert its partner in the other column.
 
 ## Orientation of new rings
 
-GEOS sometimes changes the directions of rings.
-Most of the time, it gives clockwise shells and counter-clockwise holes for anything new that it constructs.
-This is not always the case though!
+Which way GEOS runs the rings it builds is described under [New rings](../user-guide/geo/concepts/winding-order.md#new-rings) in the user guide.
 
-Every operation must therefore set the `orientation` of its output `GeosGeometries`.
+The takeaway is that it is not consistent,
+which is why every operation must therefore set the `orientation` of its output `GeosGeometries`.
 Every row of the column runs in that direction,
 unless its `GeosRow::Geometry::maybe_wrong_orientation` is set.
 
@@ -136,6 +135,8 @@ without its rings being checked.
 A row that may run otherwise, such as one passed through unchanged, must therefore have the flag.
 The rings of a row with the flag are checked when they are copied out of GEOS,
 and only reversed where needed.
-In a column of `UNKNOWN` orientation, every row is checked this way.
+In a column whose `orientation` is even partly `Unknown`, every row is checked this way.
+With `new_ring_orientation="keep"`, you indicate that you don't care about the orientation.
+This bypasses checking and reversing, which is faster.
 
 Test it before assuming anything!

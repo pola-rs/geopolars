@@ -1,9 +1,7 @@
-"""How long a linestring is.
+"""How long a linestring is, on the plane or along the ellipsoid of its CRS.
 
-`method="planar"` measures in the space the coordinates lie in, in their unit.
-`method="geodesic"` measures along the ellipsoid of the CRS, in the unit of the CRS
-(metres for a CRS in longitude/latitude).
-Without a `method`, it is picked by the CRS.
+Without a `method`, it is picked by the CRS,
+as described under "Geographic and projected" in `docs/source/user-guide/geo/concepts/crs.md`.
 """
 
 from __future__ import annotations

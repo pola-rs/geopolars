@@ -1,194 +1,125 @@
-# GeoPolars
+<h1 align="center">GeoPolars</h1>
 
-In this branch, we are rewriting large chunks of GeoPolars to work much more closely with the rest of Polars.
-This is all very much still work-in-progress, and as such this branch is HIGHLY unstable.
-Keep an eye on the tracking issues with the dev tag for where we are right now.
-We'll need a little bit more time to make things nice, but we're making a lot of progress very quickly,
-so stay tuned!
+<div align="center">
+  <a href="https://pypi.org/project/geopolars/">
+    <img src="https://img.shields.io/pypi/v/geopolars.svg" alt="PyPI Latest Release"/>
+  </a>
+  <a href="https://github.com/pola-rs/geopolars/actions/workflows/test-python.yml">
+    <img src="https://github.com/pola-rs/geopolars/actions/workflows/test-python.yml/badge.svg" alt="Python tests"/>
+  </a>
+  <a href="https://github.com/pola-rs/geopolars/actions/workflows/test-rust.yml">
+    <img src="https://github.com/pola-rs/geopolars/actions/workflows/test-rust.yml/badge.svg" alt="Rust tests"/>
+  </a>
+  <a href="https://github.com/pola-rs/geopolars/blob/main/LICENSE">
+    <img src="https://img.shields.io/pypi/l/geopolars.svg" alt="License"/>
+  </a>
+</div>
 
-## Overview of Features
+<p align="center">
+  <b>Documentation</b>:
+  <a href="https://github.com/pola-rs/geopolars/tree/main/geopolars/docs/source/reference">API reference</a>
+  |
+  <a href="https://github.com/pola-rs/geopolars/tree/main/docs/source/user-guide/geo">User guide</a>
+</p>
 
-GeoPolars has Geo data types as first-class Polars citizens,
-  represented using the Arrow Extension format as [GeoArrow](https://geoarrow.org/).
-  This has several advantages:
+## GeoPolars: geospatial data types and operations for Polars
 
-- zero-cost conversion with native polars data types.
-- Allows using regular polars operations directly on these new data types
-- Full compatibility with streaming engine
-- Mismatches, illegal operations etc. can be caught at plan time or expression creation time,
-  rather than at runtime.
+GeoPolars adds first-class geospatial data types to Polars.
+On top of being compatible with many existing Polars functionality,
+these data types also come with a suite of geo-specific expressions.
+They are regular Polars expressions,
+so they work in lazy queries and the streaming engine like any other.
 
-In addition, GeoPolars aims to be a modern GeoSpatial toolset, offering:
+- **Native geometry types**: points, line strings, polygons and their multi forms,
+  in 2D, with `z` and with `m`, stored as [GeoArrow](https://geoarrow.org/).
+- **Checked at plan time**: a mismatched type or an unsupported operation
+  is refused while the query is built, not halfway through running it.
+- **CRS-aware**: every geometry column carries its CRS.
+  Reprojection is backed by PROJ,
+  and area and distance are measured on their ellipsoid for longitude/latitude.
+- **GeoParquet**: read and write it with Polars' own Parquet readers and writers.
 
-- CRS-aware by default, backed by PROJ
-- Support for 3D (z) and measured quantities (m) for most operations
-- (De)serialisation with GeoParquet
+To learn more, read the [user guide](https://github.com/pola-rs/geopolars/tree/main/docs/source/user-guide/geo).
 
-## Developer Documentation
+## GeoPolars in action
 
-If you are interested in the design paradigm and architecture used for this plugin,
-See the `Docs` directory for more information about the internals of this plugin.
+### Reading GeoParquet
 
-- [A high-level overview of the architecture of the plugin](./docs/Architecture.md)
-- [A document that describes what happens when you call an expression, at plan and execution time](./docs/Typical expression flow.md).
-  This is accompanied by [a diagram](./docs/expression-flow.dot).
-- [What to consider when implementing new or editing existing expressions](./docs/Expression implementation guide.md)
-- [The views kernels take, in `geopolars-views`](./geopolars-views/README.md)
-- [What to consider when writing kernels, in `geopolars-compute`](./geopolars-compute/README.md)
-- [An overview of which expression is implemented at which *tier*](./docs/Tier per expression.md)
-
-## Quickstart
-
-We present two equivalent APIs.
-All functionality is is available through both.
+GeoParquet keeps the encoding and the CRS of its geometry columns in the metadata of the file,
+which `from_geoparquet` reads.
+The CRS here is longitude/latitude, so `area` measures on the ellipsoid, in square metres:
 
 ```python
-# functional
-from geopolars import geo
+import polars as pl
 
-geo.translate("route", (1.0, 2.0))
-
-# expressions using a namespace
 import geopolars as gpl
+from geopolars import MultiPolygonXY, geo
 
-gpl.col("route").geo.translate((1.0, 2.0))
-```
-
-Both are fully type-checked, but with an asterisk.
-Plain `pl.col("route").geo...` works at runtime,
-but a checker cannot see namespaces that `register_expr_namespace`
-patches onto `pl.Expr`.
-To avoid that, prefer `gpl.col` to keep static typing.
-
-For a list of all the geometry operations, look at the generated documentation!
-They are written under the *functional* API, but hold exactly the same for the namespace API.
-
-## Conventions
-
-GeoPolars does not really care about winding order. It will take any,
-and keep them in their orientation if that means less copying around is required.
-This philosophy is extended to external tools.
-If we don't need to transform any data, we'll just keep it in the same order.
-
-## Validity
-
-Every operation expects a *valid* geometry as its input.
-If given one, they should (generally) not fail, and give sensible results.
-
-But what does *valid* mean? GeoPolars knows *two* levels, which nest.
-
-The first is validity according to the GeoArrow spec, checked by `geo.is_valid_geoarrow`.
-
-- Only a whole geometry can be null.
-  A part, a ring, or a coordinate nested in another geometry cannot be null.
-- Every *ring* is closed. Its last vertex is the same as its first.
-
-Checking GeoArrow validity is cheap. It looks at every coordinate once.
-It can also check, in that same pass, that every coordinate is finite,
-or that it lies inside the bounds of its CRS (`out_of_bounds`).
-For example, a latitude has to be between -90° and 90°.
-PROJ cannot transform a place that does not exist.
-`geo.fix_out_of_bounds` drops or clamps the coordinates that do not.
-
-The second is the OGC Simple Features standard, checked by `geo.is_valid_ogc`.
-This is the same standard as followed by GEOS (and therefore shapely, and GeoPandas).
-In GeoPolars, a geometry valid by OGC has to be valid by GeoArrow as well.
-
-- Every coordinate is finite. A NaN or an infinity makes every area, length and distance NaN too.
-  It also makes it impossible to tell if two shapes cross.
-  The empty point is the exception, as a point or in a multipoint.
-  GeoArrow writes it as NaN in x and y.
-- A linestring has at least 2 different vertices (or none, making it empty).
-- A ring has at least 4 different vertices
-  (A ring with fewer vertices can only go back and forth, so it has no area).
-- The rings of a polygon do not cross themselves or each other, and its holes lie *inside* its exterior.
-- The parts of a multipolygon do not overlap.
-
-The OGC standard has one more idea.
-A geometry is **simple** when it does not cross or touch itself (`geo.is_simple`).
-A linestring may cross itself and still be valid by OGC, but just not *simple*.
-For example, a GPS track can pass the same crossing twice.
-
-Checking OGC validity is much more expensive, as it has to compare pairs of segments, and pairs of parts.
-
-OGC allows some geometries that might still surprise you!
-An empty geometry is valid by OGC (find them with `geo.is_empty`),
-and so is the same vertex twice in a row (`geo.has_repeats_in_succession`).
-
-`geo.null_out_invalid_geoarrow` and `geo.null_out_invalid_ogc` replace invalid geometries with nulls.
-See `is_valid_geoarrow` and `is_valid_ogc` for all the rules.
-
-```python
-df.select(geo.null_out_invalid_ogc("parcel"))
-```
-
-The table below lists every check, the geometries it applies to,
-and the expressions that check or repair it.
-`null_out_invalid_geoarrow` and `null_out_invalid_ogc` run the same checks as `is_valid_geoarrow`
-and `is_valid_ogc`.
-A flag next to an x turns that check off.
-Without an x, the check only runs when that argument is given.
-
-| Check | Geometry | Standalone | `is_valid_geoarrow` | `is_valid_ogc` | Repair |
-| - | - | - | - | - | - |
-| Nulls only exist at the outer level (no part, ring, coordinate or axis) | all (Point: only its axes) | | x (`check_null_coordinates`) | x (`check_null_coordinates`) | |
-| Every ring is closed: its last vertex is its first, in x, y and z | Polygon, MultiPolygon | | x | x | `close_rings` |
-| x and y lie inside the bounds of the CRS | all | | `out_of_bounds` | `out_of_bounds` | `fix_out_of_bounds` |
-| There are no NaN/inf values in the coordinates (except 'empty', see geoarrow) | all | | `check_finite_coordinates=True` | x | `filter_coordinates` |
-| There are no empty coordinates | all but Point, MultiPoint | | | only allowed in multipoints | `filter_coordinates` |
-| A linestring's vertices do not all lie at one place in x and y (`[A, A]` is invalid) (exception: empty) | LineString, MultiLineString[^1] | | | x | |
-| Every ring is empty, or every ring has at least 4 vertices that lie elsewhere in x and y than the vertex before (`[A, B, B, A]` is invalid) | Polygon, MultiPolygon[^1] | | | x | |
-| Holes lie inside the exterior and outside each other, and rings touch only at points | Polygon, MultiPolygon[^1] | | | x (`check_polygon_self_overlap`) | |
-| Rings that touch at points do not cut the area into separate pieces (e.g. a hole touching the exterior twice) | Polygon, MultiPolygon[^1] | | | only with every topology check on | |
-| Parts share no area, and touch only at points | MultiPolygon | | | x (`check_multi_polygon_self_overlap`) | |
-| Does not cross or touch itself (simple) | all (Point: trivially; LineString: its ends may meet; Polygon, MultiPolygon: every ring; MultiPoint: no two points at the same place; MultiLineString: every part, and parts only meet at their ends) | `is_simple` | | polygons and multipolygons only (`check_ring_self_intersect`) | |
-| Is not empty on the outside: has at least one vertex | all (Point: not the empty point) | `is_empty` | | | |
-| Is not empty on the inside: not every point is the empty point | all but Point | `is_empty(check_nested=True)` | | | |
-| No two vertices in a row lie at the same place | all (Point: always; Polygon, MultiPolygon: within a ring; MultiLineString: within a part) | `has_repeats_in_succession` | | | `remove_repeats_in_succession` |
-
-[^1]: Checked for every part.
-
-## CRS awareness
-
-### Geometries crossing the antimeridian
-
-Things that cross the antimeridian can be represented as having points >180° or <-180°.
-
-## Geometry Operations
-
-## User-defined functions
-
-Because GeoPolars has GeoArrow data types as first-class citizens,
-you can use Polars' `map_elements` for a user-defined function (UDF)
-like you would for other Polars data types.
-There are some small extra things to consider though!
-
-Inside a Python UDF, what the function receives depends on the geometry type.
-
-| Type           | Value passed to the function         |
-| -------------- | ------------------------------------ |
-| PointXY        | `{'x': 1.0, 'y': 2.0}` (a dict)      |
-| LineStringXY   | a Polars Series of `struct{x, y}`      |
-| PolygonXY      | a Series of `list[struct{x, y}]`       |
-| MultiPolygonXY | a Series of `list[list[struct{x, y}]]` |
-
-Points arrive as plain Python, but everything else arrives as a Polars Series.
-If you want to work with rings and coordinates, you'll have to call `.to_list()`.
-After that, editing works, and returning nested lists of dicts rebuilds the geometry:
-
-```python
-pl.col("g").map_elements(
-    lambda v: [[{**p, "x": p["x"] * 2} for p in ring] for ring in v.to_list()],
-    return_dtype=df.schema["g"],
+countries = (
+    pl.scan_parquet("countries.parquet")
+    .pipe(gpl.from_geoparquet, "countries.parquet")
+    .select("name", geometry=geo.from_wkb("geometry", MultiPolygonXY))
+    .with_columns(area_km2=geo.area("geometry") / 1e6)
+    .sort("area_km2", descending=True)
+    .collect()
 )
 ```
 
-Two things in this snippet are easy to get wrong:
+### From longitude/latitude to GeoParquet
 
-- `return_dtype` must be an instance. Passing the class like `return_dtype=PolygonXY`, raises a TypeError.
-- The CRS can be lost. `PolygonXY()` produces a polygon column with no CRS. An existing CRS can be retained by using `df.schema["g"]`.
+Build points from plain coordinate columns, reproject them,
+and write a file that other GeoParquet readers (such as GeoPandas and GDAL) understand:
 
-TODO: add helper function to set the CRS of the original column and describe it here.
+```python
+cities = pl.scan_csv("cities.csv").select(
+    "city",
+    # EPSG:28992 is the Dutch national grid, in metres.
+    geometry=geo.to_crs(geo.point("lon", "lat", crs="EPSG:4326"), "EPSG:28992"),
+)
+cities.sink_parquet("cities.parquet", metadata=gpl.geoparquet_metadata(cities))
+```
 
-TODO: setting for accepting/refusing trivial cases (e.g. 'remove duplicate points' for single point)?
-or an envvar? or not at all?
+Every operation is also in the `.geo` namespace:
+`gpl.col("geometry").geo.area()` is the same as `geo.area("geometry")`.
+
+## Installation
+
+Install the latest GeoPolars version with:
+
+```sh
+pip install geopolars
+```
+
+GeoPolars is in alpha: expect breaking changes between releases.
+See [installation](https://github.com/pola-rs/geopolars/blob/main/docs/source/user-guide/geo/installation.md)
+in the user guide for what it requires and comes with.
+
+<details>
+<summary><b>Compile GeoPolars from source</b></summary>
+
+GeoPolars builds against a pinned commit of Polars,
+which `make install` checks out into `.polars` and builds as well.
+
+1. Install the latest [Rust compiler](https://www.rust-lang.org/tools/install)
+   and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+2. Install what the bundled PROJ and GEOS are built with:
+   - a C++ compiler and CMake, for both.
+   - SQLite, both the library and the `sqlite3` binary, for PROJ only.
+   On Debian or Ubuntu: `sudo apt-get install build-essential cmake sqlite3 libsqlite3-dev`.
+3. From the root of the repository, choose one of the following:
+   - `make install`, an unoptimised build, with fast compile times.
+   - `make install-release`, an optimised build, with long compile times.
+
+Both set up a virtual environment in `.venv` with GeoPolars installed.
+Run `make help` to see the other targets.
+
+</details>
+
+## Contributing
+
+Want to contribute? Read our [contributing guide](https://github.com/pola-rs/geopolars/blob/main/docs/source/development/contributing/index.md)
+and check the [issue tracker](https://github.com/pola-rs/geopolars/issues).
+
+## License
+
+GeoPolars is licensed under the [MIT License](https://github.com/pola-rs/geopolars/blob/main/LICENSE) (SPDX: `MIT`).

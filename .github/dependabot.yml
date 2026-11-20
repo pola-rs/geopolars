@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-patch']
+    commit-message:
+      prefix: ci
+    groups:
+      ci:
+        patterns:
+          - '*'
+
+  # Python is left out: uv.lock takes polars from the .polars checkout, which dependabot does not have.
+  - package-ecosystem: cargo
+    directory: '/'
+    schedule:
+      interval: monthly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-patch']
+      # Pinned to a polars commit in Cargo.toml, and bumped together by hand.
+      - dependency-name: 'polars*'
+      - dependency-name: 'pyo3*'
+    commit-message:
+      prefix: build
+    groups:
+      rust:
+        patterns:
+          - '*'

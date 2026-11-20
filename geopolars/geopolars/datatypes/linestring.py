@@ -20,8 +20,8 @@ class LineStringType(GeoArrowType):
 class LineStringXY(LineStringType):
     """A 2D linestring: `geoarrow.linestring` over `List<Struct<x: f64, y: f64>>`.
 
-    One list of vertices per linestring. That list may be empty: unlike a point,
-    an empty linestring is a geometry this layout can hold.
+    One list of vertices per linestring, which is empty for an empty linestring
+    (see "Empty geometries" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`).
     """
 
     _dimension: ClassVar[Dimension] = XY
@@ -40,7 +40,7 @@ class LineStringXYZ(LineStringType):
 class LineStringXYM(LineStringType):
     """A 2D linestring with a measure: `List<Struct<x, y, m: f64>>`.
 
-    {linestring_measure}
+    {measure}
     """
 
     _dimension: ClassVar[Dimension] = XYM
@@ -50,7 +50,7 @@ class LineStringXYM(LineStringType):
 class LineStringXYZM(LineStringType):
     """A 3D linestring with a measure: `List<Struct<x, y, z, m: f64>>`.
 
-    {linestring_measure}
+    {measure}
     """
 
     _dimension: ClassVar[Dimension] = XYZM
