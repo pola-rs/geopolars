@@ -75,22 +75,14 @@ docs-guide: install
 	$(MAKE) docs-guide-build
 
 ## Serve the guides with zensical on localhost:8000, and rebuild them as the pages change.
-# zensical only watches the staged copy, so the staging script runs alongside it to keep that copy in sync.
+## It stops after the first rebuild with a problem the build would fail on.
 docs-guide-serve: install
 	$(INSTALL_GUIDE_DEPS)
-	.venv/bin/python scripts/stage_docs_guide.py $(POLARS_DIR) $(GUIDE_DIR)
-	.venv/bin/python scripts/stage_docs_guide.py --watch $(POLARS_DIR) $(GUIDE_DIR) & \
-		trap 'kill $$!' EXIT; \
-		cd $(GUIDE_DIR) && $(CURDIR)/.venv/bin/zensical serve
+	.venv/bin/python scripts/docs_guide.py serve $(POLARS_DIR) $(GUIDE_DIR)
 
 ## Build the user and developer guides with zensical, with the venv as it is.
-# zensical only logs a failing example, or an unknown API key in a `code_block`, so the build log is checked for them.
 docs-guide-build: polars-src
-	.venv/bin/python scripts/stage_docs_guide.py $(POLARS_DIR) $(GUIDE_DIR)
-	set -o pipefail; cd $(GUIDE_DIR) && $(CURDIR)/.venv/bin/zensical build 2>&1 | tee build.log
-	@if grep -E 'Execution of python code block exited with errors|Could not find' $(GUIDE_DIR)/build.log; then \
-		echo "A code block failed, or names an unknown API key, see the build log above." >&2; exit 1; \
-	fi
+	.venv/bin/python scripts/docs_guide.py build $(POLARS_DIR) $(GUIDE_DIR)
 
 ## Check out POLARS_REV into POLARS_DIR, if it isn't already.
 polars-src: $(POLARS_STAMP)
