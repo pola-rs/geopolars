@@ -15,8 +15,8 @@ use polars_arrow::bitmap::Bitmap;
 
 use super::{
     axes, coord_seq, reversed_rings, rows_to_geos, target_orientation, wrong_kind, Axes,
-    CoordsBuilder, GeometryOrientation, GeosGeometries, GeosRow, GeosRows, OffsetsBuilder,
-    Orientation, ToGeos, ToGeosRows,
+    CoordsBuilder, GeometryOrientation, GeosGeometries, GeosRow, OffsetsBuilder, Orientation,
+    ToGeos, ToGeosRows, ValidityBuilder,
 };
 use crate::{EarlyCoordCheck, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError};
 
@@ -29,9 +29,9 @@ impl ToGeos for ScalarPolygon<'_> {
 }
 
 impl ToGeosRows for PolygonArray {
-    fn to_geos_rows_taking_as_empty(
+    fn to_geos_rows_skipping(
         &self,
-        as_empty: Option<&Bitmap>,
+        skipped: Option<&Bitmap>,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
@@ -43,10 +43,10 @@ impl ToGeosRows for PolygonArray {
         let geometries = rows_to_geos(
             &self.rows,
             &axes,
-            as_empty,
+            skipped,
             on_row_error,
             early_coord_check,
-            |parts| self.rings.span(parts),
+            |i| self.row_vertices(i),
             |parts| polygon_to_geos(&axes, &self.rings, parts),
         )?;
         Ok(GeosGeometries {
@@ -71,9 +71,9 @@ impl ToGeos for ScalarMultiPolygon<'_> {
 }
 
 impl ToGeosRows for MultiPolygonArray {
-    fn to_geos_rows_taking_as_empty(
+    fn to_geos_rows_skipping(
         &self,
-        as_empty: Option<&Bitmap>,
+        skipped: Option<&Bitmap>,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<GeosGeometries> {
@@ -85,10 +85,10 @@ impl ToGeosRows for MultiPolygonArray {
         let geometries = rows_to_geos(
             &self.rows,
             &axes,
-            as_empty,
+            skipped,
             on_row_error,
             early_coord_check,
-            |parts| self.rings.span(self.polygons.span(parts)),
+            |i| self.row_vertices(i),
             |parts| multi_polygon_to_geos(&axes, &self.polygons, &self.rings, parts),
         )?;
         Ok(GeosGeometries {
@@ -225,7 +225,7 @@ impl GeosGeometries {
         if outer != Orientation::Unknown && holes != Orientation::Unknown {
             return;
         }
-        for row in &mut self.geometries.rows {
+        for row in &mut self.geometries {
             if let GeosRow::Geometry {
                 maybe_wrong_orientation,
                 ..
@@ -249,20 +249,20 @@ fn into_multi_polygon_array_with<
     on_row_error: OnRowError,
 ) -> GeoComputeResult<MultiPolygonArray> {
     let GeosGeometries {
-        geometries: GeosRows {
-            rows: geometries,
-            mut validity,
-        },
+        geometries,
         size_hint,
         ..
     } = geometries;
+    let mut validity = ValidityBuilder::with_capacity(geometries.len());
     let mut coords = CoordsBuilder::with_capacity(Z, size_hint.coords);
     let mut rings = OffsetsBuilder::with_capacity(size_hint.parts[0]);
     let mut polygons = OffsetsBuilder::with_capacity(size_hint.parts[1]);
     let mut rows = OffsetsBuilder::with_capacity(geometries.len());
-    for (i, geometry) in geometries.into_iter().enumerate() {
+    for geometry in geometries {
         let is_valid = match geometry {
+            GeosRow::Null | GeosRow::Failed => false,
             GeosRow::Empty => true,
+            GeosRow::Skipped => unreachable!("a skipped row never reaches an output"),
             GeosRow::Geometry {
                 geometry,
                 maybe_wrong_orientation,
@@ -288,9 +288,7 @@ fn into_multi_polygon_array_with<
                 }
             }
         };
-        if !is_valid {
-            validity.set_null(i);
-        }
+        validity.push(is_valid);
         rows.push(polygons.len());
     }
     Ok(MultiPolygonArray::from_parts(
@@ -313,19 +311,19 @@ fn into_polygon_array_with<
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PolygonArray> {
     let GeosGeometries {
-        geometries: GeosRows {
-            rows: geometries,
-            mut validity,
-        },
+        geometries,
         size_hint,
         ..
     } = geometries;
+    let mut validity = ValidityBuilder::with_capacity(geometries.len());
     let mut coords = CoordsBuilder::with_capacity(Z, size_hint.coords);
     let mut rings = OffsetsBuilder::with_capacity(size_hint.parts[0]);
     let mut rows = OffsetsBuilder::with_capacity(geometries.len());
-    for (i, geometry) in geometries.into_iter().enumerate() {
+    for geometry in geometries {
         let is_valid = match geometry {
+            GeosRow::Null | GeosRow::Failed => false,
             GeosRow::Empty => true,
+            GeosRow::Skipped => unreachable!("a skipped row never reaches an output"),
             GeosRow::Geometry {
                 geometry: polygon,
                 maybe_wrong_orientation,
@@ -349,9 +347,7 @@ fn into_polygon_array_with<
                 }
             }
         };
-        if !is_valid {
-            validity.set_null(i);
-        }
+        validity.push(is_valid);
         rows.push(rings.len());
     }
     Ok(PolygonArray::from_parts(

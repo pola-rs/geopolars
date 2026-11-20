@@ -139,7 +139,7 @@ pub fn affine_line_strings(
     shift: RowShift,
 ) -> LineStringArray {
     let (rows, coords) = affine_nested(matrix, &array.rows, &array.coords, &shift, |i| {
-        array.rows.range(i)
+        array.row_vertices(i)
     });
     LineStringArray::from_parts(rows, coords)
 }
@@ -150,7 +150,7 @@ pub fn affine_multi_points(
     shift: RowShift,
 ) -> MultiPointArray {
     let (rows, coords) = affine_nested(matrix, &array.rows, &array.coords, &shift, |i| {
-        array.rows.range(i)
+        array.row_vertices(i)
     });
     MultiPointArray::from_parts(rows, coords)
 }
@@ -161,7 +161,7 @@ pub fn affine_polygons(
     shift: RowShift,
 ) -> PolygonArray {
     let (rows, coords) = affine_nested(matrix, &array.rows, &array.coords, &shift, |i| {
-        array.rings.span(array.rows.range(i))
+        array.row_vertices(i)
     });
     PolygonArray::from_parts(rows, array.rings.clone(), coords)
 }
@@ -172,7 +172,7 @@ pub fn affine_multi_line_strings(
     shift: RowShift,
 ) -> MultiLineStringArray {
     let (rows, coords) = affine_nested(matrix, &array.rows, &array.coords, &shift, |i| {
-        array.lines.span(array.rows.range(i))
+        array.row_vertices(i)
     });
     MultiLineStringArray::from_parts(rows, array.lines.clone(), coords)
 }
@@ -183,7 +183,7 @@ pub fn affine_multi_polygons(
     shift: RowShift,
 ) -> MultiPolygonArray {
     let (rows, coords) = affine_nested(matrix, &array.rows, &array.coords, &shift, |i| {
-        array.rings.span(array.polygons.span(array.rows.range(i)))
+        array.row_vertices(i)
     });
     MultiPolygonArray::from_parts(rows, array.polygons.clone(), array.rings.clone(), coords)
 }

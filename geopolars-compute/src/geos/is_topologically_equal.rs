@@ -2,47 +2,38 @@
 //! Implements the Python `is_topologically_equal`.
 
 use geopolars_views::GeometryArray;
-use geos::Geom;
+use geos::{Geom, Geometry};
 use polars_arrow::array::BooleanArray;
 
-use super::pairs::GeosPairs;
-use super::GeosRow;
+use super::pairs::{GeosPairs, PairOperation, WhenEmpty};
 use crate::per_row::optional_bool_array;
-use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
+use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
-#[inline(always)]
-fn rows_are_topologically_equal(
-    a: Option<&GeosRow>,
-    b: Option<&GeosRow>,
-) -> GeoComputeResult<Option<bool>> {
-    let (Some(a), Some(b)) = (a, b) else {
-        return Ok(None);
-    };
-    Ok(Some(match (a, b) {
-        (GeosRow::Empty, GeosRow::Empty) => true,
-        // An empty row never went to GEOS, so it can't be compared there.
-        (
-            GeosRow::Empty,
-            GeosRow::Geometry {
-                geometry: other, ..
-            },
-        )
-        | (
-            GeosRow::Geometry {
-                geometry: other, ..
-            },
-            GeosRow::Empty,
-        ) => other.is_empty()?,
-        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => {
-            a.equals(b)?
-        }
-    }))
+struct TopologicallyEqual;
+
+impl PairOperation for TopologicallyEqual {
+    type Output = bool;
+
+    fn when_both_empty(&self) -> bool {
+        true
+    }
+
+    fn when_a_empty(&self) -> WhenEmpty<Self> {
+        WhenEmpty::Gives(|| false)
+    }
+
+    fn when_b_empty(&self) -> WhenEmpty<Self> {
+        WhenEmpty::Gives(|| false)
+    }
+
+    fn on_geometries(&self, a: &Geometry, b: &Geometry) -> GeoComputeResult<bool> {
+        Ok(a.equals(b)?)
+    }
 }
 
 /// Tests whether two arrays of geometries are topologically equal, row by row.
 /// Implements the Python `is_topologically_equal`.
 /// A single row on either side is compared against every row of the other.
-/// Each side is converted to GEOS in full, so a row paired with a null can still fail.
 ///
 /// `a` and `b` must have the same length, or one of them a single row.
 pub fn topologically_equal(
@@ -51,13 +42,9 @@ pub fn topologically_equal(
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> GeoComputeResult<BooleanArray> {
-    // TODO: Skip the partner of an empty row, as `intersection` does,
-    // with emptiness by vertices as `rows_without_vertices` gives it:
-    // `MULTIPOLYGON (EMPTY)` has a part, and GEOS finds it equal to `POLYGON EMPTY`.
-    let pairs = GeosPairs::new(a, b, on_row_error, early_coord_check)?;
+    let pairs = GeosPairs::new(a, b, &TopologicallyEqual, on_row_error, early_coord_check)?;
     let tested = pairs
-        .iter()
-        .map(|(a, b)| row_or_null(rows_are_topologically_equal(a, b), on_row_error))
+        .evaluate(&TopologicallyEqual)
         .collect::<GeoComputeResult<Vec<_>>>()?;
     Ok(optional_bool_array(&tested))
 }

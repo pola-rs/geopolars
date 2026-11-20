@@ -192,10 +192,7 @@ fn hulls(
     hulls.into_polygon_array(has_z, on_row_error, new_ring_orientation, new_holes)
 }
 
-/// [`hulls`] as GEOS polygons.
-/// The size hint is an upper bound:
-/// a row's hull is one ring, which closes on at most one coordinate more than the row has.
-/// Errors are the exception, so `on_row_error` is checked per row rather than made const.
+/// Builds the convex hull of every row as a GEOS polygon, for [`hulls`].
 fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
     rows: &List,
     coords: &ValidCoords,
@@ -228,7 +225,7 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
     for i in 0..rows.len() {
         // A null row's offsets point anywhere, so it is not converted.
         if !ALL_VALID && !rows.is_valid(i) {
-            hulls.push(None);
+            hulls.push(GeosRow::Null);
             continue;
         }
         ranges.clear();
@@ -245,19 +242,25 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
         }
         hulls.push(match row_x.len() {
             // An empty row has an empty hull, without a trip to GEOS.
-            0 => Some(GeosRow::Empty),
+            0 => GeosRow::Empty,
             // A single coordinate encloses nothing, and GEOS can't build a linestring of it.
-            1 => None,
-            _ => row_or_null(hull(&row_x, &row_y, &row_z), on_row_error)?.map(|hull| {
-                GeosRow::Geometry {
+            // The Python `convex_hull` documents its null polygon, so it is not a failure.
+            1 => GeosRow::Null,
+            _ => match row_or_null(hull(&row_x, &row_y, &row_z).map(Some), on_row_error)? {
+                Some(Some(hull)) => GeosRow::Geometry {
                     geometry: hull,
                     maybe_wrong_orientation: false,
-                }
-            }),
+                },
+                // Like a single coordinate, a hull that encloses nothing is null.
+                // A row that failed under `on_row_error="null"` is null as well.
+                _ => GeosRow::Null,
+            },
         });
     }
     Ok(GeosGeometries {
         geometries: hulls,
+        // An upper bound, as a row's hull is one ring,
+        // which closes on at most one coordinate more than the row has.
         size_hint: SizeHint {
             coords: coords.len() + rows.len(),
             parts: [rows.len(), 0],

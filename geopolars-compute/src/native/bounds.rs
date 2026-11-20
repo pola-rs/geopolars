@@ -210,7 +210,7 @@ pub fn line_string_bounds<const Z: bool, const M: bool>(
     options: &BoxOptions,
 ) -> StructArray {
     row_boxes::<Z, M>(array.rows(), array.coords(), options, |i| {
-        array.rows().range(i)
+        array.row_vertices(i)
     })
 }
 
@@ -219,39 +219,34 @@ pub fn polygon_bounds<const Z: bool, const M: bool>(
     options: &BoxOptions,
 ) -> StructArray {
     row_boxes::<Z, M>(array.rows(), array.coords(), options, |i| {
-        array.rings().span(array.rows().range(i))
+        array.row_vertices(i)
     })
 }
 
-/// One box per row, around all of its points.
 pub fn multi_point_bounds<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiPointArray>,
     options: &BoxOptions,
 ) -> StructArray {
     row_boxes::<Z, M>(array.rows(), array.coords(), options, |i| {
-        array.rows().range(i)
+        array.row_vertices(i)
     })
 }
 
-/// One box per row, around all of its linestrings.
 pub fn multi_line_string_bounds<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiLineStringArray>,
     options: &BoxOptions,
 ) -> StructArray {
     row_boxes::<Z, M>(array.rows(), array.coords(), options, |i| {
-        array.lines().span(array.rows().range(i))
+        array.row_vertices(i)
     })
 }
 
-/// One box per row, around all of its polygons.
 pub fn multi_polygon_bounds<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiPolygonArray>,
     options: &BoxOptions,
 ) -> StructArray {
     row_boxes::<Z, M>(array.rows(), array.coords(), options, |i| {
-        array
-            .rings()
-            .span(array.polygons().span(array.rows().range(i)))
+        array.row_vertices(i)
     })
 }
 

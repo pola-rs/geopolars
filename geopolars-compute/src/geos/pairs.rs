@@ -1,11 +1,38 @@
-//! Pairing up the rows of two arrays of geometries, for a GEOS operation on two geometries.
+//! Pairing up the rows of two geometry arrays for a binary GEOS operation
+//! (see "Binary" in `docs/GEOS kernel implementation guide.md`).
+//!
+//! A row that fails to convert (with `on_row_error="null"`) makes null only the pairs that need its geometry.
+//! Its pair with an empty row therefore still gives what [`WhenEmpty::Gives`] gives.
+//! This does not depend on how the arrays are chunked.
 
 use geopolars_views::output::SizeHint;
 use geopolars_views::GeometryArray;
+use geos::Geometry;
 use polars_arrow::bitmap::Bitmap;
 
-use super::{rows_without_vertices, GeosGeometries, GeosRow, GeosRows, ToGeosRows};
-use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
+use super::{rows_without_vertices, GeosGeometries, GeosRow, ToGeosRows};
+use crate::{row_or_null, EarlyCoordCheck, GeoComputeResult, OnRowError};
+
+/// A GEOS operation on two geometries, row by row.
+pub(super) trait PairOperation {
+    type Output;
+
+    fn when_both_empty(&self) -> Self::Output;
+
+    fn when_a_empty(&self) -> WhenEmpty<Self>;
+
+    fn when_b_empty(&self) -> WhenEmpty<Self>;
+
+    fn on_geometries(&self, a: &Geometry, b: &Geometry) -> GeoComputeResult<Self::Output>;
+}
+
+/// What a pair gives when one of its rows is empty.
+pub(super) enum WhenEmpty<Op: PairOperation + ?Sized> {
+    /// A result without the partner, which is therefore only converted if another pair needs it.
+    Gives(fn() -> Op::Output),
+    /// A result from the partner, which is converted.
+    WithPartner(fn(&Op, &Geometry) -> GeoComputeResult<Op::Output>),
+}
 
 /// Two arrays of geometries converted to GEOS, with their rows paired up.
 /// A single row on either side is paired with every row of the other,
@@ -16,89 +43,119 @@ pub(super) struct GeosPairs {
     b: GeosGeometries,
     a: GeosGeometries,
     rows: usize,
+    /// Whether an empty `a`, and an empty `b`, give their result without the partner.
+    gives_when_empty: [bool; 2],
+    on_row_error: OnRowError,
 }
 
 impl GeosPairs {
-    /// Each side is converted to GEOS in full, so a row paired with a null can still fail.
+    /// Converts the rows of `a` and `b` that `operation` needs (see the module doc).
+    /// A single row is only left out when every row it is paired with leaves it out.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
-    pub(super) fn new(
+    pub(super) fn new<Op: PairOperation>(
         a: &GeometryArray,
         b: &GeometryArray,
+        operation: &Op,
         on_row_error: OnRowError,
         early_coord_check: EarlyCoordCheck,
     ) -> GeoComputeResult<Self> {
-        let a = a.to_geos_rows(on_row_error, early_coord_check)?;
-        let b = b.to_geos_rows(on_row_error, early_coord_check)?;
-        let rows = pair_count(a.geometries.len(), b.geometries.len());
-        Ok(Self { a, b, rows })
-    }
-
-    /// See [`GeosPairs::new`], for an operation whose result is empty when either row is empty,
-    /// and null when either row is null.
-    /// A row paired with an empty one (see [`rows_without_vertices`]) or a null is therefore not converted,
-    /// and is taken as empty.
-    /// A single row is only taken as empty when every row it is paired with is empty or null.
-    pub(super) fn new_skipping_partners_of_empty(
-        a: &GeometryArray,
-        b: &GeometryArray,
-        on_row_error: OnRowError,
-        early_coord_check: EarlyCoordCheck,
-    ) -> GeoComputeResult<Self> {
-        let a_decides = &rows_without_vertices(a) | &null_rows(a);
-        let b_decides = &rows_without_vertices(b) | &null_rows(b);
-        let a_as_empty = paired_with(&b_decides, a.len());
-        let b_as_empty = paired_with(&a_decides, b.len());
-        let early = early_coord_check;
-        Self::new_taking_as_empty(a, b, &a_as_empty, &b_as_empty, on_row_error, early)
-    }
-
-    /// See [`GeosPairs::new`], for an operation whose result is null when either row is null,
-    /// and empty when `a` is empty, but not when `b` is.
-    /// A row paired with a null is therefore not converted, and is taken as empty.
-    /// The same holds for a row of `b` paired with an empty `a`.
-    /// Every row without vertices (see [`rows_without_vertices`]) is `Empty` as well.
-    /// A single row is only taken as empty when this holds for every row it is paired with.
-    pub(super) fn new_skipping_partners_of_empty_a(
-        a: &GeometryArray,
-        b: &GeometryArray,
-        on_row_error: OnRowError,
-        early_coord_check: EarlyCoordCheck,
-    ) -> GeoComputeResult<Self> {
+        let rows = pair_count(a.len(), b.len());
         let (a_empty, b_empty) = (rows_without_vertices(a), rows_without_vertices(b));
-        let a_as_empty = &a_empty | &paired_with(&null_rows(b), a.len());
-        let a_decides = &a_empty | &null_rows(a);
-        let b_as_empty = &b_empty | &paired_with(&a_decides, b.len());
+        let gives_when_empty = gives_when_empty(operation);
+        let decides = |array: &GeometryArray, empty: &Bitmap, gives: bool| {
+            if gives {
+                &null_rows(array) | empty
+            } else {
+                null_rows(array)
+            }
+        };
+        let a_decides = decides(a, &a_empty, gives_when_empty[0]);
+        let b_decides = decides(b, &b_empty, gives_when_empty[1]);
+        let a_skipped = &a_empty | &paired_with(&b_decides, a.len());
+        let b_skipped = &b_empty | &paired_with(&a_decides, b.len());
         let early = early_coord_check;
-        Self::new_taking_as_empty(a, b, &a_as_empty, &b_as_empty, on_row_error, early)
+        Ok(Self {
+            a: a.to_geos_rows_skipping(Some(&a_skipped), on_row_error, early)?,
+            b: b.to_geos_rows_skipping(Some(&b_skipped), on_row_error, early)?,
+            rows,
+            gives_when_empty,
+            on_row_error,
+        })
     }
 
-    fn new_taking_as_empty(
-        a: &GeometryArray,
-        b: &GeometryArray,
-        a_as_empty: &Bitmap,
-        b_as_empty: &Bitmap,
-        on_row_error: OnRowError,
-        early_coord_check: EarlyCoordCheck,
-    ) -> GeoComputeResult<Self> {
-        let rows = pair_count(a_as_empty.len(), b_as_empty.len());
-        let early = early_coord_check;
-        let a = a.to_geos_rows_taking_as_empty(Some(a_as_empty), on_row_error, early)?;
-        let b = b.to_geos_rows_taking_as_empty(Some(b_as_empty), on_row_error, early)?;
-        Ok(Self { a, b, rows })
-    }
-
-    pub(super) fn iter(&self) -> impl Iterator<Item = (Option<&GeosRow>, Option<&GeosRow>)> {
-        broadcast(&self.a.geometries, self.rows).zip(broadcast(&self.b.geometries, self.rows))
+    /// Evaluates every pair (see the module doc).
+    /// A pair that fails goes to `on_row_error`.
+    ///
+    /// `operation` must be the one the pairs were built for.
+    pub(super) fn evaluate<'a, Op: PairOperation>(
+        &'a self,
+        operation: &'a Op,
+    ) -> impl Iterator<Item = GeoComputeResult<Option<Op::Output>>> + 'a {
+        debug_assert_eq!(
+            self.gives_when_empty,
+            gives_when_empty(operation),
+            "pairs evaluated with another operation than they were built for"
+        );
+        let on_row_error = self.on_row_error;
+        let a = broadcast(self.a.geometries.iter(), self.rows);
+        let b = broadcast(self.b.geometries.iter(), self.rows);
+        a.zip(b).map(move |(a, b)| {
+            let result = match (a, b) {
+                (GeosRow::Null, _) | (_, GeosRow::Null) => Ok(None),
+                (GeosRow::Empty, GeosRow::Empty) => Ok(Some(operation.when_both_empty())),
+                (GeosRow::Empty, b) => evaluate_when_empty(operation, operation.when_a_empty(), b),
+                (a, GeosRow::Empty) => evaluate_when_empty(operation, operation.when_b_empty(), a),
+                (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => {
+                    operation.on_geometries(a, b).map(Some)
+                }
+                (GeosRow::Failed, _) | (_, GeosRow::Failed) => Ok(None),
+                (GeosRow::Skipped, _) | (_, GeosRow::Skipped) => {
+                    unreachable!("a row with vertices that an operation needs is converted")
+                }
+            };
+            row_or_null(result, on_row_error)
+        })
     }
 
     pub(super) fn len(&self) -> usize {
         self.rows
     }
 
+    pub(super) fn on_row_error(&self) -> OnRowError {
+        self.on_row_error
+    }
+
     pub(super) fn size_hints(&self) -> (SizeHint<2>, SizeHint<2>) {
         (self.a.size_hint, self.b.size_hint)
     }
+}
+
+/// Gives the result of a pair with one empty row,
+/// or `None` if it needs a `partner` that failed to convert.
+#[inline(always)]
+fn evaluate_when_empty<Op: PairOperation>(
+    operation: &Op,
+    rule: WhenEmpty<Op>,
+    partner: &GeosRow,
+) -> GeoComputeResult<Option<Op::Output>> {
+    match (rule, partner) {
+        (WhenEmpty::Gives(result), _) => Ok(Some(result())),
+        (WhenEmpty::WithPartner(result), GeosRow::Geometry { geometry, .. }) => {
+            result(operation, geometry).map(Some)
+        }
+        (WhenEmpty::WithPartner(_), GeosRow::Failed) => Ok(None),
+        (WhenEmpty::WithPartner(_), _) => {
+            unreachable!("a row with vertices that an operation needs is converted")
+        }
+    }
+}
+
+fn gives_when_empty<Op: PairOperation>(operation: &Op) -> [bool; 2] {
+    [
+        matches!(operation.when_a_empty(), WhenEmpty::Gives(_)),
+        matches!(operation.when_b_empty(), WhenEmpty::Gives(_)),
+    ]
 }
 
 fn pair_count(a_rows: usize, b_rows: usize) -> usize {
@@ -117,7 +174,8 @@ fn null_rows(array: &GeometryArray) -> Bitmap {
     }
 }
 
-/// Marks which of `len` rows are paired with a marked row of `partner_marked`, broadcast as in [`GeosPairs::iter`].
+/// Marks which of `len` rows are paired with a marked row of `partner_marked`,
+/// broadcast as in [`GeosPairs::evaluate`].
 /// A single row is only marked when every row of the partner is.
 fn paired_with(partner_marked: &Bitmap, len: usize) -> Bitmap {
     if partner_marked.len() == len {
@@ -130,9 +188,9 @@ fn paired_with(partner_marked: &Bitmap, len: usize) -> Bitmap {
     }
 }
 
-/// Gives `len` rows, repeating `rows` if it holds a single one.
+/// Gives `len` items, repeating `items` if it holds a single one.
 ///
-/// `rows` must hold `len` rows, or a single one.
-fn broadcast(rows: &GeosRows, len: usize) -> impl Iterator<Item = Option<&GeosRow>> {
-    rows.iter().cycle().take(len)
+/// `items` must hold `len` items, or a single one.
+fn broadcast<T>(items: impl Iterator<Item = T> + Clone, len: usize) -> impl Iterator<Item = T> {
+    items.cycle().take(len)
 }

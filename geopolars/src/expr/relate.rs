@@ -9,9 +9,7 @@ use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{
-    describe, ensure_same_crs, kind_of, single_chunk_masked_pairs, GeometryPairs,
-};
+use crate::geoarrow::{describe, ensure_same_crs, kind_of, single_chunk_pairs, GeometryPairs};
 
 /// The keyword arguments of the Python `relate`.
 #[derive(Debug, Deserialize)]
@@ -35,7 +33,7 @@ fn kernel_output_type_relate(input_fields: &[Field], _kwargs: RelateKwargs) -> P
 fn relate(inputs: &[Series], kwargs: RelateKwargs) -> PolarsResult<Series> {
     let (a, b) = (&inputs[0], &inputs[1]);
     let (on_row_error, early) = (kwargs.on_row_error, kwargs.early_coord_check);
-    let chunk_pairs = match single_chunk_masked_pairs(a, b)? {
+    let chunk_pairs = match single_chunk_pairs(a, b)? {
         GeometryPairs::Pairwise(pairs) => pairs,
         // `RelatePairs` pairs a single row with every row itself,
         // so the single geometry stays on its own side.

@@ -39,16 +39,15 @@ def line_interpolate_point(
     Creates a point at `distance` along every line, from its start.
     With `mode="absolute"` (default), `distance` is in the units of the coordinates
     (degrees for longitude/latitude).
-    With `mode="normalized"`, it is a fraction of the length of the line:
-    `0.5` gives the point halfway.
+    With `mode="normalized"`, it is a fraction of the length of the line.
+    A `distance` of `0.5` then gives the point halfway.
     A negative `distance` counts back from the end.
     A `distance` beyond either end gives that end.
     `distance` is one number for every geometry,
     or a column (or expression) with one distance per geometry.
     A null distance gives a null point, also for an empty geometry.
-    A NaN or infinite distance in a column raises.
-    A linestring without vertices or a multilinestring without parts
-    still gives an empty point for such a distance.
+    A NaN or infinite distance in a column is a row error, which `on_row_error` handles.
+    A geometry without vertices still gives an empty point for such a distance.
 
     Only linestrings and multilinestrings are accepted.
     A multilinestring is walked part after part,

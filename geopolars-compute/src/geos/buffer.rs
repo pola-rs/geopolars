@@ -8,7 +8,7 @@ pub use geos::{CapStyle, JoinStyle};
 use polars_arrow::array::PrimitiveArray;
 
 use super::{
-    unless_split, validity_with_distances, GeometryOrientation, GeosGeometries, ToGeosRows,
+    unless_split, validity_with_distances, GeometryOrientation, GeosGeometries, GeosRow, ToGeosRows,
 };
 use crate::{
     EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation, OnRowError,
@@ -135,8 +135,7 @@ fn buffer_via_geos(
 
 /// Passes every geometry to `op` with its distance, which `geos_distance` checks and converts.
 /// `op` gives geometries of `orientation`.
-/// A row that fails goes to `on_row_error`.
-/// A constant distance that fails would fail every row, so its error is always returned.
+/// A row that fails goes to `on_row_error`, but a constant distance that fails is always an error.
 ///
 /// A row with a null distance must already be null in `geometries`,
 /// which [validity_with_distances] does before converting.
@@ -159,7 +158,7 @@ pub(super) fn by_distance_via_geos(
             debug_assert!(
                 distances.validity().is_none_or(|has_distance| {
                     let mut rows = geometries.geometries.iter().enumerate();
-                    rows.all(|(i, row)| row.is_none() || has_distance.get_bit(i))
+                    rows.all(|(i, row)| matches!(row, GeosRow::Null) || has_distance.get_bit(i))
                 }),
                 "a row with a null distance must already be null",
             );

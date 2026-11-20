@@ -168,6 +168,11 @@ def test_a_null_or_empty_geometry_stays_so(
     assert _buffered(_column(dtype, None, empty), 1.0) == [None, []]
 
 
+def test_a_polygon_whose_ring_has_no_vertices_is_empty() -> None:
+    # Even without the early check, a row without vertices never reaches GEOS.
+    assert _buffered(_column(PolygonXY, [[]]), 1.0, early_coord_check="off") == [[]]
+
+
 def test_a_null_distance_nulls_a_row_that_is_not_finite() -> None:
     df = _column(LineStringXY, _line((0, 0), (1, math.nan)), _SEGMENT).with_columns(
         d=pl.Series([None, 1.0], dtype=pl.Float64)

@@ -8,7 +8,7 @@ use geopolars_views::{
 };
 use geos::{CoordType, Geom, Geometry, GeometryTypes};
 
-use super::pairs::GeosPairs;
+use super::pairs::{GeosPairs, PairOperation, WhenEmpty};
 use super::{GeometryOrientation, GeosGeometries, GeosRow, GeosRows};
 use crate::{
     row_or_null, EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation,
@@ -50,234 +50,62 @@ pub enum Overlay {
     Difference,
 }
 
-impl Overlay {
-    fn pairs(
-        self,
-        a: &GeometryArray,
-        b: &GeometryArray,
-        on_row_error: OnRowError,
-        early_coord_check: EarlyCoordCheck,
-    ) -> GeoComputeResult<GeosPairs> {
-        let early = early_coord_check;
-        match self {
-            Self::Intersection => {
-                GeosPairs::new_skipping_partners_of_empty(a, b, on_row_error, early)
-            }
-            Self::Difference => {
-                GeosPairs::new_skipping_partners_of_empty_a(a, b, on_row_error, early)
-            }
-        }
-    }
-}
-
-/// Two arrays of geometries converted to GEOS, with their rows paired up to overlay.
-/// A single row on either side is paired with every row of the other.
-/// Each `into_*` method narrows every overlay down to its parts of one dimension,
-/// and copies them, without m, into our array of that kind.
-pub struct OverlayPairs {
-    pairs: GeosPairs,
+struct OverlayOperation {
     overlay: Overlay,
-    on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 }
 
-impl OverlayPairs {
-    /// Converts both sides to GEOS and pairs up their rows,
-    /// for the Python `intersection` or `difference` (which document their behaviour).
-    /// A row whose overlay is already decided by a null or empty partner is not converted.
-    /// An empty `b` makes the difference a copy of `a`, so that row of `a` is still converted, and can fail.
-    /// A row that fails, here or in an `into_*` method, goes to `on_row_error`.
-    ///
-    /// `a` and `b` must have the same length, or one of them a single row.
-    pub fn new(
-        a: &GeometryArray,
-        b: &GeometryArray,
-        overlay: Overlay,
-        on_row_error: OnRowError,
-        early_coord_check: EarlyCoordCheck,
-    ) -> GeoComputeResult<Self> {
-        Ok(Self {
-            pairs: overlay.pairs(a, b, on_row_error, early_coord_check)?,
-            overlay,
-            on_row_error,
-            early_coord_check,
-        })
+impl PairOperation for OverlayOperation {
+    type Output = GeosRow;
+
+    fn when_both_empty(&self) -> GeosRow {
+        GeosRow::Empty
     }
 
-    /// A row with several points fails with [`GeoComputeError::Split`].
-    pub fn into_points(self, z: bool) -> GeoComputeResult<PointArray> {
-        let dim = if z {
-            GeoDimension::XYZ
-        } else {
-            GeoDimension::XY
-        };
-        self.overlaid(TopologicalDimension::Points, false)?
-            .into_point_array(dim)
+    fn when_a_empty(&self) -> WhenEmpty<Self> {
+        WhenEmpty::Gives(|| GeosRow::Empty)
     }
 
-    pub fn into_multi_points(self, z: bool) -> GeoComputeResult<MultiPointArray> {
-        let overlaid = self.overlaid(TopologicalDimension::Points, true)?;
-        with_const_flags!(Z = z; overlaid.into_multi_point_array::<Z>(self.on_row_error))
-    }
-
-    /// A row with several linestrings fails with [`GeoComputeError::Split`].
-    pub fn into_line_strings(self, z: bool) -> GeoComputeResult<LineStringArray> {
-        let overlaid = self.overlaid(TopologicalDimension::Lines, false)?;
-        with_const_flags!(Z = z; overlaid.into_line_string_array::<Z>(self.on_row_error))
-    }
-
-    pub fn into_multi_line_strings(self, z: bool) -> GeoComputeResult<MultiLineStringArray> {
-        let overlaid = self.overlaid(TopologicalDimension::Lines, true)?;
-        with_const_flags!(Z = z; overlaid.into_multi_line_string_array::<Z>(self.on_row_error))
-    }
-
-    /// A row with several polygons fails with [`GeoComputeError::Split`].
-    pub fn into_polygons(
-        self,
-        z: bool,
-        new_ring_orientation: NewRingOrientation,
-        new_holes: NewHoles,
-    ) -> GeoComputeResult<PolygonArray> {
-        self.overlaid(TopologicalDimension::Polygons, false)?
-            .into_polygon_array(z, self.on_row_error, new_ring_orientation, new_holes)
-    }
-
-    /// See [`OverlayPairs::into_polygons`].
-    pub fn into_multi_polygons(
-        self,
-        z: bool,
-        new_ring_orientation: NewRingOrientation,
-        new_holes: NewHoles,
-    ) -> GeoComputeResult<MultiPolygonArray> {
-        self.overlaid(TopologicalDimension::Polygons, true)?
-            .into_multi_polygon_array(z, self.on_row_error, new_ring_orientation, new_holes)
-    }
-
-    /// Overlays every pair, and narrows each overlay down with [`kept_parts`].
-    fn overlaid(
-        &self,
-        kept_dimension: TopologicalDimension,
-        multi: bool,
-    ) -> GeoComputeResult<GeosGeometries> {
-        let mut geometries = GeosRows::with_capacity(self.pairs.len());
-        for (a, b) in self.pairs.iter() {
-            geometries.push(self.row(a, b, kept_dimension, multi)?);
-        }
-        Ok(GeosGeometries {
-            geometries,
-            size_hint: summed_size_hint(self.pairs.size_hints()),
-            // GEOS builds every ring of an overlay anew.
-            // The copy of `a` that `difference_rows` gives for an empty `b` has `maybe_wrong_orientation` instead.
-            orientation: GeometryOrientation::GEOS_BUILT,
-        })
-    }
-
-    /// Overlays one pair of rows from [`Overlay::pairs`], which decides the rows it sees as `Empty`.
-    #[inline(always)]
-    fn row(
-        &self,
-        a: Option<&GeosRow>,
-        b: Option<&GeosRow>,
-        kept_dimension: TopologicalDimension,
-        multi: bool,
-    ) -> GeoComputeResult<Option<GeosRow>> {
-        let (on_row_error, early) = (self.on_row_error, self.early_coord_check);
+    fn when_b_empty(&self) -> WhenEmpty<Self> {
         match self.overlay {
-            Overlay::Intersection => intersect_rows(a, b, kept_dimension, multi, on_row_error),
-            Overlay::Difference => {
-                difference_rows(a, b, kept_dimension, multi, on_row_error, early)
-            }
+            Overlay::Intersection => WhenEmpty::Gives(|| GeosRow::Empty),
+            Overlay::Difference => WhenEmpty::WithPartner(Self::when_b_empty_copy_a),
         }
+    }
+
+    // TODO: In a difference, also give `a` as it is when `b` does not touch it, as for an empty `b`.
+    // GEOS now re-orients and nodes `a` even then, so it can differ from a copy, and even split.
+    fn on_geometries(&self, a: &Geometry, b: &Geometry) -> GeoComputeResult<GeosRow> {
+        let overlay = match self.overlay {
+            Overlay::Intersection => a.intersection(b)?,
+            Overlay::Difference => a.difference(b)?,
+        };
+        Ok(GeosRow::Geometry {
+            geometry: overlay,
+            maybe_wrong_orientation: false,
+        })
     }
 }
 
-fn summed_size_hint((a, b): (SizeHint<2>, SizeHint<2>)) -> SizeHint<2> {
-    // Overlay adds a vertex wherever the two cross,
-    // so the result can have more vertices than both inputs together.
-    SizeHint {
-        coords: a.coords + b.coords,
-        parts: [a.parts[0] + b.parts[0], a.parts[1] + b.parts[1]],
+impl OverlayOperation {
+    fn when_b_empty_copy_a(&self, a: &Geometry) -> GeoComputeResult<GeosRow> {
+        // A copy refuses a non-finite x or y whatever `early_coord_check` is,
+        // so that the option never changes a copied row (see the Python `difference`).
+        // Converting `a` has already done so for [EarlyCoordCheck::FiniteAndEmpty].
+        // [EarlyCoordCheck::Finite] lets an empty point through to GEOS.
+        // As a copy never goes to GEOS, the empty point is refused here instead.
+        if self.early_coord_check != EarlyCoordCheck::FiniteAndEmpty {
+            when_b_empty_copy_a_refuse_non_finite(a)?;
+        }
+        Ok(GeosRow::Geometry {
+            // The pairs only lend their rows, and a single `a` is shared by every row.
+            geometry: Geom::clone(a)?,
+            maybe_wrong_orientation: true,
+        })
     }
 }
 
-#[inline(always)]
-fn intersect_rows(
-    a: Option<&GeosRow>,
-    b: Option<&GeosRow>,
-    kept_dimension: TopologicalDimension,
-    multi: bool,
-    on_row_error: OnRowError,
-) -> GeoComputeResult<Option<GeosRow>> {
-    let (Some(a), Some(b)) = (a, b) else {
-        return Ok(None);
-    };
-    let intersection = match (a, b) {
-        // A row is also `Empty` when its partner is
-        // (see `GeosPairs::new_skipping_partners_of_empty`).
-        // Either way, their intersection is empty.
-        (GeosRow::Empty, _) | (_, GeosRow::Empty) => return Ok(Some(GeosRow::Empty)),
-        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => a
-            .intersection(b)
-            .map_err(GeoComputeError::from)
-            .and_then(|intersection| kept_parts(intersection, kept_dimension, multi)),
-    };
-    row_or_null(intersection.map(Some), on_row_error)
-}
-
-#[inline(always)]
-fn difference_rows(
-    a: Option<&GeosRow>,
-    b: Option<&GeosRow>,
-    kept_dimension: TopologicalDimension,
-    multi: bool,
-    on_row_error: OnRowError,
-    early_coord_check: EarlyCoordCheck,
-) -> GeoComputeResult<Option<GeosRow>> {
-    let (Some(a), Some(b)) = (a, b) else {
-        return Ok(None);
-    };
-    let difference = match (a, b) {
-        (GeosRow::Empty, _) => return Ok(Some(GeosRow::Empty)),
-        // The `else` and the arm above handle a null or empty `a`,
-        // which are the only other reasons to take `b` as empty
-        // (see `GeosPairs::new_skipping_partners_of_empty_a`).
-        // This `b` is therefore empty itself, and takes nothing away.
-        // The difference is `a` as it is, so it is copied without computing a difference.
-        // The copy fits the output kind, as the `into_multi_*` methods take a single geometry as one part.
-        // A copy is needed, as the pairs only lend their rows, and a single `a` is shared by every row.
-        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Empty) => {
-            // A copy refuses a non-finite x or y whatever `early_coord_check` is,
-            // so that the option never changes a copied row.
-            // With `early_coord_check=`[EarlyCoordCheck::FiniteAndEmpty],
-            // converting `a` has already done so.
-            // [EarlyCoordCheck::Finite] lets an empty point through to GEOS,
-            // but a copy never goes there, so it is refused here.
-            // GEOS itself does not fail on every such vertex
-            // (a line minus a polygon it does not touch keeps a NaN),
-            // so a copied row can be stricter than one GEOS computes.
-            let finite = if early_coord_check == EarlyCoordCheck::FiniteAndEmpty {
-                Ok(())
-            } else {
-                difference_rows_xy_is_finite_or_error(a)
-            };
-            finite.and_then(|()| {
-                Ok(GeosRow::Geometry {
-                    geometry: Geom::clone(a)?,
-                    maybe_wrong_orientation: true,
-                })
-            })
-        }
-        // TODO: Also give `a` as it is when `b` does not touch it, as for an empty `b`.
-        // GEOS now re-orients and nodes `a` even then, so it can differ from a copy, and even split.
-        (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => a
-            .difference(b)
-            .map_err(GeoComputeError::from)
-            .and_then(|difference| kept_parts(difference, kept_dimension, multi)),
-    };
-    row_or_null(difference.map(Some), on_row_error)
-}
-
-fn difference_rows_xy_is_finite_or_error(geometry: &impl Geom) -> GeoComputeResult<()> {
+fn when_b_empty_copy_a_refuse_non_finite(geometry: &impl Geom) -> GeoComputeResult<()> {
     if geometry.is_empty()? {
         return Ok(());
     }
@@ -295,18 +123,158 @@ fn difference_rows_xy_is_finite_or_error(geometry: &impl Geom) -> GeoComputeResu
             }
         }
         GeometryTypes::Polygon => {
-            difference_rows_xy_is_finite_or_error(&geometry.get_exterior_ring()?)?;
+            when_b_empty_copy_a_refuse_non_finite(&geometry.get_exterior_ring()?)?;
             for n in 0..geometry.get_num_interior_rings()? {
-                difference_rows_xy_is_finite_or_error(&geometry.get_interior_ring_n(n)?)?;
+                when_b_empty_copy_a_refuse_non_finite(&geometry.get_interior_ring_n(n)?)?;
             }
             Ok(())
         }
         _ => {
             for n in 0..geometry.get_num_geometries()? {
-                difference_rows_xy_is_finite_or_error(&geometry.get_geometry_n(n)?)?;
+                when_b_empty_copy_a_refuse_non_finite(&geometry.get_geometry_n(n)?)?;
             }
             Ok(())
         }
+    }
+}
+
+/// Two arrays of geometries converted to GEOS, with their rows paired up to overlay.
+/// A single row on either side is paired with every row of the other.
+/// Each `into_*` method narrows every overlay down to its parts of one dimension,
+/// and copies them, without m, into our array of that kind.
+pub struct OverlayPairs {
+    pairs: GeosPairs,
+    operation: OverlayOperation,
+}
+
+impl OverlayPairs {
+    /// Converts both sides to GEOS and pairs up their rows,
+    /// for the Python `intersection` or `difference` (which document their behaviour).
+    /// A row that fails, here or in an `into_*` method, goes to `on_row_error`.
+    ///
+    /// `a` and `b` must have the same length, or one of them a single row.
+    pub fn new(
+        a: &GeometryArray,
+        b: &GeometryArray,
+        overlay: Overlay,
+        on_row_error: OnRowError,
+        early_coord_check: EarlyCoordCheck,
+    ) -> GeoComputeResult<Self> {
+        let operation = OverlayOperation {
+            overlay,
+            early_coord_check,
+        };
+        Ok(Self {
+            pairs: GeosPairs::new(a, b, &operation, on_row_error, early_coord_check)?,
+            operation,
+        })
+    }
+
+    /// A row with several points fails with [`GeoComputeError::Split`].
+    pub fn into_points(self, z: bool) -> GeoComputeResult<PointArray> {
+        let dim = if z {
+            GeoDimension::XYZ
+        } else {
+            GeoDimension::XY
+        };
+        self.overlaid(TopologicalDimension::Points, false)?
+            .into_point_array(dim)
+    }
+
+    pub fn into_multi_points(self, z: bool) -> GeoComputeResult<MultiPointArray> {
+        let overlaid = self.overlaid(TopologicalDimension::Points, true)?;
+        with_const_flags!(Z = z; overlaid.into_multi_point_array::<Z>(self.pairs.on_row_error()))
+    }
+
+    /// A row with several linestrings fails with [`GeoComputeError::Split`].
+    pub fn into_line_strings(self, z: bool) -> GeoComputeResult<LineStringArray> {
+        let overlaid = self.overlaid(TopologicalDimension::Lines, false)?;
+        with_const_flags!(Z = z; overlaid.into_line_string_array::<Z>(self.pairs.on_row_error()))
+    }
+
+    pub fn into_multi_line_strings(self, z: bool) -> GeoComputeResult<MultiLineStringArray> {
+        let overlaid = self.overlaid(TopologicalDimension::Lines, true)?;
+        with_const_flags!(Z = z; overlaid.into_multi_line_string_array::<Z>(self.pairs.on_row_error()))
+    }
+
+    /// A row with several polygons fails with [`GeoComputeError::Split`].
+    pub fn into_polygons(
+        self,
+        z: bool,
+        new_ring_orientation: NewRingOrientation,
+        new_holes: NewHoles,
+    ) -> GeoComputeResult<PolygonArray> {
+        self.overlaid(TopologicalDimension::Polygons, false)?
+            .into_polygon_array(
+                z,
+                self.pairs.on_row_error(),
+                new_ring_orientation,
+                new_holes,
+            )
+    }
+
+    /// See [`OverlayPairs::into_polygons`].
+    pub fn into_multi_polygons(
+        self,
+        z: bool,
+        new_ring_orientation: NewRingOrientation,
+        new_holes: NewHoles,
+    ) -> GeoComputeResult<MultiPolygonArray> {
+        self.overlaid(TopologicalDimension::Polygons, true)?
+            .into_multi_polygon_array(
+                z,
+                self.pairs.on_row_error(),
+                new_ring_orientation,
+                new_holes,
+            )
+    }
+
+    /// Overlays every pair, and narrows each overlay down with [`kept_parts`].
+    fn overlaid(
+        &self,
+        kept_dimension: TopologicalDimension,
+        multi: bool,
+    ) -> GeoComputeResult<GeosGeometries> {
+        let mut geometries = GeosRows::with_capacity(self.pairs.len());
+        for overlay in self.pairs.evaluate(&self.operation) {
+            let narrowed =
+                overlay?.map(|overlay| overlaid_narrowed(overlay, kept_dimension, multi));
+            let narrowed = row_or_null(narrowed.transpose(), self.pairs.on_row_error())?;
+            geometries.push(narrowed.unwrap_or(GeosRow::Null));
+        }
+        Ok(GeosGeometries {
+            geometries,
+            size_hint: summed_size_hint(self.pairs.size_hints()),
+            // GEOS builds every ring of an overlay anew.
+            // The copy of `a` that a difference gives for an empty `b` has `maybe_wrong_orientation` instead.
+            orientation: GeometryOrientation::GEOS_BUILT,
+        })
+    }
+}
+
+/// The overlay must be `Empty` or a `Geometry`.
+#[inline(always)]
+fn overlaid_narrowed(
+    overlay: GeosRow,
+    kept_dimension: TopologicalDimension,
+    multi: bool,
+) -> GeoComputeResult<GeosRow> {
+    match overlay {
+        GeosRow::Empty => Ok(GeosRow::Empty),
+        GeosRow::Geometry {
+            geometry,
+            maybe_wrong_orientation,
+        } => kept_parts(geometry, maybe_wrong_orientation, kept_dimension, multi),
+        _ => unreachable!("an overlay is empty or a geometry"),
+    }
+}
+
+fn summed_size_hint((a, b): (SizeHint<2>, SizeHint<2>)) -> SizeHint<2> {
+    // Overlay adds a vertex wherever the two cross,
+    // so the result can have more vertices than both inputs together.
+    SizeHint {
+        coords: a.coords + b.coords,
+        parts: [a.parts[0] + b.parts[0], a.parts[1] + b.parts[1]],
     }
 }
 
@@ -315,6 +283,7 @@ fn difference_rows_xy_is_finite_or_error(geometry: &impl Geom) -> GeoComputeResu
 /// Several parts fail with [`GeoComputeError::Split`], unless `multi=true` puts them in a multi geometry.
 fn kept_parts(
     overlay: Geometry,
+    maybe_wrong_orientation: bool,
     kept_dimension: TopologicalDimension,
     multi: bool,
 ) -> GeoComputeResult<GeosRow> {
@@ -327,7 +296,7 @@ fn kept_parts(
     if found == single_type || (found == multi_type && multi) {
         return Ok(GeosRow::Geometry {
             geometry: overlay,
-            maybe_wrong_orientation: false,
+            maybe_wrong_orientation,
         });
     }
     if found != multi_type && found != GeometryTypes::GeometryCollection {
@@ -347,11 +316,11 @@ fn kept_parts(
         0 => Ok(GeosRow::Empty),
         _ if multi => Ok(GeosRow::Geometry {
             geometry: kept_dimension.create_multi(kept)?,
-            maybe_wrong_orientation: false,
+            maybe_wrong_orientation,
         }),
         1 => Ok(GeosRow::Geometry {
             geometry: kept.pop().expect("one part"),
-            maybe_wrong_orientation: false,
+            maybe_wrong_orientation,
         }),
         // This counts the parts as GEOS gives them.
         // WARNING: Only since GEOS 3.15 are line pieces that join end to end

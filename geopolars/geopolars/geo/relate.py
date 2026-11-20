@@ -42,7 +42,7 @@ def relate(
     gives `"2FF1FF212"`.
 
     `a` and `b` can be of any two kinds, and only x and y are compared.
-    A geometry without parts relates as an empty point,
+    A geometry without vertices relates as an empty point,
     such as `"FFFFFF212"` for an empty `a` against a polygon `b`.
 
     Computed by GEOS, without a tolerance.

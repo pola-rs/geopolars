@@ -196,6 +196,25 @@ def test_a_chunked_column_is_related_to_a_single_geometry() -> None:
     assert out["many"].to_list() == ["2FF1FF212", None, "2FFF1FFF2"]
 
 
+# GEOS fails to build a linestring of a single vertex.
+_ONE_VERTEX_LINE = _xy((0, 0))
+
+
+def test_a_single_failing_geometry_nulls_every_pair_that_needs_it() -> None:
+    many = _chunked(
+        [
+            _wkt("many", PolygonXY(), ["POLYGON EMPTY"]),
+            _wkt("many", PolygonXY(), ["POLYGON EMPTY", _SQUARE]),
+        ]
+    )
+    one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
+
+    out = pl.DataFrame(many).select(geo.relate("many", one, on_row_error="null"))
+
+    # The relation of an empty row still needs its partner.
+    assert out["many"].to_list() == [None, None, None]
+
+
 # GEOS raises on this one, but not on every geometry that is not finite.
 _NOT_FINITE_LINE = _xy((0, 0), (math.nan, 1), (2, 2))
 _FINITE_LINE = _xy((0, 0), (1, 0), (1, 1))
@@ -234,6 +253,23 @@ def test_the_early_coord_check_raises_before_geos(
         None,
         "1FFF0FFF2",
     ]
+
+
+@pytest.mark.parametrize("early_coord_check", ["off", "finite_and_empty"])
+def test_a_row_paired_with_a_null_never_reaches_geos(
+    early_coord_check: EarlyCoordCheck,
+) -> None:
+    failing = [_ONE_VERTEX_LINE, _NOT_FINITE_LINE]
+    df = pl.DataFrame(
+        [
+            _series("a", LineStringXY(), [None, None, _FINITE_LINE]),
+            _series("b", LineStringXY(), [*failing, _FINITE_LINE]),
+        ]
+    )
+
+    out = df.select(geo.relate("a", "b", early_coord_check=early_coord_check))
+
+    assert out["a"].to_list() == [None, None, "1FFF0FFF2"]
 
 
 def test_the_namespace_method_passes_its_options_on() -> None:

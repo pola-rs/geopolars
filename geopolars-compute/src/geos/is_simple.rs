@@ -69,7 +69,9 @@ fn multi_line_is_simple(multi: &ScalarMultiLineString) -> GeoComputeResult<bool>
 
 pub fn line_strings_are_simple(array: &LineStringArray) -> GeoComputeResult<BooleanArray> {
     let axes = axes(&array.coords);
-    try_per_row_bool(&array.rows, |i| line_is_simple(&axes, array.rows.range(i)))
+    try_per_row_bool(&array.rows, |i| {
+        line_is_simple(&axes, array.row_vertices(i))
+    })
 }
 
 pub fn multi_line_strings_are_simple(
