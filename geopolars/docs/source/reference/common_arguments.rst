@@ -173,11 +173,6 @@ Either flag is ignored for a geometry without that axis.
 
 This also ties into `early_coord_check`. See its description for more details.
 
-.. note::
-
-   Legacy: this replaces `unique_z: bool = True`, `unique_m: bool = False`,
-   as well as `ignore_z` and `ignore_m`.
-
 Building and repairing geometries
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

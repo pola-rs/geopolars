@@ -25,8 +25,8 @@ enum CollapsedLinesDef {
 pub struct RemoveRepeatsInSuccessionKwargs {
     abs_tol: Option<f64>,
     rel_tol: Option<f64>,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     #[serde(with = "CollapsedLinesDef")]
     collapsed_lines: CollapsedLines,
     #[serde(with = "ShortLinesDef")]
@@ -60,8 +60,8 @@ fn remove_repeats_in_succession(
                 chunk.as_ref(),
                 kind,
                 coincidence,
-                kwargs.unique_z,
-                kwargs.unique_m,
+                kwargs.include_z,
+                kwargs.include_m,
                 options,
             )
         })

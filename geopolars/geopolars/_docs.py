@@ -25,8 +25,8 @@ Computed by GEOS.
 This operation keeps z, but drops m.""",
     "coincidence_axes": """\
 Coordinates are compared in x and y.
-With `unique_z=True`, the default, they also have to match in z.
-With `unique_m=True`, they also have to match in m.
+With `include_z=True`, the default, they also have to match in z.
+With `include_m=True`, they also have to match in m.
 m is a measure rather than a position, so it is not compared by default.
 Either flag is ignored for a geometry without that axis.""",
     "coincidence_tolerance": """\

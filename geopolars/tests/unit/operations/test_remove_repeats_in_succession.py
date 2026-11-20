@@ -258,7 +258,7 @@ _END = {"x": 2.0, "y": 2.0, "z": 0.0, "m": 0.0}
 
 
 @pytest.mark.parametrize(
-    ("unique_z", "unique_m", "kept"),
+    ("include_z", "include_m", "kept"),
     [
         (True, False, [_P, _OTHER_M_AND_Z, _END]),
         (False, False, [_P, _END]),
@@ -266,12 +266,12 @@ _END = {"x": 2.0, "y": 2.0, "z": 0.0, "m": 0.0}
         (False, True, [_P, _OTHER_M, _END]),
     ],
 )
-def test_unique_z_and_unique_m_choose_the_axes_compared(
-    unique_z: bool, unique_m: bool, kept: Line
+def test_include_z_and_include_m_choose_the_axes_compared(
+    include_z: bool, include_m: bool, kept: Line
 ) -> None:
     line = [_P, _OTHER_M, _OTHER_M_AND_Z, _END]
 
-    out = _remove(LineStringXYZM(), line, unique_z=unique_z, unique_m=unique_m)
+    out = _remove(LineStringXYZM(), line, include_z=include_z, include_m=include_m)
 
     assert out == [kept]
 
@@ -283,13 +283,13 @@ def test_a_compared_m_is_within_the_tolerance(
     almost = _P | {"m": 1e-12}
     expected = [_P, _END] if removed else [_P, almost, _END]
 
-    out = _remove(LineStringXYZM(), [_P, almost, _END], abs_tol=abs_tol, unique_m=True)
+    out = _remove(LineStringXYZM(), [_P, almost, _END], abs_tol=abs_tol, include_m=True)
 
     assert out == [expected]
 
 
-def test_unique_z_and_unique_m_are_ignored_without_those_axes() -> None:
-    out = _remove(LineStringXY(), _REPEATED, unique_z=True, unique_m=True)
+def test_include_z_and_include_m_are_ignored_without_those_axes() -> None:
+    out = _remove(LineStringXY(), _REPEATED, include_z=True, include_m=True)
 
     assert out == [_REMOVED]
 

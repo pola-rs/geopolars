@@ -124,8 +124,8 @@ def _xyzm(x: float, z: float, m: float) -> Coord:
     ("flags", "joined"),
     [
         ({}, False),
-        ({"unique_z": False}, True),
-        ({"unique_z": False, "unique_m": True}, False),
+        ({"include_z": False}, True),
+        ({"include_z": False, "include_m": True}, False),
     ],
     ids=["z compared", "z ignored", "m compared"],
 )

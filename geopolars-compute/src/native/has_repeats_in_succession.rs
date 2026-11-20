@@ -7,10 +7,11 @@
 //!
 //! # Const generic flags
 //!
-//! [coincide_exactly], [coincide_within_abs], and [coincide_within_rel] are generic over `UNIQUE_Z` and `UNIQUE_M`,
-//! the Python `unique_z` and `unique_m`.
-//! These may only be `true` for an axis the coordinates have,
-//! so a runtime one goes through [unique_axes].
+//! [coincide_exactly], [coincide_within_abs], and [coincide_within_rel] compare z only with `Z=true`,
+//! and m only with `M=true`.
+//! `with_coincide!` first leaves out the axes the Python `include_z` and `include_m` exclude
+//! (see [ValidCoords::with_only_axes]).
+//! It then sets `Z` and `M` to the axes that are left.
 
 use geopolars_views::{
     is_close, is_close_abs, same_place, same_place_within, same_place_within_abs, LineStringArray,
@@ -54,89 +55,83 @@ impl Coincidence {
 }
 
 fn m_values(coords: &ValidCoords) -> &[f64] {
-    coords.m().expect("an m, with `UNIQUE_M`")
+    coords.m().expect("an m, with `M`")
 }
 
 /// See [Coincidence::Exact].
 #[inline(always)]
-pub(super) fn coincide_exactly<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
+pub(super) fn coincide_exactly<const Z: bool, const M: bool>(
     coords: &ValidCoords,
     i: usize,
     j: usize,
 ) -> bool {
-    same_place::<UNIQUE_Z>(coords, i, j)
-        && (!UNIQUE_M || {
+    same_place::<Z>(coords, i, j)
+        && (!M || {
             let m = m_values(coords);
             m[i] == m[j]
         })
 }
 
 #[inline(always)]
-pub(super) fn coincide_within_abs<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
+pub(super) fn coincide_within_abs<const Z: bool, const M: bool>(
     coords: &ValidCoords,
     i: usize,
     j: usize,
     abs_tol: f64,
 ) -> bool {
-    same_place_within_abs::<UNIQUE_Z>(coords, i, j, abs_tol)
-        && (!UNIQUE_M || {
+    same_place_within_abs::<Z>(coords, i, j, abs_tol)
+        && (!M || {
             let m = m_values(coords);
             is_close_abs(m[i], m[j], abs_tol)
         })
 }
 
 #[inline(always)]
-pub(super) fn coincide_within_rel<const UNIQUE_Z: bool, const UNIQUE_M: bool>(
+pub(super) fn coincide_within_rel<const Z: bool, const M: bool>(
     coords: &ValidCoords,
     i: usize,
     j: usize,
     tolerance: Tolerance,
 ) -> bool {
-    same_place_within::<UNIQUE_Z>(coords, i, j, tolerance)
-        && (!UNIQUE_M || {
+    same_place_within::<Z>(coords, i, j, tolerance)
+        && (!M || {
             let m = m_values(coords);
             is_close(m[i], m[j], tolerance)
         })
 }
 
-/// `unique_z` and `unique_m`, only for an axis `coords` has.
-pub(super) fn unique_axes(coords: &ValidCoords, unique_z: bool, unique_m: bool) -> (bool, bool) {
-    let dim = coords.dim();
-    (unique_z && dim.has_z(), unique_m && dim.has_m())
-}
-
 /// Evaluates `$body` with `$coincide` bound to a closure `|i, j| -> bool`:
 /// whether coordinates `i` and `j` of `$coords` coincide by `$coincidence`.
-/// `$unique_z` and `$unique_m` only count for an axis `$coords` has ([unique_axes]).
+/// Only the axes of `$coords` that `$include_z` and `$include_m` keep are compared.
 /// `$body` is expanded once per variant of [Coincidence],
 /// so a pass that takes the closure has no per-vertex match on the variant.
 macro_rules! with_coincide {
     (
-        $coords:expr, $coincidence:expr, $unique_z:expr, $unique_m:expr;
+        $coords:expr, $coincidence:expr, $include_z:expr, $include_m:expr;
         |$coincide:ident| $body:expr
     ) => {{
         use $crate::native::has_repeats_in_succession::{
-            coincide_exactly, Coincidence, coincide_within_abs, coincide_within_rel, unique_axes,
+            coincide_exactly, Coincidence, coincide_within_abs, coincide_within_rel,
         };
-        let coords: &geopolars_views::ValidCoords = $coords;
-        let (unique_z, unique_m) = unique_axes(coords, $unique_z, $unique_m);
+        let compared: &geopolars_views::ValidCoords =
+            &$coords.with_only_axes($include_z, $include_m);
         $crate::with_const_flags!(
-            UNIQUE_Z = unique_z, UNIQUE_M = unique_m;
+            Z = compared.z().is_some(), M = compared.m().is_some();
             match $coincidence {
                 Coincidence::Exact => {
                     let $coincide =
-                        move |i, j| coincide_exactly::<UNIQUE_Z, UNIQUE_M>(coords, i, j);
+                        move |i, j| coincide_exactly::<Z, M>(compared, i, j);
                     $body
                 }
                 Coincidence::WithinAbs(abs_tol) => {
                     let $coincide = move |i, j| {
-                        coincide_within_abs::<UNIQUE_Z, UNIQUE_M>(coords, i, j, abs_tol)
+                        coincide_within_abs::<Z, M>(compared, i, j, abs_tol)
                     };
                     $body
                 }
                 Coincidence::WithinRel(tolerance) => {
                     let $coincide = move |i, j| {
-                        coincide_within_rel::<UNIQUE_Z, UNIQUE_M>(coords, i, j, tolerance)
+                        coincide_within_rel::<Z, M>(compared, i, j, tolerance)
                     };
                     $body
                 }
@@ -181,10 +176,10 @@ pub(super) fn repeats_in_succession(
     lists: &ValidList,
     coords: &ValidCoords,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 ) -> MutableBitmap {
-    with_coincide!(coords, coincidence, unique_z, unique_m; |coincide| {
+    with_coincide!(coords, coincidence, include_z, include_m; |coincide| {
         repeats_in_succession_with(lists, coords.len(), coincide)
     })
 }
@@ -211,54 +206,69 @@ pub fn points_have_repeats_in_succession(array: &PointArray) -> BooleanArray {
 pub fn multi_points_have_repeats_in_succession(
     array: &MultiPointArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 ) -> BooleanArray {
     let rows = array.rows.ignoring_validity();
-    let repeated = repeats_in_succession(rows, &array.coords, coincidence, unique_z, unique_m);
+    let repeated = repeats_in_succession(rows, &array.coords, coincidence, include_z, include_m);
     rows_with_repeats(&array.rows, &[], repeated)
 }
 
 pub fn line_strings_have_repeats_in_succession(
     array: &LineStringArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 ) -> BooleanArray {
     let rows = array.rows.ignoring_validity();
-    let repeated = repeats_in_succession(rows, &array.coords, coincidence, unique_z, unique_m);
+    let repeated = repeats_in_succession(rows, &array.coords, coincidence, include_z, include_m);
     rows_with_repeats(&array.rows, &[], repeated)
 }
 
 pub fn multi_line_strings_have_repeats_in_succession(
     array: &MultiLineStringArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 ) -> BooleanArray {
-    let repeated =
-        repeats_in_succession(&array.lines, &array.coords, coincidence, unique_z, unique_m);
+    let repeated = repeats_in_succession(
+        &array.lines,
+        &array.coords,
+        coincidence,
+        include_z,
+        include_m,
+    );
     rows_with_repeats(&array.rows, &[&array.lines], repeated)
 }
 
 pub fn polygons_have_repeats_in_succession(
     array: &PolygonArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 ) -> BooleanArray {
-    let repeated =
-        repeats_in_succession(&array.rings, &array.coords, coincidence, unique_z, unique_m);
+    let repeated = repeats_in_succession(
+        &array.rings,
+        &array.coords,
+        coincidence,
+        include_z,
+        include_m,
+    );
     rows_with_repeats(&array.rows, &[&array.rings], repeated)
 }
 
 pub fn multi_polygons_have_repeats_in_succession(
     array: &MultiPolygonArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
 ) -> BooleanArray {
-    let repeated =
-        repeats_in_succession(&array.rings, &array.coords, coincidence, unique_z, unique_m);
+    let repeated = repeats_in_succession(
+        &array.rings,
+        &array.coords,
+        coincidence,
+        include_z,
+        include_m,
+    );
     rows_with_repeats(&array.rows, &[&array.polygons, &array.rings], repeated)
 }

@@ -24,8 +24,8 @@ def join_line_strings(
     drop_repeated_joins: bool = False,
     abs_tol: float | None = None,
     rel_tol: float | None = None,
-    unique_z: bool = True,
-    unique_m: bool = False,
+    include_z: bool = True,
+    include_m: bool = False,
 ) -> pl.Expr:
     """Joins the linestrings of each row into one, each one's end to the next one's start.
 
@@ -82,8 +82,8 @@ def join_line_strings(
         kwargs={
             "abs_tol": abs_tol,
             "rel_tol": rel_tol,
-            "unique_z": unique_z,
-            "unique_m": unique_m,
+            "include_z": include_z,
+            "include_m": include_m,
             "gaps": gaps,
             "drop_repeated_joins": drop_repeated_joins,
         },

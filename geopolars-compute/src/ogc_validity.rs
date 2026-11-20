@@ -73,8 +73,8 @@ fn finite_selection(bounds: Option<Bounds>, select_empty: bool) -> CoordinateSel
         non_finite: Some(NonFinite {
             select_non_finite: true,
             select_empty,
-            ignore_z: false,
-            ignore_m: false,
+            include_z: true,
+            include_m: true,
         }),
         bounds,
     }

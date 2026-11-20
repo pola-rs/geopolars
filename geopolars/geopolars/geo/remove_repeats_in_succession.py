@@ -26,8 +26,8 @@ def remove_repeats_in_succession(
     *,
     abs_tol: float | None = None,
     rel_tol: float | None = None,
-    unique_z: bool = True,
-    unique_m: bool = False,
+    include_z: bool = True,
+    include_m: bool = False,
     collapsed_lines: CollapsedLines = "keep_ends",
     short_lines: ShortLines = "null",
 ) -> pl.Expr:
@@ -88,8 +88,8 @@ def remove_repeats_in_succession(
             kwargs={
                 "abs_tol": abs_tol,
                 "rel_tol": rel_tol,
-                "unique_z": unique_z,
-                "unique_m": unique_m,
+                "include_z": include_z,
+                "include_m": include_m,
                 "collapsed_lines": collapsed_lines,
                 "short_lines": short_lines,
             },

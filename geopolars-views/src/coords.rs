@@ -150,6 +150,17 @@ impl ValidCoords {
         }
     }
 
+    /// Leaves z and m out of these coordinates, keeping each only with `include_z=true` or `include_m=true`.
+    /// The axes kept share their buffers.
+    pub fn with_only_axes(&self, include_z: bool, include_m: bool) -> Self {
+        Self {
+            x: self.x.clone(),
+            y: self.y.clone(),
+            z: self.z.as_ref().filter(|_| include_z).cloned(),
+            m: self.m.as_ref().filter(|_| include_m).cloned(),
+        }
+    }
+
     pub(crate) fn into_axes(self) -> BufferAxes {
         (self.x, self.y, self.z, self.m)
     }

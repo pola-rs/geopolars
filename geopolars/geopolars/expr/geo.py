@@ -447,8 +447,8 @@ class ExprGeoNameSpace:
         drop_repeated_joins: bool = False,
         abs_tol: float | None = None,
         rel_tol: float | None = None,
-        unique_z: bool = True,
-        unique_m: bool = False,
+        include_z: bool = True,
+        include_m: bool = False,
     ) -> pl.Expr:
         from geopolars.geo.join_line_strings import join_line_strings
 
@@ -458,8 +458,8 @@ class ExprGeoNameSpace:
             drop_repeated_joins=drop_repeated_joins,
             abs_tol=abs_tol,
             rel_tol=rel_tol,
-            unique_z=unique_z,
-            unique_m=unique_m,
+            include_z=include_z,
+            include_m=include_m,
         )
 
     def is_ring(self) -> pl.Expr:
@@ -495,8 +495,8 @@ class ExprGeoNameSpace:
         abs_tol: float | None = None,
         rel_tol: float | None = None,
         nans_equal: bool = False,
-        unique_z: bool = True,
-        unique_m: bool = False,
+        include_z: bool = True,
+        include_m: bool = False,
     ) -> pl.Expr:
         from geopolars.geo.is_equal import is_equal
 
@@ -506,8 +506,8 @@ class ExprGeoNameSpace:
             abs_tol=abs_tol,
             rel_tol=rel_tol,
             nans_equal=nans_equal,
-            unique_z=unique_z,
-            unique_m=unique_m,
+            include_z=include_z,
+            include_m=include_m,
         )
 
     def is_topologically_equal(
@@ -611,8 +611,8 @@ class ExprGeoNameSpace:
         other: IntoExprColumn,
         *,
         non_finite: Literal["raise", "drop", "drop_empty"] = "raise",
-        ignore_z: bool = False,
-        ignore_m: bool = False,
+        include_z: bool = True,
+        include_m: bool = False,
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         from geopolars.geo.hausdorff_line_between import hausdorff_line_between
@@ -621,8 +621,8 @@ class ExprGeoNameSpace:
             self._expr,
             other,
             non_finite=non_finite,
-            ignore_z=ignore_z,
-            ignore_m=ignore_m,
+            include_z=include_z,
+            include_m=include_m,
             on_row_error=on_row_error,
         )
 
@@ -651,8 +651,8 @@ class ExprGeoNameSpace:
         *,
         select_non_finite: bool = True,
         select_empty: bool = True,
-        ignore_z: bool = False,
-        ignore_m: bool = False,
+        include_z: bool = True,
+        include_m: bool = False,
         action: NonFiniteAction = "drop",
         short_lines: ShortLines = "null",
     ) -> pl.Expr:
@@ -662,8 +662,8 @@ class ExprGeoNameSpace:
             self._expr,
             select_non_finite=select_non_finite,
             select_empty=select_empty,
-            ignore_z=ignore_z,
-            ignore_m=ignore_m,
+            include_z=include_z,
+            include_m=include_m,
             action=action,
             short_lines=short_lines,
         )
@@ -758,8 +758,8 @@ class ExprGeoNameSpace:
         *,
         abs_tol: float | None = None,
         rel_tol: float | None = None,
-        unique_z: bool = True,
-        unique_m: bool = False,
+        include_z: bool = True,
+        include_m: bool = False,
     ) -> pl.Expr:
         from geopolars.geo.has_repeats_in_succession import has_repeats_in_succession
 
@@ -767,8 +767,8 @@ class ExprGeoNameSpace:
             self._expr,
             abs_tol=abs_tol,
             rel_tol=rel_tol,
-            unique_z=unique_z,
-            unique_m=unique_m,
+            include_z=include_z,
+            include_m=include_m,
         )
 
     def remove_repeats_in_succession(
@@ -776,8 +776,8 @@ class ExprGeoNameSpace:
         *,
         abs_tol: float | None = None,
         rel_tol: float | None = None,
-        unique_z: bool = True,
-        unique_m: bool = False,
+        include_z: bool = True,
+        include_m: bool = False,
         collapsed_lines: Literal["keep_ends", "single_vertex"] = "keep_ends",
         short_lines: ShortLines = "null",
     ) -> pl.Expr:
@@ -789,8 +789,8 @@ class ExprGeoNameSpace:
             self._expr,
             abs_tol=abs_tol,
             rel_tol=rel_tol,
-            unique_z=unique_z,
-            unique_m=unique_m,
+            include_z=include_z,
+            include_m=include_m,
             collapsed_lines=collapsed_lines,
             short_lines=short_lines,
         )

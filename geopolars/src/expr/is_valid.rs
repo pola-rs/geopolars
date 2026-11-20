@@ -91,8 +91,8 @@ fn are_valid_geoarrow(
     let non_finite = NonFinite {
         select_non_finite: true,
         select_empty: false,
-        ignore_z: false,
-        ignore_m: false,
+        include_z: true,
+        include_m: true,
     };
     let selection = CoordinateSelection {
         non_finite: kwargs.check_finite_coordinates.then_some(non_finite),

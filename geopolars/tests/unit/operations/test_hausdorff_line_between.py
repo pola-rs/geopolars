@@ -193,7 +193,7 @@ def test_an_end_on_a_vertex_keeps_its_z_beside_an_ignored_nan() -> None:
     b = _line_strings("b", [[(0, 1, 0), (20, 0, 0)]], axes="xyz")
 
     out = pl.DataFrame([a, b]).select(
-        geo.hausdorff_line_between("a", "b", ignore_z=True)
+        geo.hausdorff_line_between("a", "b", include_z=False)
     )
 
     # (20 0) is nearest to the end of `a`.
@@ -536,14 +536,14 @@ def test_an_empty_point_row_never_raises() -> None:
     assert lines == ["LINESTRING EMPTY"]
 
 
-def test_a_z_that_is_not_finite_only_counts_without_ignore_z() -> None:
+def test_a_z_that_is_not_finite_only_counts_with_include_z() -> None:
     a = _line_strings("a", [[(0, 0, math.nan), (10, 0, 1)]], axes="xyz")
     b = _wkt("b", PointXYZ(), ["POINT Z (0 1 2)"])
     df = pl.DataFrame([a, b])
 
     with pytest.raises(ComputeError, match="expects finite coordinates"):
         df.select(geo.hausdorff_line_between("a", "b"))
-    out = df.select(geo.hausdorff_line_between("a", "b", ignore_z=True))
+    out = df.select(geo.hausdorff_line_between("a", "b", include_z=False))
     assert _as_wkt(out["a"]) == ["LINESTRING Z(10 0 1,0 1 2)"]
 
 
@@ -555,14 +555,14 @@ def test_drop_leaves_out_a_vertex_whose_z_is_not_finite() -> None:
     out = df.select(geo.hausdorff_line_between("a", "b", non_finite="drop"))
     assert _as_wkt(out["a"]) == ["LINESTRING Z(10 0 1,0 1 2)"]
     out = df.select(
-        geo.hausdorff_line_between("a", "b", non_finite="drop", ignore_z=True)
+        geo.hausdorff_line_between("a", "b", non_finite="drop", include_z=False)
     )
     [line] = _as_wkt(out["a"])
     assert line is not None
     assert line.startswith("LINESTRING Z(30 0 ")
 
 
-def test_ignore_z_does_not_make_a_vertex_the_empty_point() -> None:
+def test_leaving_out_z_does_not_make_a_vertex_the_empty_point() -> None:
     def lines(vertex: tuple[float, float, float], **kwargs: Any) -> list[str | None]:
         a = _line_strings("a", [[(0, 0, 1), vertex, (10, 0, 1)]], axes="xyz")
         out = pl.DataFrame([a, _BUMP_SERIES]).select(
@@ -571,20 +571,20 @@ def test_ignore_z_does_not_make_a_vertex_the_empty_point() -> None:
         return _as_wkt(out["a"])
 
     with pytest.raises(ComputeError, match=r"got \(NaN, NaN, 5\)"):
-        lines((math.nan, math.nan, 5), ignore_z=True)
+        lines((math.nan, math.nan, 5), include_z=False)
     assert lines((math.nan, math.nan, math.nan)) == ["LINESTRING(5 0,5 4)"]
 
 
-def test_an_m_that_is_not_finite_only_counts_without_ignore_m() -> None:
+def test_an_m_that_is_not_finite_only_counts_with_include_m() -> None:
     coords = [[{"x": 0.0, "y": 0.0, "m": math.nan}, {"x": 10.0, "y": 0.0, "m": 1.0}]]
     a = pl.Series("a", coords, dtype=pl.List(_coords_storage("xym")))
     b = _wkt("b", PointXYM(), ["POINT M (0 1 2)"])
     df = pl.DataFrame([a.ext.to(LineStringXYM()), b])
 
-    with pytest.raises(ComputeError, match="expects finite coordinates"):
-        df.select(geo.hausdorff_line_between("a", "b", ignore_z=True))
-    out = df.select(geo.hausdorff_line_between("a", "b", ignore_m=True))
+    out = df.select(geo.hausdorff_line_between("a", "b"))
     assert _as_wkt(out["a"]) == ["LINESTRING M(10 0 1,0 1 2)"]
+    with pytest.raises(ComputeError, match="expects finite coordinates"):
+        df.select(geo.hausdorff_line_between("a", "b", include_m=True))
 
 
 def test_a_failing_row_gives_null_with_on_row_error_null() -> None:

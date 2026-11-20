@@ -26,8 +26,8 @@ const EMPTY_POINTS: CoordinateSelection = CoordinateSelection {
     non_finite: Some(NonFinite {
         select_non_finite: false,
         select_empty: true,
-        ignore_z: false,
-        ignore_m: false,
+        include_z: true,
+        include_m: true,
     }),
     bounds: None,
 };

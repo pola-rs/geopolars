@@ -114,19 +114,19 @@ _ALL_NAN = _xyzm(NAN, NAN, NAN, NAN)
 @pytest.mark.parametrize(
     ("kwargs", "kept"),
     [
-        ({}, [_FINITE]),
-        ({"ignore_z": True}, [_FINITE, _NAN_Z]),
-        ({"ignore_m": True}, [_FINITE, _INF_M]),
-        ({"ignore_z": True, "ignore_m": True}, [_FINITE, _NAN_Z, _INF_M]),
+        ({}, [_FINITE, _INF_M]),
+        ({"include_m": True}, [_FINITE]),
+        ({"include_z": False}, [_FINITE, _NAN_Z, _INF_M]),
+        ({"include_z": False, "include_m": True}, [_FINITE, _NAN_Z]),
         ({"select_non_finite": False}, [_FINITE, _NAN_Z, _INF_M, _ONLY_Z_AND_M]),
-        ({"select_empty": False}, [_FINITE, _ALL_NAN]),
+        ({"select_empty": False}, [_FINITE, _INF_M, _ALL_NAN]),
         (
-            {"select_empty": False, "ignore_z": True, "ignore_m": True},
+            {"select_empty": False, "include_z": False},
             [_FINITE, _NAN_Z, _INF_M, _ALL_NAN],
         ),
     ],
 )
-def test_ignore_z_and_ignore_m_only_affect_select_non_finite(
+def test_include_z_and_include_m_only_affect_select_non_finite(
     kwargs: dict[str, bool], kept: Line
 ) -> None:
     """A vertex is only empty with every axis NaN, so `(NaN, NaN, 1, 1)` is not."""

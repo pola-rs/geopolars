@@ -49,11 +49,11 @@ fn for_each_join_with(
 fn for_each_join(
     array: &MultiLineStringArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     on_join: impl FnMut(usize, usize, bool),
 ) {
-    with_coincide!(&array.coords, coincidence, unique_z, unique_m; |coincide| {
+    with_coincide!(&array.coords, coincidence, include_z, include_m; |coincide| {
         for_each_join_with(array, coincide, on_join)
     })
 }
@@ -71,8 +71,8 @@ fn vertices_per_row(array: &MultiLineStringArray) -> ValidList {
 pub fn multi_line_strings_joined(
     array: &MultiLineStringArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     gaps: Gaps,
     drop_repeated_joins: bool,
 ) -> LineStringArray {
@@ -89,8 +89,8 @@ pub fn multi_line_strings_joined(
     for_each_join(
         array,
         coincidence,
-        unique_z,
-        unique_m,
+        include_z,
+        include_m,
         |row, start, coincides| match (coincides, &mut gapless, &mut dropped) {
             (false, Some(gapless), _) => gapless.set(row, false),
             (true, _, Some(dropped)) => dropped.set(start, true),
@@ -152,8 +152,8 @@ fn lines_split_at(
 pub fn multi_line_strings_split_at_gaps(
     array: &MultiLineStringArray,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     drop_repeated_joins: bool,
 ) -> MultiLineStringArray {
     let mut gaps = Vec::new();
@@ -162,8 +162,8 @@ pub fn multi_line_strings_split_at_gaps(
     for_each_join(
         array,
         coincidence,
-        unique_z,
-        unique_m,
+        include_z,
+        include_m,
         |row, start, coincides| match (coincides, &mut dropped) {
             (false, _) => gaps.push((row, start)),
             (true, Some(dropped)) => dropped.set(start, true),

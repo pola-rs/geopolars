@@ -30,8 +30,8 @@ class NonFinite:
 
     select_non_finite: bool = True
     select_empty: bool = True
-    ignore_z: bool = False
-    ignore_m: bool = False
+    include_z: bool = True
+    include_m: bool = False
     action: NonFiniteAction = "drop"
     short_lines: ShortLines = "null"
 
@@ -61,8 +61,8 @@ def filter_coordinates(
     *,
     select_non_finite: bool = True,
     select_empty: bool = True,
-    ignore_z: bool = False,
-    ignore_m: bool = False,
+    include_z: bool = True,
+    include_m: bool = False,
     action: NonFiniteAction = "drop",
     short_lines: ShortLines = "null",
 ) -> pl.Expr:
@@ -74,9 +74,9 @@ def filter_coordinates(
 
     - `select_non_finite=True`, if it has a NaN or infinite value, but is not empty.
       x and y are always looked at.
-      With `ignore_z=True`, z is not, and with `ignore_m=True`, m is not.
+      z is also looked at with `include_z=True` (the default), and m with `include_m=True`.
     - `select_empty=True`, if it is the empty point.
-      `ignore_z` and `ignore_m` do not change this.
+      `include_z` and `include_m` do not change this.
 
     {empty_point}
 
@@ -98,8 +98,8 @@ def filter_coordinates(
     non_finite = NonFinite(
         select_non_finite=select_non_finite,
         select_empty=select_empty,
-        ignore_z=ignore_z,
-        ignore_m=ignore_m,
+        include_z=include_z,
+        include_m=include_m,
         action=action,
         short_lines=short_lines,
     )
