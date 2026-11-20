@@ -138,8 +138,7 @@ pub(super) fn multi_line_string_to_geos(
 }
 
 impl GeosGeometries {
-    /// Our linestring array of the geometries, one row each.
-    /// Every GEOS geometry is freed once it is copied.
+    /// Copies the geometries into a linestring array, one row each.
     /// A geometry that is not a linestring goes to `on_row_error`.
     pub fn into_line_string_array<const Z: bool>(
         self,
@@ -175,8 +174,8 @@ impl GeosGeometries {
     }
 
     /// See [`GeosGeometries::into_line_string_array`].
-    /// GEOS gives a multilinestring of one part as a plain linestring.
-    /// So a linestring is read as a single part, or as none if it is empty.
+    /// As GEOS gives a multilinestring of one part as a plain linestring,
+    /// a linestring is read as a single part, or as none if it is empty.
     /// A geometry that is not a linestring or multilinestring fails the same way.
     pub fn into_multi_line_string_array<const Z: bool>(
         self,

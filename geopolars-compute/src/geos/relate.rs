@@ -66,6 +66,7 @@ pub struct RelatePairs {
 }
 
 impl RelatePairs {
+    /// Converts both sides to GEOS and pairs up their rows.
     /// A row that fails here or in [`RelatePairs::matrices`] goes to `on_row_error`.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.

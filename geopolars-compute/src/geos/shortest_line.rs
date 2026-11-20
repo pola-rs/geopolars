@@ -10,7 +10,6 @@ use super::pairs::{GeosPairs, PairOperation, WhenEmpty};
 use super::{GeometryOrientation, GeosGeometries, GeosRow, GeosRows};
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
-/// See [`shortest_lines`]. An empty row gives an empty line.
 struct ShortestLine;
 
 impl PairOperation for ShortestLine {

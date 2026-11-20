@@ -1,18 +1,9 @@
-//! Pairing up the rows of two arrays of geometries, for a GEOS operation on two geometries.
-//!
-//! Each operation implements [`PairOperation`].
-//! It says what GEOS makes of two geometries,
-//! and what a pair gives when one or both of its rows are empty (see [`rows_without_vertices`]).
-//! The result for one empty row is only asked for when the other row is not empty.
-//!
-//! [`GeosPairs`] uses this to convert only the rows the operation needs.
-//! An empty row never goes to GEOS.
-//! A row is empty when it has no vertices (see [`rows_without_vertices`]).
-//! Its partner only does when the operation needs it for the result ([`WhenEmpty::WithPartner`]).
-//! A pair with a null row is null, so its other row is not converted either.
+//! Pairing up the rows of two geometry arrays for a binary GEOS operation
+//! (see "Binary" in `docs/GEOS kernel implementation guide.md`).
 //!
 //! A row that fails to convert (with `on_row_error="null"`) makes null only the pairs that need its geometry.
-//! Its pair with an empty row still gives what [`WhenEmpty::Gives`] gives, whatever the chunking.
+//! Its pair with an empty row therefore still gives what [`WhenEmpty::Gives`] gives.
+//! This does not depend on how the arrays are chunked.
 
 use geopolars_views::output::SizeHint;
 use geopolars_views::GeometryArray;
@@ -37,7 +28,7 @@ pub(super) trait PairOperation {
 
 /// What a pair gives when one of its rows is empty.
 pub(super) enum WhenEmpty<Op: PairOperation + ?Sized> {
-    /// A result without the partner, which is therefore never converted.
+    /// A result without the partner, which is therefore only converted if another pair needs it.
     Gives(fn() -> Op::Output),
     /// A result from the partner, which is converted.
     WithPartner(fn(&Op, &Geometry) -> GeoComputeResult<Op::Output>),
@@ -53,7 +44,6 @@ pub(super) struct GeosPairs {
     a: GeosGeometries,
     rows: usize,
     /// Whether an empty `a`, and an empty `b`, give their result without the partner.
-    /// [`GeosPairs::evaluate`] checks its operation against it.
     gives_when_empty: [bool; 2],
     on_row_error: OnRowError,
 }
@@ -94,7 +84,7 @@ impl GeosPairs {
         })
     }
 
-    /// The result of every pair (see the module doc), lazily, as the iterator advances.
+    /// Evaluates every pair (see the module doc).
     /// A pair that fails goes to `on_row_error`.
     ///
     /// `operation` must be the one the pairs were built for.
@@ -114,8 +104,8 @@ impl GeosPairs {
             let result = match (a, b) {
                 (GeosRow::Null, _) | (_, GeosRow::Null) => Ok(None),
                 (GeosRow::Empty, GeosRow::Empty) => Ok(Some(operation.when_both_empty())),
-                (GeosRow::Empty, b) => when_empty(operation, operation.when_a_empty(), b),
-                (a, GeosRow::Empty) => when_empty(operation, operation.when_b_empty(), a),
+                (GeosRow::Empty, b) => evaluate_when_empty(operation, operation.when_a_empty(), b),
+                (a, GeosRow::Empty) => evaluate_when_empty(operation, operation.when_b_empty(), a),
                 (GeosRow::Geometry { geometry: a, .. }, GeosRow::Geometry { geometry: b, .. }) => {
                     operation.on_geometries(a, b).map(Some)
                 }
@@ -141,9 +131,10 @@ impl GeosPairs {
     }
 }
 
-/// `None` if the operation needs `partner`, which failed to convert.
+/// Gives the result of a pair with one empty row,
+/// or `None` if it needs a `partner` that failed to convert.
 #[inline(always)]
-fn when_empty<Op: PairOperation>(
+fn evaluate_when_empty<Op: PairOperation>(
     operation: &Op,
     rule: WhenEmpty<Op>,
     partner: &GeosRow,

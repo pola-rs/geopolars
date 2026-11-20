@@ -10,8 +10,7 @@ use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use crate::geoarrow::{
-    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_pairs, Geo,
-    GeometryPairs,
+    describe, ensure_same_crs, geometry_series, kind_of, single_chunk_pairs, Geo, GeometryPairs,
 };
 
 /// The keyword arguments of the Python `shortest_line_between`.

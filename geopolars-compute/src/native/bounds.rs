@@ -223,7 +223,6 @@ pub fn polygon_bounds<const Z: bool, const M: bool>(
     })
 }
 
-/// One box per row, around all of its points.
 pub fn multi_point_bounds<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiPointArray>,
     options: &BoxOptions,
@@ -233,7 +232,6 @@ pub fn multi_point_bounds<const Z: bool, const M: bool>(
     })
 }
 
-/// One box per row, around all of its linestrings.
 pub fn multi_line_string_bounds<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiLineStringArray>,
     options: &BoxOptions,
@@ -243,7 +241,6 @@ pub fn multi_line_string_bounds<const Z: bool, const M: bool>(
     })
 }
 
-/// One box per row, around all of its polygons.
 pub fn multi_polygon_bounds<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiPolygonArray>,
     options: &BoxOptions,

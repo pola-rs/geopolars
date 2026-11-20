@@ -50,9 +50,6 @@ pub enum Overlay {
     Difference,
 }
 
-/// The overlay of a pair, before [`kept_parts`] narrows it down to the output kind.
-/// An empty row gives an empty overlay, except an empty `b` in a difference,
-/// which takes nothing away from `a`.
 struct OverlayOperation {
     overlay: Overlay,
     early_coord_check: EarlyCoordCheck,
@@ -72,11 +69,11 @@ impl PairOperation for OverlayOperation {
     fn when_b_empty(&self) -> WhenEmpty<Self> {
         match self.overlay {
             Overlay::Intersection => WhenEmpty::Gives(|| GeosRow::Empty),
-            Overlay::Difference => WhenEmpty::WithPartner(Self::unchanged_a),
+            Overlay::Difference => WhenEmpty::WithPartner(Self::when_b_empty_copy_a),
         }
     }
 
-    // TODO: Also give `a` as it is when `b` does not touch it, as for an empty `b`.
+    // TODO: In a difference, also give `a` as it is when `b` does not touch it, as for an empty `b`.
     // GEOS now re-orients and nodes `a` even then, so it can differ from a copy, and even split.
     fn on_geometries(&self, a: &Geometry, b: &Geometry) -> GeoComputeResult<GeosRow> {
         let overlay = match self.overlay {
@@ -91,25 +88,53 @@ impl PairOperation for OverlayOperation {
 }
 
 impl OverlayOperation {
-    /// The difference of `a` and an empty `b`: `a` as it is, copied without computing a difference.
-    /// A copy is needed, as the pairs only lend their rows, and a single `a` is shared by every row.
-    fn unchanged_a(&self, a: &Geometry) -> GeoComputeResult<GeosRow> {
+    fn when_b_empty_copy_a(&self, a: &Geometry) -> GeoComputeResult<GeosRow> {
         // A copy refuses a non-finite x or y whatever `early_coord_check` is,
-        // so that the option never changes a copied row.
-        // With `early_coord_check=`[EarlyCoordCheck::FiniteAndEmpty],
-        // converting `a` has already done so.
-        // [EarlyCoordCheck::Finite] lets an empty point through to GEOS,
-        // but a copy never goes there, so it is refused here.
-        // GEOS itself does not fail on every such vertex
-        // (a line minus a polygon it does not touch keeps a NaN),
-        // so a copied row can be stricter than one GEOS computes.
+        // so that the option never changes a copied row (see the Python `difference`).
+        // Converting `a` has already done so for [EarlyCoordCheck::FiniteAndEmpty].
+        // [EarlyCoordCheck::Finite] lets an empty point through to GEOS.
+        // As a copy never goes to GEOS, the empty point is refused here instead.
         if self.early_coord_check != EarlyCoordCheck::FiniteAndEmpty {
-            xy_is_finite_or_error(a)?;
+            when_b_empty_copy_a_refuse_non_finite(a)?;
         }
         Ok(GeosRow::Geometry {
+            // The pairs only lend their rows, and a single `a` is shared by every row.
             geometry: Geom::clone(a)?,
             maybe_wrong_orientation: true,
         })
+    }
+}
+
+fn when_b_empty_copy_a_refuse_non_finite(geometry: &impl Geom) -> GeoComputeResult<()> {
+    if geometry.is_empty()? {
+        return Ok(());
+    }
+    match geometry.geometry_type()? {
+        GeometryTypes::Point | GeometryTypes::LineString | GeometryTypes::LinearRing => {
+            let xy = geometry.get_coord_seq()?.as_buffer(Some(CoordType::XY))?;
+            let not_finite = xy
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .find(|[x, y]| !(x.is_finite() && y.is_finite()));
+            match not_finite {
+                Some(&[x, y]) => Err(GeoComputeError::GeosNotFinite { position: (x, y) }),
+                None => Ok(()),
+            }
+        }
+        GeometryTypes::Polygon => {
+            when_b_empty_copy_a_refuse_non_finite(&geometry.get_exterior_ring()?)?;
+            for n in 0..geometry.get_num_interior_rings()? {
+                when_b_empty_copy_a_refuse_non_finite(&geometry.get_interior_ring_n(n)?)?;
+            }
+            Ok(())
+        }
+        _ => {
+            for n in 0..geometry.get_num_geometries()? {
+                when_b_empty_copy_a_refuse_non_finite(&geometry.get_geometry_n(n)?)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -125,8 +150,6 @@ pub struct OverlayPairs {
 impl OverlayPairs {
     /// Converts both sides to GEOS and pairs up their rows,
     /// for the Python `intersection` or `difference` (which document their behaviour).
-    /// A row whose overlay is already decided by a null or empty partner is not converted.
-    /// An empty `b` makes the difference a copy of `a`, so that row of `a` is still converted, and can fail.
     /// A row that fails, here or in an `into_*` method, goes to `on_row_error`.
     ///
     /// `a` and `b` must have the same length, or one of them a single row.
@@ -214,7 +237,8 @@ impl OverlayPairs {
     ) -> GeoComputeResult<GeosGeometries> {
         let mut geometries = GeosRows::with_capacity(self.pairs.len());
         for overlay in self.pairs.evaluate(&self.operation) {
-            let narrowed = overlay?.map(|overlay| narrowed(overlay, kept_dimension, multi));
+            let narrowed =
+                overlay?.map(|overlay| overlaid_narrowed(overlay, kept_dimension, multi));
             let narrowed = row_or_null(narrowed.transpose(), self.pairs.on_row_error())?;
             geometries.push(narrowed.unwrap_or(GeosRow::Null));
         }
@@ -228,51 +252,9 @@ impl OverlayPairs {
     }
 }
 
-fn summed_size_hint((a, b): (SizeHint<2>, SizeHint<2>)) -> SizeHint<2> {
-    // Overlay adds a vertex wherever the two cross,
-    // so the result can have more vertices than both inputs together.
-    SizeHint {
-        coords: a.coords + b.coords,
-        parts: [a.parts[0] + b.parts[0], a.parts[1] + b.parts[1]],
-    }
-}
-
-fn xy_is_finite_or_error(geometry: &impl Geom) -> GeoComputeResult<()> {
-    if geometry.is_empty()? {
-        return Ok(());
-    }
-    match geometry.geometry_type()? {
-        GeometryTypes::Point | GeometryTypes::LineString | GeometryTypes::LinearRing => {
-            let xy = geometry.get_coord_seq()?.as_buffer(Some(CoordType::XY))?;
-            let not_finite = xy
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .find(|[x, y]| !(x.is_finite() && y.is_finite()));
-            match not_finite {
-                Some(&[x, y]) => Err(GeoComputeError::GeosNotFinite { position: (x, y) }),
-                None => Ok(()),
-            }
-        }
-        GeometryTypes::Polygon => {
-            xy_is_finite_or_error(&geometry.get_exterior_ring()?)?;
-            for n in 0..geometry.get_num_interior_rings()? {
-                xy_is_finite_or_error(&geometry.get_interior_ring_n(n)?)?;
-            }
-            Ok(())
-        }
-        _ => {
-            for n in 0..geometry.get_num_geometries()? {
-                xy_is_finite_or_error(&geometry.get_geometry_n(n)?)?;
-            }
-            Ok(())
-        }
-    }
-}
-
-/// [kept_parts] of a row, which keeps its `maybe_wrong_orientation`.
+/// The overlay must be `Empty` or a `Geometry`.
 #[inline(always)]
-fn narrowed(
+fn overlaid_narrowed(
     overlay: GeosRow,
     kept_dimension: TopologicalDimension,
     multi: bool,
@@ -284,6 +266,15 @@ fn narrowed(
             maybe_wrong_orientation,
         } => kept_parts(geometry, maybe_wrong_orientation, kept_dimension, multi),
         _ => unreachable!("an overlay is empty or a geometry"),
+    }
+}
+
+fn summed_size_hint((a, b): (SizeHint<2>, SizeHint<2>)) -> SizeHint<2> {
+    // Overlay adds a vertex wherever the two cross,
+    // so the result can have more vertices than both inputs together.
+    SizeHint {
+        coords: a.coords + b.coords,
+        parts: [a.parts[0] + b.parts[0], a.parts[1] + b.parts[1]],
     }
 }
 

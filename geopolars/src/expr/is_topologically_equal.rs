@@ -10,9 +10,7 @@ use polars_arrow::datatypes::ArrowDataType;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
-use crate::geoarrow::{
-    describe, ensure_same_crs, kind_of, single_chunk_pairs, GeometryPairs,
-};
+use crate::geoarrow::{describe, ensure_same_crs, kind_of, single_chunk_pairs, GeometryPairs};
 
 /// The keyword arguments of the Python `is_topologically_equal`.
 #[derive(Debug, Deserialize)]

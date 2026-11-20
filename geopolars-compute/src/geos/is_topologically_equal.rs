@@ -9,8 +9,6 @@ use super::pairs::{GeosPairs, PairOperation, WhenEmpty};
 use crate::per_row::optional_bool_array;
 use crate::{EarlyCoordCheck, GeoComputeResult, OnRowError};
 
-/// See [`topologically_equal`].
-/// Two empty rows are equal, and an empty row equals no row with vertices.
 struct TopologicallyEqual;
 
 impl PairOperation for TopologicallyEqual {

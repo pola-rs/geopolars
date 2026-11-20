@@ -192,10 +192,7 @@ fn hulls(
     hulls.into_polygon_array(has_z, on_row_error, new_ring_orientation, new_holes)
 }
 
-/// [`hulls`] as GEOS polygons.
-/// The size hint is an upper bound:
-/// a row's hull is one ring, which closes on at most one coordinate more than the row has.
-/// Errors are the exception, so `on_row_error` is checked per row rather than made const.
+/// Builds the convex hull of every row as a GEOS polygon, for [`hulls`].
 fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
     rows: &List,
     coords: &ValidCoords,
@@ -254,15 +251,16 @@ fn hulls_with<const Z: bool, const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>
                     geometry: hull,
                     maybe_wrong_orientation: false,
                 },
-                // A hull that encloses nothing is the null polygon
-                // the Python `convex_hull` documents.
-                // A failure has had its `on_row_error` verdict applied, as in `replace_geometries`.
+                // Like a single coordinate, a hull that encloses nothing is null.
+                // A row that failed under `on_row_error="null"` is null as well.
                 _ => GeosRow::Null,
             },
         });
     }
     Ok(GeosGeometries {
         geometries: hulls,
+        // An upper bound, as a row's hull is one ring,
+        // which closes on at most one coordinate more than the row has.
         size_hint: SizeHint {
             coords: coords.len() + rows.len(),
             parts: [rows.len(), 0],

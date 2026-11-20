@@ -135,8 +135,7 @@ fn buffer_via_geos(
 
 /// Passes every geometry to `op` with its distance, which `geos_distance` checks and converts.
 /// `op` gives geometries of `orientation`.
-/// A row that fails goes to `on_row_error`.
-/// A constant distance that fails would fail every row, so its error is always returned.
+/// A row that fails goes to `on_row_error`, but a constant distance that fails is always an error.
 ///
 /// A row with a null distance must already be null in `geometries`,
 /// which [validity_with_distances] does before converting.

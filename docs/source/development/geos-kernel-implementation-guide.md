@@ -16,15 +16,15 @@ view -> GeosGeometries -> (GEOS, row by row, in place) -> GeosGeometries -> view
 ```
 
 First, `to_geos_rows` converts the view.
-A private function then replaces each `GeosRow::Geometry` with what GEOS makes of it,
-with `replace_geometries`.
-It also takes the orientation of what GEOS gives
+A private function then calls `replace_geometries`,
+which replaces each `GeosRow::Geometry` with what GEOS makes of it.
+A row GEOS fails on under `on_row_error="null"` becomes `Null`.
+Rows of every other variant stay as they are.
+`replace_geometries` also takes the orientation of what GEOS gives
 (see [Orientation of new rings](#orientation-of-new-rings)),
 so that the column's orientation always matches its rows.
-Every other row stays as it is,
-and a row GEOS fails on under `on_row_error="null"` becomes `Null`.
 Then, an `into_*_array` conversion gives the view of the output kind.
-So something that looks like this:
+Put together, this looks like:
 
 ```rust
 pub fn simplify_polygons(
@@ -66,19 +66,17 @@ fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
 
 ### Binary
 
-Both sides come in as a `&GeometryArray`, so both columns can have a different type,
-but all items in the columns are all the same type.
+Both sides come in as a `&GeometryArray`.
+The two columns can therefore be of different kinds
+(all rows within one column are all the same kind).
 The operation implements `PairOperation`,
-which says what a pair of two geometries makes,
-but also what to do when either of the two sides (or both) is empty.
-`GeosPairs` does the plumbing here:
-it converts only the rows the operation needs
-(see [Trivial rows never reach GEOS](#trivial-rows-never-reach-geos)),
-broadcasts a side of a single row against the other,
-and gives null for a pair with a null row.
-A row that failed to convert under `on_row_error="null"` only nulls the pairs that need it.
-Paired with an empty row whose result needs no partner (`WhenEmpty::Gives`),
-it still gives that result.
+which says what GEOS makes of a pair of geometries,
+and what a pair gives when one or both of its rows are empty.
+`GeosPairs` broadcasts a side of a single row against the other.
+It converts only the rows the operation needs
+(see [Trivial rows never reach GEOS](#trivial-rows-never-reach-geos)).
+A pair with a null row, or one that needs a row that failed to convert, is null
+(see the module doc of `geos/pairs.rs`).
 An operation therefore never sees a row that was not converted,
 and does not handle nulls or `on_row_error` itself.
 
@@ -93,8 +91,6 @@ impl PairOperation for TopologicallyEqual {
     }
 
     fn when_a_empty(&self) -> WhenEmpty<Self> {
-        // `Gives` needs no partner, so the partner is never converted.
-        // `WithPartner` would get it as a GEOS geometry.
         WhenEmpty::Gives(|| false)
     }
 
@@ -134,34 +130,26 @@ Can use the same mechanism as any of the other GEOS things, so that they can the
 
 ## One container for GEOS geometries
 
-The geometries in a column of every GEOS kernel go in one `GeosGeometries`,
+A GEOS kernel keeps the geometries of a column in one `GeosGeometries`,
 which is made up of `GeosRow`s.
-These can hold several variants so that empty and invalid cases can be handled consistently:
+These can hold several variants so that empty and invalid cases can be handled consistently.
+Each row is one of the variants below,
+so that every kernel handles empty, null, and failed rows the same way.
+The doc of each variant in `geos/mod.rs` says what the row stands for.
 
-| `GeosRow` | The row | Made by | In the output |
-| --- | --- | --- | --- |
-| `Geometry` | holds a GEOS geometry | the conversion, or the kernel | that geometry |
-| `Empty` | has no vertices (see [Trivial rows never reach GEOS](#trivial-rows-never-reach-geos)) | the conversion, or the kernel | an empty geometry |
-| `Null` | is null | the conversion, or the kernel | null |
-| `Failed` | failed to convert under `on_row_error="null"` | the conversion | null |
-| `Skipped` | was not converted, as its partner decides result | `GeosPairs` | never gets there |
+| `GeosRow` | Made by | In the output |
+| --- | --- | --- |
+| `Geometry` | the conversion, or the kernel | that geometry |
+| `Empty` | the conversion, or the kernel | an empty geometry |
+| `Null` | the conversion, or the kernel | null |
+| `Failed` | the conversion | null |
+| `Skipped` | `GeosPairs` | nothing, as it never reaches an `into_*_array` conversion |
 
-A kernel only ever makes `Geometry`, `Empty` or `Null` itself.
-`Null` also covers a result that is null by definition,
-such as the convex hull of a single coordinate.
+`Skipped` only exists in a binary operation, between `GeosPairs::new` and its evaluation
+(see [Trivial rows never reach GEOS](#trivial-rows-never-reach-geos)).
 
-`Skipped` only exists in a binary operation, between `GeosPairs::new` and its evaluation.
-There, a null or an empty row on either side can decide the result
-without even needing to look at the other side.
-Take for example an intersection operation:
-If one side is empty, then we don't even need to look at the other (valid) side,
-as we already know that the output will be empty too.
-In such a case, the other side will be set to `Skipped`.
-
-`Failed` is kept apart from `Null`,
-so that a binary operation can null only the pairs that need the row.
-A unary kernel writes it as null, like `Null`.
-A result row that GEOS fails on is `Null`, as no other pair can still need it.
+Only a binary operation tells `Failed` and `Null` apart (see `GeosRow::Failed`).
+A result that GEOS fails on is always `Null`, as no other pair can still need it.
 
 ## Trivial rows never reach GEOS
 
@@ -175,7 +163,9 @@ and let us switch what we do without inspecting the GEOS data.
 In a binary operation, a pair with a null row,
 or with an empty row whose result needs no partner (`WhenEmpty::Gives`),
 is decided without GEOS.
-Its other row is therefore not converted either, and becomes `Skipped`.
+Its other row then becomes `Skipped`, without being converted.
+Only a single row broadcast against the other column is still converted, if any of its other pairs needs it.
+For example, an intersection with an empty row is empty, whatever its partner is.
 
 ## Coordinate checks and GEOS errors
 

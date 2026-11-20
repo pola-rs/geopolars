@@ -123,7 +123,6 @@ fn simplify_via_geos(
 }
 
 /// See [`simplify_via_geos`].
-/// Errors are the exception, so `on_row_error` is checked per row rather than made const.
 fn simplify_via_geos_with<const PRESERVE_TOPOLOGY: bool>(
     geometries: &mut GeosGeometries,
     tolerance: f64,

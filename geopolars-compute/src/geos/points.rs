@@ -7,14 +7,13 @@ use super::{
 use crate::{GeoComputeResult, OnRowError};
 
 impl GeosGeometries {
-    /// Every GEOS geometry is freed once it is copied.
+    /// Copies the geometries into a point array, one row each.
     /// An empty row or point gives an empty point (NaN on every axis).
     /// A geometry that is not a point is an error.
     pub fn into_point_array(self, dim: GeoDimension) -> GeoComputeResult<PointArray> {
         let rows = self.geometries;
         let mut validity = ValidityBuilder::with_capacity(rows.len());
         let width = dim.field_names().len();
-        // Also what a null row gets.
         let empty = [f64::NAN; 4];
         let mut axes: Vec<Vec<f64>> = (0..width).map(|_| Vec::with_capacity(rows.len())).collect();
         let mut push = |coord: &[f64]| {
@@ -60,8 +59,7 @@ impl GeosGeometries {
         )))
     }
 
-    /// Our multipoint array of the geometries, one row each.
-    /// Every GEOS geometry is freed once it is copied.
+    /// Copies the geometries into a multipoint array, one row each.
     /// As GEOS gives a multipoint of one part as a plain point,
     /// a point is read as a single part, or as none if it is empty.
     /// A geometry that is not a point or multipoint goes to `on_row_error`.

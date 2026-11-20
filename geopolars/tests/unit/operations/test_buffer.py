@@ -169,7 +169,7 @@ def test_a_null_or_empty_geometry_stays_so(
 
 
 def test_a_polygon_whose_ring_has_no_vertices_is_empty() -> None:
-    # Without the early check, only the empty rule keeps it from GEOS.
+    # Even without the early check, a row without vertices never reaches GEOS.
     assert _buffered(_column(PolygonXY, [[]]), 1.0, early_coord_check="off") == [[]]
 
 

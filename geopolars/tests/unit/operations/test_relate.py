@@ -196,6 +196,10 @@ def test_a_chunked_column_is_related_to_a_single_geometry() -> None:
     assert out["many"].to_list() == ["2FF1FF212", None, "2FFF1FFF2"]
 
 
+# GEOS fails to build a linestring of a single vertex.
+_ONE_VERTEX_LINE = _xy((0, 0))
+
+
 def test_a_single_failing_geometry_nulls_every_pair_that_needs_it() -> None:
     many = _chunked(
         [
@@ -203,8 +207,7 @@ def test_a_single_failing_geometry_nulls_every_pair_that_needs_it() -> None:
             _wkt("many", PolygonXY(), ["POLYGON EMPTY", _SQUARE]),
         ]
     )
-    # GEOS fails to build a linestring of a single vertex.
-    one = _series("one", LineStringXY(), [_xy((0, 0))])
+    one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
 
     out = pl.DataFrame(many).select(geo.relate("many", one, on_row_error="null"))
 
@@ -256,8 +259,7 @@ def test_the_early_coord_check_raises_before_geos(
 def test_a_row_paired_with_a_null_never_reaches_geos(
     early_coord_check: EarlyCoordCheck,
 ) -> None:
-    # GEOS fails to build a linestring of a single vertex.
-    failing = [_xy((0, 0)), _NOT_FINITE_LINE]
+    failing = [_ONE_VERTEX_LINE, _NOT_FINITE_LINE]
     df = pl.DataFrame(
         [
             _series("a", LineStringXY(), [None, None, _FINITE_LINE]),
