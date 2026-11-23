@@ -35,7 +35,11 @@ def _kernel(
             msg = f"cannot check `out_of_bounds` of a box: {geometry!r}"
             raise TypeError(msg)
         # PROJ is only asked when there are bounds to check.
-        bounds = None if out_of_bounds is None else _bounds(geometry, out_of_bounds)
+        bounds = (
+            None
+            if out_of_bounds is None
+            else _bounds(geometry, out_of_bounds.crs_bounds)
+        )
         return register_plugin_function(
             plugin_path=LIB,
             args=[column],

@@ -90,7 +90,7 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
     "is_empty": (lambda g: geo.is_empty(g, check_nested=True), set()),
     "count_coordinates": (lambda g: geo.count_coordinates(g), set()),
     "area": (
-        lambda g: geo.area(g, distance_method="planar"),
+        lambda g: geo.area(g, distance_method="planar", on_out_of_bounds="ignore"),
         {LineStringXY, MultiPointXY, MultiLineStringXY},
     ),
     "is_ccw": (lambda g: geo.is_ccw(g), {MultiPointXY}),

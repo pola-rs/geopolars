@@ -158,6 +158,10 @@ Empty and invalid geometries stay empty or invalid.""",
     "on_row_error": """\
 This expression can error on individual rows. How these are handled is determined by `on_row_error`.
 See :ref:`on_row_error <arg-on_row_error>` on the Common arguments page.""",
+    "on_out_of_bounds": """\
+What this expression does with a row holding a coordinate outside the bounds of its CRS
+is set by `on_out_of_bounds`. `crs_bounds` picks the bounds.
+See :ref:`on_out_of_bounds <arg-on_out_of_bounds>` on the Common arguments page.""",
     "geos_errors": """\
 If GEOS returns an error for a row, it is handled through `on_row_error`.""",
     "geos_non_finite": """\

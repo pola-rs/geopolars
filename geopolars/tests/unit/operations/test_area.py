@@ -302,7 +302,11 @@ def test_a_non_finite_x_makes_its_row_nan(
     (square,) = _areas(area, _rings([_SQUARE], crs=crs))
 
     for early_coord_check in ("finite", "finite_and_empty", "off"):
-        got = _areas(partial(area, early_coord_check=early_coord_check), df)
+        # With the check off, an infinite x would otherwise lie outside the bounds of WGS84.
+        checked = partial(
+            area, early_coord_check=early_coord_check, on_out_of_bounds="ignore"
+        )
+        got = _areas(checked, df)
         assert got[0] == square
         assert math.isnan(got[1])
 
@@ -318,6 +322,94 @@ def test_the_early_check_keeps_an_infinite_y_from_proj() -> None:
 
     with pytest.raises(ComputeError, match="failed to reproject"):
         _areas(partial(area, early_coord_check="off"), df)
+
+
+def _shifted(
+    ring: list[dict[str, float]], dx: float, dy: float = 0.0
+) -> list[dict[str, float]]:
+    return [{"x": v["x"] + dx, "y": v["y"] + dy} for v in ring]
+
+
+_EAST_OF_THE_ANTIMERIDIAN = _shifted(_DEGREE_SQUARE, 200.0)
+
+
+@pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
+def test_a_row_outside_the_bounds_of_its_crs_goes_to_on_row_error(
+    distance_method: DistanceMethod,
+) -> None:
+    area = _area_by(distance_method)
+    df = _polygons([[_DEGREE_SQUARE], [_EAST_OF_THE_ANTIMERIDIAN]], crs=WGS84)
+    (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
+
+    with pytest.raises(ComputeError, match=r"\(200, 0\) lies outside the bounds"):
+        _areas(area, df)
+
+    assert _areas(partial(area, on_row_error="null"), df) == [inside, None]
+
+
+@pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
+def test_on_out_of_bounds_null_nulls_the_row_whatever_on_row_error_says(
+    distance_method: DistanceMethod,
+) -> None:
+    area = _area_by(distance_method)
+    df = _polygons([[_DEGREE_SQUARE], [_EAST_OF_THE_ANTIMERIDIAN]], crs=WGS84)
+    (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
+
+    got = _areas(partial(area, on_out_of_bounds="null", on_row_error="raise"), df)
+    assert got == [inside, None]
+
+
+def test_on_out_of_bounds_ignore_measures_the_row() -> None:
+    df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
+
+    assert _areas(partial(_area_by("planar"), on_out_of_bounds="ignore"), df) == [1.0]
+
+
+def test_crs_bounds_can_take_longitudes_up_to_a_full_turn() -> None:
+    df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
+    area = partial(_area_by("planar"), crs_bounds="crs_wrapped_longitude")
+
+    assert _areas(area, df) == [1.0]
+
+
+def test_a_projected_crs_only_has_bounds_from_its_area_of_use() -> None:
+    """UTM zone 31N is meant for 0 to 6 degrees east, far west of x=1e8."""
+    near = _shifted(_SQUARE, 500_000.0, 1_000_000.0)
+    far = _shifted(_SQUARE, 1e8, 1_000_000.0)
+    df = _polygons([[near], [far]], crs="EPSG:32631")
+    area = _area_by("planar")
+
+    assert _areas(area, df) == [16.0, 16.0]
+    got = _areas(partial(area, crs_bounds="area_of_use", on_out_of_bounds="null"), df)
+    assert got == [16.0, None]
+
+
+@pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
+def test_a_nan_is_not_outside_the_bounds(distance_method: DistanceMethod) -> None:
+    """NaN is left to `early_coord_check`, even when that check is off."""
+    area = partial(_area_by(distance_method), early_coord_check="off")
+    for vertex in ({"x": math.nan, "y": math.nan}, {"x": math.nan, "y": 0.5}):
+        broken = [_DEGREE_SQUARE[0], vertex, *_DEGREE_SQUARE[1:]]
+        (got,) = _areas(area, _relabelled([broken], crs=WGS84))
+
+        assert math.isnan(got)
+
+
+@pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
+def test_a_multipolygon_with_a_polygon_outside_the_bounds_is_out_of_bounds(
+    distance_method: DistanceMethod,
+) -> None:
+    df = _multipolygons(
+        [[[_DEGREE_SQUARE]], [[_DEGREE_SQUARE], [_EAST_OF_THE_ANTIMERIDIAN]]], crs=WGS84
+    )
+    area = _area_by(distance_method)
+    (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
+
+    with pytest.raises(ComputeError, match="lies outside the bounds"):
+        _areas(area, df, "multipolygon")
+
+    got = _areas(partial(area, on_out_of_bounds="null"), df, "multipolygon")
+    assert got == [inside, None]
 
 
 def test_with_a_crs_the_ellipsoid_is_the_one_the_crs_declares(
@@ -694,6 +786,26 @@ def test_the_namespace_passes_allow_non_polygons_on(
 def test_an_unknown_distance_method_is_refused() -> None:
     with pytest.raises(ValueError, match="`distance_method` must be one of"):
         geo.area("polygon", distance_method="Geodesic")  # type: ignore[arg-type]
+
+
+def test_the_namespace_passes_on_out_of_bounds_and_crs_bounds_on() -> None:
+    df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
+    kwargs = {"on_out_of_bounds": "null", "crs_bounds": "crs_wrapped_longitude"}
+
+    assert df.select(pl.col("polygon").geo.area(**kwargs)).equals(
+        df.select(geo.area("polygon", **kwargs))
+    )
+    assert df.select(geo.area("polygon", on_out_of_bounds="null")).item() is None
+
+
+def test_an_unknown_on_out_of_bounds_is_refused() -> None:
+    with pytest.raises(ValueError, match="`on_out_of_bounds` must be one of"):
+        geo.area("polygon", on_out_of_bounds="raise")  # type: ignore[arg-type]
+
+
+def test_an_unknown_crs_bounds_is_refused() -> None:
+    with pytest.raises(ValueError, match="`crs_bounds` must be one of"):
+        geo.area("polygon", crs_bounds="wrapped")  # type: ignore[arg-type]
 
 
 def test_an_unknown_negative_area_is_refused() -> None:

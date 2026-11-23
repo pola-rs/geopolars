@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::fmt;
 
 use geopolars_views::MIN_RING_VERTICES;
@@ -40,6 +41,11 @@ pub enum GeoComputeError {
     Split { parts: usize },
     /// A hole with vertices for a polygon with an empty exterior.
     HoleInEmptyExterior,
+    /// A coordinate at `position` outside `bounds`, the `[xmin, ymin, xmax, ymax]` of its CRS.
+    OutOfBounds {
+        position: (f64, f64),
+        bounds: [f64; 4],
+    },
     #[cfg(feature = "geos")]
     Geos(geos::Error),
 }
@@ -108,6 +114,15 @@ impl fmt::Display for GeoComputeError {
                 "a polygon with an empty exterior got a hole with vertices, which is not valid OGC; \
                 set `empty_polygon_exterior` to \"null\", \"empty\" or \"keep\" not to raise"
             ),
+            Self::OutOfBounds {
+                position: (x, y),
+                bounds: [xmin, ymin, xmax, ymax],
+            } => write!(
+                f,
+                "({x}, {y}) lies outside the bounds of the CRS, \
+                x from {xmin} to {xmax} and y from {ymin} to {ymax}; \
+                set `on_out_of_bounds` to \"null\" or \"ignore\" not to raise"
+            ),
             #[cfg(feature = "geos")]
             Self::Geos(source) => write!(f, "{source}"),
         }
@@ -126,10 +141,17 @@ impl std::error::Error for GeoComputeError {
             | Self::NotFiniteDistance { .. }
             | Self::NegativeOneSidedDistance { .. }
             | Self::Split { .. }
-            | Self::HoleInEmptyExterior => None,
+            | Self::HoleInEmptyExterior
+            | Self::OutOfBounds { .. } => None,
             #[cfg(feature = "geos")]
             Self::Geos(source) => Some(source),
         }
+    }
+}
+
+impl From<Infallible> for GeoComputeError {
+    fn from(never: Infallible) -> Self {
+        match never {}
     }
 }
 

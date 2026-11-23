@@ -1,17 +1,15 @@
 //! The area a geometry encloses.
 //! Implements the Python `area`.
 
-use std::fmt::Display;
-
-use geopolars_compute::native::{AreaMetric, NegativeArea};
-use geopolars_compute::{EarlyCoordCheck, OnRowError, Planar};
+use geopolars_compute::native::{AreaMetric, Bounds, NegativeArea};
+use geopolars_compute::{EarlyCoordCheck, GeoComputeError, OnOutOfBounds, OnRowError, Planar};
 use geopolars_core::{areas, PolygonKind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::distance::{geodesic_metric_of, DistanceMethod};
-use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
+use crate::common_arguments::{EarlyCoordCheckDef, OnOutOfBoundsDef, OnRowErrorDef};
 use crate::geoarrow::describe;
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +28,10 @@ struct AreaKwargs {
     on_row_error: OnRowError,
     #[serde(with = "EarlyCoordCheckDef")]
     early_coord_check: EarlyCoordCheck,
+    /// The bounds `crs_bounds` names, looked up at plan time.
+    bounds: Option<Bounds>,
+    #[serde(with = "OnOutOfBoundsDef")]
+    on_out_of_bounds: OnOutOfBounds,
     #[serde(with = "NegativeAreaDef")]
     negative_area: NegativeArea,
 }
@@ -49,9 +51,8 @@ fn kernel_output_type_area(input_fields: &[Field], kwargs: AreaKwargs) -> Polars
     area_dtype(&input_fields[0])
 }
 
-/// The area of every geometry in `geometries`, as `metric` measures it.
-fn measure(
-    metric: &impl AreaMetric<Error: Display>,
+fn measure_areas(
+    metric: &impl AreaMetric<Error: Into<GeoComputeError>>,
     geometries: &Series,
     kwargs: &AreaKwargs,
 ) -> PolarsResult<Series> {
@@ -64,6 +65,8 @@ fn measure(
             metric,
             kwargs.on_row_error,
             kwargs.early_coord_check,
+            kwargs.bounds,
+            kwargs.on_out_of_bounds,
             kwargs.negative_area,
         )
     });
@@ -73,10 +76,10 @@ fn measure(
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_area)]
 fn area(inputs: &[Series], kwargs: AreaKwargs) -> PolarsResult<Series> {
     match kwargs.distance_method {
-        DistanceMethod::Planar => measure(&Planar, &inputs[0], &kwargs),
+        DistanceMethod::Planar => measure_areas(&Planar, &inputs[0], &kwargs),
         DistanceMethod::Geodesic => {
             let metric = geodesic_metric_of(&inputs[0].field())?;
-            measure(&*metric, &inputs[0], &kwargs)
+            measure_areas(&*metric, &inputs[0], &kwargs)
         }
     }
 }

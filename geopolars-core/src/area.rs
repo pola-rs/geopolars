@@ -1,22 +1,25 @@
-use std::fmt::Display;
-
-use geopolars_compute::native::{multi_polygon_areas, polygon_areas, AreaMetric, NegativeArea};
-use geopolars_compute::{EarlyCoordCheck, OnRowError};
+use geopolars_compute::native::{
+    multi_polygon_areas, polygon_areas, AreaMetric, Bounds, NegativeArea,
+};
+use geopolars_compute::{EarlyCoordCheck, GeoComputeError, OnOutOfBounds, OnRowError};
 use geopolars_views::{downcast, MultiPolygonArray, PolygonArray};
 use polars_arrow::array::{Array, PrimitiveArray};
 use polars_core::prelude::{polars_err, PolarsResult};
 
 use crate::PolygonKind;
 
-/// Measures the area of every polygon or multipolygon in one chunk of a `kind` column's storage.
+/// Measures the area of every polygon or multipolygon in `chunk`, the storage of a `kind` column.
 /// How it is measured (geodesic, planar, etc) is determined by `metric`.
 /// Implements the Python `area`.
+#[allow(clippy::too_many_arguments)]
 pub fn areas(
     chunk: &dyn Array,
     kind: PolygonKind,
-    metric: &impl AreaMetric<Error: Display>,
+    metric: &impl AreaMetric<Error: Into<GeoComputeError>>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
+    bounds: Option<Bounds>,
+    on_out_of_bounds: OnOutOfBounds,
     negative_area: NegativeArea,
 ) -> PolarsResult<PrimitiveArray<f64>> {
     match kind {
@@ -27,6 +30,8 @@ pub fn areas(
                 &array,
                 on_row_error,
                 early_coord_check,
+                bounds,
+                on_out_of_bounds,
                 negative_area,
             )
         }
@@ -37,6 +42,8 @@ pub fn areas(
                 &array,
                 on_row_error,
                 early_coord_check,
+                bounds,
+                on_out_of_bounds,
                 negative_area,
             )
         }

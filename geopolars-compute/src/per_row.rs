@@ -29,36 +29,36 @@ pub(crate) fn per_row<E>(
 pub(crate) fn per_row_or_null<E>(
     rows: &List,
     on_row_error: OnRowError,
-    measure: impl Fn(usize) -> Result<f64, E>,
+    measure: impl Fn(usize) -> Result<Option<f64>, E>,
 ) -> Result<PrimitiveArray<f64>, E> {
-    let (values, failed) = with_const_flags!(
+    let (values, nulled) = with_const_flags!(
         ALL_VALID = rows.is_all_valid();
         per_row_or_null_with::<ALL_VALID, E>(rows, on_row_error, measure)
     )?;
-    Ok(f64_array_masked(values, rows.validity(), None, &failed))
+    Ok(f64_array_masked(values, rows.validity(), None, &nulled))
 }
 
-/// [per_row_or_null]'s values, and the rows that failed.
+/// [per_row_or_null]'s values, and the rows to null.
 #[inline(always)]
 fn per_row_or_null_with<const ALL_VALID: bool, E>(
     rows: &List,
     on_row_error: OnRowError,
-    measure: impl Fn(usize) -> Result<f64, E>,
+    measure: impl Fn(usize) -> Result<Option<f64>, E>,
 ) -> Result<(Vec<f64>, Vec<usize>), E> {
     // Filled by index, not collected,
     // because collecting through `Result` loses the length.
     let mut values = vec![0.0; rows.len()];
-    let mut failed = Vec::new();
+    let mut nulled = Vec::new();
     for (i, value) in values.iter_mut().enumerate() {
         // A null row's offsets point anywhere, so it is not measured.
         if ALL_VALID || rows.is_valid(i) {
-            match row_or_null(measure(i).map(Some), on_row_error)? {
+            match row_or_null(measure(i), on_row_error)? {
                 Some(measured) => *value = measured,
-                None => failed.push(i),
+                None => nulled.push(i),
             }
         }
     }
-    Ok((values, failed))
+    Ok((values, nulled))
 }
 
 /// [per_row], for a `bool` per row.

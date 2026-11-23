@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         NewHoles,
         NewRingOrientation,
         NullParts,
+        OnOutOfBounds,
         OnRowError,
         PromoteToMulti,
         ShortLines,
@@ -836,6 +837,8 @@ class ExprGeoNameSpace:
         allow_non_polygons: bool = False,
         on_row_error: OnRowError = "raise",
         early_coord_check: EarlyCoordCheck = "finite",
+        on_out_of_bounds: OnOutOfBounds = "error",
+        crs_bounds: CrsBounds = "crs",
         negative_area: NegativeArea = "zero",
     ) -> pl.Expr:
         from geopolars.geo.area import area
@@ -846,6 +849,8 @@ class ExprGeoNameSpace:
             allow_non_polygons=allow_non_polygons,
             on_row_error=on_row_error,
             early_coord_check=early_coord_check,
+            on_out_of_bounds=on_out_of_bounds,
+            crs_bounds=crs_bounds,
             negative_area=negative_area,
         )
 

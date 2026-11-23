@@ -13,10 +13,16 @@ import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import DistanceMethod, EarlyCoordCheck, OnRowError
+from geopolars._typing import (
+    DistanceMethod,
+    EarlyCoordCheck,
+    OnOutOfBounds,
+    OnRowError,
+)
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import MultiPolygonType, PolygonType
 from geopolars.geo._dispatch import on_geometry
+from geopolars.geo.fix_out_of_bounds import CrsBounds, _bounds
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
@@ -56,6 +62,8 @@ def _area(
     allow_non_polygons: bool,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
+    on_out_of_bounds: OnOutOfBounds,
+    crs_bounds: CrsBounds,
     negative_area: NegativeArea,
 ) -> pl.Expr:
     if distance_method == "auto":
@@ -68,6 +76,8 @@ def _area(
     zero = _encloses_nothing(column, geometry, allow_non_polygons=allow_non_polygons)
     if zero is not None:
         return zero
+    # PROJ is only asked when there are bounds to check.
+    bounds = None if on_out_of_bounds == "ignore" else _bounds(geometry, crs_bounds)
     # Whether PROJ can use the CRS is for the kernel to check.
     return register_plugin_function(
         plugin_path=LIB,
@@ -77,6 +87,8 @@ def _area(
             "distance_method": distance_method,
             "on_row_error": on_row_error,
             "early_coord_check": early_coord_check,
+            "bounds": bounds,
+            "on_out_of_bounds": on_out_of_bounds,
             "negative_area": negative_area,
         },
         is_elementwise=True,
@@ -91,6 +103,8 @@ def area(
     allow_non_polygons: bool = False,
     on_row_error: OnRowError = "raise",
     early_coord_check: EarlyCoordCheck = "finite",
+    on_out_of_bounds: OnOutOfBounds = "error",
+    crs_bounds: CrsBounds = "crs",
     negative_area: NegativeArea = "zero",
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.
@@ -168,10 +182,13 @@ def area(
     In a multipolygon, this applies to each individual polygon before they are summed.
 
     {on_row_error}
-    Only `"geodesic"` can fail on a row, when PROJ cannot take one of its vertices to longitude/latitude.
+    A row holding a coordinate outside the bounds of its CRS fails (see below).
+    PROJ failing to take one of its vertices to longitude/latitude also fails it, with `"geodesic"`.
 
     {early_coord_check}
     A row that fails the check gets NaN, without being measured.
+
+    {on_out_of_bounds}
 
     .. code-block:: python
 
@@ -181,6 +198,8 @@ def area(
     validate_one_of("distance_method", distance_method, DistanceMethod)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("on_out_of_bounds", on_out_of_bounds, OnOutOfBounds)
+    validate_one_of("crs_bounds", crs_bounds, CrsBounds)
     validate_one_of("negative_area", negative_area, NegativeArea)
     return on_geometry(
         geometry,
@@ -190,6 +209,8 @@ def area(
             allow_non_polygons=allow_non_polygons,
             on_row_error=on_row_error,
             early_coord_check=early_coord_check,
+            on_out_of_bounds=on_out_of_bounds,
+            crs_bounds=crs_bounds,
             negative_area=negative_area,
         ),
     )

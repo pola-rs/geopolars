@@ -7,6 +7,12 @@
 //!
 //! The kernels are generic over `EARLY_COORD_CHECK`, an [EarlyCoordCheck].
 //! Unless it is `Off`, a row whose x or y fails it gets NaN, without being measured.
+//!
+//! ## `CHECK_BOUNDS`
+//!
+//! If `CHECK_BOUNDS=true`, a row with an x or y outside the bounds is not measured,
+//! but handled as its [OnOutOfBounds] says.
+//! It is `false` for [OnOutOfBounds::Ignore], or without bounds.
 
 use std::convert::Infallible;
 use std::ops::Range;
@@ -17,9 +23,13 @@ use geopolars_views::{
 };
 use polars_arrow::array::PrimitiveArray;
 
+use super::{first_outside, has_none_outside, Bounds};
 use crate::early_coord_check::every_xy_passes;
 use crate::per_row::per_row_or_null;
-use crate::{BaseMetric, EarlyCoordCheck, GeoComputeError, GeodesicMetric, OnRowError, Planar};
+use crate::{
+    BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, GeodesicMetric, OnOutOfBounds,
+    OnRowError, Planar,
+};
 
 /// The `negative_area` of the Python `area`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,46 +145,94 @@ fn row_passes_early_check<const EARLY_COORD_CHECK: u8>(
     every_xy_passes::<EARLY_COORD_CHECK>(&coords.x()[vertices.clone()], &coords.y()[vertices])
 }
 
+/// What a row gets instead of its area, if it fails a check before being measured.
+#[inline(always)]
+fn instead_of_measuring<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool>(
+    coords: &ValidCoords,
+    vertices: Range<usize>,
+    bounds: &Bounds,
+    on_out_of_bounds: OnOutOfBounds,
+) -> Option<GeoComputeResult<Option<f64>>> {
+    if !row_passes_early_check::<EARLY_COORD_CHECK>(coords, vertices.clone()) {
+        return Some(Ok(Some(f64::NAN)));
+    }
+    if !CHECK_BOUNDS {
+        return None;
+    }
+    let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
+    if has_none_outside(bounds, x, y) {
+        return None;
+    }
+    Some(match on_out_of_bounds {
+        OnOutOfBounds::Null => Ok(None),
+        _ => Err(GeoComputeError::OutOfBounds {
+            position: first_outside(bounds, x, y)?,
+            bounds: *bounds,
+        }),
+    })
+}
+
+/// Splits `bounds` into whether to check them and the bounds themselves,
+/// dropping them for [OnOutOfBounds::Ignore].
+/// The bounds are a placeholder when there is no check.
+fn split_bounds_check(bounds: Option<Bounds>, on_out_of_bounds: OnOutOfBounds) -> (bool, Bounds) {
+    let bounds = bounds.filter(|_| on_out_of_bounds != OnOutOfBounds::Ignore);
+    (bounds.is_some(), bounds.unwrap_or_default())
+}
+
 /// The area of every polygon of a chunk.
-pub fn polygon_areas<M: AreaMetric>(
+pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     metric: &M,
     array: &Untrimmed<PolygonArray>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
+    bounds: Option<Bounds>,
+    on_out_of_bounds: OnOutOfBounds,
     negative_area: NegativeArea,
-) -> Result<PrimitiveArray<f64>, M::Error> {
+) -> GeoComputeResult<PrimitiveArray<f64>> {
+    let (check_bounds, bounds) = split_bounds_check(bounds, on_out_of_bounds);
     with_const_flags!(
-        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
+        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
         per_row_or_null(array.rows(), on_row_error, |i| {
-            if !row_passes_early_check::<EARLY_COORD_CHECK>(array.coords(), array.row_vertices(i)) {
-                return Ok(f64::NAN);
+            let vertices = array.row_vertices(i);
+            if let Some(instead) = instead_of_measuring::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
+                array.coords(), vertices, &bounds, on_out_of_bounds,
+            ) {
+                return instead;
             }
-            polygon_area(metric, &array.get(i), negative_area)
+            Ok(Some(polygon_area(metric, &array.get(i), negative_area).map_err(Into::into)?))
         })
     )
 }
 
 /// The area of every multipolygon of a chunk.
-pub fn multi_polygon_areas<M: AreaMetric>(
+pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     metric: &M,
     array: &Untrimmed<MultiPolygonArray>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
+    bounds: Option<Bounds>,
+    on_out_of_bounds: OnOutOfBounds,
     negative_area: NegativeArea,
-) -> Result<PrimitiveArray<f64>, M::Error> {
+) -> GeoComputeResult<PrimitiveArray<f64>> {
+    let (check_bounds, bounds) = split_bounds_check(bounds, on_out_of_bounds);
     with_const_flags!(
-        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
+        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
         per_row_or_null(array.rows(), on_row_error, |i| {
-            if !row_passes_early_check::<EARLY_COORD_CHECK>(array.coords(), array.row_vertices(i)) {
-                return Ok(f64::NAN);
+            let vertices = array.row_vertices(i);
+            if let Some(instead) = instead_of_measuring::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
+                array.coords(), vertices, &bounds, on_out_of_bounds,
+            ) {
+                return instead;
             }
             array
                 .get(i)
                 .polygons()
                 // Folded from `0.0`, as `sum` starts from `-0.0`.
                 .try_fold(0.0, |total, polygon| {
-                    Ok(total + polygon_area(metric, &polygon, negative_area)?)
+                    Ok(total + polygon_area(metric, &polygon, negative_area).map_err(Into::into)?)
                 })
+                .map(Some)
         })
     )
 }

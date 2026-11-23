@@ -150,6 +150,26 @@ By default, we want to be strict. Raising an error at plan-time is clear.
 - `allow_geographic = True` shows that you know what you are doing,
   and intentionally want to express distances in degrees.
 
+.. _arg-on_out_of_bounds:
+
+`on_out_of_bounds: Literal["ignore", "error", "null"] = "error"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A coordinate outside the bounds of its CRS (a latitude of 91°, say) is not a place,
+so measuring it gives NaN, `0.0`, or a wrong number without warning.
+This argument checks for such coordinates.
+`crs_bounds` picks the bounds to check against, with the same values as in `fix_out_of_bounds`.
+
+The check leaves NaN to `early_coord_check`, as a NaN `x` or `y` never lies outside the bounds,
+so neither does an empty point inside a geometry.
+
+- `on_out_of_bounds="error"` (default) fails the row, and `on_row_error` handles it.
+- `on_out_of_bounds="null"` makes the row null, whatever `on_row_error` says.
+- `on_out_of_bounds="ignore"` skips the check, and its extra pass over the coordinates.
+
+A column without a CRS, or with a projected CRS and `crs_bounds="crs"`, has no bounds,
+so it is not checked.
+
 Comparing coordinates
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -337,17 +357,20 @@ Some arguments make another one necessary.
 
 - An expression that can remove points takes `short_lines`,
   as dropping coordinates or parts can make rings and linestrings too short.
-  So one that takes `null_parts` takes `short_lines` too.
+  One that takes `null_parts` therefore takes `short_lines` too.
 - An expression that takes polygons (or multipolygons) and `short_lines`
   takes `empty_polygon_exterior` too,
   as removing points from a ring can otherwise invalidate a polygon.
 - An expression that takes `new_ring_orientation` and can give polygons takes `new_holes` too.
 - An expression that takes `promote_to_multi` takes `on_row_error` too,
-  as with `"never"`, a result in several parts is an error.
+  as `promote_to_multi="never"` makes a result in several parts an error.
 - An expression that takes `early_coord_check` takes `on_row_error` too,
-  as the check hands what it finds to it.
+  as a GEOS kernel hands a row that fails the check to it.
 - An expression that takes `empty_polygon_exterior` takes `on_row_error` too,
   as `empty_polygon_exterior="error"` hands the error to it.
+- An expression that takes `on_out_of_bounds` takes `on_row_error` too,
+  as `on_out_of_bounds="error"` hands the error to it.
+  It also takes `crs_bounds`, to pick the bounds.
 
 Shared by two or three expressions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
