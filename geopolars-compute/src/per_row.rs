@@ -119,16 +119,17 @@ fn per_row_values_with<const ALL_VALID: bool, T: Default, E>(
     rows: &List,
     measure: impl Fn(usize) -> Result<T, E>,
 ) -> Result<Vec<T>, E> {
-    (0..rows.len())
+    // Pushed, not collected, because collecting through `Result` loses the length.
+    let mut values = Vec::with_capacity(rows.len());
+    for i in 0..rows.len() {
         // A null row's offsets point anywhere, so it is not measured.
-        .map(|i| {
-            if ALL_VALID || rows.is_valid(i) {
-                measure(i)
-            } else {
-                Ok(T::default())
-            }
-        })
-        .collect()
+        values.push(if ALL_VALID || rows.is_valid(i) {
+            measure(i)?
+        } else {
+            T::default()
+        });
+    }
+    Ok(values)
 }
 
 /// [per_row_optional_bool], as a list per row of a chunk, one per part.
