@@ -161,9 +161,11 @@ See :ref:`on_row_error <arg-on_row_error>` on the Common arguments page.""",
     "geos_errors": """\
 If GEOS returns an error for a row, it is handled through `on_row_error`.""",
     "geos_non_finite": """\
-GEOS supports neither empty points inside a geometry nor any other NaN or infinite x or y
-(see "NaN and infinity" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`).
-With `early_coord_check="off"`, they go to GEOS as they are.""",
+GEOS cannot handle a vertex with a NaN or infinite x or y, nor an empty point nested in a geometry.
+By default, `early_coord_check` sends a row with such a vertex to `on_row_error` instead of to GEOS.
+With `early_coord_check="off"`, such a vertex goes to GEOS, which is allowed to deal with it how it wants.
+GEOS handles these internal empties or invalid points differently per operation,
+so you might not get the same results.""",
     "early_coord_check": """\
 This expression can check for NaNs and nested empty points early.
 See :ref:`early_coord_check <arg-early_coord_check>` on the Common arguments page.""",

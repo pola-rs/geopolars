@@ -12,7 +12,7 @@ version = "0.2.0a1"
 license = "MIT"
 # A symlink to the root LICENSE, as license files cannot be outside the package directory.
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["dataframe", "geospatial", "gis", "geoarrow", "polars"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -24,8 +24,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: GIS",
   "Typing :: Typed",
 ]
-# `Expr.pipe_with_dtype` is new in 2.0.
-# The floor is 2.0.0rc2, as that is the version of the polars built from the pinned commit.
+# The floor is 2.0.0rc2, but we build against a later commit (see the root Cargo.toml), and do not test against the floor.
 dependencies = ["polars>=2.0.0rc2"]
 
 [project.urls]
@@ -37,8 +36,7 @@ Issues = "https://github.com/pola-rs/geopolars/issues"
 # beside them, so that `plugin_path=LIB` finds it.
 python-source = "."
 module-name = "geopolars.geopolars"
-# Local bytecode otherwise might get swept into the wheel
-# interpreter-specific .pyc files in a wheel tagged abi3 for 3.10+.
+# Keeps interpreter-specific .pyc files from local runs out of the abi3 wheel.
 exclude = ["**/__pycache__/**", "tests/**"]
 
 [tool.pytest.ini_options]

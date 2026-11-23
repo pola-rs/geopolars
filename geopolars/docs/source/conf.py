@@ -2,7 +2,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 #
 # Based on the one of py-polars.
-# `make docs` runs this with a copy of the package with the `@doc` docstrings filled in.
+# `make docs-api` runs this with a copy of the package with the `@doc` docstrings filled in.
 
 from __future__ import annotations
 

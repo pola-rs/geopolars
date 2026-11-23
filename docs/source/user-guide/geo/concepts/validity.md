@@ -19,10 +19,10 @@ The second is the OGC Simple Features standard, checked by `geo.is_valid_ogc`.
 This is the same standard as followed by GEOS (and therefore shapely, and GeoPandas).
 In GeoPolars, a geometry valid by OGC has to be valid by GeoArrow as well.
 
-- Every coordinate is finite (see [NaN and infinity](nulls-nan-and-empty.md#nan-and-infinity) for why).
+- Every coordinate is finite (see [Non-finite](nulls-nan-and-empty.md#non-finite) for why).
   The [empty point](nulls-nan-and-empty.md#empty-geometries) is the exception, as a point or in a multipoint.
 - A linestring has at least 2 different vertices (or none, making it empty).
-- A ring has at least 4 different vertices
+- A ring has at least 4 vertices once repeats in succession are left out, counting the one that closes it
   (A ring with fewer vertices can only go back and forth, so it has no area).
 - The rings of a polygon do not cross themselves or each other, and its holes lie *inside* its exterior.
 - The parts of a multipolygon do not overlap.

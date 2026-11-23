@@ -1,0 +1,39 @@
+# Our part of the nav in the Polars `zensical.toml`.
+# `make docs-guide` builds with it in place of the Polars nav.
+# When merging into Polars, add these sections to the matching ones there.
+nav = [
+  { Polars = [
+    { "User guide" = [
+      { Geo = [
+        "user-guide/geo/getting-started.md",
+        "user-guide/geo/installation.md",
+        { Concepts = [
+          "user-guide/geo/concepts/geometry-types.md",
+          "user-guide/geo/concepts/crs.md",
+          "user-guide/geo/concepts/nulls-nan-and-empty.md",
+          "user-guide/geo/concepts/validity.md",
+          "user-guide/geo/concepts/winding-order.md",
+        ] },
+        "user-guide/geo/io.md",
+        "user-guide/geo/udfs.md",
+        { Migrating = [
+          "user-guide/geo/migration/geopandas.md",
+        ] },
+      ] },
+    ] },
+    { Development = [
+      { Geo = [
+        "development/geo/contributing/index.md",
+        "development/geo/architecture.md",
+        "development/geo/typical-expression-flow.md",
+        "development/geo/expression-implementation-guide.md",
+        "development/geo/kernel-implementation-guide.md",
+        "development/geo/native-kernel-implementation-guide.md",
+        "development/geo/geos-kernel-implementation-guide.md",
+        "development/geo/view-types.md",
+        "development/geo/tier-per-expression.md",
+        "development/geo/roadmap.md",
+      ] },
+    ] },
+  ] },
+]

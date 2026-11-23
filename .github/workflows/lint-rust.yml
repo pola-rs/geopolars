@@ -1,3 +1,5 @@
+# Run `clippy` and `rustfmt` on the Rust code.
+
 name: Lint Rust
 
 on:
@@ -6,42 +8,66 @@ on:
     branches:
       - main
 
+env:
+  RUSTFLAGS: -C debuginfo=0  # Do not produce debug symbols to keep memory usage down
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  RUSTFLAGS: -C debuginfo=0  # Do not produce debug symbols to keep memory usage down
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   clippy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      # https://github.com/marketplace/actions/checkout
+      - name: Check out codebase
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Set up Rust
-        run: rustup component add clippy
+        run: |
+          rustup component add clippy
 
       # The bundled PROJ links SQLite, and generates its database with the sqlite3 binary.
       - name: Install SQLite
-        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+        run: |
+          sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
+      # https://github.com/marketplace/actions/rust-cache
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           save-if: ${{ github.event_name == 'push' }}
 
       # Without default features, as in `make test-rust`.
       - name: Run cargo clippy
-        run: cargo clippy --workspace --all-targets --no-default-features --locked -- -D warnings
+        run: |
+          cargo clippy --workspace --all-targets --no-default-features --locked -- -D warnings
 
   rustfmt:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      # https://github.com/marketplace/actions/checkout
+      - name: Check out codebase
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Set up Rust
-        run: rustup component add rustfmt
+        run: |
+          rustup component add rustfmt
 
       - name: Run cargo fmt
-        run: cargo fmt --all --check
+        run: |
+          cargo fmt --all --check

@@ -53,7 +53,7 @@ with `null_parts="drop"`.
 An operation can also *give* a null where it has no answer.
 A centroid of an empty polygon is one example.
 Another is an operation that fails on a row while `on_row_error="null"` is set,
-as you will see [below](#nan-and-infinity).
+as you will see [below](#non-finite-and-inner-empties-in-geos-backed-kernels).
 
 ## Empty geometries
 

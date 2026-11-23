@@ -21,7 +21,7 @@ Read them as follows:
 | - | - |
 | `NULLS` | `ALL_VALID`, which is its opposite |
 
-The arguments are described in [Common arguments](../../../geopolars/docs/source/reference/common_arguments.rst).
+The arguments are described in [Common arguments](https://docs.pola.rs/api/geopolars/stable/reference/common_arguments.html).
 
 ## The entry point
 
@@ -202,7 +202,7 @@ A valid polygon cannot have a null coordinate, but it can still have a NaN x.
 These are all valid GeoArrow:
 
 - Individual NaN or infinite values (e.g. `x = 32.1, y = NaN`).
-- [*Empty* points](../user-guide/geo/concepts/nulls-nan-and-empty.md#empty-geometries) (NaN on every axis).
+- [*Empty* points](../../user-guide/geo/concepts/nulls-nan-and-empty.md#empty-geometries) (NaN on every axis).
 - Empty rings and parts (e.g. a polygon with an empty ring).
 
 How to handle these is up to the kernel,
