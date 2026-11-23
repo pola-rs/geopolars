@@ -37,11 +37,18 @@ _XY_VERTICES = pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))
 _XY_RINGS = pl.List(_XY_VERTICES)
 
 
-def _rings(rings: list[list[dict[str, float]]], crs: str | None = None) -> pl.DataFrame:
-    """A one-row polygon column, built straight from XY rings."""
-    return pl.DataFrame({"rings": [rings]}, schema={"rings": _XY_RINGS}).select(
+def _polygons(
+    rows: list[list[list[dict[str, float]]]], crs: str | None = None
+) -> pl.DataFrame:
+    """A polygon column, built straight from the XY rings of each row."""
+    return pl.DataFrame({"rings": rows}, schema={"rings": _XY_RINGS}).select(
         geo.polygons_from_rings_in_single_column("rings", crs=crs).alias("polygon")
     )
+
+
+def _rings(rings: list[list[dict[str, float]]], crs: str | None = None) -> pl.DataFrame:
+    """A one-row polygon column, built straight from XY rings."""
+    return _polygons([rings], crs=crs)
 
 
 def _relabelled(rings: list[list[dict[str, float]]]) -> pl.DataFrame:
@@ -239,11 +246,7 @@ def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -
     """A square far outside the UTM zone fails on its own row, not the whole column."""
     far = [{"x": x * 1e30, "y": y * 1e30} for x, y in ((0, 0), (1, 0), (1, 1), (0, 0))]
     near = [{"x": 500_000.0 + v["x"], "y": v["y"]} for v in _SQUARE]
-    df = pl.DataFrame({"rings": [[near], [far]]}, schema={"rings": _XY_RINGS}).select(
-        geo.polygons_from_rings_in_single_column("rings", crs="EPSG:32631").alias(
-            "polygon"
-        )
-    )
+    df = _polygons([[near], [far]], crs="EPSG:32631")
 
     with pytest.raises(ComputeError, match="failed to reproject"):
         _areas(geodesic_area, df)
@@ -251,6 +254,40 @@ def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -
     got = _areas(partial(geodesic_area, on_row_error="null"), df)
     assert got[0] == pytest.approx(16.0, rel=1e-3)
     assert got[1] is None
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf])
+@pytest.mark.parametrize(
+    ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
+)
+def test_a_non_finite_x_goes_to_on_row_error(
+    value: float, distance_method: DistanceMethod, crs: str | None
+) -> None:
+    """By default, as `early_coord_check="finite"`. Turned off, the area is NaN."""
+    area = _area_by(distance_method)
+    broken = [_SQUARE[0], {"x": value, "y": 0.0}, *_SQUARE[2:]]
+    df = _polygons([[_SQUARE], [broken]], crs=crs)
+    (square,) = _areas(area, _rings([_SQUARE], crs=crs))
+
+    with pytest.raises(ComputeError, match="expects finite coordinates"):
+        _areas(area, df)
+
+    assert _areas(partial(area, on_row_error="null"), df) == [square, None]
+    unchecked = _areas(partial(area, early_coord_check="off"), df)
+    assert unchecked[0] == square
+    assert math.isnan(unchecked[1])
+
+
+def test_an_empty_point_fails_only_with_finite_and_empty(planar_area: Area) -> None:
+    """`"finite"` lets the empty point through, whose NaN makes the area NaN."""
+    with_empty = [_SQUARE[0], {"x": math.nan, "y": math.nan}, *_SQUARE[2:]]
+    df = _rings([with_empty])
+
+    (got,) = _areas(planar_area, df)
+    assert math.isnan(got)
+
+    with pytest.raises(ComputeError, match="expects finite coordinates"):
+        _areas(partial(planar_area, early_coord_check="finite_and_empty"), df)
 
 
 def test_with_a_crs_the_ellipsoid_is_the_one_the_crs_declares(

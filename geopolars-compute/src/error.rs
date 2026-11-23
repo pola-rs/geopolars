@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::fmt;
 
 use geopolars_views::MIN_RING_VERTICES;
@@ -130,6 +131,13 @@ impl std::error::Error for GeoComputeError {
             #[cfg(feature = "geos")]
             Self::Geos(source) => Some(source),
         }
+    }
+}
+
+/// So a kernel generic over an error, such as an infallible metric's, can return this one.
+impl From<Infallible> for GeoComputeError {
+    fn from(never: Infallible) -> Self {
+        match never {}
     }
 }
 

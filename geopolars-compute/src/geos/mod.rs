@@ -89,6 +89,7 @@ use polars_arrow::bitmap::{Bitmap, MutableBitmap};
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_arrow::offset::{Offsets, OffsetsBuffer};
 
+use crate::early_coord_check::{first_failing_xy, is_geoarrow_empty_point};
 use crate::{
     row_or_null, EarlyCoordCheck, GeoComputeError, GeoComputeResult, NewHoles, NewRingOrientation,
     OnRowError,
@@ -273,11 +274,6 @@ fn multi_point_to_geos(axes: &Axes, vertices: Range<usize>) -> GeoComputeResult<
     Ok(Geometry::create_multipoint(points)?)
 }
 
-#[inline(always)]
-fn is_geoarrow_empty_point(x: f64, y: f64) -> bool {
-    x.is_nan() && y.is_nan()
-}
-
 /// Marks the (valid) rows that don't have any vertices.
 /// Apart from points, these are the rows `is_empty` (without `check_nested`) calls empty,
 /// such as a polygon whose rings have no vertices.
@@ -433,35 +429,7 @@ fn axes(coords: &ValidCoords) -> Axes<'_> {
 /// z is not checked: GEOS itself uses a NaN z for a coordinate without one.
 #[inline(always)]
 fn xy_is_finite_or_error(x: &[f64], y: &[f64]) -> GeoComputeResult<()> {
-    // Does not stop at the first that fails, so that it vectorises.
-    let finite = |axis: &[f64]| axis.iter().fold(true, |ok, value| ok & value.is_finite());
-    if finite(x) && finite(y) {
-        return Ok(());
-    }
-    let position = x
-        .iter()
-        .zip(y)
-        .map(|(&x, &y)| (x, y))
-        .find(|(x, y)| !(x.is_finite() && y.is_finite()))
-        .expect("a non-finite coordinate, as the check above failed");
-    Err(GeoComputeError::GeosNotFinite { position })
-}
-
-#[inline(always)]
-fn xy_is_finite_or_empty_or_error(x: &[f64], y: &[f64]) -> GeoComputeResult<()> {
-    let passes = |x: f64, y: f64| (x.is_finite() & y.is_finite()) | is_geoarrow_empty_point(x, y);
-    // Does not stop at the first that fails, so that it vectorises.
-    let every_passes = x.iter().zip(y).fold(true, |ok, (&x, &y)| ok & passes(x, y));
-    if every_passes {
-        return Ok(());
-    }
-    let position = x
-        .iter()
-        .zip(y)
-        .map(|(&x, &y)| (x, y))
-        .find(|&(x, y)| !passes(x, y))
-        .expect("a failing coordinate, as the check above failed");
-    Err(GeoComputeError::GeosNotFinite { position })
+    coords_pass_early_check::<{ EarlyCoordCheck::FiniteAndEmpty as u8 }>(x, y)
 }
 
 /// Checks the x and y of one row as `EARLY_COORD_CHECK` asks.
@@ -470,10 +438,9 @@ fn coords_pass_early_check<const EARLY_COORD_CHECK: u8>(
     x: &[f64],
     y: &[f64],
 ) -> GeoComputeResult<()> {
-    match const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } {
-        EarlyCoordCheck::Off => Ok(()),
-        EarlyCoordCheck::Finite => xy_is_finite_or_empty_or_error(x, y),
-        EarlyCoordCheck::FiniteAndEmpty => xy_is_finite_or_error(x, y),
+    match first_failing_xy::<EARLY_COORD_CHECK>(x, y) {
+        Some(position) => Err(GeoComputeError::GeosNotFinite { position }),
+        None => Ok(()),
     }
 }
 

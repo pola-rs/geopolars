@@ -834,6 +834,7 @@ class ExprGeoNameSpace:
         distance_method: DistanceMethod = "auto",
         allow_non_polygons: bool = False,
         on_row_error: OnRowError = "raise",
+        early_coord_check: EarlyCoordCheck = "finite",
     ) -> pl.Expr:
         from geopolars.geo.area import area
 
@@ -842,6 +843,7 @@ class ExprGeoNameSpace:
             distance_method=distance_method,
             allow_non_polygons=allow_non_polygons,
             on_row_error=on_row_error,
+            early_coord_check=early_coord_check,
         )
 
     def is_empty(self, *, check_nested: bool = False) -> pl.Expr:

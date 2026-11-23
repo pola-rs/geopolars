@@ -13,7 +13,7 @@ import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import DistanceMethod, OnRowError
+from geopolars._typing import DistanceMethod, EarlyCoordCheck, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import MultiPolygonType, PolygonType
 from geopolars.geo._dispatch import on_geometry
@@ -53,6 +53,7 @@ def _area(
     distance_method: DistanceMethod,
     allow_non_polygons: bool,
     on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
 ) -> pl.Expr:
     if distance_method == "auto":
         distance_method = _auto_area_method(geometry)
@@ -69,7 +70,11 @@ def _area(
         plugin_path=LIB,
         args=[column],
         function_name="area",
-        kwargs={"distance_method": distance_method, "on_row_error": on_row_error},
+        kwargs={
+            "distance_method": distance_method,
+            "on_row_error": on_row_error,
+            "early_coord_check": early_coord_check,
+        },
         is_elementwise=True,
     )
 
@@ -81,6 +86,7 @@ def area(
     distance_method: DistanceMethod = "auto",
     allow_non_polygons: bool = False,
     on_row_error: OnRowError = "raise",
+    early_coord_check: EarlyCoordCheck = "finite",
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.
 
@@ -151,7 +157,10 @@ def area(
     wind the other way will cancel rather than add.
 
     {on_row_error}
-    Only `"geodesic"` can fail on a row, when PROJ cannot take one of its vertices to longitude/latitude.
+    A row fails when PROJ cannot take one of its vertices to longitude/latitude (only for `"geodesic"`),
+    or when one of its x or y is NaN or infinite, unless `early_coord_check="off"`.
+
+    {early_coord_check}
 
     .. code-block:: python
 
@@ -160,6 +169,7 @@ def area(
     """
     validate_one_of("distance_method", distance_method, DistanceMethod)
     validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     return on_geometry(
         geometry,
         partial(
@@ -167,5 +177,6 @@ def area(
             distance_method=distance_method,
             allow_non_polygons=allow_non_polygons,
             on_row_error=on_row_error,
+            early_coord_check=early_coord_check,
         ),
     )

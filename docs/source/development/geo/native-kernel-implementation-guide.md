@@ -164,4 +164,8 @@ keep the check for nulls and empties in the loop instead.
 ## `early_coord_check`
 
 A native kernel defaults to `early_coord_check="finite"`.
-The check runs as a pass of its own, before the loop.
+
+For a very simple kernel, check each row inside the loop, just before it is measured,
+as its coordinates are then still in cache for the work itself
+(see `native/area.rs`, with `first_failing_xy` from `early_coord_check.rs`).
+Otherwise, the check runs as a pass of its own, before the loop.
