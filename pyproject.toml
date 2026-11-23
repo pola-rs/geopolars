@@ -38,6 +38,10 @@ src = ["geopolars"]
 # the docs' fenced blocks hold snippet includes (`--8<--`), not Python
 extend-exclude = ["*.md"]
 
+[tool.rumdl]
+# admonition bodies are indented, not code blocks
+flavor = "mkdocs"
+
 [dependency-groups]
 dev = [
     # Pinned: https://github.com/PyO3/maturin/issues/3106

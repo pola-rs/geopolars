@@ -35,7 +35,9 @@ def test_a_quarter_turn_is_exact(coords: pl.DataFrame, dimension: Dimension) -> 
     assert_frame_equal(coordinates(out), expected, check_exact=True)
 
 
-@pytest.mark.parametrize(("amount", "unit"), [(90, "deg"), (0.5, "pi"), (450, "deg")])
+@pytest.mark.parametrize(
+    ("amount", "unit"), [(90, "deg"), (math.pi / 2, "rad"), (450, "deg")]
+)
 def test_a_quarter_turn_leaves_no_rounding_error(amount: float, unit: str) -> None:
     """With cos(90°) computed, (1, 0) would land on (6e-17, 1)."""
     df = pl.DataFrame({"x": [1.0], "y": [0.0]}).select(XY.point())
@@ -69,18 +71,13 @@ def test_any_angle_turns_by_its_cosine_and_sine() -> None:
     assert_frame_equal(coordinates(out), expected)
 
 
-@pytest.mark.parametrize(
-    ("degrees", "pis"),
-    [(90, 0.5), (180, 1), (-45, -0.25), (30, 1 / 6)],
-)
-def test_degrees_and_multiples_of_pi_agree(
-    coords: pl.DataFrame, degrees: float, pis: float
-) -> None:
+@pytest.mark.parametrize("degrees", [90, 180, -45, 30])
+def test_degrees_and_radians_agree(coords: pl.DataFrame, degrees: float) -> None:
     df = coords.select(XY.point())
 
     assert_frame_equal(
         df.select(geo.rotate("point", degrees)),
-        df.select(geo.rotate("point", pis, unit="pi")),
+        df.select(geo.rotate("point", math.radians(degrees), unit="rad")),
     )
 
 
@@ -114,7 +111,7 @@ def test_turning_out_of_the_plane_needs_a_z_at_plan_time(
 @pytest.mark.parametrize(
     ("kwargs", "match"),
     [
-        ({"unit": "rad"}, "`unit`"),
+        ({"unit": "pi"}, "`unit`"),
         ({"unit": "π"}, "`unit`"),
         ({"axis": "w"}, "`axis`"),
         ({"amount": math.nan}, "`amount`"),
@@ -197,7 +194,9 @@ def test_the_namespace_forwards(line_coords: pl.DataFrame) -> None:
 
     assert_frame_equal(
         line_coordinates(
-            df.select(gpl.col("line").geo.rotate(0.25, "pi", "x", (1.0, 2.0, 3.0)))
+            df.select(
+                gpl.col("line").geo.rotate(math.pi / 4, "rad", "x", (1.0, 2.0, 3.0))
+            )
         ),
         line_coordinates(
             df.select(geo.rotate("line", 45, axis="x", origin=(1.0, 2.0, 3.0)))

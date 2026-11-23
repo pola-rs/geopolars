@@ -12,6 +12,7 @@ from geopolars._typing import (
     NewHoles,
     NewRingOrientation,
     OnRowError,
+    PromoteToMulti,
 )
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import (
@@ -47,7 +48,7 @@ def intersection(
     b: IntoExprColumn,
     *,
     keep: Keep | None = None,
-    allow_splitting: bool = False,
+    promote_to_multi: PromoteToMulti = "auto",
     new_ring_orientation: NewRingOrientation = "keep",
     new_holes: NewHoles = "opposite",
     on_row_error: OnRowError = "raise",
@@ -66,12 +67,13 @@ def intersection(
     such as `keep="points"` for where two lines cross.
     It cannot be higher than the default, as two lines never intersect in a polygon.
 
-    The result is a single kind if the lower-dimensional input is one
-    (or if either input is one, when they share a dimension).
     {overlay_splitting}
-    A point cannot split, so a point input always gives a point.
-    The table below gives the output kind as "without `allow_splitting` / with it" where the two differ.
-    It is symmetric, so only its upper half is filled.
+    A point cannot split, so `"auto"` gives a point for a point input.
+    With `"never"`, the result is a single kind if the lower-dimensional input is one
+    (or if either input is one, when they share a dimension).
+    The table below gives the output kind as "`"never"` / `"auto"`" where the two differ.
+    `"always"` gives the multi kind of every cell.
+    The table is symmetric, so only its upper half is filled.
 
     ===============  =====  ==========  ============================  ============================  ============================  ============================
     ``a \\ b``        Point  MultiPoint  LineString                    MultiLineString               Polygon                       MultiPolygon
@@ -86,8 +88,8 @@ def intersection(
 
     `keep` only picks the dimension.
     Whether the result is a single or a multi kind still follows the table above.
-    Two linestrings with `keep="points"` therefore give a Point,
-    and a row where they cross twice raises without `allow_splitting`.
+    Two linestrings with `keep="points"` therefore give a MultiPoint by default.
+    With `promote_to_multi="never"`, they give a Point, and a row where they cross twice raises.
 
     ============  ==================================  ============================  ===========================================================
     `keep`        allowed when                        single / multi kind           what is dropped
@@ -112,7 +114,7 @@ def intersection(
     A Point result is then the empty point (NaN on every axis).
 
     {geos_errors}
-    The same goes for a result in several parts without `allow_splitting`.
+    The same goes for a result in several parts with `promote_to_multi="never"`.
     {on_row_error}
 
     {geos_non_finite}
@@ -128,8 +130,9 @@ def intersection(
     .. code-block:: python
 
         df.select(geo.intersection("parcel", "flood_zone"))
-        df.select(geo.intersection("road", "river", keep="points", allow_splitting=True))
+        df.select(geo.intersection("road", "river", keep="points"))
     """
+    validate_one_of("promote_to_multi", promote_to_multi, PromoteToMulti)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
@@ -138,7 +141,7 @@ def intersection(
         validate_one_of("keep", keep, Keep)
     kwargs = {
         "keep": keep,
-        "allow_splitting": allow_splitting,
+        "promote_to_multi": promote_to_multi,
         "new_ring_orientation": new_ring_orientation,
         "new_holes": new_holes,
         "on_row_error": on_row_error,

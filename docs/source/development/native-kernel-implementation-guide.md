@@ -75,16 +75,18 @@ pub fn polygons_have_repeats_in_succession(
     include_z: bool,
     include_m: bool,
 ) -> BooleanArray {
+    let compared = array.coords.with_only_axes(include_z, include_m);
     with_const_flags!(
-        INCLUDE_Z = include_z, INCLUDE_M = include_m;
-        polygons_have_repeats_in_succession_with::<INCLUDE_Z, INCLUDE_M>(array)
+        Z = compared.z().is_some(), M = compared.m().is_some();
+        polygons_have_repeats_in_succession_with::<Z, M>(array, &compared)
     )
 }
 
-fn polygons_have_repeats_in_succession_with<const INCLUDE_Z: bool, const INCLUDE_M: bool>(
+fn polygons_have_repeats_in_succession_with<const Z: bool, const M: bool>(
     array: &PolygonArray,
+    compared: &ValidCoords,
 ) -> BooleanArray {
-    let repeated: Bitmap = repeats_in_succession::<INCLUDE_Z, INCLUDE_M>(&array.rings, &array.coords);
+    let repeated: Bitmap = repeats_in_succession::<Z, M>(&array.rings, compared);
     let passing = valid_rows_passing(&array.rows, &[&array.rings], Some(!&repeated));
     …
 }

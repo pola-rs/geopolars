@@ -124,10 +124,10 @@ def _xyzm(x: float, z: float, m: float) -> Coord:
     ("flags", "joined"),
     [
         ({}, False),
-        ({"unique_z": False}, True),
-        ({"unique_z": False, "unique_m": True}, False),
+        ({"include_z": False}, False),
+        ({"include_z": False, "include_m": False}, True),
     ],
-    ids=["z compared", "z ignored", "m compared"],
+    ids=["z and m compared", "m compared", "both left out"],
 )
 def test_z_and_m_are_compared_as_asked(flags: dict[str, bool], joined: bool) -> None:
     first = [_xyzm(0, 0, 0), _xyzm(1, 0, 0)]

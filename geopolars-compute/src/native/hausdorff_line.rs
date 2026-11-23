@@ -170,8 +170,8 @@ impl<'a> Side<'a> {
         let mut side = Self {
             coords,
             levels,
-            counted_z: coords.z().filter(|_| !failing.ignore_z),
-            counted_m: coords.m().filter(|_| !failing.ignore_m),
+            counted_z: coords.z().filter(|_| failing.include_z),
+            counted_m: coords.m().filter(|_| failing.include_m),
             failing: None,
         };
         side.failing = side.failing_coords(failing);

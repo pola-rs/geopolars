@@ -55,7 +55,8 @@ fn build(crs: &str) -> PolarsResult<GeodesicMetric> {
     ))
 }
 
-/// The `method` of the Python `distance` and `length`, which the Python side always resolves.
+/// The `distance_method` of the Python `distance` and `length`,
+/// with `"auto"` resolved on the Python side.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum DistanceMethod {
@@ -69,7 +70,7 @@ pub(crate) enum DistanceMethod {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DistanceKwargs {
-    pub(crate) method: DistanceMethod,
+    pub(crate) distance_method: DistanceMethod,
     // TODO: flag which allows automatically re-projecting points if they are in a different CRS.
     // Should be false by default (which raises plan-time error)
 }
@@ -114,7 +115,7 @@ fn kernel_output_type_distance(
     input_fields: &[Field],
     kwargs: DistanceKwargs,
 ) -> PolarsResult<Field> {
-    match kwargs.method {
+    match kwargs.distance_method {
         DistanceMethod::Planar => {
             shared_crs(input_fields)?;
         }
@@ -159,7 +160,7 @@ fn distance(inputs: &[Series], kwargs: DistanceKwargs) -> PolarsResult<Series> {
         inputs[0].field().into_owned(),
         inputs[1].field().into_owned(),
     ];
-    match kwargs.method {
+    match kwargs.distance_method {
         DistanceMethod::Planar => {
             shared_crs(&fields)?;
             measure(&Planar, inputs)

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import EarlyCoordCheck, OnRowError
+from geopolars._typing import EarlyCoordCheck, OnRowError, PromoteToMulti
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType
 from geopolars.geo._dispatch import on_geometry
@@ -37,7 +37,7 @@ def offset_curve(
     quadrant_segments: int = 8,
     join_style: Literal["round", "mitre", "bevel"] = "round",
     mitre_limit: float | None = None,
-    allow_splitting: bool = False,
+    promote_to_multi: PromoteToMulti = "auto",
     on_row_error: OnRowError = "raise",
     early_coord_check: EarlyCoordCheck = "finite_and_empty",
 ) -> pl.Expr:
@@ -55,12 +55,12 @@ def offset_curve(
     Only linestrings and multilinestrings are accepted.
     The output is always XY:
 
-    =========================  ===================  ======================
-    in                         out                  with `allow_splitting`
-    =========================  ===================  ======================
-    `LineStringXY[Z][M]`       `LineStringXY`       `MultiLineStringXY`
-    `MultiLineStringXY[Z][M]`  `MultiLineStringXY`  `MultiLineStringXY`
-    =========================  ===================  ======================
+    =========================  ===================================  ===================================
+    in                         out                                  with `promote_to_multi="never"`
+    =========================  ===================================  ===================================
+    `LineStringXY[Z][M]`       `MultiLineStringXY`                  `LineStringXY`
+    `MultiLineStringXY[Z][M]`  `MultiLineStringXY`                  `MultiLineStringXY`
+    =========================  ===================================  ===================================
 
     {computed_by_geos_dropping_z_and_m}
     {empty_and_null}
@@ -71,10 +71,12 @@ def offset_curve(
     The curve leaves out the parts that come closer to the line than `distance`.
     Where the line crosses itself or comes close to itself,
     that can split the curve into several pieces, whatever the sign of `distance`.
-    A linestring column cannot hold those, so by default such a row fails.
-    With `allow_splitting=True`, a linestring column gives multilinestrings,
-    which hold every piece.
+    A linestring column cannot hold those.
+    As any linestring can split, a linestring column gives multilinestrings by default (`promote_to_multi="auto"`),
+    which hold every piece. `"always"` does the same.
+    With `"never"`, it gives linestrings, and a row that splits fails.
     A multilinestring always gets every piece as a part.
+    See :ref:`promote_to_multi <arg-promote_to_multi>` on the Common arguments page.
 
     `quadrant_segments`, `join_style` and `mitre_limit` shape the curve
     as they shape a buffer (see `buffer`).
@@ -82,7 +84,7 @@ def offset_curve(
     so a lower value is refused.
 
     {geos_errors}
-    The same goes for a linestring it splits without `allow_splitting`.
+    The same goes for a linestring it splits with `promote_to_multi="never"`.
     {on_row_error}
 
     {geos_non_finite}
@@ -93,6 +95,7 @@ def offset_curve(
         df.select(geo.offset_curve("road", 5.0))
         df.select(geo.offset_curve("road", -5.0, join_style="mitre"))
     """
+    validate_one_of("promote_to_multi", promote_to_multi, PromoteToMulti)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     constant = isinstance(distance, int | float)
@@ -133,7 +136,7 @@ def offset_curve(
                 "mitre_limit": _MITRE_LIMIT
                 if mitre_limit is None
                 else float(mitre_limit),
-                "allow_splitting": allow_splitting,
+                "promote_to_multi": promote_to_multi,
                 "on_row_error": on_row_error,
                 "early_coord_check": early_coord_check,
             },

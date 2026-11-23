@@ -107,7 +107,7 @@ def test_a_compared_z_or_m_has_to_be_within_the_tolerance(
     b = a | {axis: 1.0 + offset}
 
     out = _has_repeats_in_succession(
-        LineStringXYZM(), [a, b], unique_m=True, **tolerance
+        LineStringXYZM(), [a, b], include_m=True, **tolerance
     )
     assert out == [repeated]
 
@@ -167,7 +167,7 @@ def test_an_infinite_tolerance_also_holds_for_a_compared_z_or_m(
     b = a | {axis: value}
 
     out = _has_repeats_in_succession(
-        LineStringXYZM(), [a, b], unique_m=True, **tolerance
+        LineStringXYZM(), [a, b], include_m=True, **tolerance
     )
     assert out == [repeated]
 
@@ -179,16 +179,15 @@ def test_a_tolerance_cannot_be_negative_or_nan(name: str, value: float) -> None:
         geo.has_repeats_in_succession("g", **{name: value})
 
 
-def test_vertices_in_a_row_that_differ_only_in_m_are_repeated_unless_m_is_unique() -> (
+def test_vertices_in_a_row_that_differ_only_in_m_are_not_repeated_unless_m_is_left_out() -> (
     None
 ):
-    """m is a measure along the line, not a place on it."""
     a = {"x": 1.0, "y": 1.0, "z": 0.0, "m": 0.0}
     b = a | {"m": 1.0}
 
-    assert _has_repeats_in_succession(LineStringXYZM(), [a, b]) == [True]
-    assert _has_repeats_in_succession(LineStringXYZM(), [a, b], unique_m=True) == [
-        False
+    assert _has_repeats_in_succession(LineStringXYZM(), [a, b]) == [False]
+    assert _has_repeats_in_succession(LineStringXYZM(), [a, b], include_m=False) == [
+        True
     ]
 
 
@@ -199,7 +198,7 @@ def test_vertices_in_a_row_that_differ_in_z_are_not_repeated_unless_z_is_ignored
     b = a | {"z": 1.0}
 
     assert _has_repeats_in_succession(LineStringXYZM(), [a, b]) == [False]
-    assert _has_repeats_in_succession(LineStringXYZM(), [a, b], unique_z=False) == [
+    assert _has_repeats_in_succession(LineStringXYZM(), [a, b], include_z=False) == [
         True
     ]
 

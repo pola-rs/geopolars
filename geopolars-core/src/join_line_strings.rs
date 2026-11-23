@@ -21,23 +21,23 @@ pub enum JoinGaps {
 pub fn join_line_strings(
     chunk: &dyn Array,
     coincidence: Coincidence,
-    unique_z: bool,
-    unique_m: bool,
+    include_z: bool,
+    include_m: bool,
     gaps: JoinGaps,
     drop_repeated_joins: bool,
 ) -> PolarsResult<GeometryArray> {
     let array = propagate_inner_nulls_of_multi_line_strings(UncheckedStorage::new(chunk)?);
     let drop = drop_repeated_joins;
     let joined =
-        |gaps| multi_line_strings_joined(&array, coincidence, unique_z, unique_m, gaps, drop);
+        |gaps| multi_line_strings_joined(&array, coincidence, include_z, include_m, gaps, drop);
     Ok(match gaps {
         JoinGaps::Null => GeometryArray::LineString(joined(Gaps::Null)),
         JoinGaps::Bridge => GeometryArray::LineString(joined(Gaps::Bridge)),
         JoinGaps::Split => GeometryArray::MultiLineString(multi_line_strings_split_at_gaps(
             &array,
             coincidence,
-            unique_z,
-            unique_m,
+            include_z,
+            include_m,
             drop,
         )),
     })

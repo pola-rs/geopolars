@@ -24,10 +24,10 @@ This operation drops z and m.""",
 Computed by GEOS.
 This operation keeps z, but drops m.""",
     "coincidence_axes": """\
-Coordinates are compared in x and y.
-With `unique_z=True`, the default, they also have to match in z.
-With `unique_m=True`, they also have to match in m.
-m is a measure rather than a position, so it is not compared by default.
+Coordinates are compared in x and y, and by default in z and m too,
+if they have those dimensions.
+With `include_z=False`, they do not have to match in z,
+and with `include_m=False`, not in m.
 Either flag is ignored for a geometry without that axis.""",
     "coincidence_tolerance": """\
 By default, the coordinates have to be exactly equal.
@@ -178,8 +178,11 @@ With `"ccw"` or `"cw"`, the exterior runs that way instead, at a minimal perform
 The holes then run against it with `new_holes="opposite"` (the default), or along it with `"same"`.
 See :ref:`new_ring_orientation <arg-new_ring_orientation>` on the Common arguments page.""",
     "overlay_splitting": """\
-A row whose result has several parts then raises.
-With `allow_splitting=True`, the result is the multi kind instead, which holds every part.""",
+By default (`promote_to_multi="auto"`), the result is the multi kind wherever it can split,
+which holds every part.
+With `"never"`, a row whose result has several parts raises instead.
+`"always"` gives the multi kind for every input, even one whose result cannot split.
+See :ref:`promote_to_multi <arg-promote_to_multi>` on the Common arguments page.""",
     "overlay_z": """\
 The output has z as soon as either input has it.
 Where only one input has z, GEOS fills it in for the other.
@@ -195,6 +198,9 @@ The result has the CRS of `a`.""",
   such as `geo.mean_coordinate("shape")` to {verb} each geometry about its own middle.
   A geometry whose origin is null comes out null.
   An origin column that declares a CRS has to declare the geometry's.""",
+    "angle_unit": """\
+{angles} in degrees, or in radians with `unit="rad"`.
+See :ref:`unit <arg-unit>` on the Common arguments page.""",
     "about_centroid_accepts": """\
 Only linestrings and polygons are accepted:
 a multi-geometry has a centroid per part rather than one,

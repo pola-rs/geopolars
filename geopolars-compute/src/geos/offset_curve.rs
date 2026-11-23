@@ -22,7 +22,7 @@ pub struct OffsetCurveStyle {
 }
 
 /// Offsets every linestring into a linestring through GEOS.
-/// Implements the Python `offset_curve` with `allow_splitting=false`, which documents its behaviour.
+/// Implements the Python `offset_curve` with `promote_to_multi="never"`, which documents its behaviour.
 /// A row that GEOS splits into several linestrings therefore fails with [`crate::GeoComputeError::Split`].
 /// [`offset_curves_into_multi_line_strings`] keeps them instead.
 pub fn offset_curves_into_line_strings(
@@ -74,7 +74,7 @@ fn offset_curves_via_geos(
     distance: BufferDistance,
     style: &OffsetCurveStyle,
     on_row_error: OnRowError,
-    allow_splitting: bool,
+    into_multi: bool,
 ) -> GeoComputeResult<GeosGeometries> {
     let OffsetCurveStyle {
         quadrant_segments,
@@ -90,7 +90,7 @@ fn offset_curves_via_geos(
         finite_distance,
         |input, distance| {
             let curve = input.offset_curve(distance, quadrant_segments, join_style, mitre_limit)?;
-            if allow_splitting {
+            if into_multi {
                 return Ok(curve);
             }
             unless_split(curve, GeometryTypes::MultiLineString)

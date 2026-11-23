@@ -104,6 +104,12 @@ class GeoArrowType(pl.datatypes.BaseExtension):
             within_area_of_use=within_area_of_use,
         )
 
+    def _is_projected(self) -> bool:
+        """Whether the CRS is projected, so that `x` and `y` lie on a plane.
+        `False` without a CRS. Evaluated using PROJ, in Rust.
+        """
+        return _rust.is_projected(self.ext_metadata())
+
     def _is_equal_area(self) -> bool:
         """Whether the CRS is projected with an equal-area projection.
         `False` without a CRS, or with one that is not projected.

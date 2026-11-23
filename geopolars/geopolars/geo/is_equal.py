@@ -29,8 +29,8 @@ def is_equal(
     abs_tol: float | None = None,
     rel_tol: float | None = None,
     nans_equal: bool = False,
-    unique_z: bool = True,
-    unique_m: bool = False,
+    include_z: bool = True,
+    include_m: bool = True,
 ) -> pl.Expr:
     """Whether two geometries are equal, row by row, as a `bool`.
     {broadcast_single_geometry}
@@ -61,8 +61,8 @@ def is_equal(
         "abs_tol": abs_tol,
         "rel_tol": rel_tol,
         "nans_equal": nans_equal,
-        "unique_z": unique_z,
-        "unique_m": unique_m,
+        "include_z": include_z,
+        "include_m": include_m,
     }
 
     def build(

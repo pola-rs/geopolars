@@ -277,6 +277,23 @@ const EQUAL_AREA_METHODS: &[&str] = &[
     "Bonne",
 ];
 
+/// Whether `crs` is projected, so that its `x` and `y` lie on a plane.
+/// A compound CRS is, if its horizontal part is.
+///
+/// `crs` is anything PROJ accepts.
+pub fn is_projected(crs: &str) -> PolarsResult<bool> {
+    let ctx = Context::new()?;
+    let c_crs = CString::new(crs)
+        .map_err(|_| polars_err!(ComputeError: "a CRS cannot contain a NUL byte: {crs:?}"))?;
+
+    // SAFETY: as in `GeodeticCrs::of`.
+    unsafe {
+        let parsed = ctx.object(proj_create(ctx.0, c_crs.as_ptr()), crs)?;
+        let horizontal = ctx.horizontal(&parsed, crs)?;
+        Ok(proj_get_type(horizontal.crs().0) == PJ_TYPE_PJ_TYPE_PROJECTED_CRS)
+    }
+}
+
 /// Whether `crs` is projected with an equal-area projection,
 /// so that areas on its plane are areas on the ellipsoid.
 /// `false` for a CRS that is not projected, such as one in longitude/latitude.

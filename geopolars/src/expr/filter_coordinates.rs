@@ -26,8 +26,8 @@ enum SelectedActionDef {
 pub struct NonFiniteKwargs {
     pub(super) select_non_finite: bool,
     pub(super) select_empty: bool,
-    pub(super) ignore_z: bool,
-    pub(super) ignore_m: bool,
+    pub(super) include_z: bool,
+    pub(super) include_m: bool,
     #[serde(with = "SelectedActionDef")]
     pub(super) action: SelectedAction,
     #[serde(with = "ShortLinesDef")]
@@ -40,8 +40,8 @@ impl NonFiniteKwargs {
             non_finite: Some(NonFinite {
                 select_non_finite: self.select_non_finite,
                 select_empty: self.select_empty,
-                ignore_z: self.ignore_z,
-                ignore_m: self.ignore_m,
+                include_z: self.include_z,
+                include_m: self.include_m,
             }),
             bounds: None,
         }

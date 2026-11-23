@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from polars.plugins import register_plugin_function
 
-from geopolars._utils import LIB
+from geopolars._typing import DistanceMethod
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import PointType
 from geopolars.geo._dispatch import on_geometry_pair
 
@@ -25,13 +26,22 @@ if TYPE_CHECKING:
 # with flag to also interpolate between points / line?
 
 
+def _auto_distance_method(dtype: GeoArrowType) -> Literal["planar", "geodesic"]:
+    """Planar only without a CRS or in a projected one.
+    Any other CRS, such as a geocentric one, goes geodesic, which refuses it if it has no ellipsoid.
+    """
+    if not dtype._declares_crs() or dtype._is_projected():
+        return "planar"
+    return "geodesic"
+
+
 def _distance(
     a: pl.Expr,
     a_dtype: GeoArrowType,
     b: pl.Expr,
     b_dtype: GeoArrowType,
     *,
-    method: Literal["planar", "geodesic"] | None,
+    distance_method: DistanceMethod,
 ) -> pl.Expr:
     # TODO: for other shapes, calculate centroid, and take distance on that.
     if not (isinstance(a_dtype, PointType) and isinstance(b_dtype, PointType)):
@@ -41,10 +51,11 @@ def _distance(
         )
         raise TypeError(msg)
 
-    declares_crs = a_dtype._declares_crs() or b_dtype._declares_crs()
-    if method is None:
-        method = "geodesic" if declares_crs else "planar"
-    elif method == "geodesic" and not declares_crs:
+    # Asking one side is enough, as the kernel refuses points that do not share a CRS.
+    crs_side = a_dtype if a_dtype._declares_crs() else b_dtype
+    if distance_method == "auto":
+        distance_method = _auto_distance_method(crs_side)
+    elif distance_method == "geodesic" and not crs_side._declares_crs():
         msg = "a geodesic distance needs a CRS to measure on, but neither point declares one"
         raise TypeError(msg)
 
@@ -55,7 +66,7 @@ def _distance(
         plugin_path=LIB,
         args=[a, b],
         function_name="distance",
-        kwargs={"method": method},
+        kwargs={"distance_method": distance_method},
         is_elementwise=True,
     )
 
@@ -64,21 +75,26 @@ def distance(
     a: IntoExprColumn,
     b: IntoExprColumn,
     *,
-    method: Literal["planar", "geodesic"] | None = None,
+    distance_method: DistanceMethod = "auto",
 ) -> pl.Expr:
     """How far apart two points are, row by row, as an `f64`.
 
-    ============  =========================  ================
-    `method`      measured                   in
-    ============  =========================  ================
-    `"planar"`    Pythagorean                coordinate units
-    `"geodesic"`  along the CRS's ellipsoid  CRS units
-    ============  =========================  ================
+    =================  =========================  ================
+    `distance_method`  measured                   in
+    =================  =========================  ================
+    `"planar"`         Pythagorean                coordinate units
+    `"geodesic"`       along the CRS's ellipsoid  CRS units
+    =================  =========================  ================
 
-    The distance is calculated according to `method`.
-    If not given, points that declare a CRS are measured `"geodesic"`,
-    and points without one `"planar"`.
-    With either method, points in different CRSs, or a CRS on only one of them, are refused:
+    The default, `distance_method="auto"`, measures points in a projected CRS, or without one, `"planar"`,
+    and points in any other CRS `"geodesic"`.
+    A CRS that is not defined on longitude/latitude, such as a geocentric one, has no ellipsoid
+    to measure along, so `"geodesic"` and `"auto"` refuse it while the plan is built.
+    Ask for `"planar"` to measure it on its `x` and `y` anyway.
+    Planar is close to geodesic in a projected CRS made for measuring, such as a UTM zone,
+    but Web Mercator (EPSG:3857) stretches distances by 1/cos(latitude):
+    pass `"geodesic"` for such a CRS.
+    With any method, points in different CRSs, or a CRS on only one of them, are refused:
     reproject one onto the other with `to_crs` first.
     **Planar** ignores the CRS: for longitude/latitude it comes out in degrees,
     which are not the same length east-west as north-south.
@@ -103,6 +119,7 @@ def distance(
     .. code-block:: python
 
         df.select(geo.distance("home", "work"))
-        df.select(geo.distance("home", "work", method="planar"))
+        df.select(geo.distance("home", "work", distance_method="planar"))
     """
-    return on_geometry_pair(a, b, partial(_distance, method=method))
+    validate_one_of("distance_method", distance_method, DistanceMethod)
+    return on_geometry_pair(a, b, partial(_distance, distance_method=distance_method))

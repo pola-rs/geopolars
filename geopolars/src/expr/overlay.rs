@@ -2,7 +2,7 @@
 //! Implements the Python `intersection` and `difference`.
 
 use crate::common_arguments::{
-    EarlyCoordCheckDef, NewHolesDef, NewRingOrientationDef, OnRowErrorDef,
+    EarlyCoordCheckDef, NewHolesDef, NewRingOrientationDef, OnRowErrorDef, PromoteToMulti,
 };
 use geopolars_compute::geos::Overlay;
 use geopolars_compute::{EarlyCoordCheck, NewHoles, NewRingOrientation, OnRowError};
@@ -42,7 +42,7 @@ impl TopologicalDimension {
 #[serde(deny_unknown_fields)]
 pub struct IntersectionKwargs {
     keep: Option<TopologicalDimension>,
-    allow_splitting: bool,
+    promote_to_multi: PromoteToMulti,
     #[serde(with = "NewRingOrientationDef")]
     new_ring_orientation: NewRingOrientation,
     #[serde(with = "NewHolesDef")]
@@ -57,7 +57,7 @@ pub struct IntersectionKwargs {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DifferenceKwargs {
-    allow_splitting: bool,
+    promote_to_multi: PromoteToMulti,
     #[serde(with = "NewRingOrientationDef")]
     new_ring_orientation: NewRingOrientation,
     #[serde(with = "NewHolesDef")]
@@ -104,13 +104,15 @@ fn intersection_type(a: &DataType, b: &DataType, kwargs: &IntersectionKwargs) ->
             keep
         }
     };
-    // A single lowest-dimensional input stays single, unless splitting is allowed.
-    // A point cannot split, so it stays single regardless.
-    let has_point = a.kind == Kind::Point || b.kind == Kind::Point;
+    // A single lowest-dimensional input stays single, unless promoted.
+    // A point cannot split, so only "always" promotes it.
     let single_lowest = [a.kind, b.kind]
         .into_iter()
         .any(|kind| topological_dimension(kind) == lowest && !kind.is_multi());
-    let multi = !has_point && (kwargs.allow_splitting || !single_lowest);
+    let has_point = a.kind == Kind::Point || b.kind == Kind::Point;
+    let multi = kwargs
+        .promote_to_multi
+        .output_is_multi(!single_lowest, !has_point);
     Ok(Geo::new(
         output_kind(kept_dimension, multi),
         overlay_dimension(&a, &b),
@@ -122,8 +124,10 @@ fn intersection_type(a: &DataType, b: &DataType, kwargs: &IntersectionKwargs) ->
 fn difference_type(a: &DataType, b: &DataType, kwargs: &DifferenceKwargs) -> PolarsResult<Geo> {
     let (a, b) = (describe(a)?, describe(b)?);
     ensure_same_crs(&a, &b)?;
-    // A point cannot split, so it stays single regardless.
-    let multi = a.kind.is_multi() || (kwargs.allow_splitting && a.kind != Kind::Point);
+    // A point cannot split, so only "always" promotes it.
+    let multi = kwargs
+        .promote_to_multi
+        .output_is_multi(a.kind.is_multi(), a.kind != Kind::Point);
     Ok(Geo::new(
         output_kind(topological_dimension(a.kind), multi),
         overlay_dimension(&a, &b),

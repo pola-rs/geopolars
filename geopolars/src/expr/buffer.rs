@@ -2,7 +2,7 @@
 //! Implements the Python `buffer`.
 
 use crate::common_arguments::{
-    EarlyCoordCheckDef, NewHolesDef, NewRingOrientationDef, OnRowErrorDef,
+    EarlyCoordCheckDef, NewHolesDef, NewRingOrientationDef, OnRowErrorDef, PromoteToMulti,
 };
 use geopolars_compute::geos::{BufferDistance, BufferStyle, CapStyle, JoinStyle, Side};
 use geopolars_compute::{EarlyCoordCheck, NewHoles, NewRingOrientation, OnRowError};
@@ -20,12 +20,11 @@ use crate::geoarrow::{describe, geometry_series, Geo};
 /// Also the kind of the input, and whether the output is a multipolygon.
 fn buffered_type(dtype: &DataType, kwargs: &BufferKwargs) -> PolarsResult<(Geo, Kind, bool)> {
     let geo = describe(dtype)?;
-    let is_multi = match geo.kind {
-        Kind::Point | Kind::LineString | Kind::Polygon => false,
-        Kind::MultiPoint | Kind::MultiLineString | Kind::MultiPolygon => true,
-    };
-    let into_multi =
-        is_multi || (kwargs.allow_splitting && kwargs.distance.is_none_or(|d| d <= 0.0));
+    // Only a distance of at most 0 can split, and a column's sign is only known per row.
+    let can_split = kwargs.distance.is_none_or(|d| d <= 0.0);
+    let into_multi = kwargs
+        .promote_to_multi
+        .output_is_multi(geo.kind.is_multi(), can_split);
     let kind = if into_multi {
         Kind::MultiPolygon
     } else {
@@ -78,7 +77,7 @@ pub struct BufferKwargs {
     mitre_limit: f64,
     #[serde(with = "SideDef")]
     side: Side,
-    allow_splitting: bool,
+    promote_to_multi: PromoteToMulti,
     #[serde(with = "NewRingOrientationDef")]
     new_ring_orientation: NewRingOrientation,
     #[serde(with = "NewHolesDef")]
@@ -99,7 +98,7 @@ fn buffer(inputs: &[Series], kwargs: BufferKwargs) -> PolarsResult<Series> {
         join_style,
         mitre_limit,
         side,
-        allow_splitting: _,
+        promote_to_multi: _,
         new_ring_orientation,
         new_holes,
         on_row_error,

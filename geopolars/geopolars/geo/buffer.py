@@ -17,6 +17,7 @@ from geopolars._typing import (
     NewHoles,
     NewRingOrientation,
     OnRowError,
+    PromoteToMulti,
 )
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, MultiLineStringType, PointType
@@ -61,7 +62,7 @@ def buffer(
     join_style: Literal["round", "mitre", "bevel"] = "round",
     mitre_limit: float | None = None,
     side: Literal["both", "left", "right"] = "both",
-    allow_splitting: bool = False,
+    promote_to_multi: PromoteToMulti = "auto",
     new_ring_orientation: NewRingOrientation = "keep",
     new_holes: NewHoles = "opposite",
     on_row_error: OnRowError = "raise",
@@ -77,45 +78,46 @@ def buffer(
     A null distance gives a null polygon.
     A NaN or infinite distance in a column raises, as does a negative one with `side`.
 
-    A point, linestring or polygon gives a polygon.
+    A point, linestring, or polygon gives a polygon,
+    or a multipolygon where `promote_to_multi` asks for one (see the table below).
     Their multi-variants give a multipolygon,
     in which parts whose buffers overlap are merged into one.
     The output is always XY:
 
-    =========================  ================  ============================================================
-    in                         out               with `allow_splitting`, and `distance` a column or at most 0
-    =========================  ================  ============================================================
-    `PointXY[Z][M]`            `PolygonXY`       `MultiPolygonXY`
-    `LineStringXY[Z][M]`       `PolygonXY`       `MultiPolygonXY`
-    `PolygonXY[Z][M]`          `PolygonXY`       `MultiPolygonXY`
-    `MultiPointXY[Z][M]`       `MultiPolygonXY`  `MultiPolygonXY`
-    `MultiLineStringXY[Z][M]`  `MultiPolygonXY`  `MultiPolygonXY`
-    `MultiPolygonXY[Z][M]`     `MultiPolygonXY`  `MultiPolygonXY`
-    =========================  ================  ============================================================
+    =========================  ==============================================================  ===========================================================================
+    in                         `promote_to_multi="never"`, or `"auto"` with `distance` > 0     `"auto"` with `distance` a column or at most 0, or `"always"`
+    =========================  ==============================================================  ===========================================================================
+    `PointXY[Z][M]`            `PolygonXY`                                                     `MultiPolygonXY`
+    `LineStringXY[Z][M]`       `PolygonXY`                                                     `MultiPolygonXY`
+    `PolygonXY[Z][M]`          `PolygonXY`                                                     `MultiPolygonXY`
+    `MultiPointXY[Z][M]`       `MultiPolygonXY`                                                `MultiPolygonXY`
+    `MultiLineStringXY[Z][M]`  `MultiPolygonXY`                                                `MultiPolygonXY`
+    `MultiPolygonXY[Z][M]`     `MultiPolygonXY`                                                `MultiPolygonXY`
+    =========================  ==============================================================  ===========================================================================
 
     {computed_by_geos_dropping_z_and_m}
     {empty_and_null}
     A `distance` of at most 0 gives an empty polygon for a point or linestring.
 
-    With `allow_splitting=True` and a `distance` column, or one of at most 0,
-    every kind gives a multipolygon.
     A negative `distance` shrinks a polygon, which can split it into several polygons.
     Splitting can only happen when `distance` is at most 0:
     a positive buffer of a geometry in one piece stays in one piece.
     Take for example a dumbbell-like shape: two 4 by 4 squares, joined by a neck 0.4 wide.
     Shrunk by 0.5, the section in the neck vanishes, and two 3 by 3 squares are left.
     That shape can only be represented as a multipolygon.
-    With `allow_splitting=True` and a negative `distance`, every row is a multipolygon,
+    By default (`promote_to_multi="auto"`), a negative `distance` makes every row a multipolygon,
     which holds both squares.
+    With `promote_to_multi="never"`, such a row raises instead.
     At a `distance` of exactly 0, only a polygon that is invalid by OGC splits (see `is_valid_ogc`),
     such as one whose exterior touches itself at a point.
     GEOS separates the pieces that only touch.
     A `distance` column has its sign only known per row,
-    so with `allow_splitting=True` it always gives a multipolygon.
+    so by default it always gives a multipolygon.
 
     With `distance>0`, splitting cannot occur, because the outset will always expand outwards.
-    This means you can never end up with 'islands', so it is not necessary to output multipolygons.
-    `allow_splitting=true` does not have to change the output type in this case.
+    This means you can never end up with 'islands', so `"auto"` keeps polygons in this case.
+    Use `"always"` to get multipolygons regardless of `distance`.
+    See :ref:`promote_to_multi <arg-promote_to_multi>` on the Common arguments page.
 
     For geometries with a CRS, longitude/latitude the distance is in degrees, not along the globe.
 
@@ -135,7 +137,7 @@ def buffer(
       A polygon or multipoint is refused.
 
     {geos_errors}
-    The same goes for a polygon it splits without `allow_splitting`.
+    The same goes for a polygon it splits with `promote_to_multi="never"`.
     {on_row_error}
 
     {geos_non_finite}
@@ -148,6 +150,7 @@ def buffer(
         df.select(geo.buffer("parcel", 2.0))
         df.select(geo.buffer("road", 5.0, cap_style="flat"))
     """
+    validate_one_of("promote_to_multi", promote_to_multi, PromoteToMulti)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     validate_one_of("new_ring_orientation", new_ring_orientation, NewRingOrientation)
@@ -202,7 +205,7 @@ def buffer(
                 if mitre_limit is None
                 else float(mitre_limit),
                 "side": side,
-                "allow_splitting": allow_splitting,
+                "promote_to_multi": promote_to_multi,
                 "new_ring_orientation": new_ring_orientation,
                 "new_holes": new_holes,
                 "on_row_error": on_row_error,

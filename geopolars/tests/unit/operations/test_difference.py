@@ -75,10 +75,13 @@ def _storage(geometries: pl.Series) -> list[Any]:
 def _difference(
     a: tuple[GeoArrowType, list[str | None]],
     b: tuple[GeoArrowType, list[str | None]],
+    promote_to_multi: str = "never",
     **kwargs: Any,
 ) -> pl.Series:
     df = pl.DataFrame([_wkt("a", *a), _wkt("b", *b)])
-    return df.select(geo.difference("a", "b", **kwargs))["a"]
+    return df.select(
+        geo.difference("a", "b", promote_to_multi=promote_to_multi, **kwargs)
+    )["a"]
 
 
 def _is_ccw(out: pl.Series) -> list[bool]:
@@ -153,27 +156,29 @@ _ORACLE_DTYPES = {
 }
 
 
-def _expected_kind(a_kind: str, splits: bool) -> str:
-    if a_kind == "Point" or a_kind.startswith("Multi") or not splits:
+def _expected_kind(a_kind: str, promote_to_multi: str) -> str:
+    if a_kind.startswith("Multi") or promote_to_multi == "never":
+        return a_kind
+    if a_kind == "Point" and promote_to_multi == "auto":
         return a_kind
     return f"Multi{a_kind}"
 
 
-@pytest.mark.parametrize("allow_splitting", [False, True])
+@pytest.mark.parametrize("promote_to_multi", ["never", "auto", "always"])
 @pytest.mark.parametrize("b_kind", _KINDS)
 @pytest.mark.parametrize("a_kind", _KINDS)
 def test_the_output_kind_follows_the_table(
-    a_kind: str, b_kind: str, allow_splitting: bool
+    a_kind: str, b_kind: str, promote_to_multi: str
 ) -> None:
     a = pl.Series("a", [], dtype=_ORACLE_DTYPES[a_kind])
     b = pl.Series("b", [], dtype=_ORACLE_DTYPES[b_kind])
     lf = pl.LazyFrame([a, b]).select(
-        geo.difference("a", "b", allow_splitting=allow_splitting)
+        geo.difference("a", "b", promote_to_multi=promote_to_multi)
     )
 
     dtype = lf.collect_schema()["a"]
 
-    assert type(dtype).__name__ == f"{_expected_kind(a_kind, allow_splitting)}XY"
+    assert type(dtype).__name__ == f"{_expected_kind(a_kind, promote_to_multi)}XY"
 
 
 def test_overlapping_polygons_leave_what_a_does_not_share() -> None:
@@ -219,7 +224,7 @@ _SPLITS = {
 
 
 @pytest.mark.parametrize("dimension", _SPLITS)
-def test_a_split_raises_without_allow_splitting(dimension: str) -> None:
+def test_a_split_raises_without_promotion(dimension: str) -> None:
     a, b, parts, _ = _SPLITS[dimension]
 
     with pytest.raises(ComputeError, match=f"split into {parts} parts"):
@@ -240,10 +245,10 @@ def test_a_split_gives_null_with_on_row_error_null(dimension: str) -> None:
 
 
 @pytest.mark.parametrize("dimension", _SPLITS)
-def test_a_split_gives_every_part_with_allow_splitting(dimension: str) -> None:
+def test_a_split_gives_every_part_with_promote_to_multi(dimension: str) -> None:
     a, b, _, left = _SPLITS[dimension]
 
-    out = _difference((a[0], [a[1]]), (b[0], [b[1]]), allow_splitting=True)
+    out = _difference((a[0], [a[1]]), (b[0], [b[1]]), promote_to_multi="auto")
 
     assert type(out.dtype).__name__.startswith("Multi")
     _assert_geometries(out, [left])
@@ -292,8 +297,8 @@ def test_the_exterior_runs_counter_clockwise_with_ccw() -> None:
     assert _is_ccw(_difference(a, b)) == [False]
     assert _is_ccw(_difference(a, b, new_ring_orientation="ccw")) == [True]
     a, b = (PolygonXY(), [_WIDE]), (PolygonXY(), [_STRIP])
-    assert _is_ccw(_difference(a, b, allow_splitting=True)) == [False]
-    split = _difference(a, b, allow_splitting=True, new_ring_orientation="ccw")
+    assert _is_ccw(_difference(a, b, promote_to_multi="auto")) == [False]
+    split = _difference(a, b, promote_to_multi="auto", new_ring_orientation="ccw")
     assert split.dtype == MultiPolygonXY()
     assert _is_ccw(split) == [True]
 
@@ -350,7 +355,12 @@ def test_an_empty_b_gives_a_turned_as_asked(new_ring_orientation: str) -> None:
     b = _wkt("b", PolygonXY(), ["POLYGON EMPTY", "POLYGON EMPTY", _OVERLAPPING])
 
     out = pl.DataFrame([a, b]).select(
-        geo.difference("a", "b", new_ring_orientation=new_ring_orientation)
+        geo.difference(
+            "a",
+            "b",
+            new_ring_orientation=new_ring_orientation,
+            promote_to_multi="never",
+        )
     )
 
     got, given = _storage(out["a"]), _storage(a)
@@ -381,7 +391,11 @@ def test_a_copy_of_a_only_turns_the_rings_that_run_the_wrong_way(
 
     out = pl.DataFrame([a, b]).select(
         geo.difference(
-            "a", "b", new_ring_orientation=new_ring_orientation, new_holes=new_holes
+            "a",
+            "b",
+            new_ring_orientation=new_ring_orientation,
+            new_holes=new_holes,
+            promote_to_multi="never",
         )
     )
 
@@ -439,11 +453,11 @@ _AS_IS = {
     ids=["b_xy", "z_only_on_b"],
 )
 @pytest.mark.parametrize("new_ring_orientation", ["keep", "ccw"])
-@pytest.mark.parametrize("allow_splitting", [False, True])
+@pytest.mark.parametrize("promote_to_multi", ["never", "auto", "always"])
 @pytest.mark.parametrize("kind", _AS_IS)
 def test_an_empty_b_gives_a_as_it_is_for_every_kind(
     kind: str,
-    allow_splitting: bool,
+    promote_to_multi: str,
     new_ring_orientation: str,
     b_dtype: GeoArrowType,
     empty: str,
@@ -456,12 +470,12 @@ def test_an_empty_b_gives_a_as_it_is_for_every_kind(
         geo.difference(
             "a",
             "b",
-            allow_splitting=allow_splitting,
+            promote_to_multi=promote_to_multi,
             new_ring_orientation=new_ring_orientation,
         )
     )["a"]
 
-    out_kind = _expected_kind(kind, allow_splitting)
+    out_kind = _expected_kind(kind, promote_to_multi)
     has_z = b_dtype == PolygonXYZ()
     assert type(out.dtype).__name__ == out_kind + ("XYZ" if has_z else "XY")
     # A copy into a multi kind is its only part.
@@ -485,7 +499,7 @@ def test_an_empty_point_takes_nothing_away() -> None:
     a = _wkt("a", LineStringXY(), [_LOOP])
     df = pl.DataFrame([a, _series("b", PointXY(), [empty_point])])
 
-    out = df.select(geo.difference("a", "b"))["a"]
+    out = df.select(geo.difference("a", "b", promote_to_multi="never"))["a"]
 
     assert _storage(out) == _storage(a)
 
@@ -506,7 +520,9 @@ def test_a_b_whose_parts_have_no_vertices_takes_nothing_away(b: pl.Series) -> No
     square = _wkt("a", PolygonXY(), [_SQUARE])
 
     for a in (loop, square):
-        out = pl.DataFrame([a, b]).select(geo.difference("a", "b"))["a"]
+        out = pl.DataFrame([a, b]).select(
+            geo.difference("a", "b", promote_to_multi="never")
+        )["a"]
         assert _storage(out) == _storage(a)
 
 
@@ -527,7 +543,12 @@ def test_a_single_empty_b_copies_every_row(new_ring_orientation: str) -> None:
     one = _wkt("one", PolygonXY(), ["POLYGON EMPTY"])
 
     out = pl.DataFrame(many).select(
-        geo.difference("many", one, new_ring_orientation=new_ring_orientation)
+        geo.difference(
+            "many",
+            one,
+            new_ring_orientation=new_ring_orientation,
+            promote_to_multi="never",
+        )
     )
 
     expected = _storage(many)
@@ -538,12 +559,12 @@ def test_a_single_empty_b_copies_every_row(new_ring_orientation: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("a_dtype", "allow_splitting"),
-    [(PolygonXY(), False), (PolygonXY(), True), (MultiPolygonXY(), False)],
+    ("a_dtype", "promote_to_multi"),
+    [(PolygonXY(), "never"), (PolygonXY(), "auto"), (MultiPolygonXY(), "never")],
     ids=["polygon", "polygon_split", "multipolygon"],
 )
 def test_copied_rows_line_up_with_computed_rows_in_one_chunk(
-    a_dtype: GeoArrowType, allow_splitting: bool
+    a_dtype: GeoArrowType, promote_to_multi: str
 ) -> None:
     # The copies are rows 2, 4 and 6, between rows without polygons and rows from GEOS,
     # so that a copy indexed by anything but its row is caught.
@@ -577,11 +598,11 @@ def test_copied_rows_line_up_with_computed_rows_in_one_chunk(
 
     out = pl.DataFrame([a, b]).select(
         geo.difference(
-            "a", "b", allow_splitting=allow_splitting, new_ring_orientation="ccw"
+            "a", "b", promote_to_multi=promote_to_multi, new_ring_orientation="ccw"
         )
     )["a"]
 
-    wrapped = allow_splitting and a_dtype == PolygonXY()
+    wrapped = promote_to_multi == "auto" and a_dtype == PolygonXY()
     got = _storage(out)
     turned = _storage(_wkt("turned", a_dtype, ccw))
     copies = {2: _storage(a)[2], 4: turned[0], 6: turned[1]}
@@ -609,7 +630,12 @@ def test_a_single_a_is_copied_into_every_row_with_an_empty_b(
     )
 
     out = pl.DataFrame(many).select(
-        geo.difference(one, "many", new_ring_orientation=new_ring_orientation)
+        geo.difference(
+            one,
+            "many",
+            new_ring_orientation=new_ring_orientation,
+            promote_to_multi="never",
+        )
     )
 
     [square] = _storage(one)
@@ -631,7 +657,9 @@ def test_a_sliced_chunk_copies_its_own_rows() -> None:
     rows_b = ["POLYGON EMPTY", _OVERLAPPING, "POLYGON EMPTY"]
     whole = frame(pad_a + rows_a + pad_a, pad_b + rows_b + pad_b)
     sliced = whole.slice(len(pad_a), len(rows_a))
-    expr = geo.difference("a", "b", new_ring_orientation="ccw")
+    expr = geo.difference(
+        "a", "b", new_ring_orientation="ccw", promote_to_multi="never"
+    )
 
     out = sliced.select(expr)
 
@@ -708,7 +736,7 @@ def test_an_empty_b_drops_m_and_fills_z(
     a_series = _wkt("a", a[0], [a[1]])
 
     out = pl.DataFrame([a_series, _wkt("b", b[0], [b[1]])]).select(
-        geo.difference("a", "b")
+        geo.difference("a", "b", promote_to_multi="never")
     )["a"]
 
     assert out.dtype == out_dtype
@@ -735,7 +763,7 @@ def test_z_from_either_side_is_filled_in(z_first: bool) -> None:
         a = (LineStringXY(), [_LINE])
         b = (PolygonXYZ(), [flat_z])
 
-    out = _difference(a, b, allow_splitting=True)
+    out = _difference(a, b, promote_to_multi="auto")
 
     got = shapely.from_wkt(_to_wkt(out)[0])
     assert shapely.equals(got, shapely.from_wkt(_SPLITS["lines"][3]))
@@ -745,7 +773,7 @@ def test_z_from_either_side_is_filled_in(z_first: bool) -> None:
 def test_z_of_a_is_interpolated_where_b_cuts_it() -> None:
     a = (LineStringXYZ(), ["LINESTRING Z (0 0 1, 4 0 5)"])
 
-    out = _difference(a, (PolygonXY(), [_BOX_ON_LINE]), allow_splitting=True)
+    out = _difference(a, (PolygonXY(), [_BOX_ON_LINE]), promote_to_multi="auto")
 
     got = shapely.from_wkt(_to_wkt(out)[0])
     z = shapely.get_coordinates(got, include_z=True)[:, 2].tolist()
@@ -794,11 +822,11 @@ def test_against_a_single_null_every_row_is_null_of_the_kind_of_a() -> None:
     one = _wkt("one", PolygonXY(), [None])
     df = pl.DataFrame(many)
 
-    out = df.select(geo.difference("many", one))["many"]
+    out = df.select(geo.difference("many", one, promote_to_multi="never"))["many"]
     assert out.to_list() == [None, None]
     assert out.dtype == LineStringXY()
 
-    out = df.select(geo.difference(one, "many", allow_splitting=True)).to_series()
+    out = df.select(geo.difference(one, "many", promote_to_multi="auto")).to_series()
     assert out.to_list() == [None, None]
     assert out.dtype == MultiPolygonXY()
 
@@ -832,11 +860,13 @@ def test_a_single_geometry_keeps_its_side() -> None:
     square = _wkt("one", PolygonXY(), [_SQUARE])
     df = pl.DataFrame(lines)
 
-    out = df.select(geo.difference("many", square, allow_splitting=True))["many"]
+    out = df.select(geo.difference("many", square, promote_to_multi="auto"))["many"]
     assert out.dtype == MultiLineStringXY()
     pieces = "MULTILINESTRING ((-1 1, 0 1), (2 1, 3 1))"
     _assert_geometries(out, [pieces, None, "MULTILINESTRING ((5 5, 6 6))"])
-    out = df.select(geo.difference(square, "many")).to_series()
+    out = df.select(
+        geo.difference(square, "many", promote_to_multi="never")
+    ).to_series()
     assert out.dtype == PolygonXY()
     _assert_geometries(out, [_SQUARE, None, _SQUARE])
 
@@ -909,7 +939,9 @@ def test_against_a_single_empty_a_no_row_reaches_geos(
     df = pl.DataFrame(many)
 
     out = df.select(
-        geo.difference(one, "many", early_coord_check=early_coord_check)
+        geo.difference(
+            one, "many", early_coord_check=early_coord_check, promote_to_multi="never"
+        )
     ).to_series()
 
     assert _to_wkt(out) == [empty, empty]
@@ -930,7 +962,11 @@ def test_against_only_null_and_empty_a_a_single_b_never_reaches_geos(
     df = pl.DataFrame(_wkt("a", PolygonXY(), a))
     one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
 
-    out = df.select(geo.difference("a", one, early_coord_check=early_coord_check))
+    out = df.select(
+        geo.difference(
+            "a", one, early_coord_check=early_coord_check, promote_to_multi="never"
+        )
+    )
 
     assert _to_wkt(out["a"]) == expected
 
@@ -943,7 +979,9 @@ def test_against_only_null_b_a_single_a_never_reaches_geos(
     one = _series("one", LineStringXY(), [_ONE_VERTEX_LINE])
 
     out = df.select(
-        geo.difference(one, "b", early_coord_check=early_coord_check)
+        geo.difference(
+            one, "b", early_coord_check=early_coord_check, promote_to_multi="never"
+        )
     ).to_series()
 
     assert out.to_list() == [None, None]
@@ -959,7 +997,7 @@ def test_against_a_null_and_an_empty_b_a_single_a_still_fails() -> None:
         df.select(geo.difference(one, "b"))
 
 
-def _not_finite_lines(**kwargs: Any) -> pl.Series:
+def _not_finite_lines(promote_to_multi: str = "never", **kwargs: Any) -> pl.Series:
     """A line that is not finite, then one that is, each minus a square around both."""
     df = pl.DataFrame(
         [
@@ -967,7 +1005,9 @@ def _not_finite_lines(**kwargs: Any) -> pl.Series:
             _wkt("b", PolygonXY(), [_AROUND] * 2),
         ]
     )
-    return df.select(geo.difference("a", "b", **kwargs))["a"]
+    return df.select(
+        geo.difference("a", "b", promote_to_multi=promote_to_multi, **kwargs)
+    )["a"]
 
 
 def test_geos_raises_on_a_line_that_is_not_finite() -> None:
@@ -1014,8 +1054,14 @@ def test_an_empty_b_still_fails_on_an_a_that_is_not_finite(
 ) -> None:
     df = pl.DataFrame([a, _wkt("b", PolygonXY(), ["POLYGON EMPTY"] * 2)])
 
-    def run(**kwargs: Any) -> pl.Series:
-        expr = geo.difference("a", "b", early_coord_check=early_coord_check, **kwargs)
+    def run(promote_to_multi: str = "never", **kwargs: Any) -> pl.Series:
+        expr = geo.difference(
+            "a",
+            "b",
+            promote_to_multi=promote_to_multi,
+            early_coord_check=early_coord_check,
+            **kwargs,
+        )
         return df.select(expr)["a"]
 
     with pytest.raises(ComputeError, match="GEOS expects finite x and y"):
@@ -1046,12 +1092,14 @@ def test_the_namespace_method_passes_its_options_on() -> None:
         [_wkt("a", PolygonXY(), [_WIDE]), _wkt("b", PolygonXY(), [_STRIP])]
     )
 
-    out = df.select(pl.col("a").geo.difference("b", on_row_error="null"))
+    out = df.select(
+        pl.col("a").geo.difference("b", on_row_error="null", promote_to_multi="never")
+    )
     assert out["a"].to_list() == [None]
     out = df.select(
         pl.col("a").geo.difference(
             "b",
-            allow_splitting=True,
+            promote_to_multi="auto",
             new_ring_orientation="ccw",
             early_coord_check="off",
         )
@@ -1160,11 +1208,19 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
     )
     kept = [_kept_parts(shapely.difference(x, y), dimension) for x, y in zip(a, b)]
 
-    def differences(**kwargs: Any) -> pl.Series:
-        out = df.select(geo.difference("a", "b", on_row_error="null", **kwargs))
+    def differences(promote_to_multi: str = "never", **kwargs: Any) -> pl.Series:
+        out = df.select(
+            geo.difference(
+                "a",
+                "b",
+                promote_to_multi=promote_to_multi,
+                on_row_error="null",
+                **kwargs,
+            )
+        )
         return out["a"]
 
-    every_part = differences(allow_splitting=True)
+    every_part = differences(promote_to_multi="auto")
     assert any(len(parts) > 0 for parts in kept), "the cases should not all be empty"
     expected = [shapely.GeometryCollection(parts) for parts in kept]
     # Shapely may bring another GEOS, which can compute a crossing a bit differently,
@@ -1183,7 +1239,7 @@ def test_matches_shapely(a_kind: str, b_kind: str) -> None:
             got = shapely.from_wkt(wkt)
             count = 0 if got.is_empty else shapely.get_num_geometries(got)
             assert count == len(parts), f"row {row}"
-    if _expected_kind(a_kind, splits=False).startswith("Multi") or a_kind == "Point":
+    if _expected_kind(a_kind, "never").startswith("Multi") or a_kind == "Point":
         return
     # A lower dimension takes nothing away (see `test_a_line_or_point_takes_nothing_away_from_a_polygon`).
     if dimension <= _DIMENSION[b_kind.removeprefix("Multi")]:

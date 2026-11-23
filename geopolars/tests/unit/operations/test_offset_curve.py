@@ -38,8 +38,15 @@ def _column(
     return pl.DataFrame(storage.ext.to(dtype(crs=crs)))
 
 
-def _offset(df: pl.DataFrame, distance: object, **kwargs: object) -> list:
-    out = df.select(geo.offset_curve("geom", distance, **kwargs))  # type: ignore[arg-type]
+def _offset(
+    df: pl.DataFrame,
+    distance: object,
+    promote_to_multi: str = "never",
+    **kwargs: object,
+) -> list:
+    out = df.select(
+        geo.offset_curve("geom", distance, promote_to_multi=promote_to_multi, **kwargs)  # type: ignore[arg-type]
+    )
     return out.to_series().ext.storage().to_list()
 
 
@@ -52,16 +59,17 @@ _CROSSING = _line((0, 0), (4, 4), (4, 0), (0, 4))
 def test_the_output_is_xy_linestrings_or_multilinestrings(
     dimension: Dimension, line_coords: pl.DataFrame, ring_coords: pl.DataFrame
 ) -> None:
-    for df, allow_splitting, expected in (
-        (dimension.lines(line_coords), False, LineStringXY()),
-        (dimension.lines(line_coords), True, MultiLineStringXY()),
-        (dimension.multilinestrings(ring_coords), False, MultiLineStringXY()),
-        (dimension.multilinestrings(ring_coords), True, MultiLineStringXY()),
+    for df, promote_to_multi, expected in (
+        (dimension.lines(line_coords), "never", LineStringXY()),
+        (dimension.lines(line_coords), "auto", MultiLineStringXY()),
+        (dimension.lines(line_coords), "always", MultiLineStringXY()),
+        (dimension.multilinestrings(ring_coords), "never", MultiLineStringXY()),
+        (dimension.multilinestrings(ring_coords), "auto", MultiLineStringXY()),
     ):
         curve = geo.offset_curve(
             df.columns[0],
             1.0,
-            allow_splitting=allow_splitting,
+            promote_to_multi=promote_to_multi,
             on_row_error="null",
         )
 
@@ -71,7 +79,7 @@ def test_the_output_is_xy_linestrings_or_multilinestrings(
 def test_the_crs_is_carried_over() -> None:
     df = _column(LineStringXY, _SEGMENT, crs="EPSG:28992")
 
-    out = df.select(geo.offset_curve("geom", 1.0))
+    out = df.select(geo.offset_curve("geom", 1.0, promote_to_multi="never"))
 
     assert out.schema["geom"] == LineStringXY(crs="EPSG:28992")
 
@@ -126,8 +134,8 @@ def test_a_split_line_is_null_when_ignoring_errors() -> None:
     assert segment is not None
 
 
-def test_a_split_line_gets_both_parts_with_allow_splitting() -> None:
-    [curve] = _offset(_column(LineStringXY, _CROSSING), -1.0, allow_splitting=True)
+def test_a_split_line_gets_both_parts_with_promote_to_multi() -> None:
+    [curve] = _offset(_column(LineStringXY, _CROSSING), -1.0, promote_to_multi="auto")
 
     assert len(curve) == 2
 

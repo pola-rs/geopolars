@@ -217,12 +217,12 @@ def test_empty_geometries_of_other_kinds_are_equal(dtype: GeoArrowType) -> None:
     assert _is_equal(dtype, [[]], [[]]) == [True]
 
 
-def test_m_is_only_compared_when_unique() -> None:
+def test_m_is_compared_unless_left_out() -> None:
     a = {"x": 1.0, "y": 2.0, "m": 0.0}
     b = a | {"m": 5.0}
 
-    assert _is_close(PointXYM(), [a], [b]) == [True]
-    assert _is_close(PointXYM(), [a], [b], unique_m=True) == [False]
+    assert _is_close(PointXYM(), [a], [b]) == [False]
+    assert _is_close(PointXYM(), [a], [b], include_m=False) == [True]
 
 
 def test_z_is_compared_unless_ignored() -> None:
@@ -230,7 +230,7 @@ def test_z_is_compared_unless_ignored() -> None:
     b = a | {"z": 5.0}
 
     assert _is_close(PointXYZ(), [a], [b]) == [False]
-    assert _is_close(PointXYZ(), [a], [b], unique_z=False) == [True]
+    assert _is_close(PointXYZ(), [a], [b], include_z=False) == [True]
 
 
 def test_infinities_are_only_close_to_themselves() -> None:
@@ -281,7 +281,7 @@ def test_a_compared_z_or_m_has_to_be_within_the_tolerance(
     a = {"x": 1.0, "y": 1.0, "z": 1.0, "m": 1.0}
     b = a | {axis: 1.0 + offset}
 
-    out = _is_equal(PointXYZM(), [a], [b], unique_m=True, **tolerance)
+    out = _is_equal(PointXYZM(), [a], [b], include_m=True, **tolerance)
     assert out == [equal]
 
 
