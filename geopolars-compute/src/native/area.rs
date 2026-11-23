@@ -1,5 +1,5 @@
 //! The area a polygon encloses, as an [AreaMetric] measures it.
-//! Implements the Python `area_planar` and `area_geodesic`.
+//! Implements the Python `area`.
 
 use std::convert::Infallible;
 

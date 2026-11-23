@@ -89,8 +89,8 @@ KERNELS: dict[str, tuple[Kernel, set[type[GeoArrowType]]]] = {
     # These read untrimmed views.
     "is_empty": (lambda g: geo.is_empty(g, check_nested=True), set()),
     "count_coordinates": (lambda g: geo.count_coordinates(g), set()),
-    "area_planar": (
-        lambda g: geo.area_planar(g),
+    "area": (
+        lambda g: geo.area(g, distance_method="planar"),
         {LineStringXY, MultiPointXY, MultiLineStringXY},
     ),
     "is_ccw": (lambda g: geo.is_ccw(g), {MultiPointXY}),

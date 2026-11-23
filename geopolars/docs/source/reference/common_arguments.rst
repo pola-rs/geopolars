@@ -112,7 +112,7 @@ It is marked experimental.
 `distance_method: Literal["auto", "planar", "geodesic"] = "auto"`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Passed to functions that *measure* a distance.
+Passed to functions that *measure* a distance or an area.
 Why distances in degrees are rarely what you want is described under "Geographic and projected"
 in `docs/source/user-guide/geo/concepts/crs.md`.
 
@@ -131,6 +131,8 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
   Others do not: Web Mercator (EPSG:3857) stretches distances by 1/cos(latitude),
   about 1.6 times at 52°N.
   Pass `distance_method="geodesic"` for such a CRS.
+
+`area` decides `"auto"` based on equal-area CRS (see its doc comment).
 
 .. _arg-allow_geographic:
 
@@ -361,7 +363,7 @@ They are described as they are now.
      - meaning
    * - `allow_non_polygons`
      - `False`
-     - `area`, `area_planar`, `area_geodesic`
+     - `area`
      - give a non-polygon `0.0` rather than refusing it
    * - `allow_non_lines`
      - `False`

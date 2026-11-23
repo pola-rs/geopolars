@@ -10,8 +10,6 @@ Size and distance
     :toctree: api/
 
     area
-    area_planar
-    area_geodesic
     length
     distance
 

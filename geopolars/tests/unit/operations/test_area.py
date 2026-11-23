@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from functools import partial
 
 import polars as pl
 import pytest
@@ -12,6 +13,7 @@ from polars.exceptions import ComputeError
 from polars.testing import assert_series_equal
 
 from geopolars import geo
+from geopolars._typing import DistanceMethod
 from geopolars.datatypes import (
     GeoArrowType,
     LineStringXY,
@@ -53,24 +55,28 @@ def _relabelled(rings: list[list[dict[str, float]]]) -> pl.DataFrame:
 Area = Callable[..., pl.Expr]
 
 
-@pytest.fixture(params=[geo.area, geo.area_planar], ids=["area", "area_planar"])
+def _area_by(distance_method: DistanceMethod) -> Area:
+    return partial(geo.area, distance_method=distance_method)
+
+
+@pytest.fixture(params=["auto", "planar"])
 def planar_area(request: pytest.FixtureRequest) -> Area:
-    """`area` on a geometry without a CRS is `area_planar`."""
-    return request.param
+    """`"auto"` on a geometry without a CRS is `"planar"`."""
+    return _area_by(request.param)
 
 
-@pytest.fixture(params=[geo.area, geo.area_geodesic], ids=["area", "area_geodesic"])
+@pytest.fixture(params=["auto", "geodesic"])
 def geodesic_area(request: pytest.FixtureRequest) -> Area:
-    """`area` on a geometry with a CRS that is not equal-area is `area_geodesic`."""
-    return request.param
+    """`"auto"` on a geometry with a CRS that is not equal-area is `"geodesic"`."""
+    return _area_by(request.param)
 
 
-@pytest.fixture(params=["area", "explicit"])
+@pytest.fixture(params=["auto", "explicit"])
 def area(request: pytest.FixtureRequest) -> Area:
-    """`area`, or the function it forwards to for the test's `crs`."""
-    if request.param == "area":
+    """`"auto"`, or the method it picks for the test's `crs`."""
+    if request.param == "auto":
         return geo.area
-    return geo.area_geodesic if request.node.callspec.params["crs"] else geo.area_planar
+    return _area_by("geodesic" if request.node.callspec.params["crs"] else "planar")
 
 
 def _areas(area: Area, df: pl.DataFrame, name: str = "polygon") -> list[float | None]:
@@ -159,16 +165,16 @@ def test_the_area_survives_coordinates_far_from_the_origin(planar_area: Area) ->
     assert got == pytest.approx(1.0, abs=1e-9)
 
 
+@pytest.mark.parametrize("distance_method", ["auto", "planar"])
 def test_the_namespace_matches_the_function(
-    planar_area: Area, ring_coords: pl.DataFrame
+    distance_method: DistanceMethod, ring_coords: pl.DataFrame
 ) -> None:
     df = XY.polygons(ring_coords)
-
-    method = getattr(pl.col("polygon").geo, area.__name__)
+    namespace = pl.col("polygon").geo.area(distance_method=distance_method)
 
     assert_series_equal(
-        df.select(method()).to_series(),
-        df.select(planar_area("polygon")).to_series(),
+        df.select(namespace).to_series(),
+        df.select(geo.area("polygon", distance_method=distance_method)).to_series(),
     )
 
 
@@ -421,15 +427,17 @@ def test_a_multipolygon_gives_an_f64_named_after_the_geometry(
     )
 
 
-def test_area_planar_ignores_the_crs() -> None:
+def test_planar_ignores_the_crs() -> None:
     """Square degrees: the plane the coordinates lie in, not the ellipsoid."""
     df = _rings([_DEGREE_SQUARE], crs=WGS84)
 
-    assert _areas(geo.area_planar, df) == [1.0]
+    assert _areas(_area_by("planar"), df) == [1.0]
 
 
-def test_area_geodesic_refuses_a_geometry_without_a_crs_at_plan_time() -> None:
-    lf = _rings([_SQUARE]).lazy().select(geo.area_geodesic("polygon"))
+def test_geodesic_refuses_a_geometry_without_a_crs_at_plan_time() -> None:
+    lf = (
+        _rings([_SQUARE]).lazy().select(geo.area("polygon", distance_method="geodesic"))
+    )
 
     with pytest.raises(TypeError, match="declares none"):
         lf.collect_schema()
@@ -444,7 +452,7 @@ def test_an_equal_area_crs_is_measured_on_its_plane(crs: str) -> None:
     """Its plane keeps areas, so there is no need to go to the ellipsoid."""
     df = _rings([_SQUARE], crs=crs)
 
-    assert _areas(geo.area, df) == _areas(geo.area_planar, df) == [16.0]
+    assert _areas(geo.area, df) == _areas(_area_by("planar"), df) == [16.0]
 
 
 @pytest.mark.parametrize("crs", ["EPSG:3857", "EPSG:32631"], ids=["mercator", "utm"])
@@ -455,11 +463,11 @@ def test_any_other_projected_crs_is_measured_on_the_ellipsoid(crs: str) -> None:
 
     got = _areas(geo.area, df)
 
-    assert got == _areas(geo.area_geodesic, df)
-    assert got != _areas(geo.area_planar, df)
+    assert got == _areas(_area_by("geodesic"), df)
+    assert got != _areas(_area_by("planar"), df)
 
 
-def test_area_planar_lines_up_across_chunks_and_slices() -> None:
+def test_planar_lines_up_across_chunks_and_slices() -> None:
     hole = [
         {"x": 1.0, "y": 1.0},
         {"x": 2.0, "y": 1.0},
@@ -478,16 +486,15 @@ def test_area_planar_lines_up_across_chunks_and_slices() -> None:
         rechunk=False,
     )
 
-    assert _areas(geo.area_planar, polygons.slice(1)) == [15.5, 1.0]
-    assert _areas(geo.area_planar, multis.slice(1), "multipolygon") == [None, 16.5]
+    planar = _area_by("planar")
+    assert _areas(planar, polygons.slice(1)) == [15.5, 1.0]
+    assert _areas(planar, multis.slice(1), "multipolygon") == [None, 16.5]
 
 
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
-@pytest.mark.parametrize(
-    "fn", [geo.area, geo.area_planar, geo.area_geodesic], ids=lambda f: f.__name__
-)
+@pytest.mark.parametrize("distance_method", ["auto", "planar", "geodesic"])
 def test_only_polygons_are_accepted_while_resolving_the_schema(
-    fn: Area,
+    distance_method: DistanceMethod,
     crs: str | None,
     coords: pl.DataFrame,
     line_coords: pl.DataFrame,
@@ -495,8 +502,9 @@ def test_only_polygons_are_accepted_while_resolving_the_schema(
 ) -> None:
     """Points and linestrings, and their multi forms, enclose nothing:
     not even a closed linestring, which is a curve rather than a ring."""
-    if fn is geo.area_geodesic and crs is None:
+    if distance_method == "geodesic" and crs is None:
         pytest.skip("refused for having no CRS instead")
+    fn = _area_by(distance_method)
     point = _declaring(coords.select(XY.point()), PointXY, crs)
     line = _declaring(XY.lines(line_coords), LineStringXY, crs)
     multipoint = _declaring(XY.multipoints(line_coords), MultiPointXY, crs)
@@ -534,18 +542,17 @@ def _non_polygons(
 
 
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
-@pytest.mark.parametrize(
-    "fn", [geo.area, geo.area_planar, geo.area_geodesic], ids=lambda f: f.__name__
-)
+@pytest.mark.parametrize("distance_method", ["auto", "planar", "geodesic"])
 def test_with_allow_non_polygons_they_enclose_nothing(
-    fn: Area,
+    distance_method: DistanceMethod,
     crs: str | None,
     coords: pl.DataFrame,
     line_coords: pl.DataFrame,
     ring_coords: pl.DataFrame,
 ) -> None:
-    if fn is geo.area_geodesic and crs is None:
+    if distance_method == "geodesic" and crs is None:
         pytest.skip("refused for having no CRS instead")
+    fn = _area_by(distance_method)
 
     for df in _non_polygons(crs, coords, line_coords, ring_coords):
         (name,) = df.columns
@@ -555,13 +562,15 @@ def test_with_allow_non_polygons_they_enclose_nothing(
         assert got.to_list() == [0.0] * (len(df) - 1) + [None]
 
 
-def test_with_allow_non_polygons_area_geodesic_still_needs_a_crs(
+def test_with_allow_non_polygons_geodesic_still_needs_a_crs(
     line_coords: pl.DataFrame,
 ) -> None:
     lf = XY.lines(line_coords).lazy()
 
     with pytest.raises(TypeError, match="declares none"):
-        lf.select(geo.area_geodesic("line", allow_non_polygons=True)).collect_schema()
+        lf.select(
+            geo.area("line", distance_method="geodesic", allow_non_polygons=True)
+        ).collect_schema()
 
 
 def test_allow_non_polygons_leaves_polygons_alone(planar_area: Area) -> None:
@@ -572,13 +581,18 @@ def test_allow_non_polygons_leaves_polygons_alone(planar_area: Area) -> None:
     )
 
 
-@pytest.mark.parametrize("name", ["area", "area_planar"])
+@pytest.mark.parametrize("distance_method", ["auto", "planar"])
 def test_the_namespace_passes_allow_non_polygons_on(
-    name: str, line_coords: pl.DataFrame
+    distance_method: DistanceMethod, line_coords: pl.DataFrame
 ) -> None:
     df = XY.lines(line_coords)
-    method = getattr(pl.col("line").geo, name)
+    kwargs = {"distance_method": distance_method, "allow_non_polygons": True}
 
-    assert df.select(method(allow_non_polygons=True)).equals(
-        df.select(getattr(geo, name)("line", allow_non_polygons=True))
+    assert df.select(pl.col("line").geo.area(**kwargs)).equals(
+        df.select(geo.area("line", **kwargs))
     )
+
+
+def test_an_unknown_distance_method_is_refused() -> None:
+    with pytest.raises(ValueError, match="`distance_method` must be one of"):
+        geo.area("polygon", distance_method="Geodesic")  # type: ignore[arg-type]

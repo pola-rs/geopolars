@@ -430,7 +430,10 @@ def test_a_multipolygon_weighs_each_part_like_a_lone_polygon(
     multis = dimension.multipolygons(multipolygon_coords)
     out = multis.select(geo.centroid("multipolygon"))
     expected = _weighted_mean_of_parts(
-        multis, "multipolygon", dimension.polygon_dtype(), geo.area_planar
+        multis,
+        "multipolygon",
+        dimension.polygon_dtype(),
+        lambda g: geo.area(g, distance_method="planar"),
     )
 
     assert out.schema["multipolygon"] == dimension.point_dtype()

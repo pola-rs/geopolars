@@ -58,7 +58,8 @@ def _buffered(
 
 
 def _areas(df: pl.DataFrame, distance: float, **kwargs: object) -> list[float]:
-    out = df.select(geo.buffer("geom", distance, **kwargs).geo.area_planar())  # type: ignore[arg-type]
+    buffered = geo.buffer("geom", distance, **kwargs)  # type: ignore[arg-type]
+    out = df.select(buffered.geo.area(distance_method="planar"))
     return out.to_series().to_list()
 
 
@@ -402,7 +403,7 @@ def _points_with_distances(*distances: float | None) -> pl.DataFrame:
 def test_a_distance_column_gives_every_row_its_own_distance() -> None:
     df = _points_with_distances(1.0, 2.0, None)
 
-    out = df.select(geo.buffer("geom", "d").geo.area_planar())
+    out = df.select(geo.buffer("geom", "d").geo.area(distance_method="planar"))
 
     [one, two, null] = out.to_series().to_list()
     assert one == pytest.approx(_inscribed_area(8))
@@ -413,7 +414,9 @@ def test_a_distance_column_gives_every_row_its_own_distance() -> None:
 def test_a_distance_series_of_one_value_is_broadcast() -> None:
     df = _column(PointXY, _ORIGIN, _ORIGIN)
 
-    out = df.select(geo.buffer("geom", pl.Series([2.0])).geo.area_planar())
+    out = df.select(
+        geo.buffer("geom", pl.Series([2.0])).geo.area(distance_method="planar")
+    )
 
     assert out.to_series().to_list() == pytest.approx([4 * _inscribed_area(8)] * 2)
 

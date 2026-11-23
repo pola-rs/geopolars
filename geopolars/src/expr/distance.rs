@@ -55,7 +55,7 @@ fn build(crs: &str) -> PolarsResult<GeodesicMetric> {
     ))
 }
 
-/// The `distance_method` of the Python `distance` and `length`,
+/// The `distance_method` of the Python `distance`, `length`, and `area`,
 /// with `"auto"` resolved on the Python side.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]

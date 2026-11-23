@@ -828,20 +828,19 @@ class ExprGeoNameSpace:
             ignore_nan=ignore_nan,
         )
 
-    def area(self, *, allow_non_polygons: bool = False) -> pl.Expr:
+    def area(
+        self,
+        *,
+        distance_method: DistanceMethod = "auto",
+        allow_non_polygons: bool = False,
+    ) -> pl.Expr:
         from geopolars.geo.area import area
 
-        return area(self._expr, allow_non_polygons=allow_non_polygons)
-
-    def area_planar(self, *, allow_non_polygons: bool = False) -> pl.Expr:
-        from geopolars.geo.area import area_planar
-
-        return area_planar(self._expr, allow_non_polygons=allow_non_polygons)
-
-    def area_geodesic(self, *, allow_non_polygons: bool = False) -> pl.Expr:
-        from geopolars.geo.area import area_geodesic
-
-        return area_geodesic(self._expr, allow_non_polygons=allow_non_polygons)
+        return area(
+            self._expr,
+            distance_method=distance_method,
+            allow_non_polygons=allow_non_polygons,
+        )
 
     def is_empty(self, *, check_nested: bool = False) -> pl.Expr:
         from geopolars.geo.is_empty import is_empty

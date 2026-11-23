@@ -11,9 +11,7 @@ the comment says when one without a CRS takes a different tier.
 
 | Operation | Point | | LineString | | Polygon | | MultiPoint | | MultiLineString | | MultiPolygon | |
 | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| `area` | - | ANP | - | ANP | A/B | fwd `*_planar` `*_geodesic` | - | ANP | - | ANP | A/B | sum of parts |
-| `area_planar` | - | ANP | - | ANP | A | shoelace; CRS ignored | - | ANP | - | ANP | A | sum of parts |
-| `area_geodesic` | - | ANP | - | ANP | B | PROJ + GGL; needs a CRS | - | ANP | - | ANP | B | sum of parts |
+| `area` | - | ANP | - | ANP | A/B | shoelace or PROJ + GGL [^2] | - | ANP | - | ANP | A/B | sum of parts |
 | `length` | - | ANL | A/B | Reuses bits of `distance` [^2] | - | ANL | - | ANL | A/B | sum of parts | - | ANL |
 | `centroid` | C | RIG | A | length-weighted; keeps z/m | A | shoelace; z/m area-weighted | C | fwd `mean_coordinate` | A | length-weighted parts | A | area-weighted parts |
 | `exterior` | - | | - | | A | ring 0 | - | | - | | A | LPP |
