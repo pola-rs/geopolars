@@ -106,15 +106,13 @@ fn intersection_type(a: &DataType, b: &DataType, kwargs: &IntersectionKwargs) ->
     };
     // A single lowest-dimensional input stays single, unless promoted.
     // A point cannot split, so only "always" promotes it.
-    let has_point = a.kind == Kind::Point || b.kind == Kind::Point;
     let single_lowest = [a.kind, b.kind]
         .into_iter()
         .any(|kind| topological_dimension(kind) == lowest && !kind.is_multi());
-    let multi = match kwargs.promote_to_multi {
-        PromoteToMulti::Never => !has_point && !single_lowest,
-        PromoteToMulti::Auto => !has_point,
-        PromoteToMulti::Always => true,
-    };
+    let has_point = a.kind == Kind::Point || b.kind == Kind::Point;
+    let multi = kwargs
+        .promote_to_multi
+        .output_is_multi(!single_lowest, !has_point);
     Ok(Geo::new(
         output_kind(kept_dimension, multi),
         overlay_dimension(&a, &b),
@@ -127,12 +125,9 @@ fn difference_type(a: &DataType, b: &DataType, kwargs: &DifferenceKwargs) -> Pol
     let (a, b) = (describe(a)?, describe(b)?);
     ensure_same_crs(&a, &b)?;
     // A point cannot split, so only "always" promotes it.
-    let multi = a.kind.is_multi()
-        || match kwargs.promote_to_multi {
-            PromoteToMulti::Never => false,
-            PromoteToMulti::Auto => a.kind != Kind::Point,
-            PromoteToMulti::Always => true,
-        };
+    let multi = kwargs
+        .promote_to_multi
+        .output_is_multi(a.kind.is_multi(), a.kind != Kind::Point);
     Ok(Geo::new(
         output_kind(topological_dimension(a.kind), multi),
         overlay_dimension(&a, &b),

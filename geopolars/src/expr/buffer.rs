@@ -20,17 +20,11 @@ use crate::geoarrow::{describe, geometry_series, Geo};
 /// Also the kind of the input, and whether the output is a multipolygon.
 fn buffered_type(dtype: &DataType, kwargs: &BufferKwargs) -> PolarsResult<(Geo, Kind, bool)> {
     let geo = describe(dtype)?;
-    let is_multi = match geo.kind {
-        Kind::Point | Kind::LineString | Kind::Polygon => false,
-        Kind::MultiPoint | Kind::MultiLineString | Kind::MultiPolygon => true,
-    };
-    let into_multi = is_multi
-        || match kwargs.promote_to_multi {
-            PromoteToMulti::Never => false,
-            // Only a distance of at most 0 can split, and a column's sign is only known per row.
-            PromoteToMulti::Auto => kwargs.distance.is_none_or(|d| d <= 0.0),
-            PromoteToMulti::Always => true,
-        };
+    // Only a distance of at most 0 can split, and a column's sign is only known per row.
+    let can_split = kwargs.distance.is_none_or(|d| d <= 0.0);
+    let into_multi = kwargs
+        .promote_to_multi
+        .output_is_multi(geo.kind.is_multi(), can_split);
     let kind = if into_multi {
         Kind::MultiPolygon
     } else {

@@ -23,10 +23,10 @@ fn offset_curve_type(
     // but second check never hurt nobody.
     let geo = describe(dtype)?;
     let line_kind = LineKind::new("offset_curve", geo.kind)?;
-    let into_multi = match line_kind {
-        LineKind::LineString => kwargs.promote_to_multi != PromoteToMulti::Never,
-        LineKind::MultiLineString => true,
-    };
+    // Any linestring can split.
+    let into_multi = kwargs
+        .promote_to_multi
+        .output_is_multi(line_kind == LineKind::MultiLineString, true);
     let kind = if into_multi {
         Kind::MultiLineString
     } else {

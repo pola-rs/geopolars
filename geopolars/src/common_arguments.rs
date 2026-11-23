@@ -68,3 +68,14 @@ pub(crate) enum PromoteToMulti {
     Auto,
     Always,
 }
+
+impl PromoteToMulti {
+    pub(crate) fn output_is_multi(self, input_is_multi: bool, can_split: bool) -> bool {
+        input_is_multi
+            || match self {
+                PromoteToMulti::Never => false,
+                PromoteToMulti::Auto => can_split,
+                PromoteToMulti::Always => true,
+            }
+    }
+}
