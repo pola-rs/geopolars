@@ -1,8 +1,6 @@
-<p align="center">
+<h1 align="center">
   <img src="static/geopolars-logo-transparent.svg" alt="GeoPolars logo" width="600"/>
-</p>
-
-<h1 align="center">GeoPolars</h1>
+</h1>
 
 <div align="center">
   <a href="https://pypi.org/project/geopolars/">
@@ -21,7 +19,7 @@
 
 <p align="center">
   <b>Documentation</b>:
-  <a href="https://github.com/pola-rs/geopolars/tree/main/geopolars/docs/source/reference">API reference</a>
+  <a href="https://github.com/pola-rs/geopolars/tree/main/geopolars/docs/source/reference">Python</a>
   |
   <a href="https://github.com/pola-rs/geopolars/tree/main/docs/source/user-guide/geo">User guide</a>
 </p>
