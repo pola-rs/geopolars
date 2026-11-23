@@ -69,8 +69,9 @@ ZENSICAL := $(CURDIR)/.venv/bin/zensical
 API_LINKS := docs/source/_build/API_REFERENCE_LINKS.yml
 INSTALL_GUIDE_DEPS = grep -E '^(zensical|markdown-exec)==' $(POLARS_DIR)/docs/source/requirements.txt \
 	| uv pip install --python .venv/bin/python -r -
-# zensical only logs a failing example, an unknown API key, or any other warning.
-GUIDE_PROBLEMS := ^(Warning|Error)\b|^[0-9]+ issues? found|code block exited with|Could not find
+# zensical fails by itself on a broken link (`strict` in the Polars config) and a macro that raises (`on_error_fail`),
+# but only logs a failing example, an unknown API key, or a warning from a Python extension.
+GUIDE_PROBLEMS := ^WARNING\b|code block exited with|Could not find
 
 ## Build the user and developer guides with zensical into target/docs-guide/site.
 ## It fails on broken links and failing examples, as the Polars docs CI does,
