@@ -7,11 +7,13 @@
 //! The loop over the rows is generic over `ALL_VALID`.
 //! If `ALL_VALID=true`, every row is there, so none is checked for being null.
 
-use geopolars_views::output::{bool_array, f64_array, list_array};
+use geopolars_views::output::{bool_array, f64_array, f64_array_masked, list_array};
 use geopolars_views::{List, ValidList};
 use polars_arrow::array::{BooleanArray, ListArray, PrimitiveArray};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::Offsets;
+
+use crate::{row_or_null, OnRowError};
 
 /// `measure` of every row of a chunk, with the rows' own validity.
 #[inline(always)]
@@ -20,6 +22,43 @@ pub(crate) fn per_row<E>(
     measure: impl Fn(usize) -> Result<f64, E>,
 ) -> Result<PrimitiveArray<f64>, E> {
     Ok(f64_array(per_row_values(rows, measure)?, rows.validity()))
+}
+
+/// [per_row], with a row that fails handled as `on_row_error` says.
+#[inline(always)]
+pub(crate) fn per_row_or_null<E>(
+    rows: &List,
+    on_row_error: OnRowError,
+    measure: impl Fn(usize) -> Result<f64, E>,
+) -> Result<PrimitiveArray<f64>, E> {
+    let (values, failed) = with_const_flags!(
+        ALL_VALID = rows.is_all_valid();
+        per_row_or_null_with::<ALL_VALID, E>(rows, on_row_error, measure)
+    )?;
+    Ok(f64_array_masked(values, rows.validity(), None, &failed))
+}
+
+/// [per_row_or_null]'s values, and the rows that failed.
+#[inline(always)]
+fn per_row_or_null_with<const ALL_VALID: bool, E>(
+    rows: &List,
+    on_row_error: OnRowError,
+    measure: impl Fn(usize) -> Result<f64, E>,
+) -> Result<(Vec<f64>, Vec<usize>), E> {
+    // Filled by index, not collected,
+    // because collecting through `Result` loses the length.
+    let mut values = vec![0.0; rows.len()];
+    let mut failed = Vec::new();
+    for (i, value) in values.iter_mut().enumerate() {
+        // A null row's offsets point anywhere, so it is not measured.
+        if ALL_VALID || rows.is_valid(i) {
+            match row_or_null(measure(i).map(Some), on_row_error)? {
+                Some(measured) => *value = measured,
+                None => failed.push(i),
+            }
+        }
+    }
+    Ok((values, failed))
 }
 
 /// [per_row], for a `bool` per row.

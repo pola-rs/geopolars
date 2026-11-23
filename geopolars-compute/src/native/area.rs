@@ -9,8 +9,8 @@ use geopolars_views::{
 };
 use polars_arrow::array::PrimitiveArray;
 
-use crate::per_row::per_row;
-use crate::{BaseMetric, GeoComputeError, GeodesicMetric, Planar};
+use crate::per_row::per_row_or_null;
+use crate::{BaseMetric, GeoComputeError, GeodesicMetric, OnRowError, Planar};
 
 /// How the area a ring encloses is measured
 pub trait AreaMetric: BaseMetric {
@@ -85,16 +85,20 @@ fn polygon_area<M: AreaMetric>(metric: &M, polygon: &ScalarPolygon) -> Result<f6
 pub fn polygon_areas<M: AreaMetric>(
     metric: &M,
     array: &Untrimmed<PolygonArray>,
+    on_row_error: OnRowError,
 ) -> Result<PrimitiveArray<f64>, M::Error> {
-    per_row(array.rows(), |i| polygon_area(metric, &array.get(i)))
+    per_row_or_null(array.rows(), on_row_error, |i| {
+        polygon_area(metric, &array.get(i))
+    })
 }
 
 /// The area of every multipolygon of a chunk.
 pub fn multi_polygon_areas<M: AreaMetric>(
     metric: &M,
     array: &Untrimmed<MultiPolygonArray>,
+    on_row_error: OnRowError,
 ) -> Result<PrimitiveArray<f64>, M::Error> {
-    per_row(array.rows(), |i| {
+    per_row_or_null(array.rows(), on_row_error, |i| {
         array
             .get(i)
             .polygons()

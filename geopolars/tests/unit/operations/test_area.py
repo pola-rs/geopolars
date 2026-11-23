@@ -235,6 +235,24 @@ def test_with_a_crs_a_hole_is_taken_out(geodesic_area: Area) -> None:
         assert got == pytest.approx(0.0, abs=1e-3)
 
 
+def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -> None:
+    """A square far outside the UTM zone fails on its own row, not the whole column."""
+    far = [{"x": x * 1e30, "y": y * 1e30} for x, y in ((0, 0), (1, 0), (1, 1), (0, 0))]
+    near = [{"x": 500_000.0 + v["x"], "y": v["y"]} for v in _SQUARE]
+    df = pl.DataFrame({"rings": [[near], [far]]}, schema={"rings": _XY_RINGS}).select(
+        geo.polygons_from_rings_in_single_column("rings", crs="EPSG:32631").alias(
+            "polygon"
+        )
+    )
+
+    with pytest.raises(ComputeError, match="failed to reproject"):
+        _areas(geodesic_area, df)
+
+    got = _areas(partial(geodesic_area, on_row_error="null"), df)
+    assert got[0] == pytest.approx(16.0, rel=1e-3)
+    assert got[1] is None
+
+
 def test_with_a_crs_the_ellipsoid_is_the_one_the_crs_declares(
     geodesic_area: Area,
 ) -> None:

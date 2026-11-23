@@ -4,13 +4,14 @@
 use std::fmt::Display;
 
 use geopolars_compute::native::AreaMetric;
-use geopolars_compute::Planar;
+use geopolars_compute::{OnRowError, Planar};
 use geopolars_core::{areas, PolygonKind};
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
 use super::distance::{geodesic_metric_of, DistanceMethod};
+use crate::common_arguments::OnRowErrorDef;
 use crate::geoarrow::describe;
 
 /// The keyword arguments of the Python `area`.
@@ -18,6 +19,8 @@ use crate::geoarrow::describe;
 #[serde(deny_unknown_fields)]
 struct AreaKwargs {
     distance_method: DistanceMethod,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
 /// Refuses every kind but polygons and multipolygons,
@@ -36,23 +39,27 @@ fn kernel_output_type_area(input_fields: &[Field], kwargs: AreaKwargs) -> Polars
 }
 
 /// The area of every geometry in `geometries`, as `metric` measures it.
-fn measure(metric: &impl AreaMetric<Error: Display>, geometries: &Series) -> PolarsResult<Series> {
+fn measure(
+    metric: &impl AreaMetric<Error: Display>,
+    geometries: &Series,
+    on_row_error: OnRowError,
+) -> PolarsResult<Series> {
     let kind = PolygonKind::new("area", describe(geometries.dtype())?.kind)?;
     let storage = geometries.ext()?.storage();
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| areas(chunk.as_ref(), kind, metric));
+        .map(|chunk| areas(chunk.as_ref(), kind, metric, on_row_error));
     Ok(Float64Chunked::try_from_chunk_iter(geometries.name().clone(), chunks)?.into_series())
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_area)]
 fn area(inputs: &[Series], kwargs: AreaKwargs) -> PolarsResult<Series> {
     match kwargs.distance_method {
-        DistanceMethod::Planar => measure(&Planar, &inputs[0]),
+        DistanceMethod::Planar => measure(&Planar, &inputs[0], kwargs.on_row_error),
         DistanceMethod::Geodesic => {
             let metric = geodesic_metric_of(&inputs[0].field())?;
-            measure(&*metric, &inputs[0])
+            measure(&*metric, &inputs[0], kwargs.on_row_error)
         }
     }
 }

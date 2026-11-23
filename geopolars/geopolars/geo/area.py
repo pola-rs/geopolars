@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from polars.plugins import register_plugin_function
 
-from geopolars._typing import DistanceMethod
+from geopolars._docs import doc
+from geopolars._typing import DistanceMethod, OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import MultiPolygonType, PolygonType
 from geopolars.geo._dispatch import on_geometry
@@ -51,6 +52,7 @@ def _area(
     *,
     distance_method: DistanceMethod,
     allow_non_polygons: bool,
+    on_row_error: OnRowError,
 ) -> pl.Expr:
     if distance_method == "auto":
         distance_method = _auto_area_method(geometry)
@@ -67,16 +69,18 @@ def _area(
         plugin_path=LIB,
         args=[column],
         function_name="area",
-        kwargs={"distance_method": distance_method},
+        kwargs={"distance_method": distance_method, "on_row_error": on_row_error},
         is_elementwise=True,
     )
 
 
+@doc()
 def area(
     geometry: IntoExprColumn,
     *,
     distance_method: DistanceMethod = "auto",
     allow_non_polygons: bool = False,
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.
 
@@ -146,17 +150,22 @@ def area(
     A self-intersecting ring is not valid by OGC (see `is_valid_ogc`), and the parts of it that
     wind the other way will cancel rather than add.
 
+    {on_row_error}
+    Only `"geodesic"` can fail on a row, when PROJ cannot take one of its vertices to longitude/latitude.
+
     .. code-block:: python
 
         df.select(geo.area("parcel"))
         df.select(geo.area("parcel", distance_method="planar"))
     """
     validate_one_of("distance_method", distance_method, DistanceMethod)
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     return on_geometry(
         geometry,
         partial(
             _area,
             distance_method=distance_method,
             allow_non_polygons=allow_non_polygons,
+            on_row_error=on_row_error,
         ),
     )
