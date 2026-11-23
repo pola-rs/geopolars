@@ -90,12 +90,12 @@ fn polygon_area<M: AreaMetric>(
     polygon: &ScalarPolygon,
     negative_area: NegativeArea,
 ) -> Result<f64, M::Error> {
-    let mut rings = polygon.rings();
-    let Some(exterior) = rings.next() else {
+    let Some(exterior) = polygon.exterior() else {
         return Ok(0.0);
     };
     let exterior = metric.ring_area(&exterior)?;
-    let holes = rings
+    let holes = polygon
+        .holes()
         .map(|hole| metric.ring_area(&hole))
         .sum::<Result<f64, _>>()?;
     let area = exterior - holes;

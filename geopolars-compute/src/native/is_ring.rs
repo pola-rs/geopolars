@@ -60,8 +60,7 @@ fn has_only_rings<const Z: bool>(
     if polygon.has_empty_exterior() {
         if allow_holes_in_empty_exterior {
             return polygon
-                .rings()
-                .skip(1)
+                .holes()
                 .all(|hole| hole.vertices.is_empty() || is_ring::<Z>(hole.coords, hole.vertices));
         }
         return polygon.rings().all(|ring| ring.vertices.is_empty());

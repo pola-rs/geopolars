@@ -140,12 +140,11 @@ fn add_ring<const Z: bool, const M: bool>(
 /// moment += (exterior - holes)
 #[inline(always)]
 fn add_polygon<const Z: bool, const M: bool>(moment: &mut Moment<Z, M>, polygon: &ScalarPolygon) {
-    let mut rings = polygon.rings();
-    let Some(exterior) = rings.next() else {
+    let Some(exterior) = polygon.exterior() else {
         return;
     };
     add_ring(moment, &exterior, 1.0);
-    for hole in rings {
+    for hole in polygon.holes() {
         add_ring(moment, &hole, -1.0);
     }
 }

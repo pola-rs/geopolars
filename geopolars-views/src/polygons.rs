@@ -26,12 +26,23 @@ impl<'a> ScalarPolygon<'a> {
         })
     }
 
+    /// Its first ring, if it has any.
+    #[inline(always)]
+    pub fn exterior(&self) -> Option<ScalarLineString<'a>> {
+        self.rings().next()
+    }
+
+    /// Its rings after the exterior.
+    #[inline(always)]
+    pub fn holes(&self) -> impl Iterator<Item = ScalarLineString<'a>> + 'a {
+        self.rings().skip(1)
+    }
+
     /// Whether it has no exterior, or an empty one.
     /// Either makes it the empty polygon, whose holes GeoArrow also requires to be empty.
     #[inline(always)]
     pub fn has_empty_exterior(&self) -> bool {
-        self.rings()
-            .next()
+        self.exterior()
             .is_none_or(|exterior| exterior.vertices.is_empty())
     }
 }
