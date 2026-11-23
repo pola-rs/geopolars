@@ -51,11 +51,13 @@ def _rings(rings: list[list[dict[str, float]]], crs: str | None = None) -> pl.Da
     return _polygons([rings], crs=crs)
 
 
-def _relabelled(rings: list[list[dict[str, float]]]) -> pl.DataFrame:
+def _relabelled(
+    rings: list[list[dict[str, float]]], crs: str | None = None
+) -> pl.DataFrame:
     """As `_rings`, but relabelled rather than built,
     for rings a constructor refuses but that can still arrive around it."""
     return pl.DataFrame({"rings": [rings]}, schema={"rings": _XY_RINGS}).select(
-        pl.col("rings").ext.to(PolygonXY()).alias("polygon")
+        pl.col("rings").ext.to(PolygonXY(crs=crs)).alias("polygon")
     )
 
 
@@ -151,6 +153,26 @@ def test_an_empty_polygon_encloses_nothing(planar_area: Area) -> None:
     assert _areas(planar_area, _rings([])) == [0.0]
 
 
+# A 1x1 square inside `_SQUARE`.
+_SMALL_SQUARE = [{"x": 1.0 + v["x"] / 4, "y": 1.0 + v["y"] / 4} for v in _SQUARE]
+# A 6x6 square around `_SQUARE`.
+_BIG_HOLE = [{"x": v["x"] * 1.5 - 1.0, "y": v["y"] * 1.5 - 1.0} for v in _SQUARE]
+
+
+@pytest.mark.parametrize(
+    ("rings", "kept"),
+    [([[], _SMALL_SQUARE], -1.0), ([_SQUARE, _BIG_HOLE], -20.0)],
+    ids=["empty exterior", "hole larger than exterior"],
+)
+def test_a_polygon_below_zero_follows_negative_area(
+    planar_area: Area, rings: list[list[dict[str, float]]], kept: float
+) -> None:
+    df = _relabelled(rings)
+
+    assert _areas(planar_area, df) == [0.0]
+    assert _areas(partial(planar_area, negative_area="keep"), df) == [kept]
+
+
 def test_a_null_polygon_has_no_area(planar_area: Area) -> None:
     df = pl.DataFrame({"polygon": [[_SQUARE], None]}, schema={"polygon": _XY_RINGS})
 
@@ -240,6 +262,16 @@ def test_with_a_crs_a_hole_is_taken_out(geodesic_area: Area) -> None:
         (got,) = _areas(geodesic_area, _rings([_DEGREE_SQUARE, hole], crs=WGS84))
 
         assert got == pytest.approx(0.0, abs=1e-3)
+
+
+def test_with_a_crs_an_empty_exterior_with_a_hole_follows_negative_area(
+    geodesic_area: Area,
+) -> None:
+    df = _relabelled([[], _DEGREE_SQUARE], crs=WGS84)
+
+    assert _areas(geodesic_area, df) == [0.0]
+    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
+    assert kept == pytest.approx(-_DEGREE_SQUARE_AREA, rel=1e-9)
 
 
 def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -> None:
@@ -456,6 +488,15 @@ def test_a_multipolygon_without_polygons_encloses_nothing(
     assert _areas(area, df, "multipolygon") == [0.0, 0.0, None]
 
 
+def test_a_multipolygon_takes_negative_area_per_polygon(planar_area: Area) -> None:
+    """The polygon below zero does not take area away from the square next to it."""
+    df = _multipolygons([[[_SQUARE], [[], _SMALL_SQUARE]]])
+
+    assert _areas(planar_area, df, "multipolygon") == [16.0]
+    keep = partial(planar_area, negative_area="keep")
+    assert _areas(keep, df, "multipolygon") == [15.0]
+
+
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
 def test_a_sliced_multipolygon_keeps_its_own_polygons(
     area: Area, crs: str | None
@@ -649,3 +690,8 @@ def test_the_namespace_passes_allow_non_polygons_on(
 def test_an_unknown_distance_method_is_refused() -> None:
     with pytest.raises(ValueError, match="`distance_method` must be one of"):
         geo.area("polygon", distance_method="Geodesic")  # type: ignore[arg-type]
+
+
+def test_an_unknown_negative_area_is_refused() -> None:
+    with pytest.raises(ValueError, match="`negative_area` must be one of"):
+        geo.area("polygon", negative_area="clamp")  # type: ignore[arg-type]

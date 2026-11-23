@@ -21,6 +21,13 @@ use crate::early_coord_check::every_xy_passes;
 use crate::per_row::per_row_or_null;
 use crate::{BaseMetric, EarlyCoordCheck, GeoComputeError, GeodesicMetric, OnRowError, Planar};
 
+/// The `negative_area` of the Python `area`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NegativeArea {
+    Zero,
+    Keep,
+}
+
 /// How the area a ring encloses is measured
 pub trait AreaMetric: BaseMetric {
     /// Why a ring could not be measured (e.g. a failed reprojection).
@@ -78,7 +85,11 @@ impl AreaMetric for GeodesicMetric {
 }
 
 #[inline(always)]
-fn polygon_area<M: AreaMetric>(metric: &M, polygon: &ScalarPolygon) -> Result<f64, M::Error> {
+fn polygon_area<M: AreaMetric>(
+    metric: &M,
+    polygon: &ScalarPolygon,
+    negative_area: NegativeArea,
+) -> Result<f64, M::Error> {
     let mut rings = polygon.rings();
     let Some(exterior) = rings.next() else {
         return Ok(0.0);
@@ -87,7 +98,13 @@ fn polygon_area<M: AreaMetric>(metric: &M, polygon: &ScalarPolygon) -> Result<f6
     let holes = rings
         .map(|hole| metric.ring_area(&hole))
         .sum::<Result<f64, _>>()?;
-    Ok(exterior - holes)
+    let area = exterior - holes;
+    // Only a polygon that is not valid by OGC gets here:
+    // an empty exterior with holes, or holes that take more than it encloses.
+    if area < 0.0 && negative_area == NegativeArea::Zero {
+        return Ok(0.0);
+    }
+    Ok(area)
 }
 
 #[inline(always)]
@@ -107,6 +124,7 @@ pub fn polygon_areas<M: AreaMetric>(
     array: &Untrimmed<PolygonArray>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
+    negative_area: NegativeArea,
 ) -> Result<PrimitiveArray<f64>, M::Error> {
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
@@ -114,7 +132,7 @@ pub fn polygon_areas<M: AreaMetric>(
             if !row_passes_early_check::<EARLY_COORD_CHECK>(array.coords(), array.row_vertices(i)) {
                 return Ok(f64::NAN);
             }
-            polygon_area(metric, &array.get(i))
+            polygon_area(metric, &array.get(i), negative_area)
         })
     )
 }
@@ -125,6 +143,7 @@ pub fn multi_polygon_areas<M: AreaMetric>(
     array: &Untrimmed<MultiPolygonArray>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
+    negative_area: NegativeArea,
 ) -> Result<PrimitiveArray<f64>, M::Error> {
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
@@ -135,7 +154,7 @@ pub fn multi_polygon_areas<M: AreaMetric>(
             array
                 .get(i)
                 .polygons()
-                .map(|polygon| polygon_area(metric, &polygon))
+                .map(|polygon| polygon_area(metric, &polygon, negative_area))
                 .sum()
         })
     )

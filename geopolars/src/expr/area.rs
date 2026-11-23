@@ -3,7 +3,7 @@
 
 use std::fmt::Display;
 
-use geopolars_compute::native::AreaMetric;
+use geopolars_compute::native::{AreaMetric, NegativeArea};
 use geopolars_compute::{EarlyCoordCheck, OnRowError, Planar};
 use geopolars_core::{areas, PolygonKind};
 use polars::prelude::*;
@@ -14,6 +14,13 @@ use super::distance::{geodesic_metric_of, DistanceMethod};
 use crate::common_arguments::{EarlyCoordCheckDef, OnRowErrorDef};
 use crate::geoarrow::describe;
 
+#[derive(Debug, Deserialize)]
+#[serde(remote = "NegativeArea", rename_all = "snake_case")]
+enum NegativeAreaDef {
+    Zero,
+    Keep,
+}
+
 /// The keyword arguments of the Python `area`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +30,8 @@ struct AreaKwargs {
     on_row_error: OnRowError,
     #[serde(with = "EarlyCoordCheckDef")]
     early_coord_check: EarlyCoordCheck,
+    #[serde(with = "NegativeAreaDef")]
+    negative_area: NegativeArea,
 }
 
 /// Refuses every kind but polygons and multipolygons,
@@ -55,6 +64,7 @@ fn measure(
             metric,
             kwargs.on_row_error,
             kwargs.early_coord_check,
+            kwargs.negative_area,
         )
     });
     Ok(Float64Chunked::try_from_chunk_iter(geometries.name().clone(), chunks)?.into_series())

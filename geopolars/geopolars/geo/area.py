@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
+NegativeArea = Literal["zero", "keep"]
+
 
 def _encloses_nothing(
     column: pl.Expr, geometry: GeoArrowType, *, allow_non_polygons: bool
@@ -54,6 +56,7 @@ def _area(
     allow_non_polygons: bool,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
+    negative_area: NegativeArea,
 ) -> pl.Expr:
     if distance_method == "auto":
         distance_method = _auto_area_method(geometry)
@@ -74,6 +77,7 @@ def _area(
             "distance_method": distance_method,
             "on_row_error": on_row_error,
             "early_coord_check": early_coord_check,
+            "negative_area": negative_area,
         },
         is_elementwise=True,
     )
@@ -87,6 +91,7 @@ def area(
     allow_non_polygons: bool = False,
     on_row_error: OnRowError = "raise",
     early_coord_check: EarlyCoordCheck = "finite",
+    negative_area: NegativeArea = "zero",
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.
 
@@ -153,8 +158,14 @@ def area(
     `MultiPolygonXY[ZM]`     `0.0` and up
     =======================  ============
 
+
     A self-intersecting ring is not valid by OGC (see `is_valid_ogc`), and the parts of it that
     wind the other way will cancel rather than add.
+
+    A polygon that is not valid by OGC can come out below zero
+    (think of polygons with an empty exterior but a hole, or with holes that enclose more than its exterior).
+    `negative_area="zero"` gives such a polygon `0.0`, and `negative_area="keep"` its negative area.
+    In a multipolygon, this applies to each individual polygon before they are summed.
 
     {on_row_error}
     Only `"geodesic"` can fail on a row, when PROJ cannot take one of its vertices to longitude/latitude.
@@ -170,6 +181,7 @@ def area(
     validate_one_of("distance_method", distance_method, DistanceMethod)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("negative_area", negative_area, NegativeArea)
     return on_geometry(
         geometry,
         partial(
@@ -178,5 +190,6 @@ def area(
             allow_non_polygons=allow_non_polygons,
             on_row_error=on_row_error,
             early_coord_check=early_coord_check,
+            negative_area=negative_area,
         ),
     )

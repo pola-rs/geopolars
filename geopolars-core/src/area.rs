@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use geopolars_compute::native::{multi_polygon_areas, polygon_areas, AreaMetric};
+use geopolars_compute::native::{multi_polygon_areas, polygon_areas, AreaMetric, NegativeArea};
 use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{downcast, MultiPolygonArray, PolygonArray};
 use polars_arrow::array::{Array, PrimitiveArray};
@@ -17,15 +17,28 @@ pub fn areas(
     metric: &impl AreaMetric<Error: Display>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
+    negative_area: NegativeArea,
 ) -> PolarsResult<PrimitiveArray<f64>> {
     match kind {
         PolygonKind::Polygon => {
             let array = PolygonArray::new_untrimmed(downcast(chunk, "a list of rings")?)?;
-            polygon_areas(metric, &array, on_row_error, early_coord_check)
+            polygon_areas(
+                metric,
+                &array,
+                on_row_error,
+                early_coord_check,
+                negative_area,
+            )
         }
         PolygonKind::MultiPolygon => {
             let array = MultiPolygonArray::new_untrimmed(downcast(chunk, "a list of polygons")?)?;
-            multi_polygon_areas(metric, &array, on_row_error, early_coord_check)
+            multi_polygon_areas(
+                metric,
+                &array,
+                on_row_error,
+                early_coord_check,
+                negative_area,
+            )
         }
     }
     .map_err(|e| polars_err!(ComputeError: "{e}"))

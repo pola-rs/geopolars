@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         ShortLines,
     )
     from geopolars.datatypes import GeoArrowType
+    from geopolars.geo.area import NegativeArea
     from geopolars.geo.close_rings import CloseRings
     from geopolars.geo.filter_coordinates import NonFiniteAction
     from geopolars.geo.fix_out_of_bounds import (
@@ -835,6 +836,7 @@ class ExprGeoNameSpace:
         allow_non_polygons: bool = False,
         on_row_error: OnRowError = "raise",
         early_coord_check: EarlyCoordCheck = "finite",
+        negative_area: NegativeArea = "zero",
     ) -> pl.Expr:
         from geopolars.geo.area import area
 
@@ -844,6 +846,7 @@ class ExprGeoNameSpace:
             allow_non_polygons=allow_non_polygons,
             on_row_error=on_row_error,
             early_coord_check=early_coord_check,
+            negative_area=negative_area,
         )
 
     def is_empty(self, *, check_nested: bool = False) -> pl.Expr:
