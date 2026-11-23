@@ -139,6 +139,43 @@ def test_z_and_m_are_averaged_over_the_area(
     assert (got["z"], got["m"]) == pytest.approx((expected, expected))
 
 
+_UTM = (500_000.0, 5_000_000.0)
+
+
+def _square_at(origin: tuple[float, float], side: float) -> Ring:
+    x, y = origin
+    return _ring((x, y), (x + side, y), (x + side, y + side), (x, y + side))
+
+
+@pytest.mark.parametrize(
+    ("origin", "side"),
+    [((1e9, 1e9), 1.0), (_UTM, 0.01)],
+    ids=["unit-square-at-1e9", "centimetre-square-in-utm"],
+)
+def test_a_small_polygon_far_from_the_origin_keeps_its_centroid(
+    origin: tuple[float, float], side: float
+) -> None:
+    expected = (origin[0] + side / 2, origin[1] + side / 2)
+
+    (got,) = _centroids(_polygons([_square_at(origin, side)]))
+
+    assert got == pytest.approx(expected, rel=0, abs=1e-6)
+
+
+def test_a_flat_polygon_far_from_the_origin_keeps_its_z_and_m() -> None:
+    corner = (_UTM[0] + 0.1, _UTM[1] + 0.7)
+    out = _polygon_xyzm([_square_at(corner, 0.3)], lambda _x, _y: 100.0).select(
+        geo.centroid("polygon")
+    )
+
+    (got,) = out.to_series().ext.storage().to_list()
+
+    expected = (corner[0] + 0.15, corner[1] + 0.15, 100.0, 100.0)
+    assert (got["x"], got["y"], got["z"], got["m"]) == pytest.approx(
+        expected, rel=0, abs=1e-6
+    )
+
+
 def test_the_crs_is_carried_over() -> None:
     df = _polygons([_SQUARE], crs="EPSG:4326")
 

@@ -90,13 +90,8 @@ fn add_line<const Z: bool, const M: bool>(moment: &mut Moment<Z, M>, line: &Scal
     }
 }
 
-/// Adds the moment of a closed ring, with the shoelace formula.
-/// x and y are taken relative to the first vertex `p0`, so rings far from the origin keep their precision.
-/// With cross = x_i y_{i+1} - x_{i+1} y_i over those, a = Σ cross is twice the area,
-/// and the centroid is p0 + (Σ (x_i + x_{i+1}) cross, Σ (y_i + y_{i+1}) cross) / 3a.
-/// As each cross is twice the area of a triangle fanning out from `p0`,
-/// z and m are averaged over those triangles at the mean of their corners: Σ cross (z_0 + z_i + z_{i+1}) / 3a.
-/// On a flat ring, that is the height of its plane above the centroid.
+/// Adds the area of a closed ring, and its area-weighted centre, to `moment`.
+/// A hole passes `sign = -1.0`, which takes its area out again.
 #[inline(always)]
 fn add_ring<const Z: bool, const M: bool>(
     moment: &mut Moment<Z, M>,
@@ -107,28 +102,34 @@ fn add_ring<const Z: bool, const M: bool>(
     let Some(p0) = coordinates.next() else {
         return;
     };
-    let shift = [p0[0], p0[1], 0.0, 0.0];
-    let shifted = |p: [f64; 4]| [p[0] - shift[0], p[1] - shift[1], p[2], p[3]];
+    // The ring is split into triangles that fan out from `p0`.
+    // Each weighs half its cross product `fan`, at the mean of its corners.
+    // Taking the coordinates relative to `p0` keeps their precision far from the origin.
+    // `p0` itself is added back once, after the loop.
     let (mut a, mut sum) = (0.0, [0.0; 4]);
-    let mut p = shifted(p0);
+    let mut d_p = [0.0; 4];
     // The repeated last vertex is only ever the `q`.
     for q in coordinates {
-        let q = shifted(q);
-        let cross = p[0] * q[1] - q[0] * p[1];
-        a += cross;
-        sum[0] += (p[0] + q[0]) * cross;
-        sum[1] += (p[1] + q[1]) * cross;
-        for k in 2..4 {
+        let d_q: [f64; 4] = std::array::from_fn(|k| {
             if has_axis::<Z, M>(k) {
-                sum[k] += cross * (p0[k] + p[k] + q[k]);
+                q[k] - p0[k]
+            } else {
+                0.0
+            }
+        });
+        let fan = d_p[0] * d_q[1] - d_q[0] * d_p[1];
+        a += fan;
+        for k in 0..4 {
+            if has_axis::<Z, M>(k) {
+                sum[k] += fan * (d_p[k] + d_q[k]);
             }
         }
-        p = q;
+        d_p = d_q;
     }
     let sign = sign * a.signum();
     for (k, (total, s)) in moment.sum.iter_mut().zip(sum).enumerate() {
         if has_axis::<Z, M>(k) {
-            *total += sign * (s / 6.0 + shift[k] * a / 2.0);
+            *total += sign * (s / 6.0 + p0[k] * a / 2.0);
         }
     }
     moment.weight += sign * a / 2.0;
