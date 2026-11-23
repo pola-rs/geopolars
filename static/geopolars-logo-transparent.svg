@@ -1,0 +1,1181 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 864 429.75168"
+   width="864"
+   height="429.75168"
+   version="1.1"
+   id="svg72"
+   sodipodi:docname="geopolars-logo-transparent.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <sodipodi:namedview
+     id="namedview72"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.2236262"
+     inkscape:cx="453.56989"
+     inkscape:cy="241.0867"
+     inkscape:window-width="2048"
+     inkscape:window-height="1114"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg72" />
+  <title
+     id="title1">Globe with data-bar continents</title>
+  <defs
+     id="defs11">
+    <!-- Globe silhouette: curved top, slanted sides, flat bottom -->
+    <path
+       id="globe"
+       d="m 80,635 q 432,-270 864,0 -38,77 -80,150 H 160 Q 118,712 80,635 Z" />
+    <clipPath
+       id="globe-clip">
+      <use
+         href="#globe"
+         id="use1" />
+    </clipPath>
+    <!-- Surface: Polars Blue 200 → 300 → 400, left to right -->
+    <linearGradient
+       id="surface"
+       gradientTransform="scale(1.741143,0.57433536)"
+       x1="45.946829"
+       y1="870.5715"
+       x2="542.17258"
+       y2="870.5715"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         offset="0"
+         stop-color="#B6D0FF"
+         id="stop1" />
+      <stop
+         offset="0.5"
+         stop-color="#82AEFF"
+         id="stop2" />
+      <stop
+         offset="1"
+         stop-color="#4F8BFF"
+         id="stop3" />
+    </linearGradient>
+    <!-- Slightly deeper rim along the bottom (Polars Blue 500) -->
+    <linearGradient
+       id="rim"
+       x2="45.946829"
+       y2="1366.7973"
+       gradientTransform="scale(1.741143,0.57433536)"
+       x1="45.946829"
+       y1="870.5715"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         offset="0.6"
+         stop-color="#1E6BFF"
+         stop-opacity="0"
+         id="stop4" />
+      <stop
+         offset="1"
+         stop-color="#1E6BFF"
+         stop-opacity="0.3"
+         id="stop5" />
+    </linearGradient>
+    <!-- Bars: one shared fill, strong on the right and easing off to the left, like the Polars logo -->
+    <radialGradient
+       id="bars"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860">
+      <stop
+         offset="0"
+         stop-color="#1E6BFF"
+         stop-opacity="0.95"
+         id="stop6" />
+      <stop
+         offset="1"
+         stop-color="#1E6BFF"
+         stop-opacity="0.35"
+         id="stop7" />
+    </radialGradient>
+    <!-- Fade to transparent around the pole, following the globe's curvature
+         (mask: white = visible, transparent = hidden) -->
+    <radialGradient
+       id="polar-fade"
+       gradientUnits="userSpaceOnUse"
+       cx="512"
+       cy="540"
+       r="520"
+       gradientTransform="matrix(1,0,0,0.38,0,334.8)">
+      <stop
+         offset="0.38"
+         stop-color="#FFF"
+         stop-opacity="0"
+         id="stop8" />
+      <stop
+         offset="0.6"
+         stop-color="#FFF"
+         stop-opacity="0.25"
+         id="stop9" />
+      <stop
+         offset="0.8"
+         stop-color="#FFF"
+         stop-opacity="0.7"
+         id="stop10" />
+      <stop
+         offset="1"
+         stop-color="#FFF"
+         id="stop11" />
+    </radialGradient>
+    <mask
+       id="polar-mask"
+       maskUnits="userSpaceOnUse"
+       x="0"
+       y="0"
+       width="1024"
+       height="1024">
+      <rect
+         width="1024"
+         height="1024"
+         fill="url(#polar-fade)"
+         id="rect11"
+         x="0"
+         y="0" />
+    </mask>
+    <radialGradient
+       id="paint1_radial_62_3"
+       cx="0"
+       cy="0"
+       r="1"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(-400.70482,169.7343,-346.4004,-817.77404,610.43653,47.12877)">
+      <stop
+         stop-color="#0075FF"
+         id="stop4-7" />
+      <stop
+         offset="1"
+         stop-color="#0075FF"
+         stop-opacity="0"
+         id="stop5-5" />
+    </radialGradient>
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient72"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient73"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient74"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient75"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient76"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient77"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient78"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient79"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient80"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient81"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient82"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient83"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient84"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient85"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient86"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient87"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient88"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient89"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient90"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient91"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient92"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient93"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient94"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient95"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient96"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient97"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient98"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient99"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient100"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient101"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient102"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient103"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient104"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient105"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient106"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient107"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient108"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient109"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient110"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient111"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient112"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient113"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient114"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient115"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient116"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient117"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient118"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient119"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient120"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient121"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient122"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient123"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient124"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient125"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient126"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient127"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient128"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient129"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient130"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+    <radialGradient
+       inkscape:collect="always"
+       xlink:href="#bars"
+       id="radialGradient131"
+       gradientUnits="userSpaceOnUse"
+       cx="880"
+       cy="600"
+       r="860" />
+  </defs>
+  <g
+     clip-path="url(#globe-clip)"
+     mask="url(#polar-mask)"
+     id="g72"
+     transform="translate(-80,-355.24833)">
+    <!-- Surface -->
+    <rect
+       x="80"
+       y="500"
+       width="864"
+       height="285"
+       fill="url(#surface)"
+       id="rect12"
+       style="fill:url(#surface)" />
+    <rect
+       x="80"
+       y="500"
+       width="864"
+       height="285"
+       fill="url(#rim)"
+       id="rect13"
+       style="fill:url(#rim)" />
+    <!-- Land as segmented bar columns (16px wide, 24px pitch) -->
+    <g
+       id="land"
+       fill="url(#bars)"
+       style="fill:url(#radialGradient131)">
+      <g
+         id="north-america"
+         style="fill:url(#radialGradient89)">
+        <rect
+           x="95"
+           y="632"
+           width="16"
+           height="53"
+           rx="4"
+           id="rect14"
+           style="fill:url(#radialGradient72)" />
+        <rect
+           x="95"
+           y="695"
+           width="16"
+           height="30"
+           rx="4"
+           id="rect15"
+           style="fill:url(#radialGradient73)" />
+        <rect
+           x="119"
+           y="612"
+           width="16"
+           height="70"
+           rx="4"
+           id="rect16"
+           style="fill:url(#radialGradient74)" />
+        <rect
+           x="119"
+           y="692"
+           width="16"
+           height="48"
+           rx="4"
+           id="rect17"
+           style="fill:url(#radialGradient75)" />
+        <rect
+           x="143"
+           y="598"
+           width="16"
+           height="164"
+           rx="4"
+           id="rect18"
+           style="fill:url(#radialGradient76)" />
+        <rect
+           x="167"
+           y="585"
+           width="16"
+           height="100"
+           rx="4"
+           id="rect19"
+           style="fill:url(#radialGradient77)" />
+        <rect
+           x="167"
+           y="695"
+           width="16"
+           height="50"
+           rx="4"
+           id="rect20"
+           style="fill:url(#radialGradient78)" />
+        <rect
+           x="191"
+           y="572"
+           width="16"
+           height="40"
+           rx="4"
+           id="rect21"
+           style="fill:url(#radialGradient79)" />
+        <rect
+           x="191"
+           y="622"
+           width="16"
+           height="78"
+           rx="4"
+           id="rect22"
+           style="fill:url(#radialGradient80)" />
+        <rect
+           x="215"
+           y="565"
+           width="16"
+           height="35"
+           rx="4"
+           id="rect23"
+           style="fill:url(#radialGradient81)" />
+        <rect
+           x="215"
+           y="610"
+           width="16"
+           height="40"
+           rx="4"
+           id="rect24"
+           style="fill:url(#radialGradient82)" />
+        <rect
+           x="215"
+           y="660"
+           width="16"
+           height="60"
+           rx="4"
+           id="rect25"
+           style="fill:url(#radialGradient83)" />
+        <rect
+           x="239"
+           y="580"
+           width="16"
+           height="35"
+           rx="4"
+           id="rect26"
+           style="fill:url(#radialGradient84)" />
+        <rect
+           x="239"
+           y="625"
+           width="16"
+           height="90"
+           rx="4"
+           id="rect27"
+           style="fill:url(#radialGradient85)" />
+        <rect
+           x="263"
+           y="548"
+           width="16"
+           height="72"
+           rx="4"
+           id="rect28"
+           style="fill:url(#radialGradient86)" />
+        <rect
+           x="263"
+           y="630"
+           width="16"
+           height="60"
+           rx="4"
+           id="rect29"
+           style="fill:url(#radialGradient87)" />
+        <rect
+           x="287"
+           y="668"
+           width="16"
+           height="47"
+           rx="4"
+           id="rect30"
+           style="fill:url(#radialGradient88)" />
+      </g>
+      <g
+         id="greenland"
+         style="fill:url(#radialGradient95)">
+        <rect
+           x="335"
+           y="592"
+           width="16"
+           height="48"
+           rx="4"
+           id="rect31"
+           style="fill:url(#radialGradient90)" />
+        <rect
+           x="359"
+           y="584"
+           width="16"
+           height="80"
+           rx="4"
+           id="rect32"
+           style="fill:url(#radialGradient91)" />
+        <rect
+           x="383"
+           y="580"
+           width="16"
+           height="110"
+           rx="4"
+           id="rect33"
+           style="fill:url(#radialGradient92)" />
+        <rect
+           x="407"
+           y="586"
+           width="16"
+           height="76"
+           rx="4"
+           id="rect34"
+           style="fill:url(#radialGradient93)" />
+        <rect
+           x="431"
+           y="598"
+           width="16"
+           height="30"
+           rx="4"
+           id="rect35"
+           style="fill:url(#radialGradient94)" />
+      </g>
+      <g
+         id="iceland"
+         style="fill:url(#radialGradient98)">
+        <rect
+           x="479"
+           y="688"
+           width="16"
+           height="22"
+           rx="4"
+           id="rect36"
+           style="fill:url(#radialGradient96)" />
+        <rect
+           x="503"
+           y="690"
+           width="16"
+           height="16"
+           rx="4"
+           id="rect37"
+           style="fill:url(#radialGradient97)" />
+      </g>
+      <g
+         id="ireland-great-britain"
+         style="fill:url(#radialGradient102)">
+        <rect
+           x="479"
+           y="756"
+           width="16"
+           height="26"
+           rx="4"
+           id="rect38"
+           style="fill:url(#radialGradient99)" />
+        <rect
+           x="503"
+           y="738"
+           width="16"
+           height="54"
+           rx="4"
+           id="rect39"
+           style="fill:url(#radialGradient100)" />
+        <rect
+           x="527"
+           y="726"
+           width="16"
+           height="60"
+           rx="4"
+           id="rect40"
+           style="fill:url(#radialGradient101)" />
+      </g>
+      <g
+         id="scandinavia"
+         style="fill:url(#radialGradient109)">
+        <rect
+           x="575"
+           y="655"
+           width="16"
+           height="45"
+           rx="4"
+           id="rect41"
+           style="fill:url(#radialGradient103)" />
+        <rect
+           x="599"
+           y="630"
+           width="16"
+           height="82"
+           rx="4"
+           id="rect42"
+           style="fill:url(#radialGradient104)" />
+        <rect
+           x="623"
+           y="615"
+           width="16"
+           height="85"
+           rx="4"
+           id="rect43"
+           style="fill:url(#radialGradient105)" />
+        <rect
+           x="647"
+           y="612"
+           width="16"
+           height="48"
+           rx="4"
+           id="rect44"
+           style="fill:url(#radialGradient106)" />
+        <rect
+           x="647"
+           y="676"
+           width="16"
+           height="46"
+           rx="4"
+           id="rect45"
+           style="fill:url(#radialGradient107)" />
+        <rect
+           x="671"
+           y="620"
+           width="16"
+           height="104"
+           rx="4"
+           id="rect46"
+           style="fill:url(#radialGradient108)" />
+      </g>
+      <g
+         id="mainland-europe"
+         style="fill:url(#radialGradient115)">
+        <rect
+           x="575"
+           y="762"
+           width="16"
+           height="30"
+           rx="4"
+           id="rect47"
+           style="fill:url(#radialGradient110)" />
+        <rect
+           x="599"
+           y="748"
+           width="16"
+           height="44"
+           rx="4"
+           id="rect48"
+           style="fill:url(#radialGradient111)" />
+        <rect
+           x="623"
+           y="740"
+           width="16"
+           height="52"
+           rx="4"
+           id="rect49"
+           style="fill:url(#radialGradient112)" />
+        <rect
+           x="647"
+           y="740"
+           width="16"
+           height="52"
+           rx="4"
+           id="rect50"
+           style="fill:url(#radialGradient113)" />
+        <rect
+           x="671"
+           y="738"
+           width="16"
+           height="54"
+           rx="4"
+           id="rect51"
+           style="fill:url(#radialGradient114)" />
+      </g>
+      <g
+         id="russia-asia"
+         style="fill:url(#radialGradient130)">
+        <rect
+           x="695"
+           y="615"
+           width="16"
+           height="177"
+           rx="4"
+           id="rect52"
+           style="fill:url(#radialGradient116)" />
+        <rect
+           x="719"
+           y="595"
+           width="16"
+           height="60"
+           rx="4"
+           id="rect53"
+           style="fill:url(#radialGradient117)" />
+        <rect
+           x="719"
+           y="665"
+           width="16"
+           height="127"
+           rx="4"
+           id="rect54"
+           style="fill:url(#radialGradient118)" />
+        <rect
+           x="743"
+           y="568"
+           width="16"
+           height="224"
+           rx="4"
+           id="rect55"
+           style="fill:url(#radialGradient119)" />
+        <rect
+           x="767"
+           y="568"
+           width="16"
+           height="110"
+           rx="4"
+           id="rect56"
+           style="fill:url(#radialGradient120)" />
+        <rect
+           x="767"
+           y="688"
+           width="16"
+           height="104"
+           rx="4"
+           id="rect57"
+           style="fill:url(#radialGradient121)" />
+        <rect
+           x="791"
+           y="572"
+           width="16"
+           height="220"
+           rx="4"
+           id="rect58"
+           style="fill:url(#radialGradient122)" />
+        <rect
+           x="815"
+           y="572"
+           width="16"
+           height="40"
+           rx="4"
+           id="rect59"
+           style="fill:url(#radialGradient123)" />
+        <rect
+           x="815"
+           y="622"
+           width="16"
+           height="170"
+           rx="4"
+           id="rect60"
+           style="fill:url(#radialGradient124)" />
+        <rect
+           x="839"
+           y="585"
+           width="16"
+           height="207"
+           rx="4"
+           id="rect61"
+           style="fill:url(#radialGradient125)" />
+        <rect
+           x="863"
+           y="598"
+           width="16"
+           height="72"
+           rx="4"
+           id="rect62"
+           style="fill:url(#radialGradient126)" />
+        <rect
+           x="863"
+           y="680"
+           width="16"
+           height="112"
+           rx="4"
+           id="rect63"
+           style="fill:url(#radialGradient127)" />
+        <rect
+           x="887"
+           y="612"
+           width="16"
+           height="88"
+           rx="4"
+           id="rect64"
+           style="fill:url(#radialGradient128)" />
+        <rect
+           x="911"
+           y="645"
+           width="16"
+           height="30"
+           rx="4"
+           id="rect65"
+           style="fill:url(#radialGradient129)" />
+      </g>
+    </g>
+    <!-- Gridlines -->
+    <g
+       id="grid"
+       fill="none"
+       stroke="#ffffff"
+       stroke-width="5"
+       stroke-linecap="round"
+       opacity="0.92">
+      <!-- Latitudes: ring near the pole, and the front arc of a wider ring -->
+      <ellipse
+         cx="512"
+         cy="570"
+         rx="283"
+         ry="73"
+         id="ellipse65" />
+      <path
+         d="m -8,560 a 520,210 0 0 0 1040,0"
+         id="path65" />
+      <!-- Meridians converging on the pole -->
+      <path
+         d="M 512,800 V 450"
+         id="path66" />
+      <path
+         d="M 330,790 Q 374,567 512,450"
+         id="path67" />
+      <path
+         d="M 694,790 Q 650,567 512,450"
+         id="path68" />
+      <path
+         d="M 160,790 Q 248,580 512,450"
+         id="path69" />
+      <path
+         d="M 864,790 Q 776,580 512,450"
+         id="path70" />
+      <path
+         d="M 90,710 Q 240,560 512,450"
+         id="path71" />
+      <path
+         d="M 934,710 Q 784,560 512,450"
+         id="path72" />
+    </g>
+  </g>
+  <path
+     fill-rule="evenodd"
+     clip-rule="evenodd"
+     d="m 244.20872,160.98693 h 9.91934 c 1.33281,0 2.41792,1.0809 2.41792,2.42474 v 36.84672 c 0,1.33643 -1.07782,2.42497 -2.41792,2.42497 h -9.91934 c -1.33278,0 -2.41792,-1.08113 -2.41792,-2.42497 v -36.84672 c 0,-1.33643 1.07787,-2.42474 2.41792,-2.42474 z m 22.92658,-48.42349 h 7.76374 c 1.92994,0 3.48843,1.57067 3.48843,3.4987 v 44.92479 c 0,1.9352 -1.5659,3.49847 -3.48843,3.49847 h -7.76374 c -1.92995,0 -3.48843,-1.57068 -3.48843,-3.49847 v -44.92479 c 0,-1.9352 1.56589,-3.4987 3.48843,-3.4987 z m -1.0778,57.8595 h 9.91933 c 1.33284,0 2.41805,1.08091 2.41805,2.42498 v 39.01593 c 0,1.33642 -1.07804,2.42498 -2.41805,2.42498 h -9.91933 c -1.33284,0 -2.41792,-1.08115 -2.41792,-2.42498 v -39.01593 c 0,-1.33666 1.07791,-2.42498 2.41792,-2.42498 z M 287.91359,63.6877 h 9.91934 c 1.33284,0 2.4178,1.0809 2.4178,2.42473 v 73.05809 c 0,1.33667 -1.07779,2.42498 -2.4178,2.42498 h -9.91934 c -1.33283,0 -2.41804,-1.0809 -2.41804,-2.42498 V 66.11243 c 0,-1.33642 1.07803,-2.42473 2.41804,-2.42473 z m 0,84.76585 h 9.91934 c 1.33284,0 2.4178,1.0809 2.4178,2.42497 v 22.65566 c 0,1.33642 -1.07779,2.42497 -2.4178,2.42497 h -9.91934 c -1.33283,0 -2.41804,-1.08113 -2.41804,-2.42497 v -22.65566 c 0,-1.33666 1.07803,-2.42497 2.41804,-2.42497 z m 1.07779,45.96888 h 7.76375 c 1.92995,0 3.48843,1.57092 3.48843,3.49871 v 12.85439 c 0,1.93593 -1.56589,3.49848 -3.48843,3.49848 h -7.76375 c -1.92993,0 -3.48842,-1.56996 -3.48842,-3.49848 v -12.85439 c 0,-1.9352 1.5659,-3.49871 3.48842,-3.49871 z m 20.7783,-165.38308 h 9.9191 c 1.33331,0 2.41804,1.0809 2.41804,2.42473 v 51.67337 c 0,1.33643 -1.07732,2.42498 -2.41804,2.42498 h -9.9191 c -1.33284,0 -2.41804,-1.08114 -2.41804,-2.42498 V 31.4495 c 0,-1.33666 1.07803,-2.42473 2.41804,-2.42473 z m 0,62.81104 h 9.92651 c 1.33331,0 2.41063,1.08091 2.41063,2.41757 v 70.04223 c 0,1.33642 -1.07732,2.41757 -2.41063,2.41757 h -9.92651 c -1.33284,0 -2.41063,-1.08115 -2.41063,-2.41757 V 94.26796 c 0,-1.33666 1.07779,-2.41757 2.41063,-2.41757 z m 21.85585,-73.47443 h 9.91981 c 1.33261,0 2.41733,1.08095 2.41733,2.42479 v 34.45869 c 0,1.33643 -1.07755,2.42473 -2.41733,2.42473 h -9.91981 c -1.3326,0 -2.41732,-1.08089 -2.41732,-2.42473 V 20.79345 c 0,-1.33654 1.07731,-2.42478 2.41732,-2.42478 z m 0,45.36289 h 9.91981 c 1.33261,0 2.41733,1.0809 2.41733,2.42473 v 49.5773 c 0,1.33667 -1.07755,2.42498 -2.41733,2.42498 h -9.91981 c -1.3326,0 -2.41732,-1.0809 -2.41732,-2.42498 v -49.5773 c 0,-1.33642 1.07731,-2.42473 2.41732,-2.42473 z m 0,61.56258 h 9.91981 c 1.33261,0 2.41733,1.08114 2.41733,2.42426 v 44.54545 c 0,1.33666 -1.07755,2.42426 -2.41733,2.42426 h -9.91981 c -1.3326,0 -2.41732,-1.08019 -2.41732,-2.42426 v -44.54545 c 0,-1.33643 1.07731,-2.42426 2.41732,-2.42426 z M 354.54484,9.72842 h 7.76422 c 1.92995,0 3.48843,1.57034 3.48843,3.49851 v 64.69533 c 0,1.93592 -1.56589,3.49871 -3.48843,3.49871 h -7.76422 c -1.92994,0 -3.48819,-1.56996 -3.48819,-3.49871 V 13.22693 c 0,-1.93554 1.56566,-3.49851 3.48819,-3.49851 z m 0,78.8427 h 7.76422 c 1.92995,0 3.48843,1.5702 3.48843,3.4987 v 15.01645 c 0,1.9352 -1.56589,3.49775 -3.48843,3.49775 h -7.76422 c -1.92994,0 -3.48819,-1.56996 -3.48819,-3.49775 V 92.06982 c 0,-1.93519 1.56566,-3.4987 3.48819,-3.4987 z m 0,27.00938 h 7.75706 c 1.9297,0 3.48818,1.56996 3.48818,3.49775 v 66.85808 c 0,1.9352 -1.56566,3.49799 -3.48818,3.49799 h -7.75706 c -1.92994,0 -3.48819,-1.56996 -3.48819,-3.49799 v -66.85808 c 0,-1.9352 1.56566,-3.49775 3.48819,-3.49775 z M 376.40141,1.08824 h 7.76351 c 1.92994,0 3.48818,1.57029 3.48818,3.49844 v 12.85445 c 0,1.93544 -1.56565,3.49842 -3.48818,3.49842 h -7.76351 c -1.92994,0 -3.4889,-1.57027 -3.4889,-3.49842 V 4.59399 c 0,-1.93546 1.56637,-3.49843 3.4889,-3.49843 z m 0,25.91337 h 7.76351 c 1.92994,0 3.48818,1.57019 3.48818,3.49846 v 99.25667 c 0,1.9352 -1.56565,3.49847 -3.48818,3.49847 h -7.76351 c -1.92994,0 -3.4889,-1.57068 -3.4889,-3.49847 v -99.2495 c 0,-1.93544 1.56637,-3.49847 3.4889,-3.49847 z m 0,113.40327 h 7.76351 c 1.92994,0 3.48818,1.57068 3.48818,3.49847 v 26.89224 c 0,1.9352 -1.56565,3.49847 -3.48818,3.49847 h -7.76351 c -1.92994,0 -3.4889,-1.57068 -3.4889,-3.49847 v -26.89224 c 0,-1.9352 1.56637,-3.49847 3.4889,-3.49847 z m 0,41.04698 h 7.76351 c 1.92994,0 3.48818,1.56996 3.48818,3.49847 v 17.17776 c 0,1.93592 -1.56565,3.49847 -3.48818,3.49847 h -7.76351 c -1.92994,0 -3.4889,-1.56996 -3.4889,-3.49847 v -17.17776 c 0,-1.93592 1.56637,-3.49847 3.4889,-3.49847 z m 21.85585,-5.40522 h 7.76327 c 1.92994,0 3.48915,1.57068 3.48915,3.49871 v 31.22277 c 0,1.93593 -1.56638,3.49847 -3.48915,3.49847 h -7.76327 c -1.92994,0 -3.48842,-1.56995 -3.48842,-3.49847 v -31.22277 c 0,-1.9352 1.56565,-3.49871 3.48842,-3.49871 z m 0,-107.99853 h 7.76327 c 1.92994,0 3.48915,1.5702 3.48915,3.49846 v 76.57114 c 0,1.9352 -1.56638,3.49871 -3.48915,3.49871 h -7.76327 c -1.92994,0 -3.48842,-1.57092 -3.48842,-3.49871 V 71.54657 c 0,-1.93544 1.56565,-3.49846 3.48842,-3.49846 z m 0,-68.04811 h 7.76327 c 1.92994,0 3.48915,1.57029 3.48915,3.49844 v 53.89364 c 0,1.93544 -1.56638,3.49823 -3.48915,3.49823 h -7.76327 c -1.92994,0 -3.48842,-1.5702 -3.48842,-3.49823 V 3.50576 c 0,-1.93547 1.56565,-3.49845 3.48842,-3.49845 z m 21.85562,192.24653 h 7.76422 c 1.92994,0 3.48843,1.56996 3.48843,3.49846 v 15.01645 c 0,1.9352 -1.56566,3.49798 -3.48843,3.49798 h -7.76422 c -1.9297,0 -3.48819,-1.56996 -3.48819,-3.49798 v -15.01645 c 0,-1.93591 1.56565,-3.49846 3.48819,-3.49846 z m 0,-191.16558 h 7.76422 c 1.92994,0 3.48843,1.57027 3.48843,3.49844 v 91.69739 c 0,1.9352 -1.56566,3.49846 -3.48843,3.49846 h -7.76422 c -1.9297,0 -3.48819,-1.57067 -3.48819,-3.49846 V 4.58668 c 0,-1.93546 1.56565,-3.49844 3.48819,-3.49844 z m 0,105.84397 h 7.76422 c 1.92994,0 3.48843,1.57068 3.48843,3.49871 v 37.69408 c 0,1.9352 -1.56566,3.49871 -3.48843,3.49871 h -7.76422 c -1.9297,0 -3.48819,-1.57092 -3.48819,-3.49871 v -37.69408 c 0,-1.93544 1.56565,-3.49871 3.48819,-3.49871 z M 441.95487,5.4047 h 7.7635 c 1.92994,0 3.48843,1.57029 3.48843,3.49846 v 25.81103 c 0,1.93545 -1.5659,3.49847 -3.48843,3.49847 h -7.7635 c -1.92995,0 -3.48819,-1.57019 -3.48819,-3.49847 V 8.91045 c 0,-1.93546 1.56565,-3.49844 3.48819,-3.49844 z m 0,39.95812 h 7.7635 c 1.92994,0 3.48843,1.57043 3.48843,3.49846 v 99.25643 c 0,1.9352 -1.5659,3.49871 -3.48843,3.49871 h -7.7635 c -1.92995,0 -3.48819,-1.57092 -3.48819,-3.49871 V 48.86869 c 0,-1.93544 1.56565,-3.49846 3.48819,-3.49846 z m 21.84868,-37.7962 h 7.76327 c 1.93066,0 3.48914,1.57027 3.48914,3.49842 v 57.13629 c 0,1.93544 -1.56566,3.49846 -3.48914,3.49846 h -7.76327 c -1.92994,0 -3.48843,-1.57019 -3.48843,-3.49846 v -57.129 c 0,-1.93544 1.56565,-3.49843 3.48843,-3.49843 z m 0,71.28356 h 7.76327 c 1.93066,0 3.48914,1.56996 3.48914,3.49847 v 47.42267 c 0,1.9352 -1.56566,3.49799 -3.48914,3.49799 h -7.76327 c -1.92994,0 -3.48843,-1.56996 -3.48843,-3.49799 V 82.34865 c 0,-1.93592 1.56565,-3.49847 3.48843,-3.49847 z m 0,61.5547 h 7.76327 c 1.93066,0 3.48914,1.57068 3.48914,3.49847 v 21.49515 c 0,1.9352 -1.56566,3.49799 -3.48914,3.49799 h -7.76327 c -1.92994,0 -3.48843,-1.56996 -3.48843,-3.49799 v -21.49515 c 0,-1.9352 1.56565,-3.49847 3.48843,-3.49847 z M 485.521,10.80937 h 7.76374 c 1.92899,0 3.48748,1.57027 3.48748,3.49849 v 88.45433 c 0,1.9352 -1.56566,3.49847 -3.48748,3.49847 H 485.521 c -1.92898,0 -3.48747,-1.57068 -3.48747,-3.49847 V 14.31515 c 0,-1.93551 1.56565,-3.49842 3.48747,-3.49842 z m 0,102.60168 h 7.76374 c 1.92899,0 3.48748,1.56996 3.48748,3.49869 v 70.09291 c 0,1.9352 -1.56566,3.49799 -3.48748,3.49799 H 485.521 c -1.92898,0 -3.48747,-1.5702 -3.48747,-3.49799 v -70.09291 c 0,-1.93615 1.56565,-3.49869 3.48747,-3.49869 z M 507.22509,7.56662 h 7.76375 c 1.92899,0 3.48747,1.57027 3.48747,3.49842 v 37.69418 c 0,1.93543 -1.56566,3.49822 -3.48747,3.49822 h -7.76375 c -1.93137,0 -3.48986,-1.5702 -3.48986,-3.49822 V 11.07233 c 0,-1.93544 1.56566,-3.49843 3.48986,-3.49843 z m 0,51.84121 h 7.76375 c 1.92899,0 3.48747,1.57021 3.48747,3.49847 v 110.06592 c 0,1.9352 -1.56566,3.4987 -3.48747,3.4987 h -7.76375 c -1.93137,0 -3.48986,-1.57067 -3.48986,-3.4987 V 62.91347 c 0,-1.93543 1.56566,-3.49823 3.48986,-3.49823 z m 0,124.20607 h 7.76375 c 1.92899,0 3.48747,1.56996 3.48747,3.49775 v 20.41426 c 0,1.93519 -1.56566,3.49846 -3.48747,3.49846 h -7.76375 c -1.93137,0 -3.48986,-1.57068 -3.48986,-3.49846 v -20.41426 c 0,-1.9352 1.56566,-3.49775 3.48986,-3.49775 z m 21.84749,-6.47871 h 7.76375 c 1.93137,0 3.48985,1.56996 3.48985,3.49846 v 30.13447 c 0,1.93593 -1.56565,3.49847 -3.48985,3.49847 h -7.76375 c -1.92898,0 -3.48748,-1.56995 -3.48748,-3.49847 v -30.13447 c 0,-1.9352 1.56567,-3.49846 3.48748,-3.49846 z m 0,-91.7996 h 7.76375 c 1.93137,0 3.48985,1.57068 3.48985,3.49847 V 109.255 c 0,1.93592 -1.56565,3.49847 -3.48985,3.49847 h -7.76375 c -1.92898,0 -3.48748,-1.56996 -3.48748,-3.49847 V 88.83406 c 0,-1.9352 1.56567,-3.49847 3.48748,-3.49847 z m 0,-78.84266 h 7.76375 c 1.93137,0 3.48985,1.5703 3.48985,3.49845 v 64.69607 c 0,1.9352 -1.56565,3.49774 -3.48985,3.49774 h -7.76375 c -1.92898,0 -3.48748,-1.56995 -3.48748,-3.49774 V 9.99138 c 0,-1.93544 1.56567,-3.49845 3.48748,-3.49845 z m 22.14867,5.40468 h 7.76374 c 1.92899,0 3.48747,1.57033 3.48747,3.49849 v 81.97569 c 0,1.93591 -1.56565,3.49846 -3.48747,3.49846 h -7.76374 c -1.93138,0 -3.48987,-1.56996 -3.48987,-3.49846 V 15.3961 c 0,-1.93551 1.56566,-3.49849 3.48987,-3.49849 z m 0,182.52482 h 7.76374 c 1.92899,0 3.48747,1.57092 3.48747,3.49871 v 12.85439 c 0,1.93593 -1.56565,3.49848 -3.48747,3.49848 h -7.76374 c -1.93138,0 -3.48987,-1.56996 -3.48987,-3.49848 v -12.85439 c 0,-1.9352 1.56566,-3.49871 3.48987,-3.49871 z M 572.76277,18.38325 h 7.76374 c 1.93138,0 3.48987,1.57027 3.48987,3.49845 v 20.42103 c 0,1.93544 -1.56566,3.49847 -3.48987,3.49847 h -7.76374 c -1.92898,0 -3.48747,-1.57044 -3.48747,-3.49847 V 21.8817 c 0,-1.93547 1.56565,-3.49845 3.48747,-3.49845 z m 0,34.55352 h 7.76374 c 1.93138,0 3.48987,1.5702 3.48987,3.49846 v 38.77523 c 0,1.9352 -1.56566,3.49799 -3.48987,3.49799 h -7.76374 c -1.92898,0 -3.48747,-1.56996 -3.48747,-3.49799 V 56.43523 c 0,-1.93543 1.56565,-3.49846 3.48747,-3.49846 z m 22.12715,-29.16353 h 7.76375 c 1.92898,0 3.48747,1.57044 3.48747,3.49847 v 12.8544 c 0,1.93544 -1.56566,3.49847 -3.48747,3.49847 h -7.76375 c -1.93137,0 -3.48986,-1.5702 -3.48986,-3.49847 v -12.8544 c 0,-1.93544 1.56566,-3.49847 3.48986,-3.49847 z m 0,25.92059 h 7.76375 c 1.92898,0 3.48747,1.57044 3.48747,3.4987 v 11.77326 c 0,1.93544 -1.56566,3.49848 -3.48747,3.49848 h -7.76375 c -1.93137,0 -3.48986,-1.57021 -3.48986,-3.49848 V 53.19253 c 0,-1.93567 1.56566,-3.4987 3.48986,-3.4987 z m 0,24.83968 h 7.76375 c 1.92898,0 3.48747,1.57068 3.48747,3.49847 v 19.33311 c 0,1.9352 -1.56566,3.49799 -3.48747,3.49799 h -7.76375 c -1.93137,0 -3.48986,-1.56996 -3.48986,-3.49799 V 78.03198 c 0,-1.9352 1.56566,-3.49847 3.48986,-3.49847 z m 21.84749,-44.27462 h 7.76375 c 1.92898,0 3.48986,1.57044 3.48986,3.49846 v 66.85738 c 0,1.93544 -1.56805,3.49871 -3.48986,3.49871 h -7.76375 c -1.92898,0 -3.48747,-1.56997 -3.48747,-3.49871 V 33.75018 c 0,-1.93544 1.56566,-3.49846 3.48747,-3.49846 z m 21.71124,19.43494 h 7.76374 c 1.92899,0 3.48747,1.57044 3.48747,3.4987 v 45.25298 c 0,1.93592 -1.56565,3.49847 -3.48747,3.49847 h -7.76374 c -1.93137,0 -3.48986,-1.56995 -3.48986,-3.49847 V 53.19253 c 0,-1.93567 1.56565,-3.4987 3.48986,-3.4987 z m 21.54153,24.83968 h 7.76374 c 1.93138,0 3.48986,1.57068 3.48986,3.49847 v 12.8544 c 0,1.9352 -1.56566,3.49871 -3.48986,3.49871 h -7.76374 c -1.92899,0 -3.48748,-1.57068 -3.48748,-3.49871 v -12.8544 c 0,-1.9352 1.56566,-3.49847 3.48748,-3.49847 z"
+     fill="url(#paint1_radial_62_3)"
+     id="path2"
+     style="fill:url(#paint1_radial_62_3);stroke-width:2.39032" />
+  <metadata
+     id="metadata131">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:title>Globe with data-bar continents</dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+</svg>

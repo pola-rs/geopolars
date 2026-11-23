@@ -1,4 +1,6 @@
-<h1 align="center">GeoPolars</h1>
+<h1 align="center">
+  <img src="static/geopolars-logo-transparent.svg" alt="GeoPolars logo" width="600"/>
+</h1>
 
 <div align="center">
   <a href="https://pypi.org/project/geopolars/">
@@ -17,7 +19,7 @@
 
 <p align="center">
   <b>Documentation</b>:
-  <a href="https://github.com/pola-rs/geopolars/tree/main/geopolars/docs/source/reference">API reference</a>
+  <a href="https://github.com/pola-rs/geopolars/tree/main/geopolars/docs/source/reference">Python</a>
   |
   <a href="https://github.com/pola-rs/geopolars/tree/main/docs/source/user-guide/geo">User guide</a>
 </p>
@@ -103,12 +105,12 @@ which `make install` checks out into `.polars` and builds as well.
 1. Install the latest [Rust compiler](https://www.rust-lang.org/tools/install)
    and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 2. Install what the bundled PROJ and GEOS are built with:
-   - a C++ compiler and CMake, for both.
-   - SQLite, both the library and the `sqlite3` binary, for PROJ only.
+    - a C++ compiler and CMake, for both.
+    - SQLite, both the library and the `sqlite3` binary, for PROJ only.
    On Debian or Ubuntu: `sudo apt-get install build-essential cmake sqlite3 libsqlite3-dev`.
 3. From the root of the repository, choose one of the following:
-   - `make install`, an unoptimised build, with fast compile times.
-   - `make install-release`, an optimised build, with long compile times.
+    - `make install`, an unoptimised build, with fast compile times.
+    - `make install-release`, an optimised build, with long compile times.
 
 Both set up a virtual environment in `.venv` with GeoPolars installed.
 Run `make help` to see the other targets.
