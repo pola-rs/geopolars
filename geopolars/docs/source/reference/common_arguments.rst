@@ -8,7 +8,6 @@ An expression uses these where they fit,
 rather than defining a new argument for the same thing in slightly different words.
 
 The sections describe the target API.
-A *Legacy* note names the argument a section replaces (from the old/current design).
 The table at the end lists arguments that only a few expressions share, as they are now.
 
 Errors

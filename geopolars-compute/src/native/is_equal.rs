@@ -8,8 +8,9 @@
 //!
 //! Every kernel is generic over `Z`, `M`, and `NANS_EQUAL`,
 //! or takes the Python `include_z`, `include_m`, and `nans_equal` at runtime.
-//! A runtime `include_z` or `include_m` leaves its axis out of the compared coordinates
-//! (see [ValidCoords::with_only_axes]), and is ignored for coordinates without that axis.
+//! `include_z=false` or `include_m=false` leaves that axis out of the compared coordinates
+//! (see [ValidCoords::with_only_axes]).
+//! Either flag is ignored for coordinates without that axis.
 //! `Z` and `M` may only be `true` for an axis the compared coordinates have.
 
 // TODO: With current implementation, the order matters for MultiPoints, Multi*, and Linestring rings.

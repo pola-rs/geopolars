@@ -1,5 +1,5 @@
-"""How far apart two points are: on the plane without a CRS, along the
-ellipsoid with one."""
+"""How far apart two points are: on the plane without a CRS or in a projected one,
+along the ellipsoid in any other."""
 
 from __future__ import annotations
 
