@@ -22,7 +22,7 @@ polars-buffer = { version = "0.55", default-features = false }
 # pyo3-polars is versioned INDEPENDENTLY of polars. 0.28 is the release built
 # against polars 0.55 / pyo3 0.29. Bump all three together, never one alone.
 pyo3-polars = { version = "0.28" }
-pyo3 = { version = "0.29" }
+pyo3 = { version = "0.30" }
 
 serde = { version = "1.0.188", features = ["derive", "rc"] }
 
