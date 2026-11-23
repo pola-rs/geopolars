@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/geopolars-logo-transparent.svg" alt="GeoPolars logo" width="400"/>
+</p>
+
 <h1 align="center">GeoPolars</h1>
 
 <div align="center">
