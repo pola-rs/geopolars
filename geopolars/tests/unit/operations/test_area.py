@@ -482,10 +482,14 @@ def test_a_multipolygon_measures_each_polygon_as_a_polygon(
 def test_a_multipolygon_without_polygons_encloses_nothing(
     area: Area, crs: str | None
 ) -> None:
-    """An empty polygon inside one still encloses nothing, like on its own."""
+    """An empty polygon inside one still encloses nothing, like on its own.
+    That is `0.0`, not `-0.0`."""
     df = _multipolygons([[], [[]], None], crs=crs)
 
-    assert _areas(area, df, "multipolygon") == [0.0, 0.0, None]
+    got = _areas(area, df, "multipolygon")
+
+    assert got == [0.0, 0.0, None]
+    assert [math.copysign(1.0, a) for a in got[:2]] == [1.0, 1.0]
 
 
 def test_a_multipolygon_takes_negative_area_per_polygon(planar_area: Area) -> None:

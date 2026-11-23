@@ -154,8 +154,10 @@ pub fn multi_polygon_areas<M: AreaMetric>(
             array
                 .get(i)
                 .polygons()
-                .map(|polygon| polygon_area(metric, &polygon, negative_area))
-                .sum()
+                // Folded from `0.0`, as `sum` starts from `-0.0`.
+                .try_fold(0.0, |total, polygon| {
+                    Ok(total + polygon_area(metric, &polygon, negative_area)?)
+                })
         })
     )
 }
