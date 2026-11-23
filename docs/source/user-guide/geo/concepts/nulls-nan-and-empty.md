@@ -93,8 +93,7 @@ and the `only gaps` route has nothing but empty points:
 ## Non-finite
 
 A NaN or an infinity in a coordinate is viral and permeates into every result that depends on it.
-The length of a line with a NaN vertex is NaN, and so is the distance to it.
-`area` raises an error instead, unless `early_coord_check="off"`.
+The length of a line with a NaN vertex is NaN, and so are its area and the distance to it.
 It also becomes impossible to tell whether two shapes cross.
 Such a geometry is therefore not valid by OGC.
 `is_valid_geoarrow(..., check_finite_coordinates=True)` finds them in a single, cheap pass.
@@ -139,5 +138,5 @@ A line that loses every vertex becomes empty.
 | What it is | no geometry | a geometry without coordinates | a coordinate that is not a number |
 | Find it with | `is_null` | `is_empty` | `is_valid_geoarrow(..., check_finite_coordinates=True)` |
 | Valid by OGC | (null) | yes | no |
-| Operations give | null | an empty geometry, 0, or null | NaN, or an error for GEOS operations and `area` |
+| Operations give | null | an empty geometry, 0, or null | NaN, or an error for GEOS operations |
 | Get rid of it with | `drop_nulls` | `filter(~is_empty(...))` | `filter_coordinates` |

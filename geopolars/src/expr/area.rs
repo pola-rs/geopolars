@@ -1,6 +1,8 @@
 //! The area a geometry encloses.
 //! Implements the Python `area`.
 
+use std::fmt::Display;
+
 use geopolars_compute::native::AreaMetric;
 use geopolars_compute::{EarlyCoordCheck, OnRowError, Planar};
 use geopolars_core::{areas, PolygonKind};
@@ -40,7 +42,7 @@ fn kernel_output_type_area(input_fields: &[Field], kwargs: AreaKwargs) -> Polars
 
 /// The area of every geometry in `geometries`, as `metric` measures it.
 fn measure(
-    metric: &impl AreaMetric,
+    metric: &impl AreaMetric<Error: Display>,
     geometries: &Series,
     kwargs: &AreaKwargs,
 ) -> PolarsResult<Series> {

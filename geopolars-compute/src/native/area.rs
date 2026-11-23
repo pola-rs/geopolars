@@ -6,7 +6,7 @@
 //! ## `EARLY_COORD_CHECK`
 //!
 //! The kernels are generic over `EARLY_COORD_CHECK`, an [EarlyCoordCheck].
-//! Unless it is `Off`, a row whose x or y fails it goes to `on_row_error` before it is measured.
+//! Unless it is `Off`, a row whose x or y fails it gets NaN, without being measured.
 
 use std::convert::Infallible;
 use std::ops::Range;
@@ -17,17 +17,14 @@ use geopolars_views::{
 };
 use polars_arrow::array::PrimitiveArray;
 
-use crate::early_coord_check::first_failing_xy;
+use crate::early_coord_check::every_xy_passes;
 use crate::per_row::per_row_or_null;
-use crate::{
-    BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, GeodesicMetric, OnRowError,
-    Planar,
-};
+use crate::{BaseMetric, EarlyCoordCheck, GeoComputeError, GeodesicMetric, OnRowError, Planar};
 
 /// How the area a ring encloses is measured
 pub trait AreaMetric: BaseMetric {
     /// Why a ring could not be measured (e.g. a failed reprojection).
-    type Error: Into<GeoComputeError>;
+    type Error;
     /// The area the closed `ring` encloses, whichever way it winds. Its heights do not count.
     fn ring_area(&self, ring: &ScalarLineString) -> Result<f64, Self::Error>;
 }
@@ -93,25 +90,15 @@ fn polygon_area<M: AreaMetric>(metric: &M, polygon: &ScalarPolygon) -> Result<f6
     Ok(exterior - holes)
 }
 
-/// Fails a row whose x or y fails `EARLY_COORD_CHECK`.
 #[inline(always)]
 fn row_passes_early_check<const EARLY_COORD_CHECK: u8>(
     coords: &ValidCoords,
     vertices: Range<usize>,
-) -> GeoComputeResult<()> {
+) -> bool {
     if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
-        return Ok(());
+        return true;
     }
-    let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
-    match first_failing_xy::<EARLY_COORD_CHECK>(x, y) {
-        Some((x, y)) => Err(GeoComputeError::NotFiniteCoordinate {
-            x,
-            y,
-            z: None,
-            m: None,
-        }),
-        None => Ok(()),
-    }
+    every_xy_passes::<EARLY_COORD_CHECK>(&coords.x()[vertices.clone()], &coords.y()[vertices])
 }
 
 /// The area of every polygon of a chunk.
@@ -120,12 +107,14 @@ pub fn polygon_areas<M: AreaMetric>(
     array: &Untrimmed<PolygonArray>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
-) -> GeoComputeResult<PrimitiveArray<f64>> {
+) -> Result<PrimitiveArray<f64>, M::Error> {
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
         per_row_or_null(array.rows(), on_row_error, |i| {
-            row_passes_early_check::<EARLY_COORD_CHECK>(array.coords(), array.row_vertices(i))?;
-            polygon_area(metric, &array.get(i)).map_err(Into::into)
+            if !row_passes_early_check::<EARLY_COORD_CHECK>(array.coords(), array.row_vertices(i)) {
+                return Ok(f64::NAN);
+            }
+            polygon_area(metric, &array.get(i))
         })
     )
 }
@@ -136,17 +125,18 @@ pub fn multi_polygon_areas<M: AreaMetric>(
     array: &Untrimmed<MultiPolygonArray>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
-) -> GeoComputeResult<PrimitiveArray<f64>> {
+) -> Result<PrimitiveArray<f64>, M::Error> {
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check;
         per_row_or_null(array.rows(), on_row_error, |i| {
-            row_passes_early_check::<EARLY_COORD_CHECK>(array.coords(), array.row_vertices(i))?;
+            if !row_passes_early_check::<EARLY_COORD_CHECK>(array.coords(), array.row_vertices(i)) {
+                return Ok(f64::NAN);
+            }
             array
                 .get(i)
                 .polygons()
                 .map(|polygon| polygon_area(metric, &polygon))
-                .sum::<Result<f64, _>>()
-                .map_err(Into::into)
+                .sum()
         })
     )
 }

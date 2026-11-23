@@ -157,10 +157,10 @@ def area(
     wind the other way will cancel rather than add.
 
     {on_row_error}
-    A row fails when PROJ cannot take one of its vertices to longitude/latitude (only for `"geodesic"`),
-    or when one of its x or y is NaN or infinite, unless `early_coord_check="off"`.
+    Only `"geodesic"` can fail on a row, when PROJ cannot take one of its vertices to longitude/latitude.
 
     {early_coord_check}
+    A row that fails the check gets NaN, without being measured.
 
     .. code-block:: python
 

@@ -260,34 +260,32 @@ def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -
 @pytest.mark.parametrize(
     ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
 )
-def test_a_non_finite_x_goes_to_on_row_error(
+def test_a_non_finite_x_makes_its_row_nan(
     value: float, distance_method: DistanceMethod, crs: str | None
 ) -> None:
-    """By default, as `early_coord_check="finite"`. Turned off, the area is NaN."""
+    """Whatever `early_coord_check` is, and leaving the other rows alone."""
     area = _area_by(distance_method)
     broken = [_SQUARE[0], {"x": value, "y": 0.0}, *_SQUARE[2:]]
     df = _polygons([[_SQUARE], [broken]], crs=crs)
     (square,) = _areas(area, _rings([_SQUARE], crs=crs))
 
-    with pytest.raises(ComputeError, match="expects finite coordinates"):
-        _areas(area, df)
-
-    assert _areas(partial(area, on_row_error="null"), df) == [square, None]
-    unchecked = _areas(partial(area, early_coord_check="off"), df)
-    assert unchecked[0] == square
-    assert math.isnan(unchecked[1])
+    for early_coord_check in ("finite", "finite_and_empty", "off"):
+        got = _areas(partial(area, early_coord_check=early_coord_check), df)
+        assert got[0] == square
+        assert math.isnan(got[1])
 
 
-def test_an_empty_point_fails_only_with_finite_and_empty(planar_area: Area) -> None:
-    """`"finite"` lets the empty point through, whose NaN makes the area NaN."""
-    with_empty = [_SQUARE[0], {"x": math.nan, "y": math.nan}, *_SQUARE[2:]]
-    df = _rings([with_empty])
+def test_the_early_check_keeps_an_infinite_y_from_proj() -> None:
+    """Web Mercator cannot take y=inf back to latitude, but the check skips the row first."""
+    area = _area_by("geodesic")
+    broken = [_SQUARE[0], {"x": 0.0, "y": math.inf}, *_SQUARE[2:]]
+    df = _rings([broken], crs="EPSG:3857")
 
-    (got,) = _areas(planar_area, df)
+    (got,) = _areas(area, df)
     assert math.isnan(got)
 
-    with pytest.raises(ComputeError, match="expects finite coordinates"):
-        _areas(partial(planar_area, early_coord_check="finite_and_empty"), df)
+    with pytest.raises(ComputeError, match="failed to reproject"):
+        _areas(partial(area, early_coord_check="off"), df)
 
 
 def test_with_a_crs_the_ellipsoid_is_the_one_the_crs_declares(

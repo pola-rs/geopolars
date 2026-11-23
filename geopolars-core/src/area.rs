@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use geopolars_compute::native::{multi_polygon_areas, polygon_areas, AreaMetric};
 use geopolars_compute::{EarlyCoordCheck, OnRowError};
 use geopolars_views::{downcast, MultiPolygonArray, PolygonArray};
@@ -12,7 +14,7 @@ use crate::PolygonKind;
 pub fn areas(
     chunk: &dyn Array,
     kind: PolygonKind,
-    metric: &impl AreaMetric,
+    metric: &impl AreaMetric<Error: Display>,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
 ) -> PolarsResult<PrimitiveArray<f64>> {
