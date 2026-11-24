@@ -163,8 +163,10 @@ Its default here is `"crs_wrapped_longitude"`, so that longitudes from 180 to 36
 data stored from 0 to 360, or a box across the antimeridian (see `to_polygon`),
 measures as it would from -180 to 180.
 
-The check leaves NaN to `early_coord_check`, as a NaN `x` or `y` never lies outside the bounds,
-so neither does an empty point inside a geometry.
+`early_coord_check` runs first, so a row with a NaN or infinite `x` or `y` gets NaN,
+whatever this argument says.
+With `early_coord_check="off"`, an infinite `x` or `y` lies outside the bounds,
+but a NaN one never does, so neither does an empty point inside a geometry.
 
 - `on_out_of_bounds="auto"` (default) is `"error"` when measuring geodesic,
   and `"ignore"` when measuring planar, which then does not ask PROJ for any bounds.

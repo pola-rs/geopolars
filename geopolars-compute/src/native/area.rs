@@ -12,6 +12,7 @@
 //!
 //! If `CHECK_BOUNDS=true`, a row with an x or y outside the bounds is not measured,
 //! but handled as its [OnOutOfBounds] says.
+//! A row that fails `EARLY_COORD_CHECK` gets its NaN first, even when it also lies outside them.
 //! It is `false` for [OnOutOfBounds::Ignore], or without bounds.
 //!
 //! ## `EXTERIOR_SIDE`
