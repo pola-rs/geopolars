@@ -837,7 +837,7 @@ class ExprGeoNameSpace:
         allow_non_polygons: bool = False,
         on_row_error: OnRowError = "raise",
         early_coord_check: EarlyCoordCheck = "finite",
-        on_out_of_bounds: OnOutOfBounds = "error",
+        on_out_of_bounds: OnOutOfBounds = "auto",
         crs_bounds: CrsBounds = "crs_wrapped_longitude",
         negative_area: NegativeArea = "zero",
     ) -> pl.Expr:

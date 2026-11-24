@@ -358,7 +358,7 @@ _PAST_A_FULL_TURN = _shifted(_DEGREE_SQUARE, 400.0)
 def test_a_row_outside_the_bounds_of_its_crs_goes_to_on_row_error(
     distance_method: DistanceMethod,
 ) -> None:
-    area = _area_by(distance_method)
+    area = partial(_area_by(distance_method), on_out_of_bounds="error")
     df = _polygons([[_DEGREE_SQUARE], [_PAST_A_FULL_TURN]], crs=WGS84)
     (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
 
@@ -388,10 +388,22 @@ def test_on_out_of_bounds_ignore_measures_the_row() -> None:
 
 def test_by_default_longitudes_up_to_a_full_turn_are_within_the_bounds() -> None:
     df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
-    area = _area_by("planar")
+    area = partial(_area_by("planar"), on_out_of_bounds="error")
 
     assert _areas(area, df) == [1.0]
     assert _areas(partial(area, crs_bounds="crs", on_out_of_bounds="null"), df) == [None]
+
+
+def test_planar_checks_no_bounds_unless_asked() -> None:
+    """So it does not ask PROJ about the CRS either."""
+    unknown = _relabelled([_SQUARE], crs="EPSG:999999")
+    past = _rings([_PAST_A_FULL_TURN], crs=WGS84)
+    area = _area_by("planar")
+
+    assert _areas(area, unknown) == [16.0]
+    assert _areas(area, past) == [1.0]
+    with pytest.raises(ComputeError, match="lies outside the bounds"):
+        _areas(partial(area, on_out_of_bounds="error"), past)
 
 
 def test_a_projected_crs_only_has_bounds_from_its_area_of_use() -> None:
@@ -424,7 +436,7 @@ def test_a_multipolygon_with_a_polygon_outside_the_bounds_is_out_of_bounds(
     df = _multipolygons(
         [[[_DEGREE_SQUARE]], [[_DEGREE_SQUARE], [_PAST_A_FULL_TURN]]], crs=WGS84
     )
-    area = _area_by(distance_method)
+    area = partial(_area_by(distance_method), on_out_of_bounds="error")
     (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
 
     with pytest.raises(ComputeError, match="lies outside the bounds"):

@@ -167,7 +167,7 @@ PROJ cannot transform a place that does not exist.
 `is_valid_geoarrow` and `is_valid_ogc` check the bounds when you pass `out_of_bounds`
 (see [validity](validity.md)).
 `fix_out_of_bounds` drops or clamps the coordinates that lie outside them.
-`area` raises on them by default (see `on_out_of_bounds`).
+`area` raises on them by default when it measures geodesic (see `on_out_of_bounds`).
 
 ## GeoParquet
 

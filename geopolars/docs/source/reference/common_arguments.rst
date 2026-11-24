@@ -152,8 +152,8 @@ By default, we want to be strict. Raising an error at plan-time is clear.
 
 .. _arg-on_out_of_bounds:
 
-`on_out_of_bounds: Literal["ignore", "error", "null"] = "error"`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+`on_out_of_bounds: Literal["auto", "ignore", "error", "null"] = "auto"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A coordinate outside the bounds of its CRS (a latitude of 91°, say) is not a place,
 so measuring it gives NaN, `0.0`, or a wrong number without warning.
@@ -166,7 +166,9 @@ measures as it would from -180 to 180.
 The check leaves NaN to `early_coord_check`, as a NaN `x` or `y` never lies outside the bounds,
 so neither does an empty point inside a geometry.
 
-- `on_out_of_bounds="error"` (default) fails the row, and `on_row_error` handles it.
+- `on_out_of_bounds="auto"` (default) is `"error"` when measuring geodesic,
+  and `"ignore"` when measuring planar, which then does not ask PROJ for any bounds.
+- `on_out_of_bounds="error"` fails the row, and `on_row_error` handles it.
 - `on_out_of_bounds="null"` makes the row null, whatever `on_row_error` says.
 - `on_out_of_bounds="ignore"` skips the check, and its extra pass over the coordinates.
 

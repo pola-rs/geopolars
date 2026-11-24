@@ -73,6 +73,8 @@ def _area(
             "a geodesic area needs a CRS to measure on, but the geometry declares none"
         )
         raise TypeError(msg)
+    if on_out_of_bounds == "auto":
+        on_out_of_bounds = "ignore" if distance_method == "planar" else "error"
     zero = _encloses_nothing(column, geometry, allow_non_polygons=allow_non_polygons)
     if zero is not None:
         return zero
@@ -103,7 +105,7 @@ def area(
     allow_non_polygons: bool = False,
     on_row_error: OnRowError = "raise",
     early_coord_check: EarlyCoordCheck = "finite",
-    on_out_of_bounds: OnOutOfBounds = "error",
+    on_out_of_bounds: OnOutOfBounds = "auto",
     crs_bounds: CrsBounds = "crs_wrapped_longitude",
     negative_area: NegativeArea = "zero",
 ) -> pl.Expr:
@@ -121,7 +123,8 @@ def area(
     **Planar** calculates the area directly based on the values of the coordinate data.
     This is very useful for data where the position is already in meters,
     (such as with equal-area projections).
-    Because it can ignore the CRS, it is also very fast to calculate.
+    Because it can ignore the CRS, it is also very fast to calculate:
+    unless `on_out_of_bounds` asks for it, it does not check the bounds of the CRS either.
     For geographic CRSes, where the coordinates are longitude/latitude,
     this operation gives square degrees, which is most likely not what you want though!
     **Geodesic** takes the coordinates to the longitude/latitude
@@ -182,7 +185,7 @@ def area(
     In a multipolygon, this applies to each individual polygon before they are summed.
 
     {on_row_error}
-    A row holding a coordinate outside the bounds of its CRS fails (see below).
+    With `"geodesic"`, a row holding a coordinate outside the bounds of its CRS fails by default (see below).
     PROJ failing to take one of its vertices to longitude/latitude also fails it, with `"geodesic"`.
 
     {early_coord_check}
