@@ -171,6 +171,14 @@ impl List {
             .is_none_or(|validity| validity.unset_bits() == 0)
     }
 
+    /// Whether every list is null.
+    #[inline]
+    pub fn is_all_null(&self) -> bool {
+        self.validity
+            .as_ref()
+            .is_some_and(|validity| validity.unset_bits() == validity.len())
+    }
+
     /// See [`ValidList::sliced`].
     pub(crate) fn sliced(&self, lists: Range<usize>) -> (Self, Range<usize>) {
         let validity =

@@ -22,6 +22,7 @@ use geopolars_views::{
     MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };
 use polars_arrow::array::PrimitiveArray;
+use polars_arrow::datatypes::ArrowDataType;
 
 use super::{first_outside, has_none_outside, Bounds};
 use crate::early_coord_check::every_xy_passes;
@@ -190,6 +191,12 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     on_out_of_bounds: OnOutOfBounds,
     negative_area: NegativeArea,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
+    if array.rows().is_all_null() {
+        return Ok(PrimitiveArray::new_null(
+            ArrowDataType::Float64,
+            array.rows().len(),
+        ));
+    }
     let (check_bounds, bounds) = split_bounds_check(bounds, on_out_of_bounds);
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
@@ -215,6 +222,12 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     on_out_of_bounds: OnOutOfBounds,
     negative_area: NegativeArea,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
+    if array.rows().is_all_null() {
+        return Ok(PrimitiveArray::new_null(
+            ArrowDataType::Float64,
+            array.rows().len(),
+        ));
+    }
     let (check_bounds, bounds) = split_bounds_check(bounds, on_out_of_bounds);
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;

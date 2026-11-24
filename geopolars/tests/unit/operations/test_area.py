@@ -181,6 +181,21 @@ def test_a_null_polygon_has_no_area(planar_area: Area) -> None:
     assert _areas(planar_area, df) == [16.0, None]
 
 
+@pytest.mark.parametrize(
+    ("storage", "dtype"),
+    [(_XY_RINGS, PolygonXY()), (pl.List(_XY_RINGS), MultiPolygonXY())],
+    ids=["polygon", "multipolygon"],
+)
+def test_an_all_null_column_has_no_area(
+    planar_area: Area, storage: pl.DataType, dtype: GeoArrowType
+) -> None:
+    df = pl.DataFrame({"polygon": [None, None]}, schema={"polygon": storage})
+
+    df = df.select(pl.col("polygon").ext.to(dtype))
+
+    assert _areas(planar_area, df) == [None, None]
+
+
 def test_the_area_survives_coordinates_far_from_the_origin(planar_area: Area) -> None:
     """A metre-scale parcel in a projected CRS. Squaring the coordinates before
     subtracting them -- the shoelace sum written out about the origin -- throws
