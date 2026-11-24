@@ -1,8 +1,5 @@
-"""Writing GeoParquet files.
-
-Polars reads and writes GeoParquet itself, behind the environment variables
-`POLARS_GEOPARQUET_READ=1` and `POLARS_GEOPARQUET_WRITE=1.0` or `1.1`.
-This module adds some extra functionality for bbox covering.
+"""Adding the coverings Polars writes into GeoParquet,
+as described under "Bounding boxes" in `docs/source/user-guide/geo/io.md`.
 """
 
 from __future__ import annotations
@@ -29,7 +26,8 @@ def with_covering(frame: FrameT) -> FrameT:
     A box crossing the antimeridian has `xmin > xmax`.
     WKB has to be decoded with `geo.from_wkb` first, to be bounded.
 
-    Polars writes it as the covering with `POLARS_GEOPARQUET_WRITE=1.1`.
+    With GeoParquet writing switched on, Polars writes it as the covering,
+    as described under "Bounding boxes" in `docs/source/user-guide/geo/io.md`.
     """
     schema = frame.collect_schema()
     coverings = _coverings(schema)

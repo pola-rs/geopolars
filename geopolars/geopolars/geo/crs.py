@@ -45,20 +45,19 @@ def set_crs(geometry: IntoExprColumn, crs: str, *, force: bool = False) -> pl.Ex
 
 
 def crs_to_projjson(geometry: IntoExprColumn) -> pl.Expr:
-    """Write the column's CRS as PROJJSON.
-    This is the same CRS, but now just in another form.
+    """Write the column's CRS as PROJJSON, which is the same CRS in another form.
 
-    This function mainly exists for GeoParquet.
-    GeoParquet only accepts PROJJSON for its CRS,
-    so convert a CRS such as `"EPSG:4326"` with this before `write_parquet` or `sink_parquet`.
     Nothing is reprojected, and any other metadata is kept.
     A column without a CRS, or with one that already is PROJJSON, is left as it is.
-    A CRS that cannot be read is refused then too.
+    A CRS that cannot be read is refused while the plan is built.
     Besides the geometries, this also takes `Wkb`.
 
-    ```python
-    df.with_columns(geo.crs_to_projjson("parcel")).write_parquet("parcels.parquet")
-    ```
+    It is mainly needed to write GeoParquet,
+    as described under "CRS" in `docs/source/user-guide/geo/io.md`.
+
+    .. code-block:: python
+
+        df.with_columns(geo.crs_to_projjson("parcel")).write_parquet("parcels.parquet")
     """
 
     def build(column: pl.Expr, geometry: GeoArrowType | EncodedGeometry) -> pl.Expr:

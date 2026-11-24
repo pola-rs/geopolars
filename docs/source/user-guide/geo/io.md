@@ -1,7 +1,7 @@
 # Reading and writing
 
 GeoPolars reads and writes geometries with Polars' own readers and writers,
-which handles GeoParquet natively.
+which handle GeoParquet natively.
 GeoPolars only adds some utilities around them,
 such as decoding WKB and adding bounding boxes.
 
@@ -65,13 +65,11 @@ Below, we first write the cities as WKB, and then read them back:
 --8<-- "python/user-guide/geo/io.py:wkb"
 ```
 
-See [GeoParquet](concepts/crs.md#geoparquet) on the CRS page for how a column without a CRS is read.
-
 ### CRS
 
 GeoParquet can take a CRS written as [PROJJSON](https://proj.org/specifications/projjson.html)
 (the JSON form of a CRS).
-Specifying 'no crs' is done by explicitly setting the crs key to none.
+Specifying 'no crs' is done by explicitly setting the crs key to `null`.
 If the key is missing, it is assumed to be in `"OGC:CRS84"`.
 A string-CRS such as `"EPSG:4326"` is valid in GeoPolars (as in GeoArrow), but not for GeoParquet.
 You'll have to convert it to its PROJJSON equivalent using `crs_to_projjson`.
@@ -98,21 +96,20 @@ If you know both mean the same CRS, relabel the column with `set_crs(..., force=
 ### Bounding boxes
 
 A GeoParquet file can store two kinds of bounding boxes,
-which readers can use to skip parts of the file they do not need:
-A per-row bounding box next to each geometry (a *covering*),
-and a per-column bounding box that represents the extent of all the data in that column.
-A multi geometry gets one box around all of its parts.
-A `Wkb` column cannot be bounded, so decode it with `from_wkb` first:
+which readers can use to skip parts of the file they do not need.
+A per-row bounding box sits next to each geometry (a *covering*),
+and a per-column bounding box holds the extent of all the data in that column.
 
 #### Per-column
 
-The per-column bounding box is determined based on the statistics of the dataframe, and written automatically.
+Polars fills in the per-column bounding box from the statistics it writes into the file.
+It does this for every native geometry column, but a `Wkb` column gets none.
 
 #### Covering
 
-Polars matches a covering column to a geometry column *by name*, as `<geometry col name>_bbox`.
-You can also add them afterwards using `with_covering`.
-This adds one for every geometry column.
+Polars matches a covering column to its geometry column *by name*.
+`with_covering` adds one for every geometry column, with the name Polars expects.
+See its API reference for details.
 
 {{code_block('user-guide/geo/io','covering',['with_covering','sink_parquet'])}}
 
