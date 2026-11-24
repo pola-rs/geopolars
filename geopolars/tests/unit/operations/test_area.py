@@ -310,7 +310,8 @@ def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -
 def test_a_non_finite_x_makes_its_row_nan(
     value: float, distance_method: DistanceMethod, crs: str | None
 ) -> None:
-    """Whatever `early_coord_check` is, and leaving the other rows alone."""
+    """A checked row gets NaN without being measured; an unchecked one is
+    measured, and its result is not finite. The other rows are left alone."""
     area = _area_by(distance_method)
     broken = [_SQUARE[0], {"x": value, "y": 0.0}, *_SQUARE[2:]]
     df = _polygons([[_SQUARE], [broken]], crs=crs)
@@ -323,7 +324,10 @@ def test_a_non_finite_x_makes_its_row_nan(
         )
         got = _areas(checked, df)
         assert got[0] == square
-        assert math.isnan(got[1])
+        if early_coord_check == "off":
+            assert not math.isfinite(got[1])
+        else:
+            assert math.isnan(got[1])
 
 
 def test_the_early_check_keeps_an_infinite_y_from_proj() -> None:
