@@ -15,13 +15,12 @@ rather than at execution time.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 import polars as pl
 
 from geopolars.datatypes import GEOMETRY_DTYPES, BoxType, GeoArrowType
-from geopolars.datatypes.encoded import EncodedGeometry
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
@@ -32,19 +31,24 @@ GEOMETRY_TYPES: tuple[type[GeoArrowType], ...] = tuple(
 )
 
 
-def _names() -> str:
+def _names(dtypes: Sequence[type[pl.DataType]]) -> str:
     """The extension names, for an error message. Mirrors `Kind::names`."""
-    names = [f"`{geometry._extension_name}`" for geometry in GEOMETRY_DTYPES]
-    return f"{', '.join(names[:-1])} or {names[-1]}"
+    names = [f"`{dtype._extension_name}`" for dtype in dtypes]  # type: ignore[attr-defined]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} or {names[-1]}"
 
 
-UNSUPPORTED = f"expected a {_names()} column with separated x/y[/z][/m] coordinates"
+UNSUPPORTED = f"expected a {_names(GEOMETRY_DTYPES)} column with separated x/y[/z][/m] coordinates"
 
 
-def _geometry_of(dtype: pl.DataType) -> GeoArrowType:
-    """`dtype` as the concrete geometry it is, metadata and all."""
+def _geometry_of(
+    dtype: pl.DataType, also: tuple[type[pl.DataType], ...] = ()
+) -> GeoArrowType:
+    """`dtype` as the concrete geometry it is, metadata and all, or as one of `also`."""
+    if isinstance(dtype, also):
+        return dtype  # type: ignore[return-value]
     if type(dtype) not in GEOMETRY_TYPES:
-        msg = f"{UNSUPPORTED}, got: {dtype!r}"
+        expected = f"{UNSUPPORTED}, or a {_names(also)} column" if also else UNSUPPORTED
+        msg = f"{expected}, got: {dtype!r}"
         raise TypeError(msg)
     return dtype  # type: ignore[return-value]
 
@@ -76,17 +80,20 @@ def _named_after(built: pl.Expr, source: pl.Expr) -> pl.Expr:
 def on_geometry(
     value: IntoExprColumn,
     build: Callable[[pl.Expr, GeoArrowType], pl.Expr],
+    *,
+    also: tuple[type[pl.DataType], ...] = (),
 ) -> pl.Expr:
     """Wrapper for callbacks for pipe_with_dtype.
 
     `build` gets the dtype itself rather than its class, metadata included.
     A geometry it gives back has to carry that metadata through
     (see `GeoArrowType._with_metadata_of`), or the CRS is lost.
+    `build` also gets a dtype of the types in `also`, such as `BoxType`.
     """
     expr = _to_expr(value)
 
     def resolved(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
-        return _named_after(build(expr, _geometry_of(dtype)), expr)
+        return _named_after(build(expr, _geometry_of(dtype, also)), expr)
 
     return expr.pipe_with_dtype(resolved)
 
@@ -139,34 +146,5 @@ def on_box(
 
     def resolved(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
         return _named_after(build(expr, _box_of(dtype)), expr)
-
-    return expr.pipe_with_dtype(resolved)
-
-
-def on_any_geoarrow(
-    value: IntoExprColumn,
-    build: Callable[[pl.Expr, GeoArrowType | BoxType | EncodedGeometry], pl.Expr],
-) -> pl.Expr:
-    """`on_geometry` that also accepts a `geoarrow.box` and an encoded geometry, such as `Wkb`."""
-    expr = _to_expr(value)
-
-    def resolved(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
-        also = (BoxType, EncodedGeometry)
-        geometry = dtype if isinstance(dtype, also) else _geometry_of(dtype)
-        return _named_after(build(expr, geometry), expr)
-
-    return expr.pipe_with_dtype(resolved)
-
-
-def on_geometry_or_box(
-    value: IntoExprColumn,
-    build: Callable[[pl.Expr, GeoArrowType | BoxType], pl.Expr],
-) -> pl.Expr:
-    """`on_geometry` that also accepts a `geoarrow.box`."""
-    expr = _to_expr(value)
-
-    def resolved(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
-        geometry = dtype if isinstance(dtype, BoxType) else _geometry_of(dtype)
-        return _named_after(build(expr, geometry), expr)
 
     return expr.pipe_with_dtype(resolved)

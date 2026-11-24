@@ -9,11 +9,12 @@ from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
 from geopolars._utils import LIB
-from geopolars.geo._dispatch import on_any_geoarrow, on_geometry
+from geopolars.datatypes import BoxType, Wkb, Wkt
+from geopolars.geo._dispatch import on_geometry
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
-    from geopolars.datatypes import BoxType, GeoArrowType
+    from geopolars.datatypes import GeoArrowType
     from geopolars.datatypes.encoded import EncodedGeometry
 
 
@@ -66,7 +67,7 @@ def crs_to_projjson(geometry: IntoExprColumn) -> pl.Expr:
     ) -> pl.Expr:
         return column.ext.storage().ext.to(geometry._with_projjson_crs())
 
-    return on_any_geoarrow(geometry, build)
+    return on_geometry(geometry, build, also=(BoxType, Wkb, Wkt))
 
 
 def is_geographic(geometry: IntoExprColumn, *, ignore_errors: bool = False) -> pl.Expr:

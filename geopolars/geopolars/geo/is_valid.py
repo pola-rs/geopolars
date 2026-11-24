@@ -16,7 +16,7 @@ from polars.plugins import register_plugin_function
 from geopolars._docs import doc
 from geopolars._utils import LIB
 from geopolars.datatypes import BoxType
-from geopolars.geo._dispatch import on_geometry, on_geometry_or_box
+from geopolars.geo._dispatch import on_geometry
 from geopolars.geo.fix_out_of_bounds import _bounds
 
 if TYPE_CHECKING:
@@ -100,7 +100,7 @@ def is_valid_geoarrow(
     """
     # BUG: a box with a finite `ymin > ymax` (or in z or m) passes,
     # but GeoArrow only allows `min > max` in x.
-    return on_geometry_or_box(
+    return on_geometry(
         geometry,
         _kernel(
             "is_valid_geoarrow",
@@ -108,6 +108,7 @@ def is_valid_geoarrow(
             check_null_coordinates=check_null_coordinates,
             check_finite_coordinates=check_finite_coordinates,
         ),
+        also=(BoxType,),
     )
 
 
@@ -139,7 +140,7 @@ def null_out_invalid_geoarrow(
 
     On a column that is entirely valid, it copies nothing.
     """
-    return on_geometry_or_box(
+    return on_geometry(
         geometry,
         _kernel(
             "null_out_invalid_geoarrow",
@@ -147,6 +148,7 @@ def null_out_invalid_geoarrow(
             check_null_coordinates=check_null_coordinates,
             check_finite_coordinates=check_finite_coordinates,
         ),
+        also=(BoxType,),
     )
 
 

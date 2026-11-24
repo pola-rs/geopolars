@@ -111,7 +111,9 @@ def test_a_crs_proj_cannot_read_is_refused_while_the_plan_is_built() -> None:
 def test_a_non_geometry_is_refused() -> None:
     lf = pl.LazyFrame({"x": [1.0]}).select(geo.crs_to_projjson("x"))
 
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        TypeError, match="or a `geoarrow.box`, `geoarrow.wkb` or `geoarrow.wkt`"
+    ):
         lf.collect_schema()
 
 
