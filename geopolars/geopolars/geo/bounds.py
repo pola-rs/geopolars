@@ -22,8 +22,6 @@ def _bounds(
     geometry: GeoArrowType,
     margin_x: float,
     margin_y: float,
-    *,
-    per_part: bool,
 ) -> pl.Expr:
     return register_plugin_function(
         plugin_path=LIB,
@@ -33,23 +31,8 @@ def _bounds(
             "margin_x": margin_x,
             "margin_y": margin_y,
             "turn": geometry._longitude_turn(),
-            "per_part": per_part,
         },
         is_elementwise=True,
-    )
-
-
-def _envelope(geometry: IntoExprColumn) -> pl.Expr:
-    """same as `bounds`, except:
-
-    - One box per row around the whole geometry
-    - all parts of a multi-geometry together.
-
-    Used for a GeoParquet covering.
-    """
-    return on_geometry(
-        geometry,
-        lambda column, dtype: _bounds(column, dtype, 0.0, 0.0, per_part=False),
     )
 
 
@@ -58,18 +41,7 @@ def bounds(
     geometry: IntoExprColumn, *, margin_x: float = 0.0, margin_y: float = 0.0
 ) -> pl.Expr:
     """The bounding box of a geometry, as a `geoarrow.box` with its dimension and CRS.
-    A multi-geometry gives a list of boxes instead, one per part.
-
-    =======================  =================
-    in                       out
-    =======================  =================
-    `PointXY[ZM]`            `BoxXY[ZM]`
-    `LineStringXY[ZM]`       `BoxXY[ZM]`
-    `PolygonXY[ZM]`          `BoxXY[ZM]`
-    `MultiPointXY[ZM]`       `list[BoxXY[ZM]]`
-    `MultiLineStringXY[ZM]`  `list[BoxXY[ZM]]`
-    `MultiPolygonXY[ZM]`     `list[BoxXY[ZM]]`
-    =======================  =================
+    A multi-geometry gets one box around all of its parts.
 
     A point's box repeats its own coordinates: `xmin == xmax`.
     `margin_x` and `margin_y` widen the box by that much on both sides
@@ -87,7 +59,7 @@ def bounds(
     """
     return on_geometry(
         geometry,
-        lambda column, dtype: _bounds(column, dtype, margin_x, margin_y, per_part=True),
+        lambda column, dtype: _bounds(column, dtype, margin_x, margin_y),
     )
 
 

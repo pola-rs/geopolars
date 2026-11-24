@@ -63,7 +63,7 @@ the comment says when one without a CRS takes a different tier.
 | `scale_about_centroid` | - | | C | CAA | C | | - | | - | | - | |
 | `affine_transform` | A | `origin` may be a point column | A | | A | | A | | A | | A | |
 | `snap_to_grid` | A | x/y/z only, m kept | A | | A | | A | | A | | A | |
-| `bounds` | A | repeats its coordinate | A | | A | | A | LPP of `box` | A | LPP of `box` | A | LPP of `box` |
+| `bounds` | A | repeats its coordinate | A | | A | | A | one box around all parts | A | one box around all parts | A | one box around all parts |
 | `total_bounds` | A | one box for the column | A | | A | | A | | A | | A | |
 | `set_crs` | C | [^4] | C | | C | | C | | C | | C | |
 | `crs_to_projjson` | C | [^4], also takes `box`, `wkb` and `wkt` | C | | C | | C | | C | | C | |

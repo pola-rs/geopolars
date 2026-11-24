@@ -25,14 +25,13 @@
 use std::convert::Infallible;
 use std::ops::Range;
 
-use geopolars_views::output::{box_struct, list_array};
+use geopolars_views::output::box_struct;
 use geopolars_views::{
     GeoDimension, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
     PointArray, PolygonArray, Untrimmed, ValidCoords,
 };
-use polars_arrow::array::{ListArray, StructArray};
+use polars_arrow::array::StructArray;
 use polars_arrow::bitmap::Bitmap;
-use polars_arrow::offset::Offsets;
 
 use crate::per_row::per_row_values;
 
@@ -170,29 +169,6 @@ fn row_boxes<const Z: bool, const M: bool>(
     box_array(coords.dim(), &boxes, rows.validity().cloned())
 }
 
-/// The box of every part of `rows`, as a list per row.
-/// The coordinates of part `j` sit at `vertices_of(j)`.
-#[inline(always)]
-fn part_boxes<const Z: bool, const M: bool>(
-    rows: &List,
-    coords: &ValidCoords,
-    options: &BoxOptions,
-    vertices_of: impl Fn(usize) -> Range<usize>,
-) -> ListArray<i64> {
-    // Only the parts of these rows: a chunk can be a slice of a larger array.
-    let boxes: Vec<Extent<Z, M>> = rows
-        .span(0..rows.len())
-        .map(|j| bound(coords, vertices_of(j), options))
-        .collect();
-    let offsets = rows.ignoring_validity().offsets().buffer();
-    let first = offsets[0];
-    let offsets = offsets.iter().map(|offset| offset - first).collect();
-    // SAFETY: shifting every offset down by the first keeps them growing, from 0.
-    let offsets = unsafe { Offsets::new_unchecked(offsets) }.into();
-    let boxes = box_array(coords.dim(), &boxes, None);
-    list_array(boxes.boxed(), offsets, rows.validity().cloned())
-}
-
 pub fn point_bounds<const Z: bool, const M: bool>(
     array: &PointArray,
     options: &BoxOptions,
@@ -247,34 +223,6 @@ pub fn multi_polygon_bounds<const Z: bool, const M: bool>(
 ) -> StructArray {
     row_boxes::<Z, M>(array.rows(), array.coords(), options, |i| {
         array.row_vertices(i)
-    })
-}
-
-/// A list of boxes per row, one per point.
-pub fn multi_point_part_bounds<const Z: bool, const M: bool>(
-    array: &Untrimmed<MultiPointArray>,
-    options: &BoxOptions,
-) -> ListArray<i64> {
-    part_boxes::<Z, M>(array.rows(), array.coords(), options, |j| j..j + 1)
-}
-
-/// A list of boxes per row, one per linestring.
-pub fn multi_line_string_part_bounds<const Z: bool, const M: bool>(
-    array: &Untrimmed<MultiLineStringArray>,
-    options: &BoxOptions,
-) -> ListArray<i64> {
-    part_boxes::<Z, M>(array.rows(), array.coords(), options, |j| {
-        array.lines().range(j)
-    })
-}
-
-/// A list of boxes per row, one per polygon.
-pub fn multi_polygon_part_bounds<const Z: bool, const M: bool>(
-    array: &Untrimmed<MultiPolygonArray>,
-    options: &BoxOptions,
-) -> ListArray<i64> {
-    part_boxes::<Z, M>(array.rows(), array.coords(), options, |j| {
-        array.rings().span(array.polygons().range(j))
     })
 }
 

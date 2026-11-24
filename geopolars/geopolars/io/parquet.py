@@ -8,7 +8,7 @@ import polars as pl
 
 from geopolars.datatypes import GeoArrowType
 from geopolars.datatypes.encoded import EncodedGeometry
-from geopolars.geo.bounds import _envelope
+from geopolars.geo.bounds import bounds
 
 FrameT = TypeVar("FrameT", pl.DataFrame, pl.LazyFrame)
 
@@ -18,8 +18,7 @@ def with_covering(frame: FrameT) -> FrameT:
 
     Each row of the covering is the box around the whole geometry,
     which readers can filter on without touching the geometries.
-    It is the box `geo.bounds` gives,
-    except that a multi-geometry gets one box around all of its parts.
+    It is the box `geo.bounds` gives.
 
     The covering of a column `<name>` is named `<name>_bbox`,
     or `bbox` for a column named `geometry` or `geography`.
@@ -39,7 +38,7 @@ def with_covering(frame: FrameT) -> FrameT:
             msg = f"the covering of `{name}` would be written to `{bbox}`, which exists"
             raise pl.exceptions.DuplicateError(msg)
     return frame.with_columns(
-        _envelope(name).alias(bbox) for name, bbox in coverings.items()
+        bounds(name).alias(bbox) for name, bbox in coverings.items()
     )
 
 

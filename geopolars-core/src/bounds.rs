@@ -1,8 +1,7 @@
 use geopolars_compute::native::{
     box_array, line_string_bounds, line_string_column_extent, multi_line_string_bounds,
-    multi_line_string_column_extent, multi_line_string_part_bounds, multi_point_bounds,
-    multi_point_column_extent, multi_point_part_bounds, multi_polygon_bounds,
-    multi_polygon_column_extent, multi_polygon_part_bounds, point_bounds, point_column_extent,
+    multi_line_string_column_extent, multi_point_bounds, multi_point_column_extent,
+    multi_polygon_bounds, multi_polygon_column_extent, point_bounds, point_column_extent,
     polygon_bounds, polygon_column_extent, BoxOptions, Extent,
 };
 use geopolars_compute::with_const_flags;
@@ -17,13 +16,10 @@ use polars_core::prelude::PolarsResult;
 /// Finds the bounding box of every geometry in one chunk of a `kind` column's storage
 /// of dimension `dim`.
 /// Implements the Python `bounds`.
-/// A multi-geometry only gets one box around all its parts,
-/// rather than a list of boxes, if `per_part=false`.
 pub fn bounds(
     chunk: &dyn Array,
     kind: Kind,
     dim: GeoDimension,
-    per_part: bool,
     options: &BoxOptions,
 ) -> PolarsResult<Box<dyn Array>> {
     let (has_z, has_m) = (dim.has_z(), dim.has_m());
@@ -46,52 +42,28 @@ pub fn bounds(
         }
         Kind::MultiPoint => {
             let array = MultiPointArray::new_untrimmed(downcast(chunk, "a list of coordinates")?)?;
-            if per_part {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_point_part_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            } else {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_point_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            }
+            with_const_flags!(
+                Z = has_z, M = has_m;
+                multi_point_bounds::<Z, M>(&array, options)
+            )
+            .boxed()
         }
         Kind::MultiLineString => {
             let array =
                 MultiLineStringArray::new_untrimmed(downcast(chunk, "a list of linestrings")?)?;
-            if per_part {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_line_string_part_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            } else {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_line_string_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            }
+            with_const_flags!(
+                Z = has_z, M = has_m;
+                multi_line_string_bounds::<Z, M>(&array, options)
+            )
+            .boxed()
         }
         Kind::MultiPolygon => {
             let array = MultiPolygonArray::new_untrimmed(downcast(chunk, "a list of polygons")?)?;
-            if per_part {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_polygon_part_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            } else {
-                with_const_flags!(
-                    Z = has_z, M = has_m;
-                    multi_polygon_bounds::<Z, M>(&array, options)
-                )
-                .boxed()
-            }
+            with_const_flags!(
+                Z = has_z, M = has_m;
+                multi_polygon_bounds::<Z, M>(&array, options)
+            )
+            .boxed()
         }
     })
 }
