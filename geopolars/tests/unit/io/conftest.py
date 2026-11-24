@@ -63,6 +63,13 @@ BACKENDS = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _without_geoparquet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unset the GeoParquet variables, so one exported in the shell cannot switch it on."""
+    for name in ("POLARS_GEOPARQUET_READ", "POLARS_GEOPARQUET_WRITE"):
+        monkeypatch.delenv(name, raising=False)
+
+
 def use_backend(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 ) -> Parquet:
