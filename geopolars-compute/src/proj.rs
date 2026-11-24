@@ -249,6 +249,24 @@ fn reproject_positions_in_place(
     }
 }
 
+/// The `x` and `y` of `vertices` of `coords`, moved through PROJ in a single call.
+/// A coordinate PROJ fails on gets an `x` of `f64::INFINITY` rather than an error.
+/// Retry it with [reproject_position] to get the error.
+pub(crate) fn reprojected_xy_with_failures_infinite(
+    transformation: &Transformation,
+    coords: &ValidCoords,
+    vertices: Range<usize>,
+) -> [Vec<f64>; 2] {
+    let mut positions = [
+        coords.x()[vertices.clone()].to_vec(),
+        coords.y()[vertices.clone()].to_vec(),
+        Vec::new(),
+    ];
+    reproject_positions_in_place(transformation, &mut positions, 0..vertices.len(), false);
+    let [xs, ys, _] = positions;
+    [xs, ys]
+}
+
 /// Reprojects every coordinate that [reproject_positions_in_place] failed on once more, on its own,
 /// to get the error back. A coordinate for which `is_skipped` holds is left as it is.
 fn retry_failed_positions(
@@ -275,7 +293,7 @@ fn retry_failed_positions(
 }
 
 /// `[x, y, z]` through PROJ (see the module docs).
-fn reproject_position(
+pub(crate) fn reproject_position(
     transformation: &Transformation,
     [x, y, z]: [f64; 3],
 ) -> GeoComputeResult<[f64; 3]> {

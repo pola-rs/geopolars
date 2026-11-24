@@ -6,13 +6,13 @@ use std::fmt::Display;
 use std::rc::Rc;
 
 use geopolars_compute::native::DistanceMetric;
+use geopolars_compute::proj::Transformation;
 use geopolars_compute::{GeodesicMetric, Planar};
 use geopolars_core::{distances_to_one, pairwise_distances};
 use geopolars_views::Kind;
 use polars::prelude::*;
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
-use proj::Proj;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
@@ -21,7 +21,7 @@ use crate::geoarrow::{aligned_pairs, describe, ensure_same_crs_unless_bare, Geom
 use crate::proj::GeodeticCrs;
 
 thread_local! {
-    /// Per thread, because a [`Proj`] can't be shared between threads.
+    /// Per thread, because a [`Transformation`] can't be shared between threads.
     static METRICS: ThreadCache<String, GeodesicMetric> = ThreadCache::default();
 }
 
@@ -45,7 +45,7 @@ pub(crate) fn geodesic_metric_of(field: &Field) -> PolarsResult<Rc<GeodesicMetri
 
 fn build(crs: &str) -> PolarsResult<GeodesicMetric> {
     let geodetic = GeodeticCrs::of(crs)?;
-    let to_lonlat = Proj::new_known_crs(crs, &geodetic.definition, None).map_err(
+    let to_lonlat = Transformation::new(crs, &geodetic.definition).map_err(
         |e| polars_err!(ComputeError: "cannot measure along the ellipsoid in {crs}: {e}"),
     )?;
     Ok(GeodesicMetric::new(

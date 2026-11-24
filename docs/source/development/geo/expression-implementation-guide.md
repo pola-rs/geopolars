@@ -80,6 +80,7 @@ Examples are:
   `to_crs` hands it each run of valid coordinates in a single call through the `proj-sys` C API,
   and only retries the coordinates PROJ failed on one at a time, to get their error
   (see `geopolars-compute/src/proj.rs`).
+  Geodesic `area` does the same for the vertices of a chunk, retrying them per row instead.
   Prefer this over one call per coordinate.
 - [geographiclib](https://geographiclib.sourceforge.io/), to measure along an ellipsoid.
 - The [geo ecosystem](https://georust.org/)
