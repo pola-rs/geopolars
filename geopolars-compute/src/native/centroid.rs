@@ -55,6 +55,7 @@ const fn has_axis<const Z: bool, const M: bool>(k: usize) -> bool {
 
 /// Running average for a weight.
 /// You can keep adding to this!
+#[derive(Clone, Copy)]
 struct Moment<const Z: bool, const M: bool> {
     /// Σ weight * centre, in x, y, z, m.
     /// An axis that is not [there](has_axis) stays `0.0`.
@@ -379,6 +380,15 @@ fn norm(v: [f64; 3]) -> f64 {
     largest * dot(scaled, scaled).sqrt()
 }
 
+/// Why a row has no centroid.
+/// Unlike [GeoComputeError], it is small and needs no drop, so a row's result stays cheap to return.
+#[derive(Clone, Copy)]
+enum NoCentroid {
+    WithoutWeight,
+    Underflow { extent: f64 },
+    HolesExceedExterior,
+}
+
 /// What the centroids of a column are weighted by,
 /// to take a closer look at a row whose weight is too small to trust.
 #[derive(Clone, Copy)]
@@ -418,18 +428,19 @@ impl<'a> Weighing<'a> {
 
     /// The centroid of a row whose weight is too small to trust without a closer look.
     /// A row without vertices gets the empty point.
-    /// A row that only lies close to its first vertex, or has no weight at all, gets the error that says why.
+    /// A row that only lies close to its first vertex, or has no weight at all, gets why it has none.
     #[cold]
+    #[inline(never)]
     fn centroid_with_little_weight<const Z: bool, const M: bool>(
         self,
         vertices: Range<usize>,
-        moment: &Moment<Z, M>,
-    ) -> GeoComputeResult<[f64; 4]> {
+        moment: Moment<Z, M>,
+    ) -> Result<[f64; 4], NoCentroid> {
         if has_no_points::<false>(self.coords, vertices.clone()) {
             return Ok([f64::NAN; 4]);
         }
         if moment.weight < 0.0 {
-            return Err(GeoComputeError::HolesExceedExterior);
+            return Err(NoCentroid::HolesExceedExterior);
         }
         let first = self.coords.position::<Z>(vertices.start);
         let axes = if self.measures_z { 3 } else { 2 };
@@ -440,18 +451,27 @@ impl<'a> Weighing<'a> {
             })
         });
         if extent > 0.0 && extent < self.smallest_extent {
-            return Err(GeoComputeError::CentroidUnderflow {
-                weighed_by: self.weighed_by,
-                extent,
-            });
+            return Err(NoCentroid::Underflow { extent });
         }
         if moment.weight > 0.0 {
             return Ok(moment.average());
         }
-        Err(GeoComputeError::CentroidWithoutWeight {
-            weighed_by: self.weighed_by,
-            suggest_3d: Z && !self.measures_z,
-        })
+        Err(NoCentroid::WithoutWeight)
+    }
+
+    #[cold]
+    fn error<const Z: bool>(self, why: NoCentroid) -> GeoComputeError {
+        let weighed_by = self.weighed_by;
+        match why {
+            NoCentroid::WithoutWeight => GeoComputeError::CentroidWithoutWeight {
+                weighed_by,
+                suggest_3d: Z && !self.measures_z,
+            },
+            NoCentroid::Underflow { extent } => {
+                GeoComputeError::CentroidUnderflow { weighed_by, extent }
+            }
+            NoCentroid::HolesExceedExterior => GeoComputeError::HolesExceedExterior,
+        }
     }
 }
 
@@ -477,7 +497,7 @@ fn centroids<const Z: bool, const M: bool>(
             let centroid = if moment.outweighs(weighing.smallest_weight) {
                 Ok(moment.average())
             } else {
-                weighing.centroid_with_little_weight(row_vertices(i), &moment)
+                weighing.centroid_with_little_weight(row_vertices(i), moment)
             };
             row_or_null(centroid.map(Some), on_row_error)
         },
@@ -490,7 +510,8 @@ fn centroids<const Z: bool, const M: bool>(
             }
             validity.push(centroid.is_some());
         },
-    )?;
+    )
+    .map_err(|why| weighing.error::<Z>(why))?;
     let [x, y, z, m] = axes;
     Ok(PointArray::new(Coords::from_valid(
         ValidCoords::from_axes((x, y, Z.then_some(z), M.then_some(m))),
