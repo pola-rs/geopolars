@@ -67,12 +67,12 @@ pub struct UncheckedBoxes {
 impl UncheckedBoxes {
     pub fn new(chunk: &dyn Array) -> PolarsResult<Self> {
         let boxes: &StructArray = downcast(chunk, "a box struct")?;
-        let validity = (bound_arrays(boxes)?.into_iter())
-            .fold(boxes.validity().cloned(), |validity, bound| {
-                combine_validities_and(validity.as_ref(), bound.validity())
-            });
+        let bounds = bound_arrays(boxes)?;
+        let validity = (bounds.iter()).fold(boxes.validity().cloned(), |validity, bound| {
+            combine_validities_and(validity.as_ref(), bound.validity())
+        });
         Ok(Self {
-            boxes: BoxArray::new(chunk)?.with_validity(validity),
+            boxes: BoxArray::from_bounds(validity, &bounds),
         })
     }
 }

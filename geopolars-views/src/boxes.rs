@@ -3,44 +3,37 @@
 use polars_arrow::array::{Array, PrimitiveArray, StructArray};
 use polars_arrow::bitmap::Bitmap;
 use polars_buffer::Buffer;
-use polars_core::prelude::{polars_err, PolarsResult};
+use polars_core::prelude::PolarsResult;
 
-use crate::{downcast, GeoDimension};
+use crate::downcast;
 
 /// A column of boxes, with null rows recorded in the struct's own validity.
 /// Like [`Coords`](crate::Coords), it trusts that a bound is only null under a null row.
 pub struct BoxArray {
     validity: Option<Bitmap>,
-    /// Every minimum, then every maximum, in the order of [`GeoDimension::box_field_names`].
+    /// Every minimum, then every maximum,
+    /// in the order of [`GeoDimension::box_field_names`](crate::GeoDimension::box_field_names).
     bounds: Vec<Buffer<f64>>,
-    dim: GeoDimension,
 }
 
 impl BoxArray {
     pub fn new(chunk: &dyn Array) -> PolarsResult<Self> {
         let boxes: &StructArray = downcast(chunk, "a box struct")?;
-        Ok(Self {
-            validity: boxes.validity().cloned(),
-            bounds: (bound_arrays(boxes)?.iter())
-                .map(|bound| bound.values().clone())
-                .collect(),
-            dim: box_dimension(boxes)?,
-        })
+        let bounds = bound_arrays(boxes)?;
+        Ok(Self::from_bounds(boxes.validity().cloned(), &bounds))
     }
 
-    pub(crate) fn with_validity(self, validity: Option<Bitmap>) -> Self {
-        Self { validity, ..self }
+    pub(crate) fn from_bounds(validity: Option<Bitmap>, bounds: &[&PrimitiveArray<f64>]) -> Self {
+        Self {
+            validity,
+            bounds: bounds.iter().map(|bound| bound.values().clone()).collect(),
+        }
     }
 
     #[allow(clippy::len_without_is_empty)]
     #[inline]
     pub fn len(&self) -> usize {
         self.bounds[0].len()
-    }
-
-    #[inline]
-    pub fn dim(&self) -> GeoDimension {
-        self.dim
     }
 
     /// `None` when every box is there.
@@ -73,12 +66,4 @@ pub(crate) fn bound_arrays(boxes: &StructArray) -> PolarsResult<Vec<&PrimitiveAr
     (boxes.values().iter())
         .map(|bound| downcast(bound.as_ref(), "f64 bounds"))
         .collect()
-}
-
-fn box_dimension(boxes: &StructArray) -> PolarsResult<GeoDimension> {
-    let names: Vec<&str> = boxes.fields().iter().map(|f| f.name.as_str()).collect();
-    GeoDimension::ALL
-        .into_iter()
-        .find(|dim| dim.box_field_names() == names.as_slice())
-        .ok_or_else(|| polars_err!(ComputeError: "expected the fields of a box, got: {names:?}"))
 }
