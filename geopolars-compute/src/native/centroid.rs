@@ -21,7 +21,9 @@ use geopolars_views::{
 };
 use polars_arrow::bitmap::MutableBitmap;
 
+use super::DistanceMetric;
 use crate::per_row::for_each_row_value;
+use crate::Planar;
 
 /// Which axes measure the length or area that a centroid is weighted by.
 /// Implements `method` of the Python `centroid`.
@@ -106,13 +108,8 @@ fn add_line<const Z: bool, const M: bool>(
 }
 
 #[inline(always)]
-fn footprint_segment_length(a: [f64; 4], b: [f64; 4]) -> f64 {
-    ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt()
-}
-
-#[inline(always)]
-fn three_d_segment_length(a: [f64; 4], b: [f64; 4]) -> f64 {
-    ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt()
+fn planar_segment_length<const Z: bool>(a: [f64; 4], b: [f64; 4]) -> f64 {
+    Planar.segment::<Z>(xyz(a), xyz(b))
 }
 
 /// The point a ring fans out from, relative to its first vertex.
@@ -200,7 +197,7 @@ fn add_ring<const Z: bool, const M: bool, const ANCHOR: u8>(
             }
         }
         if Z || M {
-            anchor.add_edge(d_p, d_q, footprint_segment_length);
+            anchor.add_edge(d_p, d_q, planar_segment_length::<false>);
             for k in 2..4 {
                 if has_axis::<Z, M>(k) {
                     sum_dx[k] += (d_q[0] - d_p[0]) * (d_p[k] + d_q[k]);
@@ -297,7 +294,7 @@ fn ring_fan_three_d<const M: bool, const ANCHOR: u8>(ring: &ScalarLineString) ->
             }
         });
         let n = cross(xyz(d_p), xyz(d_q));
-        anchor.add_edge(d_p, d_q, three_d_segment_length);
+        anchor.add_edge(d_p, d_q, planar_segment_length::<true>);
         for j in 0..3 {
             fan.normal[j] += n[j];
             for k in 0..4 {
@@ -424,13 +421,13 @@ fn line_string_centroids_footprint<const Z: bool, const M: bool>(
     array: &Untrimmed<LineStringArray>,
 ) -> PointArray {
     centroids::<Z, M>(array.rows(), |moment, i| {
-        add_line(moment, &array.get(i), footprint_segment_length);
+        add_line(moment, &array.get(i), planar_segment_length::<false>);
     })
 }
 
 fn line_string_centroids_three_d<const M: bool>(array: &Untrimmed<LineStringArray>) -> PointArray {
     centroids::<true, M>(array.rows(), |moment, i| {
-        add_line(moment, &array.get(i), three_d_segment_length);
+        add_line(moment, &array.get(i), planar_segment_length::<true>);
     })
 }
 
@@ -463,7 +460,7 @@ fn multi_line_string_centroids_footprint<const Z: bool, const M: bool>(
 ) -> PointArray {
     centroids::<Z, M>(array.rows(), |moment, i| {
         for line in array.get(i).line_strings() {
-            add_line(moment, &line, footprint_segment_length);
+            add_line(moment, &line, planar_segment_length::<false>);
         }
     })
 }
@@ -473,7 +470,7 @@ fn multi_line_string_centroids_three_d<const M: bool>(
 ) -> PointArray {
     centroids::<true, M>(array.rows(), |moment, i| {
         for line in array.get(i).line_strings() {
-            add_line(moment, &line, three_d_segment_length);
+            add_line(moment, &line, planar_segment_length::<true>);
         }
     })
 }
