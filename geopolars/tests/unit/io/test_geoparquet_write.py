@@ -346,6 +346,22 @@ def test_a_box_that_covers_no_geometry_is_refused(
     assert not path.exists()
 
 
+def test_a_covering_can_be_converted_after_it_is_added(
+    parquet: Parquet, tmp_path: Path
+) -> None:
+    """The covering takes the geometry's CRS, so it needs converting too."""
+    path = tmp_path / "covered.parquet"
+    df = (
+        _lines(crs="EPSG:4326")
+        .pipe(gpl.with_covering)
+        .with_columns(geo.crs_to_projjson("geometry"), geo.crs_to_projjson("bbox"))
+    )
+    parquet.write(df, path)
+
+    covering = _geo_of(path)["columns"]["geometry"]["covering"]
+    assert covering["bbox"]["xmin"] == ["bbox", "xmin"]
+
+
 def test_sink_writes_the_same_covering(parquet: Parquet, tmp_path: Path) -> None:
     written, sunk = tmp_path / "written.parquet", tmp_path / "sunk.parquet"
     parquet.write(_lines(crs=CRS84), written, covering=True)

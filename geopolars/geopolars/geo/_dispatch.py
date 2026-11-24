@@ -143,15 +143,16 @@ def on_box(
     return expr.pipe_with_dtype(resolved)
 
 
-def on_geometry_or_encoded(
+def on_any_geoarrow(
     value: IntoExprColumn,
-    build: Callable[[pl.Expr, GeoArrowType | EncodedGeometry], pl.Expr],
+    build: Callable[[pl.Expr, GeoArrowType | BoxType | EncodedGeometry], pl.Expr],
 ) -> pl.Expr:
-    """`on_geometry` that also accepts an encoded geometry, such as `Wkb`."""
+    """`on_geometry` that also accepts a `geoarrow.box` and an encoded geometry, such as `Wkb`."""
     expr = _to_expr(value)
 
     def resolved(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
-        geometry = dtype if isinstance(dtype, EncodedGeometry) else _geometry_of(dtype)
+        also = (BoxType, EncodedGeometry)
+        geometry = dtype if isinstance(dtype, also) else _geometry_of(dtype)
         return _named_after(build(expr, geometry), expr)
 
     return expr.pipe_with_dtype(resolved)

@@ -10,7 +10,7 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from geopolars import geo
-from geopolars.datatypes import PointXY, Wkb
+from geopolars.datatypes import BoxXY, PointXY, Wkb
 from tests.unit.operations.test_set_crs import _geometries, _points
 
 if TYPE_CHECKING:
@@ -60,6 +60,20 @@ def test_wkb_gets_its_crs_as_projjson() -> None:
     assert_frame_equal(
         out.select(pl.col("point").ext.storage()),
         wkb.select(pl.col("point").ext.storage()),
+    )
+
+
+def test_a_box_gets_its_crs_as_projjson() -> None:
+    """Such as the covering `with_covering` adds."""
+    boxes = _points(crs=WGS84).select(geo.bounds("point"))
+
+    out = boxes.select(geo.crs_to_projjson("point"))
+
+    assert isinstance(out.schema["point"], BoxXY)
+    assert _crs_of(out.schema["point"])["id"] == PROJJSON_ID
+    assert_frame_equal(
+        out.select(pl.col("point").ext.storage()),
+        boxes.select(pl.col("point").ext.storage()),
     )
 
 

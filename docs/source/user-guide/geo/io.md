@@ -110,6 +110,9 @@ It does this for every native geometry column, but a `Wkb` column gets none.
 Polars matches a covering column to its geometry column *by name*.
 `with_covering` adds one for every geometry column, with the name Polars expects.
 See its API reference for details.
+A covering must be in the same CRS as its geometry column.
+This has interplay with the `crs_to_projjson` mentioned above.
+This conversion must happen first, or convert both columns afterwards.
 
 {{code_block('user-guide/geo/io','covering',['with_covering','sink_parquet'])}}
 
