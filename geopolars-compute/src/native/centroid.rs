@@ -389,7 +389,18 @@ fn centroids<const Z: bool, const M: bool>(
     ))
 }
 
-pub fn line_string_centroids<const Z: bool, const M: bool>(
+pub fn line_string_centroids(
+    array: &Untrimmed<LineStringArray>,
+    method: CentroidMethod,
+) -> PointArray {
+    let dim = array.coords().dim();
+    with_const_flags!(
+        Z = dim.has_z(), M = dim.has_m();
+        line_string_centroids_with::<Z, M>(array, method)
+    )
+}
+
+fn line_string_centroids_with<const Z: bool, const M: bool>(
     array: &Untrimmed<LineStringArray>,
     method: CentroidMethod,
 ) -> PointArray {
@@ -416,7 +427,18 @@ fn line_string_centroids_three_d<const M: bool>(array: &Untrimmed<LineStringArra
     })
 }
 
-pub fn multi_line_string_centroids<const Z: bool, const M: bool>(
+pub fn multi_line_string_centroids(
+    array: &Untrimmed<MultiLineStringArray>,
+    method: CentroidMethod,
+) -> PointArray {
+    let dim = array.coords().dim();
+    with_const_flags!(
+        Z = dim.has_z(), M = dim.has_m();
+        multi_line_string_centroids_with::<Z, M>(array, method)
+    )
+}
+
+fn multi_line_string_centroids_with<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiLineStringArray>,
     method: CentroidMethod,
 ) -> PointArray {
@@ -449,21 +471,29 @@ fn multi_line_string_centroids_three_d<const M: bool>(
     })
 }
 
-pub fn polygon_centroids<const Z: bool, const M: bool>(
+pub fn polygon_centroids(
     array: &Untrimmed<PolygonArray>,
     method: CentroidMethod,
     anchor: CentroidAnchor,
 ) -> PointArray {
+    let dim = array.coords().dim();
     with_const_flags!(
-        ANCHOR: CentroidAnchor = anchor;
-        match method {
-            CentroidMethod::ThreeD if Z => polygon_centroids_three_d::<M, ANCHOR>(array),
-            // Without a z, a polygon's own plane is its footprint.
-            CentroidMethod::Footprint | CentroidMethod::ThreeD => {
-                polygon_centroids_footprint::<Z, M, ANCHOR>(array)
-            }
-        }
+        Z = dim.has_z(), M = dim.has_m(), ANCHOR: CentroidAnchor = anchor;
+        polygon_centroids_with::<Z, M, ANCHOR>(array, method)
     )
+}
+
+fn polygon_centroids_with<const Z: bool, const M: bool, const ANCHOR: u8>(
+    array: &Untrimmed<PolygonArray>,
+    method: CentroidMethod,
+) -> PointArray {
+    match method {
+        CentroidMethod::ThreeD if Z => polygon_centroids_three_d::<M, ANCHOR>(array),
+        // Without a z, a polygon's own plane is its footprint.
+        CentroidMethod::Footprint | CentroidMethod::ThreeD => {
+            polygon_centroids_footprint::<Z, M, ANCHOR>(array)
+        }
+    }
 }
 
 fn polygon_centroids_footprint<const Z: bool, const M: bool, const ANCHOR: u8>(
@@ -482,21 +512,29 @@ fn polygon_centroids_three_d<const M: bool, const ANCHOR: u8>(
     })
 }
 
-pub fn multi_polygon_centroids<const Z: bool, const M: bool>(
+pub fn multi_polygon_centroids(
     array: &Untrimmed<MultiPolygonArray>,
     method: CentroidMethod,
     anchor: CentroidAnchor,
 ) -> PointArray {
+    let dim = array.coords().dim();
     with_const_flags!(
-        ANCHOR: CentroidAnchor = anchor;
-        match method {
-            CentroidMethod::ThreeD if Z => multi_polygon_centroids_three_d::<M, ANCHOR>(array),
-            // Without a z, a polygon's own plane is its footprint.
-            CentroidMethod::Footprint | CentroidMethod::ThreeD => {
-                multi_polygon_centroids_footprint::<Z, M, ANCHOR>(array)
-            }
-        }
+        Z = dim.has_z(), M = dim.has_m(), ANCHOR: CentroidAnchor = anchor;
+        multi_polygon_centroids_with::<Z, M, ANCHOR>(array, method)
     )
+}
+
+fn multi_polygon_centroids_with<const Z: bool, const M: bool, const ANCHOR: u8>(
+    array: &Untrimmed<MultiPolygonArray>,
+    method: CentroidMethod,
+) -> PointArray {
+    match method {
+        CentroidMethod::ThreeD if Z => multi_polygon_centroids_three_d::<M, ANCHOR>(array),
+        // Without a z, a polygon's own plane is its footprint.
+        CentroidMethod::Footprint | CentroidMethod::ThreeD => {
+            multi_polygon_centroids_footprint::<Z, M, ANCHOR>(array)
+        }
+    }
 }
 
 fn multi_polygon_centroids_footprint<const Z: bool, const M: bool, const ANCHOR: u8>(

@@ -57,15 +57,7 @@ fn centroid(inputs: &[Series], kwargs: CentroidKwargs) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| {
-            centroids(
-                chunk.as_ref(),
-                kind,
-                point.dim(),
-                kwargs.method,
-                kwargs.anchor,
-            )
-        })
+        .map(|chunk| centroids(chunk.as_ref(), kind, kwargs.method, kwargs.anchor))
         .collect::<PolarsResult<Vec<_>>>()?;
     geometry_series(inputs[0].name().clone(), point, chunks)
 }
