@@ -15,15 +15,13 @@
 //!
 //! The [CentroidAnchor] that every ring of a polygon fans out from.
 
-use std::convert::Infallible;
-
 use geopolars_views::{
     Coords, LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PointArray,
     PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };
-use polars_arrow::bitmap::Bitmap;
+use polars_arrow::bitmap::MutableBitmap;
 
-use crate::per_row::per_row_values;
+use crate::per_row::for_each_row_value;
 
 /// Which axes measure the length or area that a centroid is weighted by.
 /// Implements `method` of the Python `centroid`.
@@ -370,22 +368,31 @@ fn centroids<const Z: bool, const M: bool>(
     rows: &List,
     add_row: impl Fn(&mut Moment<Z, M>, usize),
 ) -> PointArray {
-    let Ok(centroids) = per_row_values(rows, |i| {
-        let mut moment = Moment::ZERO;
-        add_row(&mut moment, i);
-        Ok::<_, Infallible>(moment.average())
-    });
-    let axis = |k: usize| -> Vec<f64> {
-        centroids
-            .iter()
-            .map(|centroid| centroid.map_or(0.0, |centroid| centroid[k]))
-            .collect()
-    };
-    let axes = (axis(0), axis(1), Z.then(|| axis(2)), M.then(|| axis(3)));
-    let validity = Bitmap::from_iter(centroids.iter().map(Option::is_some));
+    let len = rows.len();
+    let mut axes: [Vec<f64>; 4] =
+        std::array::from_fn(|k| Vec::with_capacity(if has_axis::<Z, M>(k) { len } else { 0 }));
+    let mut validity = MutableBitmap::with_capacity(len);
+    for_each_row_value(
+        rows,
+        |i| {
+            let mut moment = Moment::ZERO;
+            add_row(&mut moment, i);
+            moment.average()
+        },
+        |centroid| {
+            let values = centroid.unwrap_or_default();
+            for k in 0..4 {
+                if has_axis::<Z, M>(k) {
+                    axes[k].push(values[k]);
+                }
+            }
+            validity.push(centroid.is_some());
+        },
+    );
+    let [x, y, z, m] = axes;
     PointArray::new(Coords::from_valid(
-        ValidCoords::from_axes(axes),
-        Some(validity),
+        ValidCoords::from_axes((x, y, Z.then_some(z), M.then_some(m))),
+        Some(validity.into()),
     ))
 }
 

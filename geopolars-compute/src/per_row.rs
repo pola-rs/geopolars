@@ -133,6 +133,35 @@ fn per_row_values_with<const ALL_VALID: bool, T: Default, E>(
     Ok(values)
 }
 
+/// [per_row_values], handing each value to `push` rather than collecting them.
+#[inline(always)]
+pub(crate) fn for_each_row_value<T: Default>(
+    rows: &List,
+    measure: impl Fn(usize) -> T,
+    push: impl FnMut(T),
+) {
+    with_const_flags!(
+        ALL_VALID = rows.is_all_valid();
+        for_each_row_value_with::<ALL_VALID, T>(rows, measure, push)
+    )
+}
+
+#[inline(always)]
+fn for_each_row_value_with<const ALL_VALID: bool, T: Default>(
+    rows: &List,
+    measure: impl Fn(usize) -> T,
+    mut push: impl FnMut(T),
+) {
+    for i in 0..rows.len() {
+        // A null row's offsets point anywhere, so it is not measured.
+        push(if ALL_VALID || rows.is_valid(i) {
+            measure(i)
+        } else {
+            T::default()
+        });
+    }
+}
+
 /// [per_row_optional_bool], as a list per row of a chunk, one per part.
 /// `parts` holds where the parts of each row sit, and `test` takes the index of a part.
 pub(crate) fn per_part_optional_bool<E>(
