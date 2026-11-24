@@ -20,6 +20,7 @@ from geopolars.datatypes import (
     PointXY,
     PolygonXYZM,
 )
+from geopolars.geo.centroid import CentroidMethod
 from tests.unit.conftest import XY, Dimension, coordinates
 
 if TYPE_CHECKING:
@@ -245,8 +246,15 @@ def _lines(
     return pl.DataFrame(storage.ext.to(dtype(crs=crs)))
 
 
-def _line_centroids(df: pl.DataFrame) -> list[tuple[float, ...] | None]:
-    out = df.select(geo.centroid("line")).to_series().ext.storage().to_list()
+def _line_centroids(
+    df: pl.DataFrame, method: CentroidMethod = "footprint"
+) -> list[tuple[float, ...] | None]:
+    out = (
+        df.select(geo.centroid("line", method=method))
+        .to_series()
+        .ext.storage()
+        .to_list()
+    )
     return [None if c is None else tuple(c.values()) for c in out]
 
 
@@ -271,13 +279,50 @@ def test_a_lines_centroid_is_its_midpoints_weighted_by_length(
     assert got == pytest.approx(expected)
 
 
-def test_z_counts_towards_the_length() -> None:
-    # Segments of length 2 (straight up) and 1: in 2D the first would weigh nothing.
-    line = [(0, 0, 0), (0, 0, 2), (1, 0, 2)]
+# Segments of length 2 (straight up) and 1, of which only the second has length in x/y.
+_RISING_HOOK = [(0, 0, 0), (0, 0, 2), (1, 0, 2)]
 
-    (got,) = _line_centroids(_lines(line, dtype=LineStringXYZ))
 
-    assert got == pytest.approx((1 / 6, 0.0, 4 / 3))
+@pytest.mark.parametrize(
+    ("method", "expected"),
+    [("footprint", (0.5, 0.0, 2.0)), ("3d", (1 / 6, 0.0, 4 / 3))],
+)
+def test_the_method_says_whether_z_counts_towards_the_length(
+    method: CentroidMethod, expected: tuple[float, float, float]
+) -> None:
+    (got,) = _line_centroids(_lines(_RISING_HOOK, dtype=LineStringXYZ), method)
+
+    assert got == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("method", "expected"),
+    [("footprint", None), ("3d", pytest.approx((1.0, 1.0, 2.5)))],
+)
+def test_a_vertical_line_only_has_a_centroid_in_3d(
+    method: CentroidMethod, expected: object
+) -> None:
+    df = _lines([(1, 1, 0), (1, 1, 5)], dtype=LineStringXYZ)
+
+    assert _line_centroids(df, method) == [expected]
+
+
+@pytest.mark.parametrize("method", ["footprint", "3d"])
+def test_without_z_both_methods_agree(method: CentroidMethod) -> None:
+    lines = _lines(_HOOK, [(0, 0), (2, 4)])
+    polygons = _polygons([_L], [_SQUARE])
+
+    assert lines.select(geo.centroid("line", method=method)).equals(
+        lines.select(geo.centroid("line"))
+    )
+    assert polygons.select(geo.centroid("polygon", method=method)).equals(
+        polygons.select(geo.centroid("polygon"))
+    )
+
+
+def test_an_unknown_method_is_refused() -> None:
+    with pytest.raises(ValueError, match="`method` must be one of"):
+        geo.centroid("line", method="3D")  # type: ignore[arg-type]
 
 
 def test_m_is_averaged_along_the_length_without_adding_to_it() -> None:
@@ -317,11 +362,12 @@ def test_a_line_without_length_has_no_centroid() -> None:
     ]
 
 
-def test_the_namespace_matches_the_function_for_lines() -> None:
-    df = _lines(_HOOK, [(0, 0), (2, 4)])
+@pytest.mark.parametrize("method", ["footprint", "3d"])
+def test_the_namespace_matches_the_function_for_lines(method: CentroidMethod) -> None:
+    df = _lines(_RISING_HOOK, dtype=LineStringXYZ)
 
-    assert df.select(pl.col("line").geo.centroid()).equals(
-        df.select(geo.centroid("line"))
+    assert df.select(pl.col("line").geo.centroid(method=method)).equals(
+        df.select(geo.centroid("line", method=method))
     )
 
 
@@ -437,8 +483,18 @@ def test_a_non_finite_line_has_a_nan_centroid(line: Line) -> None:
     assert _all_nan(got)
 
 
-def test_a_nan_z_changes_the_length_of_a_line() -> None:
+def test_a_nan_z_only_changes_the_z_of_a_footprint_centroid() -> None:
     (got,) = _line_centroids(_lines([(0, 0, 0), (2, 0, _NAN)], dtype=LineStringXYZ))
+
+    assert got is not None
+    assert got[:2] == pytest.approx((1.0, 0.0))
+    assert math.isnan(got[2])
+
+
+def test_a_nan_z_changes_the_3d_length_of_a_line() -> None:
+    df = _lines([(0, 0, 0), (2, 0, _NAN)], dtype=LineStringXYZ)
+
+    (got,) = _line_centroids(df, "3d")
 
     assert _all_nan(got)
 
@@ -497,6 +553,7 @@ def _weighted_mean_of_parts(
     name: str,
     part: GeoArrowType,
     weight: Callable[[str], pl.Expr],
+    method: CentroidMethod = "footprint",
 ) -> pl.DataFrame:
     """The centroid of each part on its own, weighted by `weight` and averaged
     per row, as plain float columns."""
@@ -509,7 +566,7 @@ def _weighted_mean_of_parts(
     centroids = parts.select(
         "row",
         weight(name).alias("weight"),
-        geo.centroid(name).ext.storage().struct.unnest(),
+        geo.centroid(name, method=method).ext.storage().struct.unnest(),
     )
     fields = [c for c in centroids.columns if c not in ("row", "weight")]
     return (
@@ -522,16 +579,24 @@ def _weighted_mean_of_parts(
     )
 
 
+_LENGTHS: dict[CentroidMethod, Callable[[str], pl.Expr]] = {
+    "footprint": lambda name: geo.length(geo.force_2d(name), distance_method="planar"),
+    "3d": lambda name: geo.length(name, distance_method="planar"),
+}
+
+
+@pytest.mark.parametrize("method", ["footprint", "3d"])
 def test_a_multilinestring_weighs_each_part_like_a_lone_linestring(
-    ring_coords: pl.DataFrame, dimension: Dimension
+    ring_coords: pl.DataFrame, dimension: Dimension, method: CentroidMethod
 ) -> None:
     multis = dimension.multilinestrings(ring_coords)
-    out = multis.select(geo.centroid("multilinestring"))
+    out = multis.select(geo.centroid("multilinestring", method=method))
     expected = _weighted_mean_of_parts(
         multis,
         "multilinestring",
         dimension.linestring_dtype(),
-        lambda name: geo.length(name, distance_method="planar"),
+        _LENGTHS[method],
+        method,
     )
 
     assert out.schema["multilinestring"] == dimension.point_dtype()

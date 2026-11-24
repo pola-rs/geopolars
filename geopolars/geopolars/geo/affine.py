@@ -252,7 +252,9 @@ def _about_centroid(
                 f"or polygon column, got: {geometry!r}"
             )
             raise TypeError(msg)
-        return on_geometry_pair(column, _centroid(column, geometry), build_about)
+        return on_geometry_pair(
+            column, _centroid(column, geometry, "footprint"), build_about
+        )
 
     return build
 

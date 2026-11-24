@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         ShortLines,
     )
     from geopolars.datatypes import GeoArrowType
+    from geopolars.geo.centroid import CentroidMethod
     from geopolars.geo.close_rings import CloseRings
     from geopolars.geo.filter_coordinates import NonFiniteAction
     from geopolars.geo.fix_out_of_bounds import (
@@ -256,10 +257,10 @@ class ExprGeoNameSpace:
 
         return mean_coordinate(self._expr)
 
-    def centroid(self) -> pl.Expr:
+    def centroid(self, *, method: CentroidMethod = "footprint") -> pl.Expr:
         from geopolars.geo.centroid import centroid
 
-        return centroid(self._expr)
+        return centroid(self._expr, method=method)
 
     def exterior(self) -> pl.Expr:
         from geopolars.geo.exterior import exterior

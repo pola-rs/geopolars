@@ -1,20 +1,15 @@
 //! The centroid of a linestring or polygon, or their multi-variants, in one pass over the storage.
 //! Implements the Python `centroid`, which documents how every kind is weighted.
-//! - polygon uses the shoelace formula.
-//! - multi-geometry's running sum just goes on over its parts.
 //!
 //! # Const generic flags
 //!
 //! ## `Z`
 //!
-//! Every function here is generic over `Z`.
 //! If `Z=true`, the z values are averaged too.
-//! A linestring's segments are then measured in x, y and z.
 //!
 //! ## `M`
 //!
-//! Every function here is generic over `M`.
-//! If `M=true`, the m values are averaged too, with the same weights as the other axes.
+//! If `M=true`, the m values are averaged too.
 
 use std::convert::Infallible;
 
@@ -25,6 +20,14 @@ use geopolars_views::{
 use polars_arrow::bitmap::Bitmap;
 
 use crate::per_row::per_row_values;
+
+/// Which axes measure the length or area that a centroid is weighted by.
+/// Implements `method` of the Python `centroid`.
+#[derive(Clone, Copy, Debug)]
+pub enum CentroidMethod {
+    Footprint,
+    ThreeD,
+}
 
 /// Used at compile to drop loops
 /// Whether axis `k` is there.
@@ -69,20 +72,18 @@ impl<const Z: bool, const M: bool> Moment<Z, M> {
     }
 }
 
-/// Adds `line` to the moment
-/// Σ len (a + b) / 2 and Σ len over its segments `ab`.
 #[inline(always)]
-fn add_line<const Z: bool, const M: bool>(moment: &mut Moment<Z, M>, line: &ScalarLineString) {
+fn add_line<const Z: bool, const M: bool>(
+    moment: &mut Moment<Z, M>,
+    line: &ScalarLineString,
+    segment_length: impl Fn([f64; 4], [f64; 4]) -> f64,
+) {
     let mut coordinates = line.coordinates::<Z, M>();
     let Some(mut previous) = coordinates.next() else {
         return;
     };
     for here in coordinates {
-        let mut squared = (here[0] - previous[0]).powi(2) + (here[1] - previous[1]).powi(2);
-        if Z {
-            squared += (here[2] - previous[2]).powi(2);
-        }
-        let len = squared.sqrt();
+        let len = segment_length(previous, here);
         for k in 0..4 {
             if has_axis::<Z, M>(k) {
                 moment.sum[k] += 0.5 * len * (previous[k] + here[k]);
@@ -91,6 +92,16 @@ fn add_line<const Z: bool, const M: bool>(moment: &mut Moment<Z, M>, line: &Scal
         moment.weight += len;
         previous = here;
     }
+}
+
+#[inline(always)]
+fn footprint_segment_length(a: [f64; 4], b: [f64; 4]) -> f64 {
+    ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt()
+}
+
+#[inline(always)]
+fn three_d_segment_length(a: [f64; 4], b: [f64; 4]) -> f64 {
+    ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt()
 }
 
 /// Adds the area of a closed ring, and its area-weighted centre, to `moment`.
@@ -177,27 +188,101 @@ fn centroids<const Z: bool, const M: bool>(
 
 pub fn line_string_centroids<const Z: bool, const M: bool>(
     array: &Untrimmed<LineStringArray>,
+    method: CentroidMethod,
 ) -> PointArray {
-    centroids::<Z, M>(array.rows(), |moment, i| add_line(moment, &array.get(i)))
+    match method {
+        CentroidMethod::ThreeD if Z => line_string_centroids_three_d::<M>(array),
+        // Without a z, measuring in 3D is measuring the footprint.
+        CentroidMethod::Footprint | CentroidMethod::ThreeD => {
+            line_string_centroids_footprint::<Z, M>(array)
+        }
+    }
+}
+
+fn line_string_centroids_footprint<const Z: bool, const M: bool>(
+    array: &Untrimmed<LineStringArray>,
+) -> PointArray {
+    centroids::<Z, M>(array.rows(), |moment, i| {
+        add_line(moment, &array.get(i), footprint_segment_length);
+    })
+}
+
+fn line_string_centroids_three_d<const M: bool>(array: &Untrimmed<LineStringArray>) -> PointArray {
+    centroids::<true, M>(array.rows(), |moment, i| {
+        add_line(moment, &array.get(i), three_d_segment_length);
+    })
 }
 
 pub fn multi_line_string_centroids<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiLineStringArray>,
+    method: CentroidMethod,
+) -> PointArray {
+    match method {
+        CentroidMethod::ThreeD if Z => multi_line_string_centroids_three_d::<M>(array),
+        // Without a z, measuring in 3D is measuring the footprint.
+        CentroidMethod::Footprint | CentroidMethod::ThreeD => {
+            multi_line_string_centroids_footprint::<Z, M>(array)
+        }
+    }
+}
+
+fn multi_line_string_centroids_footprint<const Z: bool, const M: bool>(
+    array: &Untrimmed<MultiLineStringArray>,
 ) -> PointArray {
     centroids::<Z, M>(array.rows(), |moment, i| {
         for line in array.get(i).line_strings() {
-            add_line(moment, &line);
+            add_line(moment, &line, footprint_segment_length);
+        }
+    })
+}
+
+fn multi_line_string_centroids_three_d<const M: bool>(
+    array: &Untrimmed<MultiLineStringArray>,
+) -> PointArray {
+    centroids::<true, M>(array.rows(), |moment, i| {
+        for line in array.get(i).line_strings() {
+            add_line(moment, &line, three_d_segment_length);
         }
     })
 }
 
 pub fn polygon_centroids<const Z: bool, const M: bool>(
     array: &Untrimmed<PolygonArray>,
+    method: CentroidMethod,
+) -> PointArray {
+    match method {
+        CentroidMethod::ThreeD if Z => polygon_centroids_three_d::<M>(array),
+        // Without a z, a polygon's own plane is its footprint.
+        CentroidMethod::Footprint | CentroidMethod::ThreeD => {
+            polygon_centroids_footprint::<Z, M>(array)
+        }
+    }
+}
+
+fn polygon_centroids_footprint<const Z: bool, const M: bool>(
+    array: &Untrimmed<PolygonArray>,
 ) -> PointArray {
     centroids::<Z, M>(array.rows(), |moment, i| add_polygon(moment, &array.get(i)))
 }
 
+fn polygon_centroids_three_d<const M: bool>(_array: &Untrimmed<PolygonArray>) -> PointArray {
+    todo!("weigh a polygon by its area on its own plane")
+}
+
 pub fn multi_polygon_centroids<const Z: bool, const M: bool>(
+    array: &Untrimmed<MultiPolygonArray>,
+    method: CentroidMethod,
+) -> PointArray {
+    match method {
+        CentroidMethod::ThreeD if Z => multi_polygon_centroids_three_d::<M>(array),
+        // Without a z, a polygon's own plane is its footprint.
+        CentroidMethod::Footprint | CentroidMethod::ThreeD => {
+            multi_polygon_centroids_footprint::<Z, M>(array)
+        }
+    }
+}
+
+fn multi_polygon_centroids_footprint<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiPolygonArray>,
 ) -> PointArray {
     centroids::<Z, M>(array.rows(), |moment, i| {
@@ -205,4 +290,10 @@ pub fn multi_polygon_centroids<const Z: bool, const M: bool>(
             add_polygon(moment, &polygon);
         }
     })
+}
+
+fn multi_polygon_centroids_three_d<const M: bool>(
+    _array: &Untrimmed<MultiPolygonArray>,
+) -> PointArray {
+    todo!("weigh every polygon by its area on its own plane")
 }

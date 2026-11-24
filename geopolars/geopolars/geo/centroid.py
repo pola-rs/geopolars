@@ -1,22 +1,13 @@
-"""The centroid of a geometry: the centre of its length or area.
-Note that this is not the mean coordinate, which weighs every vertex the same!
-
-A native kernel (A-tier) does either in one pass over the storage:
-it weighs every segment of a linestring by its length,
-and applies the shoelace formula over a polygon's planar area.
-A multilinestring or multipolygon gets the centroid of its parts together,
-each weighted by its length or area.
-A (multi)point has neither length nor area,
-so its centroid is its mean coordinate (C-tier).
-"""
+"""The centroid of a geometry, the centre of its length or area."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from polars.plugins import register_plugin_function
 
-from geopolars._utils import LIB
+from geopolars._docs import doc
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import MultiPointType, PointType
 from geopolars.geo._dispatch import on_geometry
 from geopolars.geo.mean_coordinate import _mean_coordinate
@@ -27,8 +18,12 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
+CentroidMethod = Literal["footprint", "3d"]
 
-def _centroid(column: pl.Expr, geometry: GeoArrowType) -> pl.Expr:
+
+def _centroid(
+    column: pl.Expr, geometry: GeoArrowType, method: CentroidMethod
+) -> pl.Expr:
     """The centroid of one geometry type, per row."""
     # Every point weighs the same, so the centroid is the mean of the points.
     if isinstance(geometry, PointType | MultiPointType):
@@ -38,51 +33,67 @@ def _centroid(column: pl.Expr, geometry: GeoArrowType) -> pl.Expr:
         args=[column],
         function_name="centroid",
         is_elementwise=True,
+        kwargs={"method": method},
     )
 
 
-def centroid(geometry: IntoExprColumn) -> pl.Expr:
+@doc()
+def centroid(
+    geometry: IntoExprColumn, *, method: CentroidMethod = "footprint"
+) -> pl.Expr:
     """The centroid of a polygon (centre of area) or linestring (centre of length).
 
-    A polygon's centroid is measured on the plane the coordinates lie in,
-    even when they carry a CRS, and the CRS is carried over to the result.
-    Holes are taken out.
-    Its `x` and `y` are the centroid of its footprint (its shadow on the x/y plane),
-    and its `z` and `m` are averaged over that footprint's area.
-    For a flat 3D polygon, that puts the centroid on the polygon,
-    right above the centroid of its footprint.
-    The result keeps the polygon's dimension.
-    A vertical polygon has a footprint that encloses nothing, so it has no centroid.
+    Every segment of a linestring weighs as much as it is long,
+    and a polygon is weighted evenly over its area without its holes.
+    The centroid is the average of every axis under those weights.
+    It is therefore not the mean coordinate, which weighs every vertex the same
+    (see `mean_coordinate`).
+    Lengths and areas are measured on the plane the coordinates lie in,
+    even when they carry a CRS.
 
-    A linestring's centroid is the midpoint of each of its segments,
-    weighted by that segment's length.
-    Fully three-dimensional if `z`.
-    If the line has an `m`, it is averaged.
-    The result keeps the line's dimension.
-    A null linestring, an empty one,
-    and one without length (a single vertex, or all on one spot) have no centroid.
+    `method` says which axes measure a length or an area:
 
-    A null geometry, an empty polygon, and a polygon that encloses nothing
-    (all of its vertices on a line) have no centroid.
+    - `"footprint"` is the default. It only measures `x` and `y`, as `area_planar` does.
+      A geometry with a `z` is measured by its footprint (its shadow on the x/y plane),
+      and its `z` is averaged over that footprint.
+      For a flat polygon that is not vertical,
+      this puts the centroid on the polygon's plane, right above the centroid of its footprint.
+      A vertical linestring or polygon has no centroid,
+      as its footprint has no length or area.
+    - `"3d"` measures `x`, `y`, and `z`, as `length` does.
+      A linestring's segments then count their difference in height too.
+      A polygon is to be measured on its own plane,
+      so that a vertical one has a centroid as well.
+      This is not implemented yet for a polygon with a `z`.
 
-    A multilinestring or multipolygon gets a single centroid:
-    that of each part (measured as for a lone linestring or polygon),
-    weighted by its length or area.
-    A part without length or area adds nothing.
-    A null geometry, an empty one,
-    and one whose parts have no length or area at all have no centroid.
+    Without a `z`, both methods give the same centroid.
+
+    {measure}
+    As it is not a position, it never adds to a length or area, whatever the `method`.
+    It is averaged with the same weights as the positions,
+    which gives the mean `m` over the length or area of the geometry.
+
+    A multilinestring or multipolygon gets a single centroid.
+    Its parts are weighted together by their length or area,
+    measured as for a lone linestring or polygon.
+
+    A geometry without length or area has no centroid,
+    such as a linestring with all its vertices on one spot,
+    or a polygon with all its vertices on a line.
+    An empty geometry gives a null as well, rather than an empty point.
 
     A NaN or an infinity in a coordinate gives a centroid that is not finite,
-    rather than no centroid.
-    In `x` or `y` (or the `z` of a linestring), it changes the length or area,
-    which makes every axis NaN.
-    In `m` (or the `z` of a polygon), it only changes that axis.
-    In one part of a multilinestring or multipolygon, it does this to the whole centroid.
+    rather than a null.
+    In an axis that measures the length or area, it makes every axis NaN.
+    In any other axis (`m`, or `z` with `"footprint"`), it only changes that axis.
+    For a multilinestring or multipolygon, this holds for the centroid of the whole,
+    whichever part the coordinate is in.
 
     A point is its own centroid.
-    A multipoint gets a single centroid, which is the mean of its points
-    (see `mean_coordinate`).
-    A null or empty multipoint has no centroid.
+    A multipoint gets the mean of its points as its centroid (see `mean_coordinate`),
+    whatever the `method`.
+
+    The result keeps the geometry's dimension and CRS.
 
     =======================  =============
     in                       out
@@ -98,5 +109,7 @@ def centroid(geometry: IntoExprColumn) -> pl.Expr:
     .. code-block:: python
 
         df.select(geo.centroid("parcel"), geo.centroid("road"))
+        df.select(geo.centroid("flight_path", method="3d"))
     """
-    return on_geometry(geometry, _centroid)
+    validate_one_of("method", method, CentroidMethod)
+    return on_geometry(geometry, lambda column, dtype: _centroid(column, dtype, method))
