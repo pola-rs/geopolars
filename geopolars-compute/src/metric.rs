@@ -54,6 +54,8 @@ impl GeodesicMetric {
     /// Reprojecting is the expensive part of measuring,
     /// so something measuring many segments should do this once per vertex.
     pub fn lonlat(&self, (x, y): (f64, f64)) -> GeoComputeResult<(f64, f64)> {
+        // TODO: `length` and `distance` still call this once per vertex.
+        // Batch them through `lonlats` and `lonlat_of`, as `area` does.
         let [lon, lat, _] = reproject_position(&self.to_lonlat, [x, y, 0.0])?;
         Ok((lon, lat))
     }
