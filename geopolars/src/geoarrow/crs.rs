@@ -108,6 +108,9 @@ impl ExtensionMetadata {
     /// A short name for the CRS, to display: a PROJJSON CRS by its id or name.
     /// `None` if the metadata declares no CRS.
     pub fn crs_label(&self) -> Option<&str> {
+        // TODO: add a little marker so that a string CRS can be differentiated from a PROJJSON one.
+        // For PROJJSON, also make it so that in the debug view it also shows the rest of the json key,
+        // not just the name/id
         self.crs_label.as_deref()
     }
 
