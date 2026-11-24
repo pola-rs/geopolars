@@ -333,16 +333,17 @@ def test_no_covering_unless_asked(parquet: Parquet, tmp_path: Path) -> None:
     assert "covering" not in _geo_of(path)["columns"]["geometry"]
 
 
-def test_a_box_column_does_not_block_the_write(
+def test_a_box_that_covers_no_geometry_is_refused(
     parquet: Parquet, tmp_path: Path
 ) -> None:
-    """A box is GeoArrow, but no GeoParquet geometry: it is written as is."""
+    """A box is GeoArrow, but no GeoParquet geometry: unless it is a covering, it is refused."""
     path = tmp_path / "boxed.parquet"
     df = _lines().with_columns(geo.bounds("geometry").alias("box"))
-    parquet.write(df, path)
-
-    assert list(_geo_of(path)["columns"]) == ["geometry"]
-    assert_frame_equal(parquet.read(path), df)
+    with pytest.raises(
+        pl.exceptions.InvalidOperationError, match="cannot write box column 'box'"
+    ):
+        parquet.write(df, path)
+    assert not path.exists()
 
 
 def test_sink_writes_the_same_covering(parquet: Parquet, tmp_path: Path) -> None:

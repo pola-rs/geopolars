@@ -132,6 +132,11 @@ def test_a_null_geometry_survives_a_parquet_round_trip(
 
 
 def test_box_survives_a_parquet_round_trip(parquet: Parquet, tmp_path: Path) -> None:
+    if parquet.name != "plain":
+        pytest.skip(
+            "GeoParquet refuses a box that covers no geometry; "
+            "see test_a_box_that_covers_no_geometry_is_refused"
+        )
     df = pl.DataFrame({"a": [0.0], "b": [1.0], "c": [2.0], "d": [3.0]}).select(
         geo.box("a", "b", "c", "d", crs="EPSG:4326").alias("box")
     )
