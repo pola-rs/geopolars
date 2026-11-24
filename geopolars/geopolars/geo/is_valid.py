@@ -98,6 +98,8 @@ def is_valid_geoarrow(
 
         df.filter(geo.is_valid_geoarrow("parcel"))
     """
+    # BUG: a box with a finite `ymin > ymax` (or in z or m) passes,
+    # but GeoArrow only allows `min > max` in x.
     return on_geometry_or_box(
         geometry,
         _kernel(

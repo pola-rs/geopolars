@@ -13,7 +13,7 @@ use serde::Deserialize;
 
 use super::coords::kernel_output_type_wrapper_same_geometry;
 use crate::geoarrow::bbox::is_box;
-use crate::geoarrow::{describe, geometry_series};
+use crate::geoarrow::{describe, geometry_series, storage_series};
 
 /// The keyword arguments of the Python `is_valid_geoarrow` and `null_out_invalid_geoarrow`.
 #[derive(Debug, Deserialize)]
@@ -196,21 +196,11 @@ fn keep_rows(geometries: &Series, keep: &BooleanChunked) -> PolarsResult<Series>
 
 /// [`keep_rows`] for a box, which has no [`GeometryArray`].
 fn keep_boxes(boxes: &Series, keep: &BooleanChunked) -> PolarsResult<Series> {
-    let DataType::Extension(typ, _) = boxes.dtype() else {
-        polars_bail!(SchemaMismatch: "expected a box column, got: {}", boxes.dtype());
-    };
-    let storage = boxes.ext()?.storage();
-    let chunks = storage
-        .chunks()
-        .iter()
+    let chunks = (boxes.ext()?.storage().chunks().iter())
         .zip(keep.downcast_iter())
         .map(|(chunk, keep)| chunk.with_validity(Some(keep.values().clone())))
         .collect();
-    // SAFETY: only the outer validity changed, so every chunk is still the storage.
-    let storage = unsafe {
-        Series::from_chunks_and_dtype_unchecked(storage.name().clone(), chunks, storage.dtype())
-    };
-    Ok(storage.into_extension(typ.clone()))
+    storage_series(boxes.name().clone(), chunks, boxes.dtype())
 }
 
 /// [`kernel_output_type_wrapper_same_geometry`], also for a box.
