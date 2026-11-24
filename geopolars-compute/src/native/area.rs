@@ -247,10 +247,12 @@ fn instead_of_measuring<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool>(
     if has_none_outside(bounds, x, y) {
         return None;
     }
+    // `Ignore` never gets here, as it gives `CHECK_BOUNDS=false`.
     Some(match on_out_of_bounds {
         OnOutOfBounds::Null => Ok(None),
         _ => Err(GeoComputeError::OutOfBounds {
-            position: first_outside(bounds, x, y)?,
+            position: first_outside(bounds, x, y)
+                .expect("a coordinate outside, as the check above failed"),
             bounds: *bounds,
         }),
     })
@@ -271,6 +273,7 @@ fn vertices_of_rows(
     if row_count == 0 {
         return 0..0;
     }
+    // Offsets never decrease, also under a null row, so this spans the vertices of every row.
     row_vertices(0).start..row_vertices(row_count - 1).end
 }
 

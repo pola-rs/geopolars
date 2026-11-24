@@ -45,8 +45,8 @@ you might be better off leaving this one as this can skip expensive calculations
 
 - `early_coord_check="off"` skips this extra pass.
 - `early_coord_check="finite"` (default for native kernels) means that the kernel will
-  check for such values in the operation. If it finds one, a native kernel gives that row NaN
-  without computing it, while a GEOS kernel marks it as an error,
+  check for such values in the operation. If it finds one, a native kernel that gives a float
+  gives that row NaN without computing it, while a GEOS kernel marks it as an error,
   which can be picked up by `on_row_error`. An empty point does not trigger this.
 - `early_coord_check="finite_and_empty"` (default for GEOS kernels) does the same as the above,
   but also for an empty point inside a geometry.

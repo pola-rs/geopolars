@@ -164,24 +164,25 @@ keep the check for nulls and empties in the loop instead.
 ## `early_coord_check`
 
 A native kernel defaults to `early_coord_check="finite"`.
-A row that fails it gets NaN, without being computed, rather than going to `on_row_error`.
+In one that gives a float per row, a row that fails it gets NaN, without being computed,
+rather than going to `on_row_error`.
 
 Check each row in the loop over the rows, with a pass over its coordinates just before the work.
 Doing it here finds them still in cache:
 
 ```rust
-per_row_or_null(array.rows(), on_row_error, |i| {
-    if !row_passes_early_check::<EARLY_COORD_CHECK>(array.coords(), array.row_vertices(i)) {
-        return Ok(f64::NAN);
+per_row_or_null(rows, on_row_error, |i| {
+    if !row_passes_early_check::<EARLY_COORD_CHECK>(coords, row_vertices(i)) {
+        return Ok(Some(f64::NAN));
     }
-    polygon_area(metric, &array.get(i))
+    Ok(Some(row_area(&chunk, i)))
 })
 ```
 
-> [!NOTE] Doing the checks in different areas
+> [!NOTE] Where to run the check
 > Other approaches were slower when prototyped for `area`.
 >
 > - Doing it ahead, over the whole chunk in a separate pass is 65-95% slower,
 >   as it needs to read the coordinates from memory again.
-> - Doing it inside of the wonk's loop over the coordinates is about 30% slower,
+> - Doing it inside the work's loop over the coordinates is about 30% slower,
 >   as the check loses vectorisation and the work's loop its unrolling.

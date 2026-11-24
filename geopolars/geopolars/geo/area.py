@@ -80,9 +80,9 @@ def _area(
     zero = _encloses_nothing(column, geometry, allow_non_polygons=allow_non_polygons)
     if zero is not None:
         return zero
-    # PROJ is only asked when there are bounds to check.
+    # PROJ is only asked for the bounds when they are checked.
     bounds = None if on_out_of_bounds == "ignore" else _bounds(geometry, crs_bounds)
-    # Whether PROJ can use the CRS is for the kernel to check.
+    # Whether PROJ can measure in the CRS is for the kernel to check, while the plan is built.
     return register_plugin_function(
         plugin_path=LIB,
         args=[column],
@@ -115,18 +115,19 @@ def area(
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.
 
-    ===================  =========================  =====================
+    ===================  =========================  ==========================
     `distance_method`    measured                   in
-    ===================  =========================  =====================
+    ===================  =========================  ==========================
     `"auto"`             depends on CRS             -
     `"planar"`           shoelace formula           coordinate units²
-    `"geodesic"`         along the CRS's ellipsoid  CRS units²
-    ===================  =========================  =====================
+    `"geodesic"`         along the CRS's ellipsoid  CRS units², m² for degrees
+    ===================  =========================  ==========================
 
 
     **Planar** calculates the area directly based on the values of the coordinate data.
-    This is very useful for data where the position is already in meters,
-    (such as with equal-area projections).
+    It only keeps areas in an equal-area CRS:
+    in any other projected CRS (a UTM zone included),
+    it is off by as much as the projection distorts areas.
     Because it can ignore the CRS, it is also very fast to calculate:
     unless `on_out_of_bounds` asks for it, it does not check the bounds of the CRS either.
     For geographic CRSes, where the coordinates are longitude/latitude,
@@ -156,14 +157,13 @@ def area(
     `exterior_side="smaller"` skips this, which is faster.
     `"planar"` ignores `exterior_side`.
 
-    Winding order of the holes does not matter.
-    Holes are subtracted from the enclosed volume.
+    Which way a ring winds does not matter: a hole is always subtracted from the exterior.
     A multipolygon gets the sum of the areas of its polygons.
 
     Only the two-dimensional part is considered: `z` and `m` are ignored,
-    so a a 3D polygon returns the area of its footprint
+    so a 3D polygon gets the area of its footprint
     (its shadow on the x/y plane), not the area of its surface in 3D.
-    a tilted polygon 3D polygon gets less than its true area, and a vertical one gets `0.0`.
+    A tilted 3D polygon gets less than its true area, and a vertical one gets `0.0`.
 
     An empty polygon encloses nothing, so it gets `0.0`.
     Every other geometry (points, linestrings and their multi forms)

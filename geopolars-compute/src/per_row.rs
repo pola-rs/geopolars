@@ -24,7 +24,8 @@ pub(crate) fn per_row<E>(
     Ok(f64_array(per_row_values(rows, measure)?, rows.validity()))
 }
 
-/// [per_row], with a row that fails handled as `on_row_error` says.
+/// [per_row], where `measure` can also null a row by giving `Ok(None)`,
+/// and a row that fails is handled as `on_row_error` says.
 #[inline(always)]
 pub(crate) fn per_row_or_null<E>(
     rows: &List,
@@ -50,7 +51,7 @@ fn per_row_or_null_with<const ALL_VALID: bool, E>(
     let mut values = vec![0.0; rows.len()];
     let mut nulled = Vec::new();
     for (i, value) in values.iter_mut().enumerate() {
-        // A null row's offsets point anywhere, so it is not measured.
+        // The vertices under a null row mean nothing, so it is not measured.
         if ALL_VALID || rows.is_valid(i) {
             match row_or_null(measure(i), on_row_error)? {
                 Some(measured) => *value = measured,
@@ -122,7 +123,7 @@ fn per_row_values_with<const ALL_VALID: bool, T: Default, E>(
     // Pushed, not collected, because collecting through `Result` loses the length.
     let mut values = Vec::with_capacity(rows.len());
     for i in 0..rows.len() {
-        // A null row's offsets point anywhere, so it is not measured.
+        // The vertices under a null row mean nothing, so it is not measured.
         values.push(if ALL_VALID || rows.is_valid(i) {
             measure(i)?
         } else {
