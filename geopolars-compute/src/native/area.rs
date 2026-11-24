@@ -13,6 +13,13 @@
 //! If `CHECK_BOUNDS=true`, a row with an x or y outside the bounds is not measured,
 //! but handled as its [OnOutOfBounds] says.
 //! It is `false` for [OnOutOfBounds::Ignore], or without bounds.
+//!
+//! ## `EXTERIOR_SIDE`
+//!
+//! The kernels are generic over `EXTERIOR_SIDE`, an [ExteriorSide].
+//! With `FitHoles`, a geodesic exterior whose holes take more than its smaller side gets its larger side,
+//! the only one they fit in. With `Smaller`, every ring gets its smaller side.
+//! Planar ignores it.
 
 use std::convert::Infallible;
 use std::ops::Range;
@@ -39,6 +46,14 @@ pub enum NegativeArea {
     Keep,
 }
 
+const_enum!(
+    /// The `exterior_side` of the Python `area`.
+    pub enum ExteriorSide {
+        FitHoles,
+        Smaller,
+    }
+);
+
 /// How the area a ring encloses is measured
 pub trait AreaMetric: BaseMetric {
     /// Why a ring could not be measured (e.g. a failed reprojection).
@@ -51,6 +66,9 @@ pub trait AreaMetric: BaseMetric {
     ///
     /// `chunk` must come from [`prepare_chunk`](Self::prepare_chunk) over vertices including the ring's.
     fn ring_area(&self, chunk: &Self::Chunk, ring: &ScalarLineString) -> Result<f64, Self::Error>;
+    /// The area an exterior encloses, given its [`ring_area`](Self::ring_area)
+    /// and the `holes` its polygon takes out of it.
+    fn exterior_area<const EXTERIOR_SIDE: u8>(&self, exterior: f64, holes: f64) -> f64;
 }
 
 impl AreaMetric for Planar {
@@ -61,6 +79,12 @@ impl AreaMetric for Planar {
 
     fn ring_area(&self, _chunk: &(), ring: &ScalarLineString) -> Result<f64, Infallible> {
         Ok(twice_signed_area(ring).abs() / 2.0)
+    }
+
+    /// A ring on the plane has one inside, so `EXTERIOR_SIDE` changes nothing.
+    #[inline(always)]
+    fn exterior_area<const EXTERIOR_SIDE: u8>(&self, exterior: f64, _holes: f64) -> f64 {
+        exterior
     }
 }
 
@@ -129,10 +153,22 @@ impl AreaMetric for GeodesicMetric {
         let (_perimeter, area, _vertices) = area.compute(true);
         Ok(area.abs())
     }
+
+    #[inline(always)]
+    fn exterior_area<const EXTERIOR_SIDE: u8>(&self, exterior: f64, holes: f64) -> f64 {
+        // `ring_area` takes the smaller of the two sides of a ring.
+        // Holes that take more than that only fit in the larger side, which is then the exterior's.
+        // An exterior that encloses nothing (empty or degenerate) keeps it, rather than becoming the whole ellipsoid.
+        let fit_holes = const { ExteriorSide::from_u8(EXTERIOR_SIDE) } == ExteriorSide::FitHoles;
+        if fit_holes && 0.0 < exterior && exterior < holes {
+            return self.ellipsoid.area() - exterior;
+        }
+        exterior
+    }
 }
 
 #[inline(always)]
-fn polygon_area<M: AreaMetric>(
+fn polygon_area<M: AreaMetric, const EXTERIOR_SIDE: u8>(
     metric: &M,
     chunk: &M::Chunk,
     polygon: &ScalarPolygon,
@@ -146,9 +182,10 @@ fn polygon_area<M: AreaMetric>(
         .holes()
         .map(|hole| metric.ring_area(chunk, &hole))
         .sum::<Result<f64, _>>()?;
-    let area = exterior - holes;
-    // Only a polygon that is not valid by OGC gets here:
-    // an empty exterior with holes, or holes that take more than it encloses.
+    let area = metric.exterior_area::<EXTERIOR_SIDE>(exterior, holes) - holes;
+    // Only a polygon that is not valid by OGC gets here
+    // (an empty exterior with holes, or holes that take more than it encloses),
+    // or with `ExteriorSide::Smaller`, a valid one whose geodesic exterior covers over half the ellipsoid.
     if area < 0.0 && negative_area == NegativeArea::Zero {
         return Ok(0.0);
     }
@@ -212,6 +249,7 @@ fn vertices_of_rows(
 }
 
 /// The area of every polygon of a chunk.
+#[allow(clippy::too_many_arguments)]
 pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     metric: &M,
     array: &Untrimmed<PolygonArray>,
@@ -220,6 +258,7 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
     negative_area: NegativeArea,
+    exterior_side: ExteriorSide,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
     if array.rows().is_all_null() {
         return Ok(PrimitiveArray::new_null(
@@ -231,7 +270,8 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     let vertices = vertices_of_rows(array.rows().len(), |i| array.row_vertices(i));
     let chunk = metric.prepare_chunk(array.coords(), vertices);
     with_const_flags!(
-        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
+        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds,
+        EXTERIOR_SIDE: ExteriorSide = exterior_side;
         per_row_or_null(array.rows(), on_row_error, |i| {
             let vertices = array.row_vertices(i);
             if let Some(instead) = instead_of_measuring::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
@@ -239,12 +279,17 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
             ) {
                 return instead;
             }
-            Ok(Some(polygon_area(metric, &chunk, &array.get(i), negative_area).map_err(Into::into)?))
+            let polygon = array.get(i);
+            Ok(Some(
+                polygon_area::<M, EXTERIOR_SIDE>(metric, &chunk, &polygon, negative_area)
+                    .map_err(Into::into)?,
+            ))
         })
     )
 }
 
 /// The area of every multipolygon of a chunk.
+#[allow(clippy::too_many_arguments)]
 pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     metric: &M,
     array: &Untrimmed<MultiPolygonArray>,
@@ -253,6 +298,7 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
     negative_area: NegativeArea,
+    exterior_side: ExteriorSide,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
     if array.rows().is_all_null() {
         return Ok(PrimitiveArray::new_null(
@@ -264,7 +310,8 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     let vertices = vertices_of_rows(array.rows().len(), |i| array.row_vertices(i));
     let chunk = metric.prepare_chunk(array.coords(), vertices);
     with_const_flags!(
-        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
+        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds,
+        EXTERIOR_SIDE: ExteriorSide = exterior_side;
         per_row_or_null(array.rows(), on_row_error, |i| {
             let vertices = array.row_vertices(i);
             if let Some(instead) = instead_of_measuring::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
@@ -277,7 +324,10 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
                 .polygons()
                 // Folded from `0.0`, as `sum` starts from `-0.0`.
                 .try_fold(0.0, |total, polygon| {
-                    Ok(total + polygon_area(metric, &chunk, &polygon, negative_area).map_err(Into::into)?)
+                    let area =
+                        polygon_area::<M, EXTERIOR_SIDE>(metric, &chunk, &polygon, negative_area)
+                            .map_err(Into::into)?;
+                    Ok(total + area)
                 })
                 .map(Some)
         })

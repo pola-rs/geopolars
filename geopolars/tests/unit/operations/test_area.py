@@ -289,6 +289,49 @@ def test_with_a_crs_an_empty_exterior_with_a_hole_follows_negative_area(
     assert kept == pytest.approx(-_DEGREE_SQUARE_AREA, rel=1e-9)
 
 
+# The area of the WGS 84 ellipsoid, in m².
+_WGS84_AREA = 510_065_621_724_088.44
+
+
+def _band(lons: list[float], lat: float) -> list[dict[str, float]]:
+    """A closed ring along `lons` at `-lat`, and back along them at `lat`."""
+    ring = [{"x": x, "y": -lat} for x in lons] + [
+        {"x": x, "y": lat} for x in lons[::-1]
+    ]
+    return [*ring, ring[0]]
+
+
+# An exterior around most of the ellipsoid, and a hole that takes more than the rest of it.
+_LARGE_EXTERIOR = _band([-170.0, -85.0, 0.0, 85.0, 170.0], 60.0)
+_LARGE_HOLE = _band([-50.0, 0.0, 50.0], 50.0)
+
+
+def test_with_a_crs_an_exterior_takes_the_side_its_holes_fit_in(
+    geodesic_area: Area,
+) -> None:
+    df = _polygons(
+        [[_LARGE_EXTERIOR, _LARGE_HOLE], [_LARGE_EXTERIOR], [_LARGE_HOLE]], crs=WGS84
+    )
+
+    got, smaller_side, hole = _areas(geodesic_area, df)
+
+    assert got == pytest.approx(_WGS84_AREA - smaller_side - hole, rel=1e-9)
+
+
+def test_with_exterior_side_smaller_every_ring_takes_its_smaller_side(
+    geodesic_area: Area,
+) -> None:
+    df = _polygons(
+        [[_LARGE_EXTERIOR, _LARGE_HOLE], [_LARGE_EXTERIOR], [_LARGE_HOLE]], crs=WGS84
+    )
+    smaller = partial(geodesic_area, exterior_side="smaller")
+
+    _, smaller_side, hole = _areas(geodesic_area, df)
+    assert _areas(smaller, df)[0] == 0.0
+    (kept,) = _areas(partial(smaller, negative_area="keep"), df.head(1))
+    assert kept == pytest.approx(smaller_side - hole, rel=1e-9)
+
+
 def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -> None:
     """A square far outside the UTM zone fails on its own row, not the whole column."""
     far = [{"x": x * 1e30, "y": y * 1e30} for x, y in ((0, 0), (1, 0), (1, 1), (0, 0))]
@@ -391,7 +434,9 @@ def test_by_default_longitudes_up_to_a_full_turn_are_within_the_bounds() -> None
     area = partial(_area_by("planar"), on_out_of_bounds="error")
 
     assert _areas(area, df) == [1.0]
-    assert _areas(partial(area, crs_bounds="crs", on_out_of_bounds="null"), df) == [None]
+    assert _areas(partial(area, crs_bounds="crs", on_out_of_bounds="null"), df) == [
+        None
+    ]
 
 
 def test_planar_checks_no_bounds_unless_asked() -> None:
@@ -845,3 +890,18 @@ def test_an_unknown_crs_bounds_is_refused() -> None:
 def test_an_unknown_negative_area_is_refused() -> None:
     with pytest.raises(ValueError, match="`negative_area` must be one of"):
         geo.area("polygon", negative_area="clamp")  # type: ignore[arg-type]
+
+
+def test_the_namespace_passes_exterior_side_on() -> None:
+    df = _rings([_LARGE_EXTERIOR, _LARGE_HOLE], crs=WGS84)
+    kwargs = {"exterior_side": "smaller"}
+
+    assert df.select(pl.col("polygon").geo.area(**kwargs)).equals(
+        df.select(geo.area("polygon", **kwargs))
+    )
+    assert df.select(geo.area("polygon", **kwargs)).item() == 0.0
+
+
+def test_an_unknown_exterior_side_is_refused() -> None:
+    with pytest.raises(ValueError, match="`exterior_side` must be one of"):
+        geo.area("polygon", exterior_side="larger")  # type: ignore[arg-type]

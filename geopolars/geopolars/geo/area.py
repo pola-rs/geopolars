@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 NegativeArea = Literal["zero", "keep"]
+ExteriorSide = Literal["fit_holes", "smaller"]
 
 
 def _encloses_nothing(
@@ -65,6 +66,7 @@ def _area(
     on_out_of_bounds: OnOutOfBounds,
     crs_bounds: CrsBounds,
     negative_area: NegativeArea,
+    exterior_side: ExteriorSide,
 ) -> pl.Expr:
     if distance_method == "auto":
         distance_method = _auto_area_method(geometry)
@@ -92,6 +94,7 @@ def _area(
             "bounds": bounds,
             "on_out_of_bounds": on_out_of_bounds,
             "negative_area": negative_area,
+            "exterior_side": exterior_side,
         },
         is_elementwise=True,
     )
@@ -108,6 +111,7 @@ def area(
     on_out_of_bounds: OnOutOfBounds = "auto",
     crs_bounds: CrsBounds = "crs_wrapped_longitude",
     negative_area: NegativeArea = "zero",
+    exterior_side: ExteriorSide = "fit_holes",
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.
 
@@ -146,8 +150,11 @@ def area(
     including a projected one such as a UTM zone.
     This differs from `"auto"` in `distance`, which measures every projected CRS on its plane.
 
-    If a ring of the polygon spans more than half the ellipsoid,
-    it takes the smaller side of the enclosed surface.
+    With `"geodesic"`, a ring encloses the smaller of the two regions it splits the ellipsoid into.
+    With `exterior_side="fit_holes"` (default), an exterior whose holes take more than that
+    gets the larger one instead, the only side they fit in.
+    `exterior_side="smaller"` skips this, which is faster.
+    `"planar"` ignores `exterior_side`.
 
     Winding order of the holes does not matter.
     Holes are subtracted from the enclosed volume.
@@ -181,6 +188,8 @@ def area(
 
     A polygon that is not valid by OGC can come out below zero
     (think of polygons with an empty exterior but a hole, or with holes that enclose more than its exterior).
+    So can a valid one with `exterior_side="smaller"`,
+    whose geodesic exterior covers more than half the ellipsoid.
     `negative_area="zero"` gives such a polygon `0.0`, and `negative_area="keep"` its negative area.
     In a multipolygon, this applies to each individual polygon before they are summed.
 
@@ -204,6 +213,7 @@ def area(
     validate_one_of("on_out_of_bounds", on_out_of_bounds, OnOutOfBounds)
     validate_one_of("crs_bounds", crs_bounds, CrsBounds)
     validate_one_of("negative_area", negative_area, NegativeArea)
+    validate_one_of("exterior_side", exterior_side, ExteriorSide)
     return on_geometry(
         geometry,
         partial(
@@ -215,5 +225,6 @@ def area(
             on_out_of_bounds=on_out_of_bounds,
             crs_bounds=crs_bounds,
             negative_area=negative_area,
+            exterior_side=exterior_side,
         ),
     )

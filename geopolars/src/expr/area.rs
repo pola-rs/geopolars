@@ -1,7 +1,7 @@
 //! The area a geometry encloses.
 //! Implements the Python `area`.
 
-use geopolars_compute::native::{AreaMetric, Bounds, NegativeArea};
+use geopolars_compute::native::{AreaMetric, Bounds, ExteriorSide, NegativeArea};
 use geopolars_compute::{EarlyCoordCheck, GeoComputeError, OnOutOfBounds, OnRowError, Planar};
 use geopolars_core::{areas, PolygonKind};
 use polars::prelude::*;
@@ -19,6 +19,13 @@ enum NegativeAreaDef {
     Keep,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(remote = "ExteriorSide", rename_all = "snake_case")]
+enum ExteriorSideDef {
+    FitHoles,
+    Smaller,
+}
+
 /// The keyword arguments of the Python `area`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -34,6 +41,8 @@ struct AreaKwargs {
     on_out_of_bounds: OnOutOfBounds,
     #[serde(with = "NegativeAreaDef")]
     negative_area: NegativeArea,
+    #[serde(with = "ExteriorSideDef")]
+    exterior_side: ExteriorSide,
 }
 
 /// Refuses every kind but polygons and multipolygons,
@@ -68,6 +77,7 @@ fn measure_areas(
             kwargs.bounds,
             kwargs.on_out_of_bounds,
             kwargs.negative_area,
+            kwargs.exterior_side,
         )
     });
     Ok(Float64Chunked::try_from_chunk_iter(geometries.name().clone(), chunks)?.into_series())

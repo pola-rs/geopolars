@@ -33,7 +33,7 @@ if TYPE_CHECKING:
         ShortLines,
     )
     from geopolars.datatypes import GeoArrowType
-    from geopolars.geo.area import NegativeArea
+    from geopolars.geo.area import ExteriorSide, NegativeArea
     from geopolars.geo.close_rings import CloseRings
     from geopolars.geo.filter_coordinates import NonFiniteAction
     from geopolars.geo.fix_out_of_bounds import (
@@ -840,6 +840,7 @@ class ExprGeoNameSpace:
         on_out_of_bounds: OnOutOfBounds = "auto",
         crs_bounds: CrsBounds = "crs_wrapped_longitude",
         negative_area: NegativeArea = "zero",
+        exterior_side: ExteriorSide = "fit_holes",
     ) -> pl.Expr:
         from geopolars.geo.area import area
 
@@ -852,6 +853,7 @@ class ExprGeoNameSpace:
             on_out_of_bounds=on_out_of_bounds,
             crs_bounds=crs_bounds,
             negative_area=negative_area,
+            exterior_side=exterior_side,
         )
 
     def is_empty(self, *, check_nested: bool = False) -> pl.Expr:
