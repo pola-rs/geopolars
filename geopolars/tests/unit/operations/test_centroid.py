@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -413,6 +414,82 @@ def test_a_multipolygon_without_area_has_no_centroid() -> None:
     df = _multipolygons(None, [], [[]])
 
     assert _multi_centroids(df) == [None, None, None]
+
+
+# Non-finite coordinates: the centroid is not finite either, rather than null
+
+_NAN = float("nan")
+_INF = float("inf")
+
+
+def _all_nan(centroid: tuple[float, ...] | None) -> bool:
+    return centroid is not None and all(math.isnan(c) for c in centroid)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [[(0, 0), (_NAN, 1)], [(0, 1), (_INF, 1)], [(0, 0), (0, -_INF), (1, 0)]],
+    ids=["nan", "inf", "-inf"],
+)
+def test_a_non_finite_line_has_a_nan_centroid(line: Line) -> None:
+    (got,) = _line_centroids(_lines(line))
+
+    assert _all_nan(got)
+
+
+def test_a_nan_z_changes_the_length_of_a_line() -> None:
+    (got,) = _line_centroids(_lines([(0, 0, 0), (2, 0, _NAN)], dtype=LineStringXYZ))
+
+    assert _all_nan(got)
+
+
+def test_a_nan_m_only_changes_the_m_of_a_line() -> None:
+    (got,) = _line_centroids(_lines([(0, 0, 0), (2, 0, _NAN)], dtype=LineStringXYM))
+
+    assert got is not None
+    assert got[:2] == pytest.approx((1.0, 0.0))
+    assert math.isnan(got[2])
+
+
+@pytest.mark.parametrize(
+    "rings",
+    [
+        [_ring((0, 0), (1, 0), (_NAN, 1), (0, 1))],
+        [_ring((0, 0), (1, 0), (_INF, 1), (0, 1))],
+        # Its infinities add up, rather than cancel to NaN: the hole weighs -inf.
+        [
+            _ring((0, 0), (4, 0), (4, 4), (0, 4)),
+            _ring((1, 1), (1, 2), (_INF, 6), (1, 0)),
+        ],
+    ],
+    ids=["nan", "inf", "inf-in-hole"],
+)
+def test_a_non_finite_polygon_has_a_nan_centroid(rings: list[Ring]) -> None:
+    (got,) = _centroids(_polygons(rings))
+
+    assert _all_nan(got)
+
+
+def test_a_nan_z_only_changes_the_z_of_a_polygon() -> None:
+    out = _polygon_xyzm([_SQUARE], lambda x, y: _NAN if x == y == 1 else 0.0).select(
+        geo.centroid("polygon")
+    )
+
+    (got,) = out.to_series().ext.storage().to_list()
+
+    assert (got["x"], got["y"]) == pytest.approx((0.5, 0.5))
+    assert math.isnan(got["z"])
+    assert math.isnan(got["m"])
+
+
+def test_one_non_finite_part_makes_the_multi_centroid_nan() -> None:
+    lines = _multilines([[(0, 0), (2, 0)], [(10, 0), (_NAN, 0)]])
+    polygons = _multipolygons(
+        [[_BIG_SQUARE], [_ring((0, 0), (1, 0), (_NAN, 1), (0, 1))]]
+    )
+
+    assert _all_nan(_multi_centroids(lines)[0])
+    assert _all_nan(_multi_centroids(polygons)[0])
 
 
 def _weighted_mean_of_parts(

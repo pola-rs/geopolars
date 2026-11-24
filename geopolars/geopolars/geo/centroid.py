@@ -72,6 +72,13 @@ def centroid(geometry: IntoExprColumn) -> pl.Expr:
     A null geometry, an empty one,
     and one whose parts have no length or area at all have no centroid.
 
+    A NaN or an infinity in a coordinate gives a centroid that is not finite,
+    rather than no centroid.
+    In `x` or `y` (or the `z` of a linestring), it changes the length or area,
+    which makes every axis NaN.
+    In `m` (or the `z` of a polygon), it only changes that axis.
+    In one part of a multilinestring or multipolygon, it does this to the whole centroid.
+
     A point is its own centroid.
     A multipoint gets a single centroid, which is the mean of its points
     (see `mean_coordinate`).

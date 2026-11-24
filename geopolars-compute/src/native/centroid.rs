@@ -52,9 +52,12 @@ impl<const Z: bool, const M: bool> Moment<Z, M> {
     };
 
     /// Σ weight * centre / Σ weight.
+    /// `None` if there is no length or area, but a NaN or infinite weight propagates.
     #[inline(always)]
     fn average(&self) -> Option<[f64; 4]> {
-        (self.weight > 0.0).then(|| {
+        // A hole with an infinite coordinate can weigh -inf.
+        let no_weight = self.weight <= 0.0 && self.weight.is_finite();
+        (!no_weight).then(|| {
             std::array::from_fn(|k| {
                 if has_axis::<Z, M>(k) {
                     self.sum[k] / self.weight
