@@ -15,7 +15,7 @@ use std::ops::Range;
 use geographiclib_rs::{Geodesic, InverseGeodesic};
 use geopolars_views::ValidCoords;
 
-use crate::proj::{reproject_position, reprojected_xy_with_failures_infinite, Transformation};
+use crate::proj::{reproject_position, ReprojectedXy, Transformation};
 use crate::GeoComputeResult;
 
 /// Marker trait so we can trace all the metrics to one place :)
@@ -55,42 +55,25 @@ impl GeodesicMetric {
     /// so something measuring many segments should do this once per vertex.
     pub fn lonlat(&self, (x, y): (f64, f64)) -> GeoComputeResult<(f64, f64)> {
         // TODO: `length` and `distance` still call this once per vertex.
-        // Batch them through `lonlats` and `lonlat_of`, as `area` does.
+        // Batch them through `lonlats`, as `area` does.
         let [lon, lat, _] = reproject_position(&self.to_lonlat, [x, y, 0.0])?;
         Ok((lon, lat))
     }
 
     /// [`lonlat`](Self::lonlat) for `vertices` of `coords`, reprojected in a single call to PROJ.
-    /// Read them back with [`lonlat_of`](Self::lonlat_of).
-    pub fn lonlats(&self, coords: &ValidCoords, vertices: Range<usize>) -> LonLats {
-        let first_vertex = vertices.start;
-        let [lon, lat] = reprojected_xy_with_failures_infinite(&self.to_lonlat, coords, vertices);
-        LonLats {
-            lon,
-            lat,
-            first_vertex,
-        }
+    pub(crate) fn lonlats(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
+        ReprojectedXy::new(&self.to_lonlat, coords, vertices)
     }
 
-    /// Looks up the [`lonlat`](Self::lonlat) of coordinate `i` in `lonlats`,
-    /// reprojecting it on its own where the batch failed.
-    ///
-    /// `lonlats` must hold coordinate `i` of `coords`.
+    /// [ReprojectedXy::check] for `lonlats` made by [`lonlats`](Self::lonlats) from `coords`.
     #[inline(always)]
-    pub fn lonlat_of(
+    pub(crate) fn check_lonlats(
         &self,
-        lonlats: &LonLats,
+        lonlats: &ReprojectedXy,
         coords: &ValidCoords,
-        i: usize,
-    ) -> GeoComputeResult<(f64, f64)> {
-        let j = i - lonlats.first_vertex;
-        let (lon, lat) = (lonlats.lon[j], lonlats.lat[j]);
-        if lon == f64::INFINITY {
-            // PROJ failed on it, or it came out infinite without failing.
-            // On its own, it gives the error, or the same infinite position again.
-            return self.lonlat((coords.x()[i], coords.y()[i]));
-        }
-        Ok((lon, lat))
+        vertices: Range<usize>,
+    ) -> GeoComputeResult<()> {
+        lonlats.check(&self.to_lonlat, coords, vertices)
     }
 
     /// The geodesic distance between two coordinates already in [`lonlat`](Self::lonlat),
@@ -98,12 +81,4 @@ impl GeodesicMetric {
     pub fn between(&self, (lon_a, lat_a): (f64, f64), (lon_b, lat_b): (f64, f64)) -> f64 {
         self.ellipsoid.inverse(lat_a, lon_a, lat_b, lon_b)
     }
-}
-
-/// The longitudes and latitudes of a run of vertices, made by [`GeodesicMetric::lonlats`].
-pub struct LonLats {
-    lon: Vec<f64>,
-    lat: Vec<f64>,
-    /// The index of the first vertex in the coordinates they were made from.
-    first_vertex: usize,
 }

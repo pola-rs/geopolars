@@ -35,9 +35,10 @@ use polars_arrow::datatypes::ArrowDataType;
 use super::{first_outside, has_none_outside, Bounds};
 use crate::early_coord_check::every_xy_passes;
 use crate::per_row::per_row_or_null;
+use crate::proj::ReprojectedXy;
 use crate::{
-    BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, GeodesicMetric, LonLats,
-    OnOutOfBounds, OnRowError, Planar,
+    BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, GeodesicMetric, OnOutOfBounds,
+    OnRowError, Planar,
 };
 
 /// The `negative_area` of the Python `area`.
@@ -57,16 +58,24 @@ const_enum!(
 
 /// How the area a ring encloses is measured
 pub trait AreaMetric: BaseMetric {
-    /// Why a ring could not be measured (e.g. a failed reprojection).
+    /// Why a row could not be measured (e.g. a failed reprojection).
     type Error;
     /// What is worked out once for a whole chunk, before its rings are measured.
     type Chunk;
     /// Prepares measuring the rings whose vertices lie within `vertices` of `coords`.
     fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> Self::Chunk;
+    /// Fails a row that cannot be measured, before its rings are.
+    /// `chunk` must come from [`prepare_chunk`](Self::prepare_chunk) over `coords`.
+    fn check_row(
+        &self,
+        chunk: &Self::Chunk,
+        coords: &ValidCoords,
+        vertices: Range<usize>,
+    ) -> Result<(), Self::Error>;
     /// The area the closed `ring` encloses, whichever way it winds. Its heights do not count.
     ///
-    /// `chunk` must come from [`prepare_chunk`](Self::prepare_chunk) over vertices including the ring's.
-    fn ring_area(&self, chunk: &Self::Chunk, ring: &ScalarLineString) -> Result<f64, Self::Error>;
+    /// The ring's row must have passed [`check_row`](Self::check_row).
+    fn ring_area(&self, chunk: &Self::Chunk, ring: &ScalarLineString) -> f64;
     /// The area an exterior encloses, given its [`ring_area`](Self::ring_area)
     /// and the `holes` its polygon takes out of it.
     fn exterior_area<const EXTERIOR_SIDE: u8>(&self, exterior: f64, holes: f64) -> f64;
@@ -78,8 +87,18 @@ impl AreaMetric for Planar {
 
     fn prepare_chunk(&self, _coords: &ValidCoords, _vertices: Range<usize>) {}
 
-    fn ring_area(&self, _chunk: &(), ring: &ScalarLineString) -> Result<f64, Infallible> {
-        Ok(twice_signed_area(ring).abs() / 2.0)
+    #[inline(always)]
+    fn check_row(
+        &self,
+        _chunk: &(),
+        _coords: &ValidCoords,
+        _vertices: Range<usize>,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+
+    fn ring_area(&self, _chunk: &(), ring: &ScalarLineString) -> f64 {
+        twice_signed_area(ring).abs() / 2.0
     }
 
     /// A ring on the plane has one inside, so `EXTERIOR_SIDE` changes nothing.
@@ -129,22 +148,28 @@ pub(super) fn twice_signed_area(ring: &ScalarLineString) -> f64 {
 impl AreaMetric for GeodesicMetric {
     type Error = GeoComputeError;
     /// Every vertex is reprojected up front, in a single call to PROJ.
-    type Chunk = LonLats;
+    type Chunk = ReprojectedXy;
 
-    fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> LonLats {
+    fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
         self.lonlats(coords, vertices)
     }
 
-    fn ring_area(
+    #[inline(always)]
+    fn check_row(
         &self,
-        lonlats: &LonLats,
-        ring: &ScalarLineString,
-    ) -> Result<f64, GeoComputeError> {
+        lonlats: &ReprojectedXy,
+        coords: &ValidCoords,
+        vertices: Range<usize>,
+    ) -> Result<(), GeoComputeError> {
+        self.check_lonlats(lonlats, coords, vertices)
+    }
+
+    fn ring_area(&self, lonlats: &ReprojectedXy, ring: &ScalarLineString) -> f64 {
         // On the ellipsoid, in the CRS's unit squared, like [`between`](GeodesicMetric::between).
         // Based on `geographiclib_rs`.
         let mut area = PolygonArea::new(&self.ellipsoid, Winding::CounterClockwise);
         for i in ring.vertices.clone() {
-            let (lon, lat) = self.lonlat_of(lonlats, ring.coords, i)?;
+            let (lon, lat) = lonlats.xy(i);
             // The repeated closing vertex adds an edge of length zero, which encloses nothing.
             area.add_point(lat, lon);
         }
@@ -152,7 +177,7 @@ impl AreaMetric for GeodesicMetric {
         // unsigned would take a clockwise ring
         // to enclose everything outside of it.
         let (_perimeter, area, _vertices) = area.compute(true);
-        Ok(area.abs())
+        area.abs()
     }
 
     #[inline(always)]
@@ -174,23 +199,23 @@ fn polygon_area<M: AreaMetric, const EXTERIOR_SIDE: u8>(
     chunk: &M::Chunk,
     polygon: &ScalarPolygon,
     negative_area: NegativeArea,
-) -> Result<f64, M::Error> {
+) -> f64 {
     let Some(exterior) = polygon.exterior() else {
-        return Ok(0.0);
+        return 0.0;
     };
-    let exterior = metric.ring_area(chunk, &exterior)?;
-    let holes = polygon
+    let exterior = metric.ring_area(chunk, &exterior);
+    let holes: f64 = polygon
         .holes()
         .map(|hole| metric.ring_area(chunk, &hole))
-        .sum::<Result<f64, _>>()?;
+        .sum();
     let area = metric.exterior_area::<EXTERIOR_SIDE>(exterior, holes) - holes;
     // Only a polygon that is not valid by OGC gets here
     // (an empty exterior with holes, or holes that take more than it encloses),
     // or with `ExteriorSide::Smaller`, a valid one whose geodesic exterior covers over half the ellipsoid.
     if area < 0.0 && negative_area == NegativeArea::Zero {
-        return Ok(0.0);
+        return 0.0;
     }
-    Ok(area)
+    area
 }
 
 #[inline(always)]
@@ -271,7 +296,6 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
             |chunk, i| {
                 let polygon = array.get(i);
                 polygon_area::<M, EXTERIOR_SIDE>(metric, chunk, &polygon, negative_area)
-                    .map_err(Into::into)
             },
             on_row_error,
             early_coord_check,
@@ -305,11 +329,9 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
                     .get(i)
                     .polygons()
                     // Folded from `0.0`, as `sum` starts from `-0.0`.
-                    .try_fold(0.0, |total, polygon| {
-                        let area =
-                            polygon_area::<M, EXTERIOR_SIDE>(metric, chunk, &polygon, negative_area)
-                                .map_err(Into::into)?;
-                        Ok(total + area)
+                    .fold(0.0, |total, polygon| {
+                        total
+                            + polygon_area::<M, EXTERIOR_SIDE>(metric, chunk, &polygon, negative_area)
                     })
             },
             on_row_error,
@@ -323,12 +345,12 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
 /// The area of every row of a chunk, as `row_area` measures a row that passes the checks.
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
-fn areas_with<M: AreaMetric>(
+fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
     metric: &M,
     rows: &List,
     coords: &ValidCoords,
     row_vertices: impl Fn(usize) -> Range<usize>,
-    row_area: impl Fn(&M::Chunk, usize) -> GeoComputeResult<f64>,
+    row_area: impl Fn(&M::Chunk, usize) -> f64,
     on_row_error: OnRowError,
     early_coord_check: EarlyCoordCheck,
     bounds: Option<Bounds>,
@@ -342,12 +364,14 @@ fn areas_with<M: AreaMetric>(
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
         per_row_or_null(rows, on_row_error, |i| {
+            let vertices = row_vertices(i);
             if let Some(instead) = instead_of_measuring::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
-                coords, row_vertices(i), &bounds, on_out_of_bounds,
+                coords, vertices.clone(), &bounds, on_out_of_bounds,
             ) {
                 return instead;
             }
-            Ok(Some(row_area(&chunk, i)?))
+            metric.check_row(&chunk, coords, vertices).map_err(Into::into)?;
+            Ok(Some(row_area(&chunk, i)))
         })
     )
 }

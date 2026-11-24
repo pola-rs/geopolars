@@ -206,8 +206,8 @@ fn set_position([xs, ys, zs]: &mut [Vec<f64>; 3], i: usize, [x, y, new_z]: [f64;
 }
 
 /// Moves the positions in `range` through PROJ in a single call.
-/// A coordinate PROJ fails on gets an `x` of `f64::INFINITY` rather than an error,
-/// so [retry_failed_positions] has to follow.
+/// A coordinate PROJ fails on is marked as [failed_in_batch] rather than giving an error,
+/// so [retry_failed_positions] or [ReprojectedXy::check] has to follow.
 fn reproject_positions_in_place(
     transformation: &Transformation,
     [xs, ys, zs]: &mut [Vec<f64>; 3],
@@ -227,7 +227,7 @@ fn reproject_positions_in_place(
     // A null buffer it reads as `0.0` for `z` and as "no time given" for `t`.
     unsafe {
         // PROJ logs every coordinate it fails on to stderr.
-        // Only the one `retry_failed_positions` reports should be, as before batching.
+        // Only one retried on its own should be, as before batching.
         let log_level = proj_log_level(transformation.ctx, PJ_LOG_LEVEL_PJ_LOG_NONE);
         proj_trans_generic(
             transformation.pj,
@@ -249,22 +249,73 @@ fn reproject_positions_in_place(
     }
 }
 
-/// The `x` and `y` of `vertices` of `coords`, moved through PROJ in a single call.
-/// A coordinate PROJ fails on gets an `x` of `f64::INFINITY` rather than an error.
-/// Retry it with [reproject_position] to get the error.
-pub(crate) fn reprojected_xy_with_failures_infinite(
-    transformation: &Transformation,
-    coords: &ValidCoords,
-    vertices: Range<usize>,
-) -> [Vec<f64>; 2] {
-    let mut positions = [
-        coords.x()[vertices.clone()].to_vec(),
-        coords.y()[vertices.clone()].to_vec(),
-        Vec::new(),
-    ];
-    reproject_positions_in_place(transformation, &mut positions, 0..vertices.len(), false);
-    let [xs, ys, _] = positions;
-    [xs, ys]
+/// Whether [reproject_positions_in_place] failed on the position whose new `x` this is.
+/// A coordinate can also come out infinite without failing, e.g. one that went in infinite.
+/// On its own, it then comes out the same again.
+#[inline(always)]
+fn failed_in_batch(x: f64) -> bool {
+    x == f64::INFINITY
+}
+
+/// The `x` and `y` of a run of vertices of some coordinates, moved through PROJ in a single call.
+pub struct ReprojectedXy {
+    x: Vec<f64>,
+    y: Vec<f64>,
+    /// The index in the coordinates of the first vertex.
+    first: usize,
+}
+
+impl ReprojectedXy {
+    pub(crate) fn new(
+        transformation: &Transformation,
+        coords: &ValidCoords,
+        vertices: Range<usize>,
+    ) -> Self {
+        let mut positions = [
+            coords.x()[vertices.clone()].to_vec(),
+            coords.y()[vertices.clone()].to_vec(),
+            Vec::new(),
+        ];
+        reproject_positions_in_place(transformation, &mut positions, 0..vertices.len(), false);
+        let [x, y, _] = positions;
+        Self {
+            x,
+            y,
+            first: vertices.start,
+        }
+    }
+
+    /// The error of the first of `vertices` PROJ failed on, if any,
+    /// by reprojecting each it failed on once more, on its own.
+    /// `transformation` and `coords` must be the ones it was made with.
+    #[inline(always)]
+    pub(crate) fn check(
+        &self,
+        transformation: &Transformation,
+        coords: &ValidCoords,
+        vertices: Range<usize>,
+    ) -> GeoComputeResult<()> {
+        let x = &self.x[vertices.start - self.first..vertices.end - self.first];
+        // Does not stop at the first that failed, so that it vectorises.
+        if x.iter().fold(true, |ok, &x| ok & !failed_in_batch(x)) {
+            return Ok(());
+        }
+        for (i, &x) in vertices.zip(x) {
+            if failed_in_batch(x) {
+                // Comes back fine for one that went in infinite, which keeps its value from the batch.
+                reproject_position(transformation, coords.position::<false>(i))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The `x` and `y` of vertex `i` of the coordinates.
+    /// `i` must lie in its vertices, in a run that passed [check](Self::check).
+    #[inline(always)]
+    pub(crate) fn xy(&self, i: usize) -> (f64, f64) {
+        let j = i - self.first;
+        (self.x[j], self.y[j])
+    }
 }
 
 /// Reprojects every coordinate that [reproject_positions_in_place] failed on once more, on its own,
@@ -277,9 +328,7 @@ fn retry_failed_positions(
     is_skipped: impl Fn(usize) -> bool,
 ) -> GeoComputeResult<()> {
     for i in 0..original.len() {
-        // A coordinate can also come out infinite without failing, e.g. one that went in infinite.
-        // On its own, it then comes out the same again.
-        if positions[0][i] == f64::INFINITY && !is_skipped(i) {
+        if failed_in_batch(positions[0][i]) && !is_skipped(i) {
             let position = if z {
                 original.position::<true>(i)
             } else {
