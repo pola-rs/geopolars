@@ -17,7 +17,9 @@ from geopolars.datatypes import (
     LineStringXYZ,
     MultiLineStringXY,
     MultiPolygonXY,
+    MultiPolygonXYZ,
     PointXY,
+    PolygonXYZ,
     PolygonXYZM,
 )
 from geopolars.geo.centroid import CentroidAnchor, CentroidMethod
@@ -101,11 +103,15 @@ def test_a_polygon_keeps_its_dimension(
 
 
 def _polygon_xyzm(
-    rings: list[Ring], z: Callable[[float, float], float]
+    rings: list[Ring],
+    z: Callable[[float, float], float],
+    m: Callable[[float, float], float] | None = None,
 ) -> pl.DataFrame:
-    """A `PolygonXYZM` column of one polygon: `rings` with both z and m at `z(x, y)`."""
+    """A `PolygonXYZM` column of one polygon: `rings` with z at `z(x, y)`,
+    and m at `m(x, y)`, or at `z(x, y)` as well without `m`."""
+    m = m or z
     rings_zm = [
-        [{**c, "z": z(c["x"], c["y"]), "m": z(c["x"], c["y"])} for c in ring]
+        [{**c, "z": z(c["x"], c["y"]), "m": m(c["x"], c["y"])} for c in ring]
         for ring in rings
     ]
     vertex = pl.Struct(dict.fromkeys("xyzm", pl.Float64))
@@ -131,15 +137,19 @@ def _polygon_xyzm(
     ids=["L", "hole"],
 )
 @pytest.mark.parametrize("anchor", ["length_weighted_mean", "vertex_mean"])
+@pytest.mark.parametrize("method", ["footprint", "3d"])
 def test_z_and_m_are_averaged_over_the_area(
     rings: list[Ring],
     z: Callable[[float, float], float],
     expected: float,
     anchor: CentroidAnchor,
+    method: CentroidMethod,
 ) -> None:
     # On a tilted plane, the centroid lies on it: above the centroid of the footprint.
     # As z and m change linearly over the polygon, the anchor makes no difference.
-    out = _polygon_xyzm(rings, z).select(geo.centroid("polygon", anchor=anchor))
+    out = _polygon_xyzm(rings, z).select(
+        geo.centroid("polygon", method=method, anchor=anchor)
+    )
 
     (got,) = out.to_series().ext.storage().to_list()
 
@@ -209,10 +219,13 @@ def test_a_small_polygon_far_from_the_origin_keeps_its_centroid(
     assert got == pytest.approx(expected, rel=0, abs=1e-6)
 
 
-def test_a_flat_polygon_far_from_the_origin_keeps_its_z_and_m() -> None:
+@pytest.mark.parametrize("method", ["footprint", "3d"])
+def test_a_flat_polygon_far_from_the_origin_keeps_its_z_and_m(
+    method: CentroidMethod,
+) -> None:
     corner = (_UTM[0] + 0.1, _UTM[1] + 0.7)
     out = _polygon_xyzm([_square_at(corner, 0.3)], lambda _x, _y: 100.0).select(
-        geo.centroid("polygon")
+        geo.centroid("polygon", method=method)
     )
 
     (got,) = out.to_series().ext.storage().to_list()
@@ -221,6 +234,123 @@ def test_a_flat_polygon_far_from_the_origin_keeps_its_z_and_m() -> None:
     assert (got["x"], got["y"], got["z"], got["m"]) == pytest.approx(
         expected, rel=0, abs=1e-6
     )
+
+
+# Polygons in 3D: measured on their own plane
+
+XyzRing = list[tuple[float, float, float]]
+
+
+def _xyz_ring(*xyz: tuple[float, float, float]) -> XyzRing:
+    """A closed ring through `xyz`."""
+    return [*xyz, xyz[0]]
+
+
+def _xyz_vertices(ring: XyzRing) -> list[dict[str, float]]:
+    return [dict(zip("xyz", c, strict=True)) for c in ring]
+
+
+_XYZ_RINGS = pl.List(pl.List(pl.Struct(dict.fromkeys("xyz", pl.Float64))))
+
+
+def _polygons_xyz(*polygons: list[XyzRing]) -> pl.DataFrame:
+    """A `polygon` column of `PolygonXYZ`, one row per list of rings."""
+    rows = [[_xyz_vertices(ring) for ring in polygon] for polygon in polygons]
+    storage = pl.Series("polygon", rows, dtype=_XYZ_RINGS)
+    return pl.DataFrame(storage.ext.to(PolygonXYZ()))
+
+
+def _multipolygons_xyz(*multis: list[list[XyzRing]]) -> pl.DataFrame:
+    """A `multi` column of `MultiPolygonXYZ`, one row per list of polygons."""
+    rows = [
+        [[_xyz_vertices(ring) for ring in polygon] for polygon in multi]
+        for multi in multis
+    ]
+    storage = pl.Series("multi", rows, dtype=pl.List(_XYZ_RINGS))
+    return pl.DataFrame(storage.ext.to(MultiPolygonXYZ()))
+
+
+def _centroids_of_only_column(
+    df: pl.DataFrame,
+    method: CentroidMethod,
+    anchor: CentroidAnchor = "length_weighted_mean",
+) -> list[tuple[float, ...] | None]:
+    (name,) = df.columns
+    out = df.select(geo.centroid(name, method=method, anchor=anchor))
+    return [
+        None if c is None else tuple(c.values())
+        for c in out.to_series().ext.storage().to_list()
+    ]
+
+
+@pytest.mark.parametrize(
+    ("method", "expected"),
+    [("footprint", None), ("3d", pytest.approx((0.5, 0.0, 0.5)))],
+)
+def test_a_vertical_polygon_only_has_a_centroid_in_3d(
+    method: CentroidMethod, expected: object
+) -> None:
+    df = _polygons_xyz([_xyz_ring((0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1))])
+
+    assert _centroids_of_only_column(df, method) == [expected]
+
+
+@pytest.mark.parametrize("reverse_hole", [False, True])
+def test_a_hole_in_a_vertical_polygon_is_taken_out_whichever_way_it_winds(
+    reverse_hole: bool,
+) -> None:
+    exterior = _xyz_ring((0, 0, 0), (4, 0, 0), (4, 0, 4), (0, 0, 4))
+    hole = _xyz_ring((2, 0, 2), (3, 0, 2), (3, 0, 3), (2, 0, 3))
+    # 16 at (2, 0, 2), less 1 at (2.5, 0, 2.5)
+    expected = (16 * 2 - 2.5) / 15
+    df = _polygons_xyz([exterior, hole[::-1] if reverse_hole else hole])
+
+    assert _centroids_of_only_column(df, "3d") == [
+        pytest.approx((expected, 0.0, expected))
+    ]
+
+
+def _saddle_centroid_in_3d(ring: Ring, anchor: CentroidAnchor) -> tuple[float, ...]:
+    df = _polygon_xyzm([ring], lambda x, y: x * y)
+    (got,) = _centroids_of_only_column(df, "3d", anchor)
+    assert got is not None
+    return got
+
+
+@pytest.mark.parametrize("start", range(1, 6))
+@pytest.mark.parametrize("anchor", ["length_weighted_mean", "vertex_mean"])
+def test_a_non_flat_polygon_in_3d_does_not_depend_on_where_its_ring_starts(
+    start: int, anchor: CentroidAnchor
+) -> None:
+    # Its plane is tilted, so the anchor moves every axis, not only z and m.
+    expected = _saddle_centroid_in_3d(_L, anchor)
+
+    got = _saddle_centroid_in_3d(_starting_at(_L, start), anchor)
+
+    assert got == pytest.approx(expected)
+
+
+def test_splitting_an_edge_does_not_move_the_length_weighted_3d_centroid() -> None:
+    expected = _saddle_centroid_in_3d(_L, "length_weighted_mean")
+
+    got = _saddle_centroid_in_3d(_L_SPLIT, "length_weighted_mean")
+
+    assert got == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("method", "expected"),
+    # 1 at (0.5, 0.5, 0), and in 3D also 4 at (11, 0, 1)
+    [("footprint", (0.5, 0.5, 0.0)), ("3d", (8.9, 0.1, 0.8))],
+)
+def test_a_vertical_part_of_a_multipolygon_only_weighs_in_3d(
+    method: CentroidMethod, expected: tuple[float, float, float]
+) -> None:
+    flat = _xyz_ring((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0))
+    upright = _xyz_ring((10, 0, 0), (12, 0, 0), (12, 0, 2), (10, 0, 2))
+    df = _multipolygons_xyz([[flat], [upright]])
+
+    assert _centroids_of_only_column(df, method) == [pytest.approx(expected)]
 
 
 def test_the_crs_is_carried_over() -> None:
@@ -596,6 +726,26 @@ def test_a_nan_z_only_changes_the_z_of_a_polygon() -> None:
     assert (got["x"], got["y"]) == pytest.approx((0.5, 0.5))
     assert math.isnan(got["z"])
     assert math.isnan(got["m"])
+
+
+def test_a_nan_z_makes_the_3d_centroid_of_a_polygon_nan() -> None:
+    df = _polygon_xyzm([_SQUARE], lambda x, y: _NAN if x == y == 1 else 0.0)
+
+    (got,) = _centroids_of_only_column(df, "3d")
+
+    assert _all_nan(got)
+
+
+def test_a_nan_m_only_changes_the_m_of_a_3d_polygon_centroid() -> None:
+    df = _polygon_xyzm(
+        [_SQUARE], lambda _x, _y: 0.0, lambda x, y: _NAN if x == y == 1 else 0.0
+    )
+
+    (got,) = _centroids_of_only_column(df, "3d")
+
+    assert got is not None
+    assert got[:3] == pytest.approx((0.5, 0.5, 0.0))
+    assert math.isnan(got[3])
 
 
 def test_one_non_finite_part_makes_the_multi_centroid_nan() -> None:

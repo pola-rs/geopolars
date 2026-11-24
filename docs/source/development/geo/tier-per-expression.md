@@ -13,7 +13,7 @@ the comment says when one without a CRS takes a different tier.
 | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | `area` | - | ANP | - | ANP | A/B | shoelace or PROJ + GGL [^2] | - | ANP | - | ANP | A/B | sum of parts |
 | `length` | - | ANL | A/B | Reuses bits of `distance` [^2] | - | ANL | - | ANL | A/B | sum of parts | - | ANL |
-| `centroid` | C | RIG | A | | A || C | fwd `mean_coordinate` | A | length-weighted parts | A | area-weighted parts |
+| `centroid` | C | RIG | A | length-weighted; footprint or 3D length | A | fan from `anchor`; footprint or Newell plane | C | fwd `mean_coordinate` | A | length-weighted parts | A | area-weighted parts |
 | `exterior` | - | | - | | A | ring 0 | - | | - | | A | LPP |
 | `interior` | - | | - | | A | rings after the first | - | | - | | A | LPP |
 | `add_holes` | - | | - | | A | holes: linestring(s), multipoint(s) or multilinestring | - | | - | | - | |

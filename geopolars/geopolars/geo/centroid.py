@@ -69,9 +69,11 @@ def centroid(
       as its footprint has no length or area.
     - `"3d"` measures `x`, `y`, and `z`, as `length` does.
       A linestring's segments then count their difference in height too.
-      A polygon is to be measured on its own plane,
+      A polygon is measured on its own plane,
       so that a vertical one has a centroid as well.
-      This is not implemented yet for a polygon with a `z`.
+      A polygon that is not flat has no plane of its own.
+      It is measured by its shadow on the plane that faces along its vector area instead
+      (Newell's method), which gives the same plane for a flat one.
 
     Without a `z`, both methods give the same centroid.
 
