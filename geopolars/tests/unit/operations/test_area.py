@@ -350,6 +350,8 @@ def _shifted(
 
 
 _EAST_OF_THE_ANTIMERIDIAN = _shifted(_DEGREE_SQUARE, 200.0)
+# Past the longitudes up to a full turn that `crs_bounds` lets through by default.
+_PAST_A_FULL_TURN = _shifted(_DEGREE_SQUARE, 400.0)
 
 
 @pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
@@ -357,10 +359,10 @@ def test_a_row_outside_the_bounds_of_its_crs_goes_to_on_row_error(
     distance_method: DistanceMethod,
 ) -> None:
     area = _area_by(distance_method)
-    df = _polygons([[_DEGREE_SQUARE], [_EAST_OF_THE_ANTIMERIDIAN]], crs=WGS84)
+    df = _polygons([[_DEGREE_SQUARE], [_PAST_A_FULL_TURN]], crs=WGS84)
     (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
 
-    with pytest.raises(ComputeError, match=r"\(200, 0\) lies outside the bounds"):
+    with pytest.raises(ComputeError, match=r"\(400, 0\) lies outside the bounds"):
         _areas(area, df)
 
     assert _areas(partial(area, on_row_error="null"), df) == [inside, None]
@@ -371,7 +373,7 @@ def test_on_out_of_bounds_null_nulls_the_row_whatever_on_row_error_says(
     distance_method: DistanceMethod,
 ) -> None:
     area = _area_by(distance_method)
-    df = _polygons([[_DEGREE_SQUARE], [_EAST_OF_THE_ANTIMERIDIAN]], crs=WGS84)
+    df = _polygons([[_DEGREE_SQUARE], [_PAST_A_FULL_TURN]], crs=WGS84)
     (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
 
     got = _areas(partial(area, on_out_of_bounds="null", on_row_error="raise"), df)
@@ -379,16 +381,17 @@ def test_on_out_of_bounds_null_nulls_the_row_whatever_on_row_error_says(
 
 
 def test_on_out_of_bounds_ignore_measures_the_row() -> None:
-    df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
+    df = _rings([_PAST_A_FULL_TURN], crs=WGS84)
 
     assert _areas(partial(_area_by("planar"), on_out_of_bounds="ignore"), df) == [1.0]
 
 
-def test_crs_bounds_can_take_longitudes_up_to_a_full_turn() -> None:
+def test_by_default_longitudes_up_to_a_full_turn_are_within_the_bounds() -> None:
     df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
-    area = partial(_area_by("planar"), crs_bounds="crs_wrapped_longitude")
+    area = _area_by("planar")
 
     assert _areas(area, df) == [1.0]
+    assert _areas(partial(area, crs_bounds="crs", on_out_of_bounds="null"), df) == [None]
 
 
 def test_a_projected_crs_only_has_bounds_from_its_area_of_use() -> None:
@@ -419,7 +422,7 @@ def test_a_multipolygon_with_a_polygon_outside_the_bounds_is_out_of_bounds(
     distance_method: DistanceMethod,
 ) -> None:
     df = _multipolygons(
-        [[[_DEGREE_SQUARE]], [[_DEGREE_SQUARE], [_EAST_OF_THE_ANTIMERIDIAN]]], crs=WGS84
+        [[[_DEGREE_SQUARE]], [[_DEGREE_SQUARE], [_PAST_A_FULL_TURN]]], crs=WGS84
     )
     area = _area_by(distance_method)
     (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
@@ -809,12 +812,12 @@ def test_an_unknown_distance_method_is_refused() -> None:
 
 def test_the_namespace_passes_on_out_of_bounds_and_crs_bounds_on() -> None:
     df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
-    kwargs = {"on_out_of_bounds": "null", "crs_bounds": "crs_wrapped_longitude"}
+    kwargs = {"on_out_of_bounds": "null", "crs_bounds": "crs"}
 
     assert df.select(pl.col("polygon").geo.area(**kwargs)).equals(
         df.select(geo.area("polygon", **kwargs))
     )
-    assert df.select(geo.area("polygon", on_out_of_bounds="null")).item() is None
+    assert df.select(geo.area("polygon", **kwargs)).item() is None
 
 
 def test_an_unknown_on_out_of_bounds_is_refused() -> None:

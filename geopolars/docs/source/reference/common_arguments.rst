@@ -159,6 +159,9 @@ A coordinate outside the bounds of its CRS (a latitude of 91°, say) is not a pl
 so measuring it gives NaN, `0.0`, or a wrong number without warning.
 This argument checks for such coordinates.
 `crs_bounds` picks the bounds to check against, with the same values as in `fix_out_of_bounds`.
+Its default here is `"crs_wrapped_longitude"`, so that longitudes from 180 to 360 pass:
+data stored from 0 to 360, or a box across the antimeridian (see `to_polygon`),
+measures as it would from -180 to 180.
 
 The check leaves NaN to `early_coord_check`, as a NaN `x` or `y` never lies outside the bounds,
 so neither does an empty point inside a geometry.
@@ -167,8 +170,8 @@ so neither does an empty point inside a geometry.
 - `on_out_of_bounds="null"` makes the row null, whatever `on_row_error` says.
 - `on_out_of_bounds="ignore"` skips the check, and its extra pass over the coordinates.
 
-A column without a CRS, or with a projected CRS and `crs_bounds="crs"`, has no bounds,
-so it is not checked.
+A column without a CRS, or with a projected CRS and bounds not taken from its area of use,
+has no bounds, so it is not checked.
 
 Comparing coordinates
 ~~~~~~~~~~~~~~~~~~~~~

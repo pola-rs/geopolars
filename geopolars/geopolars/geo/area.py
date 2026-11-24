@@ -104,7 +104,7 @@ def area(
     on_row_error: OnRowError = "raise",
     early_coord_check: EarlyCoordCheck = "finite",
     on_out_of_bounds: OnOutOfBounds = "error",
-    crs_bounds: CrsBounds = "crs",
+    crs_bounds: CrsBounds = "crs_wrapped_longitude",
     negative_area: NegativeArea = "zero",
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.

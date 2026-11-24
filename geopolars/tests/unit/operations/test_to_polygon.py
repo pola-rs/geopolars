@@ -136,10 +136,10 @@ def test_a_geographic_box_measures_the_side_it_means() -> None:
     """20 degrees across the antimeridian is as large as 20 degrees anywhere."""
     across = _polygons((170.0, -10.0, -170.0, 10.0), crs="EPSG:4326").to_frame()
     meridian = _polygons((-10.0, -10.0, 10.0, 10.0), crs="EPSG:4326").to_frame()
-    # The box goes around, past longitude 180.
-    area = geo.area("box", crs_bounds="crs_wrapped_longitude")
 
-    assert across.select(area).item() == pytest.approx(meridian.select(area).item())
+    assert across.select(geo.area("box")).item() == pytest.approx(
+        meridian.select(geo.area("box")).item()
+    )
 
 
 def test_a_geographic_box_that_does_not_cross_is_left_as_it_is() -> None:
