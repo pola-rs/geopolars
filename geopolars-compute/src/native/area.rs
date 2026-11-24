@@ -27,7 +27,7 @@ use std::ops::Range;
 
 use geographiclib_rs::{PolygonArea, Winding};
 use geopolars_views::{
-    MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
+    List, MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
@@ -261,31 +261,23 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     negative_area: NegativeArea,
     exterior_side: ExteriorSide,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
-    if array.rows().is_all_null() {
-        return Ok(PrimitiveArray::new_null(
-            ArrowDataType::Float64,
-            array.rows().len(),
-        ));
-    }
-    let (check_bounds, bounds) = split_bounds_check(bounds, on_out_of_bounds);
-    let vertices = vertices_of_rows(array.rows().len(), |i| array.row_vertices(i));
-    let chunk = metric.prepare_chunk(array.coords(), vertices);
     with_const_flags!(
-        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds,
         EXTERIOR_SIDE: ExteriorSide = exterior_side;
-        per_row_or_null(array.rows(), on_row_error, |i| {
-            let vertices = array.row_vertices(i);
-            if let Some(instead) = instead_of_measuring::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
-                array.coords(), vertices, &bounds, on_out_of_bounds,
-            ) {
-                return instead;
-            }
-            let polygon = array.get(i);
-            Ok(Some(
-                polygon_area::<M, EXTERIOR_SIDE>(metric, &chunk, &polygon, negative_area)
-                    .map_err(Into::into)?,
-            ))
-        })
+        areas_with(
+            metric,
+            array.rows(),
+            array.coords(),
+            |i| array.row_vertices(i),
+            |chunk, i| {
+                let polygon = array.get(i);
+                polygon_area::<M, EXTERIOR_SIDE>(metric, chunk, &polygon, negative_area)
+                    .map_err(Into::into)
+            },
+            on_row_error,
+            early_coord_check,
+            bounds,
+            on_out_of_bounds,
+        )
     )
 }
 
@@ -301,36 +293,61 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     negative_area: NegativeArea,
     exterior_side: ExteriorSide,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
-    if array.rows().is_all_null() {
-        return Ok(PrimitiveArray::new_null(
-            ArrowDataType::Float64,
-            array.rows().len(),
-        ));
+    with_const_flags!(
+        EXTERIOR_SIDE: ExteriorSide = exterior_side;
+        areas_with(
+            metric,
+            array.rows(),
+            array.coords(),
+            |i| array.row_vertices(i),
+            |chunk, i| {
+                array
+                    .get(i)
+                    .polygons()
+                    // Folded from `0.0`, as `sum` starts from `-0.0`.
+                    .try_fold(0.0, |total, polygon| {
+                        let area =
+                            polygon_area::<M, EXTERIOR_SIDE>(metric, chunk, &polygon, negative_area)
+                                .map_err(Into::into)?;
+                        Ok(total + area)
+                    })
+            },
+            on_row_error,
+            early_coord_check,
+            bounds,
+            on_out_of_bounds,
+        )
+    )
+}
+
+/// The area of every row of a chunk, as `row_area` measures a row that passes the checks.
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn areas_with<M: AreaMetric>(
+    metric: &M,
+    rows: &List,
+    coords: &ValidCoords,
+    row_vertices: impl Fn(usize) -> Range<usize>,
+    row_area: impl Fn(&M::Chunk, usize) -> GeoComputeResult<f64>,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
+    bounds: Option<Bounds>,
+    on_out_of_bounds: OnOutOfBounds,
+) -> GeoComputeResult<PrimitiveArray<f64>> {
+    if rows.is_all_null() {
+        return Ok(PrimitiveArray::new_null(ArrowDataType::Float64, rows.len()));
     }
     let (check_bounds, bounds) = split_bounds_check(bounds, on_out_of_bounds);
-    let vertices = vertices_of_rows(array.rows().len(), |i| array.row_vertices(i));
-    let chunk = metric.prepare_chunk(array.coords(), vertices);
+    let chunk = metric.prepare_chunk(coords, vertices_of_rows(rows.len(), &row_vertices));
     with_const_flags!(
-        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds,
-        EXTERIOR_SIDE: ExteriorSide = exterior_side;
-        per_row_or_null(array.rows(), on_row_error, |i| {
-            let vertices = array.row_vertices(i);
+        EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
+        per_row_or_null(rows, on_row_error, |i| {
             if let Some(instead) = instead_of_measuring::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
-                array.coords(), vertices, &bounds, on_out_of_bounds,
+                coords, row_vertices(i), &bounds, on_out_of_bounds,
             ) {
                 return instead;
             }
-            array
-                .get(i)
-                .polygons()
-                // Folded from `0.0`, as `sum` starts from `-0.0`.
-                .try_fold(0.0, |total, polygon| {
-                    let area =
-                        polygon_area::<M, EXTERIOR_SIDE>(metric, &chunk, &polygon, negative_area)
-                            .map_err(Into::into)?;
-                    Ok(total + area)
-                })
-                .map(Some)
+            Ok(Some(row_area(&chunk, i)?))
         })
     )
 }
