@@ -10,6 +10,10 @@
 //! ## `M`
 //!
 //! If `M=true`, the m values are averaged too.
+//!
+//! ## `ANCHOR`
+//!
+//! The [CentroidAnchor] that every ring of a polygon fans out from.
 
 use std::convert::Infallible;
 
@@ -113,10 +117,50 @@ fn three_d_segment_length(a: [f64; 4], b: [f64; 4]) -> f64 {
     ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt()
 }
 
+/// The point a ring fans out from, relative to its first vertex.
+struct RingAnchor<const Z: bool, const M: bool, const ANCHOR: u8> {
+    sum: [f64; 4],
+    weight: f64,
+}
+
+impl<const Z: bool, const M: bool, const ANCHOR: u8> RingAnchor<Z, M, ANCHOR> {
+    const ZERO: Self = Self {
+        sum: [0.0; 4],
+        weight: 0.0,
+    };
+
+    #[inline(always)]
+    fn add_edge(&mut self, d_p: [f64; 4], d_q: [f64; 4]) {
+        let (weight, centre) = match const { CentroidAnchor::from_u8(ANCHOR) } {
+            // On a closed ring, every vertex ends exactly one edge.
+            CentroidAnchor::VertexMean => (1.0, d_q),
+            CentroidAnchor::LengthWeightedMean => (
+                footprint_segment_length(d_p, d_q),
+                std::array::from_fn(|k| 0.5 * (d_p[k] + d_q[k])),
+            ),
+        };
+        for k in 0..4 {
+            if has_axis::<Z, M>(k) {
+                self.sum[k] += weight * centre[k];
+            }
+        }
+        self.weight += weight;
+    }
+
+    #[inline(always)]
+    fn relative_to_first(&self) -> [f64; 4] {
+        // A ring without length has no area either, so any point does.
+        if self.weight == 0.0 {
+            return [0.0; 4];
+        }
+        self.sum.map(|s| s / self.weight)
+    }
+}
+
 /// Adds the area of a closed ring, and its area-weighted centre, to `moment`.
 /// A hole passes `sign = -1.0`, which takes its area out again.
 #[inline(always)]
-fn add_ring<const Z: bool, const M: bool>(
+fn add_ring<const Z: bool, const M: bool, const ANCHOR: u8>(
     moment: &mut Moment<Z, M>,
     ring: &ScalarLineString,
     sign: f64,
@@ -129,7 +173,12 @@ fn add_ring<const Z: bool, const M: bool>(
     // Each weighs half its cross product `fan`, at the mean of its corners.
     // Taking the coordinates relative to `p0` keeps their precision far from the origin.
     // `p0` itself is added back once, after the loop.
+    // The area, x, and y come out the same whichever point the fan starts from.
+    // As z and m need not lie on a plane, they do depend on it.
+    // `sum_dx` and `sum_dy` let them move to the fan from the anchor after the loop.
     let (mut a, mut sum) = (0.0, [0.0; 4]);
+    let mut anchor = RingAnchor::<Z, M, ANCHOR>::ZERO;
+    let (mut sum_dx, mut sum_dy) = ([0.0; 4], [0.0; 4]);
     let mut d_p = [0.0; 4];
     // The repeated last vertex is only ever the `q`.
     for q in coordinates {
@@ -147,7 +196,26 @@ fn add_ring<const Z: bool, const M: bool>(
                 sum[k] += fan * (d_p[k] + d_q[k]);
             }
         }
+        if Z || M {
+            anchor.add_edge(d_p, d_q);
+            for k in 2..4 {
+                if has_axis::<Z, M>(k) {
+                    sum_dx[k] += (d_q[0] - d_p[0]) * (d_p[k] + d_q[k]);
+                    sum_dy[k] += (d_q[1] - d_p[1]) * (d_p[k] + d_q[k]);
+                }
+            }
+        }
         d_p = d_q;
+    }
+    if Z || M {
+        // Moving the tip of a triangle from `p0` to `c` takes `c × (d_q - d_p)` off its `fan`.
+        // Over a closed ring, these add up to nothing, so `a` stays the same.
+        let c = anchor.relative_to_first();
+        for k in 2..4 {
+            if has_axis::<Z, M>(k) {
+                sum[k] += c[k] * a - (c[0] * sum_dy[k] - c[1] * sum_dx[k]);
+            }
+        }
     }
     let sign = sign * a.signum();
     for (k, (total, s)) in moment.sum.iter_mut().zip(sum).enumerate() {
@@ -160,13 +228,16 @@ fn add_ring<const Z: bool, const M: bool>(
 
 /// moment += (exterior - holes)
 #[inline(always)]
-fn add_polygon<const Z: bool, const M: bool>(moment: &mut Moment<Z, M>, polygon: &ScalarPolygon) {
+fn add_polygon<const Z: bool, const M: bool, const ANCHOR: u8>(
+    moment: &mut Moment<Z, M>,
+    polygon: &ScalarPolygon,
+) {
     let Some(exterior) = polygon.exterior() else {
         return;
     };
-    add_ring(moment, &exterior, 1.0);
+    add_ring::<Z, M, ANCHOR>(moment, &exterior, 1.0);
     for hole in polygon.holes() {
-        add_ring(moment, &hole, -1.0);
+        add_ring::<Z, M, ANCHOR>(moment, &hole, -1.0);
     }
 }
 
@@ -258,21 +329,24 @@ fn multi_line_string_centroids_three_d<const M: bool>(
 pub fn polygon_centroids<const Z: bool, const M: bool>(
     array: &Untrimmed<PolygonArray>,
     method: CentroidMethod,
-    _anchor: CentroidAnchor,
+    anchor: CentroidAnchor,
 ) -> PointArray {
     match method {
         CentroidMethod::ThreeD if Z => polygon_centroids_three_d::<M>(array),
         // Without a z, a polygon's own plane is its footprint.
-        CentroidMethod::Footprint | CentroidMethod::ThreeD => {
-            polygon_centroids_footprint::<Z, M>(array)
-        }
+        CentroidMethod::Footprint | CentroidMethod::ThreeD => with_const_flags!(
+            ANCHOR: CentroidAnchor = anchor;
+            polygon_centroids_footprint::<Z, M, ANCHOR>(array)
+        ),
     }
 }
 
-fn polygon_centroids_footprint<const Z: bool, const M: bool>(
+fn polygon_centroids_footprint<const Z: bool, const M: bool, const ANCHOR: u8>(
     array: &Untrimmed<PolygonArray>,
 ) -> PointArray {
-    centroids::<Z, M>(array.rows(), |moment, i| add_polygon(moment, &array.get(i)))
+    centroids::<Z, M>(array.rows(), |moment, i| {
+        add_polygon::<Z, M, ANCHOR>(moment, &array.get(i));
+    })
 }
 
 fn polygon_centroids_three_d<const M: bool>(_array: &Untrimmed<PolygonArray>) -> PointArray {
@@ -282,23 +356,24 @@ fn polygon_centroids_three_d<const M: bool>(_array: &Untrimmed<PolygonArray>) ->
 pub fn multi_polygon_centroids<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiPolygonArray>,
     method: CentroidMethod,
-    _anchor: CentroidAnchor,
+    anchor: CentroidAnchor,
 ) -> PointArray {
     match method {
         CentroidMethod::ThreeD if Z => multi_polygon_centroids_three_d::<M>(array),
         // Without a z, a polygon's own plane is its footprint.
-        CentroidMethod::Footprint | CentroidMethod::ThreeD => {
-            multi_polygon_centroids_footprint::<Z, M>(array)
-        }
+        CentroidMethod::Footprint | CentroidMethod::ThreeD => with_const_flags!(
+            ANCHOR: CentroidAnchor = anchor;
+            multi_polygon_centroids_footprint::<Z, M, ANCHOR>(array)
+        ),
     }
 }
 
-fn multi_polygon_centroids_footprint<const Z: bool, const M: bool>(
+fn multi_polygon_centroids_footprint<const Z: bool, const M: bool, const ANCHOR: u8>(
     array: &Untrimmed<MultiPolygonArray>,
 ) -> PointArray {
     centroids::<Z, M>(array.rows(), |moment, i| {
         for polygon in array.get(i).polygons() {
-            add_polygon(moment, &polygon);
+            add_polygon::<Z, M, ANCHOR>(moment, &polygon);
         }
     })
 }

@@ -146,6 +146,46 @@ def test_z_and_m_are_averaged_over_the_area(
     assert (got["z"], got["m"]) == pytest.approx((expected, expected))
 
 
+def _starting_at(ring: Ring, start: int) -> Ring:
+    vertices = ring[:-1]
+    rotated = vertices[start:] + vertices[:start]
+    return [*rotated, rotated[0]]
+
+
+def _saddle_z_and_m(rings: list[Ring], anchor: CentroidAnchor) -> tuple[float, float]:
+    # x * y is not flat, but it is straight along the axis-aligned edges of the L.
+    out = _polygon_xyzm(rings, lambda x, y: x * y).select(
+        geo.centroid("polygon", anchor=anchor)
+    )
+    (got,) = out.to_series().ext.storage().to_list()
+    return got["z"], got["m"]
+
+
+@pytest.mark.parametrize("start", range(6))
+@pytest.mark.parametrize("anchor", ["length_weighted_mean", "vertex_mean"])
+def test_a_non_flat_polygon_does_not_depend_on_where_its_ring_starts(
+    start: int, anchor: CentroidAnchor
+) -> None:
+    got = _saddle_z_and_m([_starting_at(_L, start)], anchor)
+
+    assert got == pytest.approx((0.5, 0.5))
+
+
+# The L, with a vertex added halfway along its edge from (2, 0) to (2, 1).
+_L_SPLIT = _ring((0, 0), (2, 0), (2, 0.5), (2, 1), (1, 1), (1, 2), (0, 2))
+
+
+@pytest.mark.parametrize(
+    ("anchor", "expected"),
+    [("length_weighted_mean", 1 / 2), ("vertex_mean", 41 / 84)],
+)
+def test_only_the_vertex_mean_moves_when_an_edge_is_split(
+    anchor: CentroidAnchor, expected: float
+) -> None:
+    assert _saddle_z_and_m([_L], anchor) == pytest.approx((0.5, 0.5))
+    assert _saddle_z_and_m([_L_SPLIT], anchor) == pytest.approx((expected, expected))
+
+
 _UTM = (500_000.0, 5_000_000.0)
 
 
