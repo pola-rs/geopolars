@@ -47,7 +47,7 @@ pub use bounds::{
 };
 pub use centroid::{
     line_string_centroids, multi_line_string_centroids, multi_polygon_centroids, polygon_centroids,
-    CentroidMethod,
+    CentroidAnchor, CentroidMethod,
 };
 pub(crate) use coordinate_selection::which_are_not_selected;
 pub use coordinate_selection::{selected_coords, Bounds, CoordinateSelection, NonFinite};

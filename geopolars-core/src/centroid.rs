@@ -1,6 +1,6 @@
 use geopolars_compute::native::{
     line_string_centroids, multi_line_string_centroids, multi_polygon_centroids, polygon_centroids,
-    CentroidMethod,
+    CentroidAnchor, CentroidMethod,
 };
 use geopolars_compute::with_const_flags;
 use geopolars_views::{
@@ -20,6 +20,7 @@ pub fn centroids(
     kind: SegmentKind,
     dim: GeoDimension,
     method: CentroidMethod,
+    anchor: CentroidAnchor,
 ) -> PolarsResult<GeometryArray> {
     let (has_z, has_m) = (dim.has_z(), dim.has_m());
     Ok(GeometryArray::Point(match kind {
@@ -29,7 +30,7 @@ pub fn centroids(
         }
         SegmentKind::Polygon => {
             let array = PolygonArray::new_untrimmed(downcast(chunk, "a list of rings")?)?;
-            with_const_flags!(Z = has_z, M = has_m; polygon_centroids::<Z, M>(&array, method))
+            with_const_flags!(Z = has_z, M = has_m; polygon_centroids::<Z, M>(&array, method, anchor))
         }
         SegmentKind::MultiLineString => {
             let array =
@@ -41,7 +42,7 @@ pub fn centroids(
         }
         SegmentKind::MultiPolygon => {
             let array = MultiPolygonArray::new_untrimmed(downcast(chunk, "a list of polygons")?)?;
-            with_const_flags!(Z = has_z, M = has_m; multi_polygon_centroids::<Z, M>(&array, method))
+            with_const_flags!(Z = has_z, M = has_m; multi_polygon_centroids::<Z, M>(&array, method, anchor))
         }
     }))
 }

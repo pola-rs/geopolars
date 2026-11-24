@@ -2,7 +2,7 @@
 //! Implements the Python `centroid` for (multi)linestrings and (multi)polygons,
 //! as the Python side takes the mean coordinate of a (multi)point itself.
 
-use geopolars_compute::native::CentroidMethod;
+use geopolars_compute::native::{CentroidAnchor, CentroidMethod};
 use geopolars_core::{centroids, SegmentKind};
 use geopolars_views::Kind;
 use polars::prelude::*;
@@ -20,10 +20,19 @@ enum CentroidMethodDef {
 }
 
 #[derive(Deserialize)]
+#[serde(remote = "CentroidAnchor", rename_all = "snake_case")]
+enum CentroidAnchorDef {
+    LengthWeightedMean,
+    VertexMean,
+}
+
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CentroidKwargs {
     #[serde(with = "CentroidMethodDef")]
     method: CentroidMethod,
+    #[serde(with = "CentroidAnchorDef")]
+    anchor: CentroidAnchor,
 }
 
 /// The point a `dtype` column's centroids are, and the kind of geometry they are of.
@@ -48,7 +57,15 @@ fn centroid(inputs: &[Series], kwargs: CentroidKwargs) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| centroids(chunk.as_ref(), kind, point.dim(), kwargs.method))
+        .map(|chunk| {
+            centroids(
+                chunk.as_ref(),
+                kind,
+                point.dim(),
+                kwargs.method,
+                kwargs.anchor,
+            )
+        })
         .collect::<PolarsResult<Vec<_>>>()?;
     geometry_series(inputs[0].name().clone(), point, chunks)
 }

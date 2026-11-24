@@ -20,7 +20,7 @@ from geopolars.datatypes import (
     PointXY,
     PolygonXYZM,
 )
-from geopolars.geo.centroid import CentroidMethod
+from geopolars.geo.centroid import CentroidAnchor, CentroidMethod
 from tests.unit.conftest import XY, Dimension, coordinates
 
 if TYPE_CHECKING:
@@ -130,11 +130,16 @@ def _polygon_xyzm(
     ],
     ids=["L", "hole"],
 )
+@pytest.mark.parametrize("anchor", ["length_weighted_mean", "vertex_mean"])
 def test_z_and_m_are_averaged_over_the_area(
-    rings: list[Ring], z: Callable[[float, float], float], expected: float
+    rings: list[Ring],
+    z: Callable[[float, float], float],
+    expected: float,
+    anchor: CentroidAnchor,
 ) -> None:
     # On a tilted plane, the centroid lies on it: above the centroid of the footprint.
-    out = _polygon_xyzm(rings, z).select(geo.centroid("polygon"))
+    # As z and m change linearly over the polygon, the anchor makes no difference.
+    out = _polygon_xyzm(rings, z).select(geo.centroid("polygon", anchor=anchor))
 
     (got,) = out.to_series().ext.storage().to_list()
 
@@ -201,11 +206,12 @@ def test_rejects_a_non_geometry_while_resolving_the_schema() -> None:
         lf.collect_schema()
 
 
-def test_the_namespace_matches_the_function() -> None:
+@pytest.mark.parametrize("anchor", ["length_weighted_mean", "vertex_mean"])
+def test_the_namespace_matches_the_function(anchor: CentroidAnchor) -> None:
     df = _polygons([_L], [_SQUARE])
 
-    assert df.select(pl.col("polygon").geo.centroid()).equals(
-        df.select(geo.centroid("polygon"))
+    assert df.select(pl.col("polygon").geo.centroid(anchor=anchor)).equals(
+        df.select(geo.centroid("polygon", anchor=anchor))
     )
 
 
@@ -323,6 +329,20 @@ def test_without_z_both_methods_agree(method: CentroidMethod) -> None:
 def test_an_unknown_method_is_refused() -> None:
     with pytest.raises(ValueError, match="`method` must be one of"):
         geo.centroid("line", method="3D")  # type: ignore[arg-type]
+
+
+def test_an_unknown_anchor_is_refused() -> None:
+    with pytest.raises(ValueError, match="`anchor` must be one of"):
+        geo.centroid("line", anchor="first_vertex")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("method", ["footprint", "3d"])
+def test_a_line_ignores_the_anchor(method: CentroidMethod) -> None:
+    df = _lines(_RISING_HOOK, dtype=LineStringXYZ)
+
+    assert df.select(geo.centroid("line", method=method, anchor="vertex_mean")).equals(
+        df.select(geo.centroid("line", method=method))
+    )
 
 
 def test_m_is_averaged_along_the_length_without_adding_to_it() -> None:

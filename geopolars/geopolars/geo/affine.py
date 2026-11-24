@@ -253,7 +253,9 @@ def _about_centroid(
             )
             raise TypeError(msg)
         return on_geometry_pair(
-            column, _centroid(column, geometry, "footprint"), build_about
+            column,
+            _centroid(column, geometry, "footprint", "length_weighted_mean"),
+            build_about,
         )
 
     return build

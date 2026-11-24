@@ -29,6 +29,15 @@ pub enum CentroidMethod {
     ThreeD,
 }
 
+const_enum!(
+    /// Which point every ring of a polygon is fanned out from.
+    /// Implements `anchor` of the Python `centroid`.
+    pub enum CentroidAnchor {
+        LengthWeightedMean,
+        VertexMean,
+    }
+);
+
 /// Used at compile to drop loops
 /// Whether axis `k` is there.
 /// k=0 is x, k=1 is y etc
@@ -249,6 +258,7 @@ fn multi_line_string_centroids_three_d<const M: bool>(
 pub fn polygon_centroids<const Z: bool, const M: bool>(
     array: &Untrimmed<PolygonArray>,
     method: CentroidMethod,
+    _anchor: CentroidAnchor,
 ) -> PointArray {
     match method {
         CentroidMethod::ThreeD if Z => polygon_centroids_three_d::<M>(array),
@@ -272,6 +282,7 @@ fn polygon_centroids_three_d<const M: bool>(_array: &Untrimmed<PolygonArray>) ->
 pub fn multi_polygon_centroids<const Z: bool, const M: bool>(
     array: &Untrimmed<MultiPolygonArray>,
     method: CentroidMethod,
+    _anchor: CentroidAnchor,
 ) -> PointArray {
     match method {
         CentroidMethod::ThreeD if Z => multi_polygon_centroids_three_d::<M>(array),

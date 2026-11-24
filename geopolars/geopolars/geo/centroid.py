@@ -19,10 +19,14 @@ if TYPE_CHECKING:
     from geopolars.datatypes import GeoArrowType
 
 CentroidMethod = Literal["footprint", "3d"]
+CentroidAnchor = Literal["length_weighted_mean", "vertex_mean"]
 
 
 def _centroid(
-    column: pl.Expr, geometry: GeoArrowType, method: CentroidMethod
+    column: pl.Expr,
+    geometry: GeoArrowType,
+    method: CentroidMethod,
+    anchor: CentroidAnchor,
 ) -> pl.Expr:
     """The centroid of one geometry type, per row."""
     # Every point weighs the same, so the centroid is the mean of the points.
@@ -33,13 +37,16 @@ def _centroid(
         args=[column],
         function_name="centroid",
         is_elementwise=True,
-        kwargs={"method": method},
+        kwargs={"method": method, "anchor": anchor},
     )
 
 
 @doc()
 def centroid(
-    geometry: IntoExprColumn, *, method: CentroidMethod = "footprint"
+    geometry: IntoExprColumn,
+    *,
+    method: CentroidMethod = "footprint",
+    anchor: CentroidAnchor = "length_weighted_mean",
 ) -> pl.Expr:
     """The centroid of a polygon (centre of area) or linestring (centre of length).
 
@@ -68,6 +75,24 @@ def centroid(
 
     Without a `z`, both methods give the same centroid.
 
+    A polygon's area is split into triangles,
+    which fan out from one point per ring.
+    `anchor` picks that point.
+    It makes no difference to where the centroid of a flat polygon lies.
+    For a polygon that is not flat, it moves the `z` with `"footprint"`,
+    and every axis with `"3d"`.
+    It also moves an `m` that does not change linearly over the polygon.
+
+    - `"length_weighted_mean"` is the default.
+      It fans out from the centre of the ring's length, measured as `method` says.
+      The centroid therefore does not change when a vertex is added on a straight edge,
+      or when the ring starts at another vertex.
+    - `"vertex_mean"` fans out from the mean of the ring's vertices.
+      It is quicker to find, but it moves when a vertex is added on a straight edge,
+      and the centroid with it.
+
+    A linestring has no area to fan out over, so it ignores `anchor`.
+
     {measure}
     As it is not a position, it never adds to a length or area, whatever the `method`.
     It is averaged with the same weights as the positions,
@@ -91,7 +116,7 @@ def centroid(
 
     A point is its own centroid.
     A multipoint gets the mean of its points as its centroid (see `mean_coordinate`),
-    whatever the `method`.
+    whatever the `method` and `anchor`.
 
     The result keeps the geometry's dimension and CRS.
 
@@ -112,4 +137,7 @@ def centroid(
         df.select(geo.centroid("flight_path", method="3d"))
     """
     validate_one_of("method", method, CentroidMethod)
-    return on_geometry(geometry, lambda column, dtype: _centroid(column, dtype, method))
+    validate_one_of("anchor", anchor, CentroidAnchor)
+    return on_geometry(
+        geometry, lambda column, dtype: _centroid(column, dtype, method, anchor)
+    )
