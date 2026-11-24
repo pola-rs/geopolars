@@ -1,6 +1,4 @@
-"""Adding the coverings Polars writes into GeoParquet,
-as described under "Bounding boxes" in `docs/source/user-guide/geo/io.md`.
-"""
+"""Adding the coverings Polars writes into GeoParquet."""
 
 from __future__ import annotations
 
@@ -16,21 +14,26 @@ FrameT = TypeVar("FrameT", pl.DataFrame, pl.LazyFrame)
 
 
 def with_covering(frame: FrameT) -> FrameT:
-    """Add a bbox covering for every geometry column `<name>`.
+    """Add a bbox covering column for every geometry column.
 
-    The covering is a column `bbox` for a column named `geometry` or `geography`,
-    and `<name>_bbox` for any other, as Polars and geopandas name it.
-    It has the bounds of each geometry (see `geo.bounds`),
+    Each row of the covering is the box around the whole geometry,
     which readers can filter on without touching the geometries.
-    A multi-geometry gets one box around all of its parts.
-    A box crossing the antimeridian has `xmin > xmax`.
-    WKB has to be decoded with `geo.from_wkb` first, to be bounded.
+    It is the box `geo.bounds` gives,
+    except that a multi-geometry gets one box around all of its parts.
 
-    With GeoParquet writing switched on, Polars writes it as the covering,
-    as described under "Bounding boxes" in `docs/source/user-guide/geo/io.md`.
+    The covering of a column `<name>` is named `<name>_bbox`,
+    or `bbox` for a column named `geometry` or `geography`.
+    Polars writes a box column under that name as the GeoParquet covering of its geometry.
+    This needs GeoParquet writing to be switched on,
+    as described under "GeoParquet" in `docs/source/user-guide/geo/io.md`.
+
+    A covering whose name is already taken raises a `DuplicateError`,
+    as does a frame with both a `geometry` and a `geography` geometry column.
+    An encoded column, such as `Wkb`, cannot be bounded and raises a `SchemaError`.
+    Decode it first, for example with `geo.from_wkb`.
     """
     schema = frame.collect_schema()
-    coverings = _coverings(schema)
+    coverings = _with_covering_names(schema)
     for name, bbox in coverings.items():
         if bbox in schema:
             msg = f"the covering of `{name}` would be written to `{bbox}`, which exists"
@@ -40,8 +43,7 @@ def with_covering(frame: FrameT) -> FrameT:
     )
 
 
-def _coverings(schema: pl.Schema) -> dict[str, str]:
-    """The bbox column of every geometry column."""
+def _with_covering_names(schema: pl.Schema) -> dict[str, str]:
     coverings: dict[str, str] = {}
     for name, dtype in schema.items():
         if isinstance(dtype, EncodedGeometry):
@@ -59,5 +61,7 @@ def _coverings(schema: pl.Schema) -> dict[str, str]:
     return coverings
 
 
+# Mirrors `covering_name` in Polars' `polars-parquet/src/arrow/geo.rs`.
+# Polars refuses to write a box under any other name.
 def _covering_name(name: str) -> str:
     return "bbox" if name in ("geometry", "geography") else f"{name}_bbox"

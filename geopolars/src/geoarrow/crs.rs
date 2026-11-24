@@ -132,11 +132,20 @@ impl ExtensionMetadata {
         Self::from_map(map)
     }
 
-    /// The CRS as a PROJJSON object.
-    /// This is used for GeoParquet.
-    /// `None` if the metadata declares no CRS.
-    /// A PROJJSON CRS comes back as-is; any other form is converted by PROJ.
-    pub fn projjson(&self) -> PolarsResult<Option<Map<String, Value>>> {
+    pub fn with_projjson_crs(self) -> PolarsResult<Self> {
+        if matches!(
+            self.map.get("crs"),
+            None | Some(Value::Null | Value::Object(_))
+        ) {
+            return Ok(self);
+        }
+        let Some(projjson) = self.with_projjson_crs_convert()? else {
+            return Ok(self);
+        };
+        Ok(self.with_crs(&Value::Object(projjson).to_string()))
+    }
+
+    fn with_projjson_crs_convert(&self) -> PolarsResult<Option<Map<String, Value>>> {
         match self.map.get("crs") {
             None | Some(Value::Null) => return Ok(None),
             Some(Value::Object(projjson)) => return Ok(Some(projjson.clone())),
@@ -155,19 +164,6 @@ impl ExtensionMetadata {
                 ComputeError: "PROJ wrote invalid PROJJSON for the CRS {crs}: {projjson}"
             ),
         }
-    }
-
-    pub fn with_projjson_crs(self) -> PolarsResult<Self> {
-        if matches!(
-            self.map.get("crs"),
-            None | Some(Value::Null | Value::Object(_))
-        ) {
-            return Ok(self);
-        }
-        let Some(projjson) = self.projjson()? else {
-            return Ok(self);
-        };
-        Ok(self.with_crs(&Value::Object(projjson).to_string()))
     }
 
     /// How the edges between coordinates run. `None` means planar.
@@ -191,7 +187,7 @@ fn crs_of(map: &Map<String, Value>) -> Result<String, String> {
         (None, _) => Err("the column does not declare a CRS, so it cannot be reprojected".into()),
         // Only the producer knows what an SRID refers to.
         (Some(srid), Some(CrsType::Srid)) => Err(format!(
-            "the column's CRS is the opaque SRID {srid}, which cannot be reprojected from"
+            "the column's CRS is the opaque SRID {srid}, which PROJ cannot read"
         )),
         // PROJJSON, WKT, `AUTH:CODE`, or a string of unstated kind: PROJ gets to try.
         (Some(Value::String(crs)), _) => Ok(crs.clone()),

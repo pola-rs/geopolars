@@ -7,7 +7,7 @@ use polars_core::prelude::PolarsResult;
 
 use crate::downcast;
 
-/// A column of boxes, with null rows recorded in the struct's own validity.
+/// A column of boxes, which only keeps the validity of its rows.
 /// Like [`Coords`](crate::Coords), it trusts that a bound is only null under a null row.
 pub struct BoxArray {
     validity: Option<Bitmap>,

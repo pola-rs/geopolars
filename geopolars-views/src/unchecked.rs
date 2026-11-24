@@ -57,8 +57,7 @@ impl UncheckedStorage {
     }
 }
 
-/// A chunk of boxes as it comes from Polars, which might have null bounds under a valid row.
-/// Use it only to move those nulls out to the rows (see `inner_nulls` in geopolars-compute).
+/// [UncheckedStorage] for a chunk of boxes, whose bounds might be null under a valid row.
 pub struct UncheckedBoxes {
     /// Null where the box struct is, or one of its bounds.
     pub boxes: BoxArray,

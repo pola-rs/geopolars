@@ -19,8 +19,9 @@ polars-arrow = { version = "0.55", default-features = false }
 # Where polars-arrow's `Buffer` lives. It is not re-exported.
 polars-buffer = { version = "0.55", default-features = false }
 
-# pyo3-polars is versioned INDEPENDENTLY of polars. 0.28 is the release built
-# against polars 0.55 / pyo3 0.29. Bump all three together, never one alone.
+# pyo3-polars is versioned independently of polars,
+# and comes from the polars commit patched in below.
+# Keep pyo3 at the version that commit's pyo3-polars depends on.
 pyo3-polars = { version = "0.28" }
 pyo3 = { version = "0.30" }
 
