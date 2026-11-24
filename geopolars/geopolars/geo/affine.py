@@ -10,7 +10,8 @@ import polars as pl
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._utils import LIB
+from geopolars._typing import OnRowError
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, PointType, PolygonType
 from geopolars.geo._dispatch import on_geometry, on_geometry_pair
 from geopolars.geo.centroid import _centroid
@@ -239,6 +240,7 @@ def _points(name: str, dtype: GeoArrowType) -> None:
 def _about_centroid(
     name: str,
     build_about: Callable[[pl.Expr, GeoArrowType, pl.Expr, GeoArrowType], pl.Expr],
+    on_row_error: OnRowError,
 ) -> Callable[[pl.Expr, GeoArrowType], pl.Expr]:
     """An `on_geometry` callback that hands `build_about` (one of the `_*_about` builders)
     each geometry's own centroid as its origin.
@@ -254,7 +256,9 @@ def _about_centroid(
             raise TypeError(msg)
         return on_geometry_pair(
             column,
-            _centroid(column, geometry, "footprint", "length_weighted_mean"),
+            _centroid(
+                column, geometry, "footprint", "length_weighted_mean", on_row_error
+            ),
             build_about,
         )
 
@@ -373,6 +377,7 @@ def rotate_about_centroid(
     amount: float,
     unit: AngleUnit = "deg",
     axis: Literal["x", "y", "z"] = "z",
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """Turn every geometry about an axis through its own centroid.
 
@@ -382,15 +387,16 @@ def rotate_about_centroid(
 
     {about_centroid_accepts}
 
+    {on_row_error}
 
     .. code-block:: python
 
         df.select(geo.rotate_about_centroid("parcel", 30))
     """
-
     _axis(axis)
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     about = _rotate_about(_degrees(amount, unit, "amount"), axis)
-    return on_geometry(geometry, _about_centroid("rotate", about))
+    return on_geometry(geometry, _about_centroid("rotate", about, on_row_error))
 
 
 def _shear(
@@ -467,6 +473,7 @@ def skew_about_centroid(
     xs: float = 0.0,
     ys: float = 0.0,
     unit: AngleUnit = "deg",
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """Shear every geometry in the plane about its own centroid.
 
@@ -476,12 +483,15 @@ def skew_about_centroid(
 
     {about_centroid_accepts}
 
+    {on_row_error}
+
     .. code-block:: python
 
         df.select(geo.skew_about_centroid("parcel", xs=15))
     """
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     about = _skew_about(_shear(xs, ys, unit))
-    return on_geometry(geometry, _about_centroid("skew", about))
+    return on_geometry(geometry, _about_centroid("skew", about, on_row_error))
 
 
 def _stretch(
@@ -580,6 +590,7 @@ def scale_about_centroid(
     xfact: float = 1.0,
     yfact: float = 1.0,
     zfact: float = 1.0,
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """Stretch every geometry away from (or towards) its own centroid.
 
@@ -589,13 +600,16 @@ def scale_about_centroid(
 
     {about_centroid_accepts}
 
+    {on_row_error}
+
     .. code-block:: python
 
         df.select(geo.scale_about_centroid("parcel", 2.0, 2.0))
     """
     _factors(xfact, yfact, zfact)
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     about = _scale_about(xfact, yfact, zfact)
-    return on_geometry(geometry, _about_centroid("scale", about))
+    return on_geometry(geometry, _about_centroid("scale", about, on_row_error))
 
 
 def _can_transform(matrix: list[float], geometry: GeoArrowType) -> None:

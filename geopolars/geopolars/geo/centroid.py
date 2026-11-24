@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
+from geopolars._typing import OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import MultiPointType, PointType
 from geopolars.geo._dispatch import on_geometry
@@ -27,17 +28,18 @@ def _centroid(
     geometry: GeoArrowType,
     method: CentroidMethod,
     anchor: CentroidAnchor,
+    on_row_error: OnRowError,
 ) -> pl.Expr:
     """The centroid of one geometry type, per row."""
     # Every point weighs the same, so the centroid is the mean of the points.
     if isinstance(geometry, PointType | MultiPointType):
-        return _mean_coordinate(column, geometry)
+        return _mean_coordinate(column, geometry, empty="empty_point")
     return register_plugin_function(
         plugin_path=LIB,
         args=[column],
         function_name="centroid",
         is_elementwise=True,
-        kwargs={"method": method, "anchor": anchor},
+        kwargs={"method": method, "anchor": anchor, "on_row_error": on_row_error},
     )
 
 
@@ -47,6 +49,7 @@ def centroid(
     *,
     method: CentroidMethod = "footprint",
     anchor: CentroidAnchor = "length_weighted_mean",
+    on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """The centroid of a polygon (centre of area) or linestring (centre of length).
 
@@ -104,10 +107,21 @@ def centroid(
     Its parts are weighted together by their length or area,
     measured as for a lone linestring or polygon.
 
-    A geometry without length or area has no centroid,
+    An empty geometry (one without any vertices, in any of its parts)
+    gives the empty point.
+
+    {on_row_error}
+    A geometry with vertices but without length or area has no centroid,
     such as a linestring with all its vertices on one spot,
     or a polygon with all its vertices on a line.
-    An empty geometry gives a null as well, rather than an empty point.
+    The error for it suggests `method="3d"` when the geometry has a `z`,
+    as a vertical geometry only has length or area in 3D.
+    There are two more cases without a centroid, which each have an error of their own.
+    A geometry whose vertices all lie very close to the first
+    (within about 1e-154 for a linestring, or 1e-103 for a polygon)
+    has a length or area too small to be held by a float.
+    A polygon whose holes take out more area than its exterior holds is not valid,
+    and would have a negative area.
 
     A NaN or an infinity in a coordinate gives a centroid that is not finite,
     rather than a null.
@@ -140,6 +154,8 @@ def centroid(
     """
     validate_one_of("method", method, CentroidMethod)
     validate_one_of("anchor", anchor, CentroidAnchor)
+    validate_one_of("on_row_error", on_row_error, OnRowError)
     return on_geometry(
-        geometry, lambda column, dtype: _centroid(column, dtype, method, anchor)
+        geometry,
+        lambda column, dtype: _centroid(column, dtype, method, anchor, on_row_error),
     )

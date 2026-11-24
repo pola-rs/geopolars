@@ -46,11 +46,41 @@ pub enum GeoComputeError {
         position: (f64, f64),
         bounds: [f64; 4],
     },
+    /// A geometry with vertices but without the length or area its centroid is weighted by.
+    CentroidWithoutWeight {
+        weighed_by: CentroidWeight,
+        /// Whether `method="3d"` could measure it, as it has a z that `method="footprint"` ignores.
+        suggest_3d: bool,
+    },
+    /// A geometry whose length or area underflows to 0 as an `f64`.
+    CentroidUnderflow {
+        weighed_by: CentroidWeight,
+        /// How far the vertices lie from the first, at most.
+        extent: f64,
+    },
+    /// A polygon whose holes take out more area than its exterior holds.
+    HolesExceedExterior,
     #[cfg(feature = "geos")]
     Geos(geos::Error),
 }
 
 pub type GeoComputeResult<T> = Result<T, GeoComputeError>;
+
+/// What a centroid is weighted by: the length of a linestring, or the area of a polygon.
+#[derive(Clone, Copy, Debug)]
+pub enum CentroidWeight {
+    Length,
+    Area,
+}
+
+impl CentroidWeight {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Length => "length",
+            Self::Area => "area",
+        }
+    }
+}
 
 /// The result of one row, or `None` if it failed and `on_row_error=`[OnRowError::Null].
 #[cfg(any(feature = "native", feature = "geos", feature = "rsgeo"))]
@@ -123,6 +153,40 @@ impl fmt::Display for GeoComputeError {
                 x from {xmin} to {xmax} and y from {ymin} to {ymax}; \
                 set `on_out_of_bounds` to \"null\" or \"ignore\" not to raise"
             ),
+            Self::CentroidWithoutWeight {
+                weighed_by,
+                suggest_3d,
+            } => {
+                let weight = weighed_by.name();
+                let degenerate = match weighed_by {
+                    CentroidWeight::Length => "every vertex on one spot",
+                    CentroidWeight::Area => "every vertex on one line",
+                };
+                write!(
+                    f,
+                    "a centroid needs a geometry with {weight}, \
+                    got one without (such as one with {degenerate})"
+                )?;
+                if *suggest_3d {
+                    write!(
+                        f,
+                        "; a vertical geometry only has {weight} with `method=\"3d\"`"
+                    )?;
+                }
+                Ok(())
+            }
+            Self::CentroidUnderflow { weighed_by, extent } => write!(
+                f,
+                "a centroid needs a geometry with {weight}, got one whose {weight} is too small \
+                for a float (every vertex lies within {extent:e} of the first); \
+                scale the geometry up first",
+                weight = weighed_by.name(),
+            ),
+            Self::HolesExceedExterior => write!(
+                f,
+                "a centroid needs a polygon with area, got one whose holes take out more area \
+                than its exterior holds, which is not valid OGC"
+            ),
             #[cfg(feature = "geos")]
             Self::Geos(source) => write!(f, "{source}"),
         }
@@ -142,7 +206,10 @@ impl std::error::Error for GeoComputeError {
             | Self::NegativeOneSidedDistance { .. }
             | Self::Split { .. }
             | Self::HoleInEmptyExterior
-            | Self::OutOfBounds { .. } => None,
+            | Self::OutOfBounds { .. }
+            | Self::CentroidWithoutWeight { .. }
+            | Self::CentroidUnderflow { .. }
+            | Self::HolesExceedExterior => None,
             #[cfg(feature = "geos")]
             Self::Geos(source) => Some(source),
         }

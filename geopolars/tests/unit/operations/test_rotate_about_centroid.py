@@ -104,18 +104,31 @@ def test_bad_arguments_are_refused() -> None:
         geo.rotate_about_centroid("line", 30, unit="pi")  # type: ignore[arg-type]
 
 
-def test_a_geometry_without_a_centroid_comes_out_null() -> None:
+def test_a_null_comes_out_null_and_an_empty_geometry_stays_empty() -> None:
     df = pl.DataFrame(
         {"line": [[{"x": 0.0, "y": 0.0}, {"x": 2.0, "y": 0.0}], [], None]},
         schema={"line": pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))},
     ).select(pl.col("line").ext.to(XY.linestring_dtype()))
     out = df.select(geo.rotate_about_centroid("line", 90))
 
-    assert out["line"].is_null().to_list() == [False, True, True]
+    assert out["line"].ext.storage()[1:].to_list() == [[], None]
     assert out["line"].ext.storage()[0].to_list() == [
         {"x": 1.0, "y": -1.0},
         {"x": 1.0, "y": 1.0},
     ]
+
+
+def test_a_line_without_length_goes_to_on_row_error() -> None:
+    df = pl.DataFrame(
+        {"line": [[{"x": 1.0, "y": 1.0}, {"x": 1.0, "y": 1.0}]]},
+        schema={"line": pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))},
+    ).select(pl.col("line").ext.to(XY.linestring_dtype()))
+
+    with pytest.raises(pl.exceptions.ComputeError, match="got one without"):
+        df.select(geo.rotate_about_centroid("line", 90))
+    out = df.select(geo.rotate_about_centroid("line", 90, on_row_error="null"))
+
+    assert out["line"].is_null().to_list() == [True]
 
 
 def test_the_crs_is_carried_over(ring_coords: pl.DataFrame) -> None:

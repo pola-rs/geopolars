@@ -167,8 +167,11 @@ class ExprGeoNameSpace:
         amount: float,
         unit: AngleUnit = "deg",
         axis: Literal["x", "y", "z"] = "z",
+        on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
-        return affine.rotate_about_centroid(self._expr, amount, unit=unit, axis=axis)
+        return affine.rotate_about_centroid(
+            self._expr, amount, unit=unit, axis=axis, on_row_error=on_row_error
+        )
 
     def skew(
         self,
@@ -184,9 +187,15 @@ class ExprGeoNameSpace:
         return affine.skew(self._expr, xs=xs, ys=ys, unit=unit, origin=origin)
 
     def skew_about_centroid(
-        self, xs: float = 0.0, ys: float = 0.0, unit: AngleUnit = "deg"
+        self,
+        xs: float = 0.0,
+        ys: float = 0.0,
+        unit: AngleUnit = "deg",
+        on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
-        return affine.skew_about_centroid(self._expr, xs=xs, ys=ys, unit=unit)
+        return affine.skew_about_centroid(
+            self._expr, xs=xs, ys=ys, unit=unit, on_row_error=on_row_error
+        )
 
     def scale(
         self,
@@ -204,10 +213,18 @@ class ExprGeoNameSpace:
         )
 
     def scale_about_centroid(
-        self, xfact: float = 1.0, yfact: float = 1.0, zfact: float = 1.0
+        self,
+        xfact: float = 1.0,
+        yfact: float = 1.0,
+        zfact: float = 1.0,
+        on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         return affine.scale_about_centroid(
-            self._expr, xfact=xfact, yfact=yfact, zfact=zfact
+            self._expr,
+            xfact=xfact,
+            yfact=yfact,
+            zfact=zfact,
+            on_row_error=on_row_error,
         )
 
     def snap_to_grid(
@@ -262,10 +279,13 @@ class ExprGeoNameSpace:
         *,
         method: CentroidMethod = "footprint",
         anchor: CentroidAnchor = "length_weighted_mean",
+        on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         from geopolars.geo.centroid import centroid
 
-        return centroid(self._expr, method=method, anchor=anchor)
+        return centroid(
+            self._expr, method=method, anchor=anchor, on_row_error=on_row_error
+        )
 
     def exterior(self) -> pl.Expr:
         from geopolars.geo.exterior import exterior

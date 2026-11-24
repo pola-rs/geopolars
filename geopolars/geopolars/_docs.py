@@ -249,8 +249,9 @@ See :ref:`unit <arg-unit>` on the Common arguments page.""",
 Only linestrings and polygons are accepted:
 a multi-geometry has a centroid per part rather than one,
 and a point would stay where it is.
-A geometry without a centroid (null, empty, a line without length,
-or a polygon that encloses nothing) comes out null.""",
+A null geometry comes out null, and an empty one stays empty.
+Any other geometry without a centroid, such as a line without length,
+goes to `on_row_error` (see `centroid` for every such case).""",
     # TODO: Describe in the constructors' docstrings how `crs` labels the result:
     # it sets a CRS where none is declared,
     # and refuses a different declared one rather than reprojecting (`MetadataKwargs::apply`).

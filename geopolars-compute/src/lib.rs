@@ -45,7 +45,7 @@ pub use early_coord_check::EarlyCoordCheck;
 pub use empty_polygon_exterior::EmptyPolygonExterior;
 #[cfg(any(feature = "native", feature = "geos", feature = "rsgeo"))]
 use error::row_or_null;
-pub use error::{GeoComputeError, GeoComputeResult};
+pub use error::{CentroidWeight, GeoComputeError, GeoComputeResult};
 pub use metric::{BaseMetric, GeodesicMetric, Planar, WithHeight};
 pub use new_ring_orientation::{NewHoles, NewRingOrientation};
 pub use null_parts::NullParts;

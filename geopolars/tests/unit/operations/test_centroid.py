@@ -16,6 +16,7 @@ from geopolars.datatypes import (
     LineStringXYM,
     LineStringXYZ,
     MultiLineStringXY,
+    MultiPointXY,
     MultiPolygonXY,
     MultiPolygonXYZ,
     PointXY,
@@ -28,10 +29,18 @@ from tests.unit.conftest import XY, Dimension, coordinates
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from geopolars._typing import OnRowError
+
 _XY_VERTICES = pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))
 _XY_RINGS = pl.List(_XY_VERTICES)
 
 Ring = list[dict[str, float]]
+
+# How the errors for a geometry without a centroid start, one per reason.
+_NO_LENGTH = "needs a geometry with length, got one without"
+_NO_AREA = "needs a geometry with area, got one without"
+_UNDERFLOW = "too small for a float"
+_HOLES_EXCEED = "holes take out more area than its exterior holds"
 
 
 def _ring(*xy: tuple[float, float]) -> Ring:
@@ -42,6 +51,7 @@ def _ring(*xy: tuple[float, float]) -> Ring:
 _SQUARE = _ring((0, 0), (1, 0), (1, 1), (0, 1))
 # An L of three unit squares: its vertices average elsewhere than its area.
 _L = _ring((0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2))
+_BIG_SQUARE = _ring((10, 10), (12, 10), (12, 12), (10, 12))
 
 
 def _polygons(*polygons: list[Ring] | None, crs: str | None = None) -> pl.DataFrame:
@@ -51,8 +61,15 @@ def _polygons(*polygons: list[Ring] | None, crs: str | None = None) -> pl.DataFr
     )
 
 
-def _centroids(df: pl.DataFrame) -> list[tuple[float, float] | None]:
-    out = df.select(geo.centroid("polygon")).to_series().ext.storage().to_list()
+def _centroids(
+    df: pl.DataFrame, on_row_error: OnRowError = "raise"
+) -> list[tuple[float, float] | None]:
+    out = (
+        df.select(geo.centroid("polygon", on_row_error=on_row_error))
+        .to_series()
+        .ext.storage()
+        .to_list()
+    )
     return [None if c is None else (c["x"], c["y"]) for c in out]
 
 
@@ -274,25 +291,60 @@ def _centroids_of_only_column(
     df: pl.DataFrame,
     method: CentroidMethod,
     anchor: CentroidAnchor = "length_weighted_mean",
+    on_row_error: OnRowError = "raise",
 ) -> list[tuple[float, ...] | None]:
     (name,) = df.columns
-    out = df.select(geo.centroid(name, method=method, anchor=anchor))
+    out = df.select(
+        geo.centroid(name, method=method, anchor=anchor, on_row_error=on_row_error)
+    )
     return [
         None if c is None else tuple(c.values())
         for c in out.to_series().ext.storage().to_list()
     ]
 
 
-@pytest.mark.parametrize(
-    ("method", "expected"),
-    [("footprint", None), ("3d", pytest.approx((0.5, 0.0, 0.5)))],
-)
-def test_a_vertical_polygon_only_has_a_centroid_in_3d(
-    method: CentroidMethod, expected: object
-) -> None:
+def test_a_vertical_polygon_only_has_a_centroid_in_3d() -> None:
     df = _polygons_xyz([_xyz_ring((0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1))])
 
-    assert _centroids_of_only_column(df, method) == [expected]
+    assert _centroids_of_only_column(df, "3d") == [pytest.approx((0.5, 0.0, 0.5))]
+    with pytest.raises(pl.exceptions.ComputeError, match='area with `method="3d"`'):
+        _centroids_of_only_column(df, "footprint")
+
+
+@pytest.mark.parametrize("method", ["footprint", "3d"])
+def test_a_small_polygon_keeps_its_centroid(method: CentroidMethod) -> None:
+    # Small enough that the squared normal of the 3D fan underflows.
+    side = 1e-90
+    square = _xyz_ring((0, 0, 0), (side, 0, side), (side, side, side), (0, side, 0))
+    df = _polygons_xyz([square])
+
+    got = _centroids_of_only_column(df, method)
+
+    assert got == [pytest.approx((side / 2,) * 3, rel=1e-12, abs=0)]
+
+
+@pytest.mark.parametrize(
+    ("rings", "error"),
+    [
+        ([_xyz_ring((0, 0, 0), (1e-200, 0, 0), (0, 0, 1e-200))], _UNDERFLOW),
+        (
+            [
+                _xyz_ring((0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)),
+                _xyz_ring((-1, 0, -1), (2, 0, -1), (2, 0, 2), (-1, 0, 2)),
+            ],
+            _HOLES_EXCEED,
+        ),
+    ],
+    ids=["tiny", "hole exceeds exterior"],
+)
+def test_a_polygon_without_area_has_no_centroid_in_3d(
+    rings: list[XyzRing], error: str
+) -> None:
+    df = _polygons_xyz(rings)
+
+    with pytest.raises(pl.exceptions.ComputeError, match=error):
+        _centroids_of_only_column(df, "3d")
+    assert _centroids_of_only_column(df, "3d", on_row_error="null") == [None]
 
 
 @pytest.mark.parametrize("reverse_hole", [False, True])
@@ -361,12 +413,63 @@ def test_the_crs_is_carried_over() -> None:
     assert out.schema["polygon"] == PointXY._with_metadata_of(df.schema["polygon"])
 
 
-def test_a_null_or_empty_polygon_has_no_centroid() -> None:
-    assert _centroids(_polygons(None, [], [_SQUARE])) == [None, None, (0.5, 0.5)]
+def test_an_empty_polygon_has_the_empty_point_as_its_centroid() -> None:
+    null, empty, empty_exterior, square = _centroids(
+        _polygons(None, [], [[]], [_SQUARE])
+    )
+
+    assert null is None
+    assert _all_nan(empty)
+    assert _all_nan(empty_exterior)
+    assert square == (0.5, 0.5)
 
 
 def test_a_polygon_that_encloses_nothing_has_no_centroid() -> None:
-    assert _centroids(_polygons([_ring((0, 0), (2, 0), (1, 0))])) == [None]
+    df = _polygons([_ring((0, 0), (2, 0), (1, 0))], [_SQUARE])
+
+    with pytest.raises(pl.exceptions.ComputeError, match=_NO_AREA):
+        _centroids(df)
+    assert _centroids(df, on_row_error="null") == [None, (0.5, 0.5)]
+
+
+# The cross products of a ring this small underflow to 0.
+_TINY_TRIANGLE = _ring((0, 0), (1e-200, 0), (0, 1e-200))
+
+
+# The area of the second one is still there, but the sums it is weighted by underflow.
+@pytest.mark.parametrize("side", [1e-200, 1e-105])
+def test_a_polygon_too_small_for_its_area_has_no_centroid(side: float) -> None:
+    df = _polygons([_ring((0, 0), (side, 0), (0, side))], [_SQUARE])
+
+    with pytest.raises(pl.exceptions.ComputeError, match=_UNDERFLOW):
+        _centroids(df)
+    assert _centroids(df, on_row_error="null") == [None, (0.5, 0.5)]
+
+
+def test_a_polygon_whose_hole_exceeds_its_exterior_has_no_centroid() -> None:
+    df = _polygons([_SQUARE, _BIG_SQUARE], [_SQUARE])
+
+    with pytest.raises(pl.exceptions.ComputeError, match=_HOLES_EXCEED):
+        _centroids(df)
+    assert _centroids(df, on_row_error="null") == [None, (0.5, 0.5)]
+
+
+def test_rows_without_a_centroid_line_up_across_chunks_and_slices() -> None:
+    flat = [_ring((0, 0), (2, 0), (1, 0))]
+    df = pl.concat(
+        [_polygons([_SQUARE], flat, [_L]), _polygons([], flat, [_SQUARE])],
+        rechunk=False,
+    )
+    assert df.n_chunks() == 2
+
+    _, nothing, l_shape, empty, nothing_again, square = _centroids(
+        df, on_row_error="null"
+    )
+
+    assert (nothing, nothing_again) == (None, None)
+    assert l_shape == pytest.approx((5 / 6, 5 / 6))
+    assert _all_nan(empty)
+    assert square == pytest.approx((0.5, 0.5))
 
 
 def test_rejects_a_non_geometry_while_resolving_the_schema() -> None:
@@ -423,10 +526,12 @@ def _lines(
 
 
 def _line_centroids(
-    df: pl.DataFrame, method: CentroidMethod = "footprint"
+    df: pl.DataFrame,
+    method: CentroidMethod = "footprint",
+    on_row_error: OnRowError = "raise",
 ) -> list[tuple[float, ...] | None]:
     out = (
-        df.select(geo.centroid("line", method=method))
+        df.select(geo.centroid("line", method=method, on_row_error=on_row_error))
         .to_series()
         .ext.storage()
         .to_list()
@@ -471,16 +576,12 @@ def test_the_method_says_whether_z_counts_towards_the_length(
     assert got == pytest.approx(expected)
 
 
-@pytest.mark.parametrize(
-    ("method", "expected"),
-    [("footprint", None), ("3d", pytest.approx((1.0, 1.0, 2.5)))],
-)
-def test_a_vertical_line_only_has_a_centroid_in_3d(
-    method: CentroidMethod, expected: object
-) -> None:
+def test_a_vertical_line_only_has_a_centroid_in_3d() -> None:
     df = _lines([(1, 1, 0), (1, 1, 5)], dtype=LineStringXYZ)
 
-    assert _line_centroids(df, method) == [expected]
+    assert _line_centroids(df, "3d") == [pytest.approx((1.0, 1.0, 2.5))]
+    with pytest.raises(pl.exceptions.ComputeError, match='length with `method="3d"`'):
+        _line_centroids(df)
 
 
 @pytest.mark.parametrize("method", ["footprint", "3d"])
@@ -540,16 +641,34 @@ def test_the_crs_of_a_line_is_carried_over() -> None:
     assert out.schema["line"] == PointXY._with_metadata_of(df.schema["line"])
 
 
-def test_a_line_without_length_has_no_centroid() -> None:
-    df = _lines(None, [], [(1, 1)], [(1, 1), (1, 1)], _HOOK)
+def test_an_empty_line_has_the_empty_point_as_its_centroid() -> None:
+    null, empty, hook = _line_centroids(_lines(None, [], _HOOK))
 
-    assert _line_centroids(df) == [
-        None,
-        None,
-        None,
+    assert null is None
+    assert _all_nan(empty)
+    assert hook == pytest.approx((4 / 3, 1 / 6))
+
+
+@pytest.mark.parametrize(
+    "line", [[(1, 1)], [(1, 1), (1, 1)]], ids=["one vertex", "one spot"]
+)
+def test_a_line_without_length_has_no_centroid(line: Line) -> None:
+    df = _lines(line, _HOOK)
+
+    with pytest.raises(pl.exceptions.ComputeError, match=_NO_LENGTH):
+        _line_centroids(df)
+    assert _line_centroids(df, on_row_error="null") == [
         None,
         pytest.approx((4 / 3, 1 / 6)),
     ]
+
+
+def test_a_line_too_small_for_its_length_has_no_centroid() -> None:
+    df = _lines([(0, 0), (1e-200, 1e-200)], _HOOK)
+
+    with pytest.raises(pl.exceptions.ComputeError, match=_UNDERFLOW):
+        _line_centroids(df)
+    assert _line_centroids(df, on_row_error="null")[0] is None
 
 
 @pytest.mark.parametrize("method", ["footprint", "3d"])
@@ -601,12 +720,16 @@ def _multipolygons(
     return pl.DataFrame(storage.ext.to(MultiPolygonXY(crs=crs)))
 
 
-def _multi_centroids(df: pl.DataFrame) -> list[tuple[float, ...] | None]:
-    out = df.select(geo.centroid("multi")).to_series().ext.storage().to_list()
+def _multi_centroids(
+    df: pl.DataFrame, on_row_error: OnRowError = "raise"
+) -> list[tuple[float, ...] | None]:
+    out = (
+        df.select(geo.centroid("multi", on_row_error=on_row_error))
+        .to_series()
+        .ext.storage()
+        .to_list()
+    )
     return [None if c is None else tuple(c.values()) for c in out]
-
-
-_BIG_SQUARE = _ring((10, 10), (12, 10), (12, 12), (10, 12))
 
 
 def test_a_multilinestrings_parts_are_weighted_by_length() -> None:
@@ -640,16 +763,47 @@ def test_a_part_without_area_adds_nothing() -> None:
     assert _multi_centroids(df) == [pytest.approx((11.0, 11.0))]
 
 
+def test_an_empty_multilinestring_has_the_empty_point_as_its_centroid() -> None:
+    null, empty, empty_parts = _multi_centroids(_multilines(None, [], [[], []]))
+
+    assert null is None
+    assert _all_nan(empty)
+    assert _all_nan(empty_parts)
+
+
 def test_a_multilinestring_without_length_has_no_centroid() -> None:
-    df = _multilines(None, [], [[(1, 1)], []])
+    df = _multilines([[(1, 1)], []])
 
-    assert _multi_centroids(df) == [None, None, None]
+    with pytest.raises(pl.exceptions.ComputeError, match=_NO_LENGTH):
+        _multi_centroids(df)
+    assert _multi_centroids(df, on_row_error="null") == [None]
 
 
-def test_a_multipolygon_without_area_has_no_centroid() -> None:
-    df = _multipolygons(None, [], [[]])
+def test_an_empty_multipolygon_has_the_empty_point_as_its_centroid() -> None:
+    null, empty, empty_parts = _multi_centroids(_multipolygons(None, [], [[], [[]]]))
 
-    assert _multi_centroids(df) == [None, None, None]
+    assert null is None
+    assert _all_nan(empty)
+    assert _all_nan(empty_parts)
+
+
+@pytest.mark.parametrize(
+    ("polygons", "error"),
+    [
+        ([[_ring((0, 0), (2, 0), (1, 0))]], _NO_AREA),
+        ([[_TINY_TRIANGLE]], _UNDERFLOW),
+        ([[_SQUARE, _BIG_SQUARE]], _HOLES_EXCEED),
+    ],
+    ids=["flat", "tiny", "hole exceeds exterior"],
+)
+def test_a_multipolygon_without_area_has_no_centroid(
+    polygons: list[list[Ring]], error: str
+) -> None:
+    df = _multipolygons(polygons)
+
+    with pytest.raises(pl.exceptions.ComputeError, match=error):
+        _multi_centroids(df)
+    assert _multi_centroids(df, on_row_error="null") == [None]
 
 
 # Non-finite coordinates: the centroid is not finite either, rather than null
@@ -882,6 +1036,19 @@ def test_a_multipoints_centroid_is_its_mean_coordinate(
 
     assert out.schema["multipoint"] == dimension.point_dtype()
     assert out.equals(df.select(geo.mean_coordinate("multipoint")))
+
+
+def test_an_empty_multipoint_has_the_empty_point_as_its_centroid() -> None:
+    points = [[{"x": 0.0, "y": 0.0}, {"x": 2.0, "y": 4.0}], [], None]
+    df = pl.DataFrame(
+        pl.Series("multipoint", points, dtype=_XY_VERTICES).ext.to(MultiPointXY())
+    )
+
+    both, empty, null = _centroids_of_only_column(df, "footprint")
+
+    assert both == (1.0, 2.0)
+    assert _all_nan(empty)
+    assert null is None
 
 
 def test_the_crs_of_a_multipoint_is_carried_over() -> None:

@@ -3,12 +3,14 @@
 //! as the Python side takes the mean coordinate of a (multi)point itself.
 
 use geopolars_compute::native::{CentroidAnchor, CentroidMethod};
+use geopolars_compute::OnRowError;
 use geopolars_core::{centroids, SegmentKind};
 use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
 
+use crate::common_arguments::OnRowErrorDef;
 use crate::geoarrow::{describe, geometry_series, Geo};
 
 #[derive(Deserialize)]
@@ -33,6 +35,8 @@ struct CentroidKwargs {
     method: CentroidMethod,
     #[serde(with = "CentroidAnchorDef")]
     anchor: CentroidAnchor,
+    #[serde(with = "OnRowErrorDef")]
+    on_row_error: OnRowError,
 }
 
 /// The point a `dtype` column's centroids are, and the kind of geometry they are of.
@@ -57,7 +61,15 @@ fn centroid(inputs: &[Series], kwargs: CentroidKwargs) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| centroids(chunk.as_ref(), kind, kwargs.method, kwargs.anchor))
+        .map(|chunk| {
+            centroids(
+                chunk.as_ref(),
+                kind,
+                kwargs.method,
+                kwargs.anchor,
+                kwargs.on_row_error,
+            )
+        })
         .collect::<PolarsResult<Vec<_>>>()?;
     geometry_series(inputs[0].name().clone(), point, chunks)
 }

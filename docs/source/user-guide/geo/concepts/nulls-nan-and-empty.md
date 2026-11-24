@@ -24,7 +24,7 @@ Below, we compare a square, an empty polygon and a null:
 
 See if this makes sense in your mental model:
 The empty polygon is still a polygon. It has an area, which is 0.
-It does not have a centroid though, so that comes out as null.
+Its centroid is empty too: the empty point.
 If it does, then you got it!
 
 ## Nulls
@@ -50,9 +50,7 @@ the whole row becomes null:
 `add_parts`, `add_holes` and `polygons_from_rings_in_separate_columns` can leave the null part out instead,
 with `null_parts="drop"`.
 
-An operation can also *give* a null where it has no answer.
-A centroid of an empty polygon is one example.
-Another is an operation that fails on a row while `on_row_error="null"` is set,
+An operation can also *give* a null, when it fails on a row while `on_row_error="null"` is set,
 as you will see [below](#non-finite-and-inner-empties-in-geos-backed-kernels).
 
 ## Empty geometries
