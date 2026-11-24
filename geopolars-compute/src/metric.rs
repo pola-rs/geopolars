@@ -31,7 +31,6 @@ pub type WithHeight = ((f64, f64), f64);
 
 /// Measures coordinates in one CRS against each other along the ellipsoid that CRS lies on.
 pub struct GeodesicMetric {
-    /// To the CRS's own longitude/latitude, so no datum is shifted.
     to_lonlat: Transformation,
     pub(crate) ellipsoid: Geodesic,
 }
@@ -39,9 +38,10 @@ pub struct GeodesicMetric {
 impl BaseMetric for GeodesicMetric {}
 
 impl GeodesicMetric {
-    /// `to_lonlat` goes from the CRS to its own longitude/latitude, so no datum is shifted.
-    /// `semi_major` is in the unit of the CRS's `x` and `y` (metres if those are degrees),
-    /// which is the unit everything measured comes out in.
+    /// Measures along the ellipsoid of `semi_major` and `flattening`, in the unit of `semi_major`.
+    ///
+    /// `to_lonlat` must go from the CRS to its own longitude/latitude, so no datum is shifted.
+    /// `semi_major` must be in the unit of the CRS's `x` and `y` (metres if those are degrees).
     pub fn new(to_lonlat: Transformation, semi_major: f64, flattening: f64) -> Self {
         Self {
             to_lonlat,

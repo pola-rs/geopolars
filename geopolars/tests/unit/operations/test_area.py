@@ -350,11 +350,10 @@ def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -
 @pytest.mark.parametrize(
     ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
 )
-def test_a_non_finite_x_makes_its_row_nan(
+def test_a_non_finite_x_gives_a_non_finite_area(
     value: float, distance_method: DistanceMethod, crs: str | None
 ) -> None:
-    """A checked row gets NaN without being measured; an unchecked one is
-    measured, and its result is not finite. The other rows are left alone."""
+    """A checked row gets NaN without being measured. An unchecked one is measured."""
     area = _area_by(distance_method)
     broken = [_SQUARE[0], {"x": value, "y": 0.0}, *_SQUARE[2:]]
     df = _polygons([[_SQUARE], [broken]], crs=crs)
@@ -440,7 +439,7 @@ def test_by_default_longitudes_up_to_a_full_turn_are_within_the_bounds() -> None
 
 
 def test_planar_checks_no_bounds_unless_asked() -> None:
-    """So it does not ask PROJ about the CRS either."""
+    """Without the bounds check, it does not ask PROJ about the CRS either."""
     unknown = _relabelled([_SQUARE], crs="EPSG:999999")
     past = _rings([_PAST_A_FULL_TURN], crs=WGS84)
     area = _area_by("planar")

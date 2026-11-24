@@ -26,7 +26,6 @@ enum ExteriorSideDef {
     Smaller,
 }
 
-/// The keyword arguments of the Python `area`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AreaKwargs {
@@ -54,13 +53,24 @@ fn area_dtype(field: &Field) -> PolarsResult<Field> {
 
 fn kernel_output_type_area(input_fields: &[Field], kwargs: AreaKwargs) -> PolarsResult<Field> {
     if let DistanceMethod::Geodesic = kwargs.distance_method {
-        // So a CRS PROJ cannot measure in fails while the plan is built.
+        // Builds the metric, so that a CRS PROJ cannot measure in fails while the plan is built.
         geodesic_metric_of(&input_fields[0])?;
     }
     area_dtype(&input_fields[0])
 }
 
-fn measure_areas(
+#[polars_expr(output_type_func_with_kwargs=kernel_output_type_area)]
+fn area(inputs: &[Series], kwargs: AreaKwargs) -> PolarsResult<Series> {
+    match kwargs.distance_method {
+        DistanceMethod::Planar => area_with_metric(&Planar, &inputs[0], &kwargs),
+        DistanceMethod::Geodesic => {
+            let metric = geodesic_metric_of(&inputs[0].field())?;
+            area_with_metric(&*metric, &inputs[0], &kwargs)
+        }
+    }
+}
+
+fn area_with_metric(
     metric: &impl AreaMetric<Error: Into<GeoComputeError>>,
     geometries: &Series,
     kwargs: &AreaKwargs,
@@ -81,15 +91,4 @@ fn measure_areas(
         )
     });
     Ok(Float64Chunked::try_from_chunk_iter(geometries.name().clone(), chunks)?.into_series())
-}
-
-#[polars_expr(output_type_func_with_kwargs=kernel_output_type_area)]
-fn area(inputs: &[Series], kwargs: AreaKwargs) -> PolarsResult<Series> {
-    match kwargs.distance_method {
-        DistanceMethod::Planar => measure_areas(&Planar, &inputs[0], &kwargs),
-        DistanceMethod::Geodesic => {
-            let metric = geodesic_metric_of(&inputs[0].field())?;
-            measure_areas(&*metric, &inputs[0], &kwargs)
-        }
-    }
 }

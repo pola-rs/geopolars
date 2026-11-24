@@ -163,16 +163,14 @@ keep the check for nulls and empties in the loop instead.
 
 ## `early_coord_check`
 
-A native kernel defaults to `early_coord_check="finite"`.
-In one that gives a float per row, a row that fails it gets NaN, without being computed,
-rather than going to `on_row_error`.
+Implement `early_coord_check` in a native kernel as `geopolars/docs/source/reference/common_arguments.rst` describes it.
 
 Check each row in the loop over the rows, with a pass over its coordinates just before the work.
 Doing it here finds them still in cache:
 
 ```rust
 per_row_or_null(rows, on_row_error, |i| {
-    if !row_passes_early_check::<EARLY_COORD_CHECK>(coords, row_vertices(i)) {
+    if !areas_with_failed_check_row_passes_early::<EARLY_COORD_CHECK>(coords, row_vertices(i)) {
         return Ok(Some(f64::NAN));
     }
     Ok(Some(row_area(&chunk, i)))

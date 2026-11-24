@@ -1,7 +1,5 @@
 const_enum!(
     /// Which coordinates a kernel looks for in a check before its work.
-    /// A GEOS kernel sends a row holding one to `on_row_error`,
-    /// a native one that gives a float gives it NaN.
     /// Implements `early_coord_check`, which `geopolars/docs/source/reference/common_arguments.rst` documents.
     pub enum EarlyCoordCheck {
         Off,

@@ -44,10 +44,10 @@ Turning this off in data with very few NaNs might be faster, but if your data co
 you might be better off leaving this one as this can skip expensive calculations.
 
 - `early_coord_check="off"` skips this extra pass.
-- `early_coord_check="finite"` (default for native kernels) means that the kernel will
-  check for such values in the operation. If it finds one, a native kernel that gives a float
-  gives that row NaN without computing it, while a GEOS kernel marks it as an error,
-  which can be picked up by `on_row_error`. An empty point does not trigger this.
+- `early_coord_check="finite"` (default for native kernels) checks for a NaN or infinite `x` or `y`,
+  other than an empty point.
+  If it finds one, a native kernel that gives a float gives that row NaN without computing it.
+  A GEOS kernel marks the row as an error instead, which `on_row_error` handles.
 - `early_coord_check="finite_and_empty"` (default for GEOS kernels) does the same as the above,
   but also for an empty point inside a geometry.
 
@@ -133,7 +133,8 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
   about 1.6 times at 52°N.
   Pass `distance_method="geodesic"` for such a CRS.
 
-`area` decides `"auto"` based on equal-area CRS (see its doc comment).
+`area` resolves `"auto"` differently.
+It only measures planar without a CRS or in an equal-area one (see `area`).
 
 .. _arg-allow_geographic:
 
@@ -159,14 +160,13 @@ A coordinate outside the bounds of its CRS (a latitude of 91°, say) is not a pl
 so measuring it gives NaN, `0.0`, or a wrong number without warning.
 This argument checks for such coordinates.
 `crs_bounds` picks the bounds to check against, with the same values as in `fix_out_of_bounds`.
-Its default here is `"crs_wrapped_longitude"`, so that longitudes from 180 to 360 pass:
-data stored from 0 to 360, or a box across the antimeridian (see `to_polygon`),
-measures as it would from -180 to 180.
+Its default here is `"crs_wrapped_longitude"`, which lets longitudes from 180 to 360 pass.
+Data stored from 0 to 360 then measures as it would from -180 to 180,
+as does a box across the antimeridian (see `to_polygon`).
 
-`early_coord_check` runs first, so a row with a NaN or infinite `x` or `y` gets NaN,
-whatever this argument says.
-With `early_coord_check="off"`, an infinite `x` or `y` lies outside the bounds,
-but a NaN one never does, so neither does an empty point inside a geometry.
+`early_coord_check` runs first, so a row that fails it gets NaN, whatever this argument says.
+An infinite `x` or `y` lies outside the bounds, which only matters with `early_coord_check="off"`.
+A NaN one never does, so neither does an empty point inside a geometry.
 
 - `on_out_of_bounds="auto"` (default) is `"error"` when measuring geodesic,
   and `"ignore"` when measuring planar, which then does not ask PROJ for any bounds.
@@ -392,14 +392,10 @@ They are described as they are now.
      - default
      - taken by
      - meaning
-   * - `allow_non_polygons`
+   * - `allow_non_polygons`, `allow_non_lines`
      - `False`
-     - `area`
-     - give a non-polygon `0.0` rather than refusing it
-   * - `allow_non_lines`
-     - `False`
-     - `length`
-     - as `allow_non_polygons`, for non-lines
+     - `area`, `length`
+     - give a non-polygon (or a non-line) `0.0` rather than refusing it
    * - `action`
      - `"drop"`
      - `filter_coordinates`, `fix_out_of_bounds` (inside `OutOfBounds`)

@@ -227,7 +227,7 @@ fn reproject_positions_in_place(
     // A null buffer it reads as `0.0` for `z` and as "no time given" for `t`.
     unsafe {
         // PROJ logs every coordinate it fails on to stderr.
-        // Only one retried on its own should be, as before batching.
+        // It is silenced here, so that only the retry of a failed coordinate logs it.
         let log_level = proj_log_level(transformation.ctx, PJ_LOG_LEVEL_PJ_LOG_NONE);
         proj_trans_generic(
             transformation.pj,
@@ -257,12 +257,11 @@ fn failed_in_batch(x: f64) -> bool {
     x == f64::INFINITY
 }
 
-/// The `x` and `y` of a run of vertices of some coordinates, moved through PROJ in a single call.
+/// A run of vertices, with their `x` and `y` moved through PROJ in a single call.
 pub struct ReprojectedXy {
     x: Vec<f64>,
     y: Vec<f64>,
-    /// The index in the coordinates of the first vertex.
-    first: usize,
+    first_vertex: usize,
 }
 
 impl ReprojectedXy {
@@ -281,12 +280,11 @@ impl ReprojectedXy {
         Self {
             x,
             y,
-            first: vertices.start,
+            first_vertex: vertices.start,
         }
     }
 
-    /// The error of the first of `vertices` PROJ failed on, if any,
-    /// by reprojecting each it failed on once more, on its own.
+    /// Checks that PROJ reprojected every one of `vertices`, giving the error of the first it failed on.
     /// `transformation` and `coords` must be the ones it was made with.
     #[inline(always)]
     pub(crate) fn check(
@@ -295,7 +293,7 @@ impl ReprojectedXy {
         coords: &ValidCoords,
         vertices: Range<usize>,
     ) -> GeoComputeResult<()> {
-        let x = &self.x[vertices.start - self.first..vertices.end - self.first];
+        let x = &self.x[vertices.start - self.first_vertex..vertices.end - self.first_vertex];
         // Does not stop at the first that failed, so that it vectorises.
         if x.iter().fold(true, |ok, &x| ok & !failed_in_batch(x)) {
             return Ok(());
@@ -313,7 +311,7 @@ impl ReprojectedXy {
     /// `i` must lie in its vertices, in a run that passed [check](Self::check).
     #[inline(always)]
     pub(crate) fn xy(&self, i: usize) -> (f64, f64) {
-        let j = i - self.first;
+        let j = i - self.first_vertex;
         (self.x[j], self.y[j])
     }
 }
@@ -341,7 +339,7 @@ fn retry_failed_positions(
     Ok(())
 }
 
-/// `[x, y, z]` through PROJ (see the module docs).
+/// Reprojects one `[x, y, z]` through PROJ (see the module docs).
 pub(crate) fn reproject_position(
     transformation: &Transformation,
     [x, y, z]: [f64; 3],

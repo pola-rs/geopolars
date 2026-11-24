@@ -1,26 +1,7 @@
 //! The area a polygon encloses, as an [AreaMetric] measures it.
 //! Implements the Python `area`.
 //!
-//! # Const generic flags
-//!
-//! ## `EARLY_COORD_CHECK`
-//!
-//! The kernels are generic over `EARLY_COORD_CHECK`, an [EarlyCoordCheck].
-//! Unless it is `Off`, a row whose x or y fails it gets NaN, without being measured.
-//!
-//! ## `CHECK_BOUNDS`
-//!
-//! If `CHECK_BOUNDS=true`, a row with an x or y outside the bounds is not measured,
-//! but handled as its [OnOutOfBounds] says.
-//! A row that fails `EARLY_COORD_CHECK` gets its NaN first, even when it also lies outside them.
-//! It is `false` for [OnOutOfBounds::Ignore], or without bounds.
-//!
-//! ## `EXTERIOR_SIDE`
-//!
-//! The kernels are generic over `EXTERIOR_SIDE`, an [ExteriorSide].
-//! With `FitHoles`, a geodesic exterior whose holes take more than its smaller side gets its larger side,
-//! the only one they fit in. With `Smaller`, every ring gets its smaller side.
-//! Planar ignores it.
+//! The const generics `EARLY_COORD_CHECK` and `EXTERIOR_SIDE` hold an [EarlyCoordCheck] and an [ExteriorSide].
 
 use std::convert::Infallible;
 use std::ops::Range;
@@ -101,14 +82,13 @@ impl AreaMetric for Planar {
         twice_signed_area(ring).abs() / 2.0
     }
 
-    /// A ring on the plane has one inside, so `EXTERIOR_SIDE` changes nothing.
     #[inline(always)]
     fn exterior_area<const EXTERIOR_SIDE: u8>(&self, exterior: f64, _holes: f64) -> f64 {
+        // A ring on the plane has a single inside, so there is no side to pick.
         exterior
     }
 }
 
-/// How many partial sums [twice_signed_area] keeps, so that its adds do not wait on each other.
 const PARTIAL_SUMS: usize = 8;
 
 /// Twice the area the closed `ring` encloses in x and y, positive when it runs counter-clockwise.
@@ -130,6 +110,7 @@ pub(super) fn twice_signed_area(ring: &ScalarLineString) -> f64 {
     let (x_chunks, x_rest) = x[1..n - 1].as_chunks::<PARTIAL_SUMS>();
     let (previous_chunks, previous_rest) = y[..n - 2].as_chunks::<PARTIAL_SUMS>();
     let (next_chunks, next_rest) = y[2..].as_chunks::<PARTIAL_SUMS>();
+    // Several partial sums, so that the adds do not wait on each other.
     let mut sums = [0.0; PARTIAL_SUMS];
     for ((x, previous), next) in x_chunks.iter().zip(previous_chunks).zip(next_chunks) {
         for lane in 0..PARTIAL_SUMS {
@@ -147,7 +128,6 @@ pub(super) fn twice_signed_area(ring: &ScalarLineString) -> f64 {
 
 impl AreaMetric for GeodesicMetric {
     type Error = GeoComputeError;
-    /// Every vertex is reprojected up front, in a single call to PROJ.
     type Chunk = ReprojectedXy;
 
     fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
@@ -184,7 +164,7 @@ impl AreaMetric for GeodesicMetric {
     fn exterior_area<const EXTERIOR_SIDE: u8>(&self, exterior: f64, holes: f64) -> f64 {
         // `ring_area` takes the smaller of the two sides of a ring.
         // Holes that take more than that only fit in the larger side, which is then the exterior's.
-        // An exterior that encloses nothing (empty or degenerate) keeps it, rather than becoming the whole ellipsoid.
+        // An exterior that encloses nothing (empty or degenerate) keeps its area of 0, rather than becoming the whole ellipsoid.
         let fit_holes = const { ExteriorSide::from_u8(EXTERIOR_SIDE) } == ExteriorSide::FitHoles;
         if fit_holes && 0.0 < exterior && exterior < holes {
             return self.ellipsoid.area() - exterior;
@@ -209,72 +189,11 @@ fn polygon_area<M: AreaMetric, const EXTERIOR_SIDE: u8>(
         .map(|hole| metric.ring_area(chunk, &hole))
         .sum();
     let area = metric.exterior_area::<EXTERIOR_SIDE>(exterior, holes) - holes;
-    // Only a polygon that is not valid by OGC gets here
-    // (an empty exterior with holes, or holes that take more than it encloses),
-    // or with `ExteriorSide::Smaller`, a valid one whose geodesic exterior covers over half the ellipsoid.
+    // The Python `area` says which polygons come out below zero.
     if area < 0.0 && negative_area == NegativeArea::Zero {
         return 0.0;
     }
     area
-}
-
-#[inline(always)]
-fn row_passes_early_check<const EARLY_COORD_CHECK: u8>(
-    coords: &ValidCoords,
-    vertices: Range<usize>,
-) -> bool {
-    if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
-        return true;
-    }
-    every_xy_passes::<EARLY_COORD_CHECK>(&coords.x()[vertices.clone()], &coords.y()[vertices])
-}
-
-/// What a row gets instead of its area, if it fails a check before being measured.
-#[inline(always)]
-fn instead_of_measuring<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool>(
-    coords: &ValidCoords,
-    vertices: Range<usize>,
-    bounds: &Bounds,
-    on_out_of_bounds: OnOutOfBounds,
-) -> Option<GeoComputeResult<Option<f64>>> {
-    if !row_passes_early_check::<EARLY_COORD_CHECK>(coords, vertices.clone()) {
-        return Some(Ok(Some(f64::NAN)));
-    }
-    if !CHECK_BOUNDS {
-        return None;
-    }
-    let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
-    if has_none_outside(bounds, x, y) {
-        return None;
-    }
-    // `Ignore` never gets here, as it gives `CHECK_BOUNDS=false`.
-    Some(match on_out_of_bounds {
-        OnOutOfBounds::Null => Ok(None),
-        _ => Err(GeoComputeError::OutOfBounds {
-            position: first_outside(bounds, x, y)
-                .expect("a coordinate outside, as the check above failed"),
-            bounds: *bounds,
-        }),
-    })
-}
-
-/// Splits `bounds` into whether to check them and the bounds themselves,
-/// dropping them for [OnOutOfBounds::Ignore].
-/// The bounds are a placeholder when there is no check.
-fn split_bounds_check(bounds: Option<Bounds>, on_out_of_bounds: OnOutOfBounds) -> (bool, Bounds) {
-    let bounds = bounds.filter(|_| on_out_of_bounds != OnOutOfBounds::Ignore);
-    (bounds.is_some(), bounds.unwrap_or_default())
-}
-
-fn vertices_of_rows(
-    row_count: usize,
-    row_vertices: impl Fn(usize) -> Range<usize>,
-) -> Range<usize> {
-    if row_count == 0 {
-        return 0..0;
-    }
-    // Offsets never decrease, also under a null row, so this spans the vertices of every row.
-    row_vertices(0).start..row_vertices(row_count - 1).end
 }
 
 /// The area of every polygon of a chunk.
@@ -362,13 +281,16 @@ fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
     if rows.is_all_null() {
         return Ok(PrimitiveArray::new_null(ArrowDataType::Float64, rows.len()));
     }
-    let (check_bounds, bounds) = split_bounds_check(bounds, on_out_of_bounds);
-    let chunk = metric.prepare_chunk(coords, vertices_of_rows(rows.len(), &row_vertices));
+    let (check_bounds, bounds) = areas_with_split_bounds(bounds, on_out_of_bounds);
+    let chunk = metric.prepare_chunk(
+        coords,
+        areas_with_vertices_of_rows(rows.len(), &row_vertices),
+    );
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
         per_row_or_null(rows, on_row_error, |i| {
             let vertices = row_vertices(i);
-            if let Some(instead) = instead_of_measuring::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
+            if let Some(instead) = areas_with_failed_check::<EARLY_COORD_CHECK, CHECK_BOUNDS>(
                 coords, vertices.clone(), &bounds, on_out_of_bounds,
             ) {
                 return instead;
@@ -377,4 +299,66 @@ fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
             Ok(Some(row_area(&chunk, i)))
         })
     )
+}
+
+/// What a row gets instead of its area, if it fails a check before being measured.
+#[inline(always)]
+fn areas_with_failed_check<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool>(
+    coords: &ValidCoords,
+    vertices: Range<usize>,
+    bounds: &Bounds,
+    on_out_of_bounds: OnOutOfBounds,
+) -> Option<GeoComputeResult<Option<f64>>> {
+    if !areas_with_failed_check_row_passes_early::<EARLY_COORD_CHECK>(coords, vertices.clone()) {
+        return Some(Ok(Some(f64::NAN)));
+    }
+    if !CHECK_BOUNDS {
+        return None;
+    }
+    let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
+    if has_none_outside(bounds, x, y) {
+        return None;
+    }
+    // `Ignore` never gets here, as it gives `CHECK_BOUNDS=false`.
+    Some(match on_out_of_bounds {
+        OnOutOfBounds::Null => Ok(None),
+        _ => Err(GeoComputeError::OutOfBounds {
+            position: first_outside(bounds, x, y)
+                .expect("a coordinate outside, as the check above failed"),
+            bounds: *bounds,
+        }),
+    })
+}
+
+#[inline(always)]
+fn areas_with_failed_check_row_passes_early<const EARLY_COORD_CHECK: u8>(
+    coords: &ValidCoords,
+    vertices: Range<usize>,
+) -> bool {
+    if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
+        return true;
+    }
+    every_xy_passes::<EARLY_COORD_CHECK>(&coords.x()[vertices.clone()], &coords.y()[vertices])
+}
+
+/// Splits `bounds` into whether to check them and the bounds themselves,
+/// dropping them for [OnOutOfBounds::Ignore].
+/// The bounds are a placeholder when there is no check.
+fn areas_with_split_bounds(
+    bounds: Option<Bounds>,
+    on_out_of_bounds: OnOutOfBounds,
+) -> (bool, Bounds) {
+    let bounds = bounds.filter(|_| on_out_of_bounds != OnOutOfBounds::Ignore);
+    (bounds.is_some(), bounds.unwrap_or_default())
+}
+
+fn areas_with_vertices_of_rows(
+    row_count: usize,
+    row_vertices: impl Fn(usize) -> Range<usize>,
+) -> Range<usize> {
+    if row_count == 0 {
+        return 0..0;
+    }
+    // Offsets never decrease, also under a null row, so this spans the vertices of every row.
+    row_vertices(0).start..row_vertices(row_count - 1).end
 }

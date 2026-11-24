@@ -171,7 +171,6 @@ impl List {
             .is_none_or(|validity| validity.unset_bits() == 0)
     }
 
-    /// Whether every list is null.
     #[inline]
     pub fn is_all_null(&self) -> bool {
         self.validity

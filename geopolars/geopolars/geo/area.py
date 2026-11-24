@@ -48,13 +48,6 @@ def _encloses_nothing(
     return pl.when(column.is_not_null()).then(pl.lit(0.0, dtype=pl.Float64))
 
 
-def _auto_area_method(geometry: GeoArrowType) -> Literal["planar", "geodesic"]:
-    """Planar only without a CRS or in an equal-area one, whose plane keeps areas."""
-    if not geometry._declares_crs() or geometry._is_equal_area():
-        return "planar"
-    return "geodesic"
-
-
 def _area(
     column: pl.Expr,
     geometry: GeoArrowType,
@@ -69,7 +62,7 @@ def _area(
     exterior_side: ExteriorSide,
 ) -> pl.Expr:
     if distance_method == "auto":
-        distance_method = _auto_area_method(geometry)
+        distance_method = _area_auto_method(geometry)
     elif distance_method == "geodesic" and not geometry._declares_crs():
         msg = (
             "a geodesic area needs a CRS to measure on, but the geometry declares none"
@@ -100,6 +93,12 @@ def _area(
     )
 
 
+def _area_auto_method(geometry: GeoArrowType) -> Literal["planar", "geodesic"]:
+    if not geometry._declares_crs() or geometry._is_equal_area():
+        return "planar"
+    return "geodesic"
+
+
 @doc()
 def area(
     geometry: IntoExprColumn,
@@ -124,78 +123,76 @@ def area(
     ===================  =========================  ==========================
 
 
-    **Planar** calculates the area directly based on the values of the coordinate data.
-    It only keeps areas in an equal-area CRS:
-    in any other projected CRS (a UTM zone included),
+    **Planar** measures the area straight from the coordinates.
+    As it can ignore the CRS, it is very fast.
+    It does not check the bounds of the CRS either, unless `on_out_of_bounds` asks for it.
+    Its area is only right in an equal-area CRS.
+    In any other projected CRS (a UTM zone included),
     it is off by as much as the projection distorts areas.
-    Because it can ignore the CRS, it is also very fast to calculate:
-    unless `on_out_of_bounds` asks for it, it does not check the bounds of the CRS either.
-    For geographic CRSes, where the coordinates are longitude/latitude,
-    this operation gives square degrees, which is most likely not what you want though!
-    **Geodesic** takes the coordinates to the longitude/latitude
-    the CRS is defined on (for a projected CRS, the one it projects from;
-    no datum is shifted),
-    and measures every ring as the region its geodesic edges enclose
-    on that CRS's own ellipsoid, as `distance` measures two points.
+    In a geographic CRS, the coordinates are longitude/latitude.
+    Its area is then in square degrees, and that is most likely not what you want.
+
+    **Geodesic** first takes the coordinates to the longitude/latitude the CRS is defined on.
+    For a projected CRS, that is the one it projects from, and no datum is shifted.
+    It then measures every ring as the region its geodesic edges enclose on the CRS's own ellipsoid,
+    as `distance` measures two points.
     The result is in the unit of the CRS's `x` and `y` squared
     (such as square US survey feet for EPSG:2263),
     or in square metres when those are degrees.
 
-
     `"geodesic"` refuses a geometry without a CRS while the plan is built.
     `"geodesic"` and `"auto"` also refuse a CRS that is not defined on longitude/latitude.
 
-    The default, `distance_method="auto"`, measures a geometry without a CRS,
-    or in an equal-area CRS (whose plane keeps areas), `"planar"`.
-    A geometry in any other CRS is measured `"geodesic"`,
-    including a projected one such as a UTM zone.
+    The default, `distance_method="auto"`, measures `"planar"` without a CRS or in an equal-area one.
+    It measures a geometry in any other CRS `"geodesic"`, including a projected one such as a UTM zone.
     This differs from `"auto"` in `distance`, which measures every projected CRS on its plane.
 
-    With `"geodesic"`, a ring encloses the smaller of the two regions it splits the ellipsoid into.
-    With `exterior_side="fit_holes"` (default), an exterior whose holes take more than that
-    gets the larger one instead, the only side they fit in.
+    A geodesic ring encloses the smaller of the two regions it splits the ellipsoid into.
+    By default, an exterior whose holes take more than that gets the larger region instead,
+    as only there do they fit (`exterior_side="fit_holes"`).
     `exterior_side="smaller"` skips this, which is faster.
     `"planar"` ignores `exterior_side`.
 
-    Which way a ring winds does not matter: a hole is always subtracted from the exterior.
+    A hole is always subtracted from the exterior, whichever way their rings wind.
     A multipolygon gets the sum of the areas of its polygons.
 
-    Only the two-dimensional part is considered: `z` and `m` are ignored,
-    so a 3D polygon gets the area of its footprint
+    Only `x` and `y` are measured, and `z` and `m` are ignored.
+    A 3D polygon therefore gets the area of its footprint
     (its shadow on the x/y plane), not the area of its surface in 3D.
     A tilted 3D polygon gets less than its true area, and a vertical one gets `0.0`.
 
     An empty polygon encloses nothing, so it gets `0.0`.
-    Every other geometry (points, linestrings and their multi forms)
-    is refused while the plan is built,
-    unless `allow_non_polygons` is set: then each of them gets `0.0`
-    (and a null stays null).
+    Every other geometry (points, linestrings, and their multi forms)
+    is refused while the plan is built.
+    `allow_non_polygons=True` gives each of them `0.0` instead.
 
     =======================  ============
     in                       out
     =======================  ============
     `PointXY[ZM]`            refused
     `LineStringXY[ZM]`       refused
-    `PolygonXY[ZM]`          `0.0` and up
+    `PolygonXY[ZM]`          `f64`
     `MultiPointXY[ZM]`       refused
     `MultiLineStringXY[ZM]`  refused
-    `MultiPolygonXY[ZM]`     `0.0` and up
+    `MultiPolygonXY[ZM]`     `f64`
     =======================  ============
 
 
-    A self-intersecting ring is not valid by OGC (see `is_valid_ogc`), and the parts of it that
-    wind the other way will cancel rather than add.
+    A self-intersecting ring is not valid by OGC (see `is_valid_ogc`).
+    The parts of it that wind the other way cancel rather than add.
 
-    A polygon that is not valid by OGC can come out below zero
-    (think of polygons with an empty exterior but a hole, or with holes that enclose more than its exterior).
-    So can a valid one with `exterior_side="smaller"`,
-    whose geodesic exterior covers more than half the ellipsoid.
-    `negative_area="zero"` gives such a polygon `0.0`, and `negative_area="keep"` its negative area.
-    In a multipolygon, this applies to each individual polygon before they are summed.
+    A polygon that is not valid by OGC can come out below zero,
+    for example one with an empty exterior but a hole,
+    or one with holes that enclose more than its exterior.
+    A valid polygon whose geodesic exterior covers more than half the ellipsoid can too,
+    but only with `exterior_side="smaller"`.
+    By default, such a polygon gets `0.0`.
+    `negative_area="keep"` gives it its negative area instead.
+    In a multipolygon, this applies to each polygon before they are summed.
 
     {on_row_error}
-    With `"geodesic"`, a row holding a coordinate outside the bounds of its CRS fails by default (see below).
-    PROJ failing to take one of its vertices to longitude/latitude also fails it, with `"geodesic"`.
+    A geodesic row fails when PROJ cannot take one of its vertices to longitude/latitude.
+    By default, it also fails when it holds a coordinate outside the bounds of its CRS (see below).
 
     {early_coord_check}
     A row that fails the check gets NaN, without being measured.
