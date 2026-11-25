@@ -114,6 +114,8 @@ def centroid(
     A geometry with vertices but without length or area has no centroid,
     such as a linestring with all its vertices on one spot,
     or a polygon with all its vertices on a line.
+    GEOS and Shapely fall back to the centroid of its length, or else to the mean of its vertices.
+    This does not, as a centroid of another kind would go unnoticed.
     The error for it suggests `method="3d"` when the geometry has a `z`,
     as a vertical geometry only has length or area in 3D.
     There are two more cases without a centroid, which each have an error of their own.
