@@ -122,10 +122,13 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
+    let rows = array.rows();
+    let chunk_vertices = array.rings().span(rows.span(0..rows.len()));
     areas_with(
         metric,
-        array.rows(),
+        rows,
         array.coords(),
+        chunk_vertices,
         |i| array.row_vertices(i),
         |chunk, i| {
             let polygon = array.get(i);
@@ -147,10 +150,15 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
+    let rows = array.rows();
+    let chunk_vertices = array
+        .rings()
+        .span(array.polygons().span(rows.span(0..rows.len())));
     areas_with(
         metric,
-        array.rows(),
+        rows,
         array.coords(),
+        chunk_vertices,
         |i| array.row_vertices(i),
         |chunk, i| {
             array
@@ -175,6 +183,7 @@ fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
     metric: &M,
     rows: &List,
     coords: &ValidCoords,
+    chunk_vertices: Range<usize>,
     row_vertices: impl Fn(usize) -> Range<usize>,
     row_area: impl Fn(&M::Chunk, usize) -> f64,
     on_row_error: OnRowError,
@@ -186,10 +195,7 @@ fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
         return Ok(PrimitiveArray::new_null(ArrowDataType::Float64, rows.len()));
     }
     let (check_bounds, bounds) = areas_with_split_bounds(bounds, on_out_of_bounds);
-    let chunk = metric.prepare_chunk(
-        coords,
-        areas_with_vertices_of_rows(rows.len(), &row_vertices),
-    );
+    let chunk = metric.prepare_chunk(coords, chunk_vertices);
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
         per_row_or_null(rows, on_row_error, |i| {
@@ -240,15 +246,4 @@ fn areas_with_split_bounds(
 ) -> (bool, Bounds) {
     let bounds = bounds.filter(|_| on_out_of_bounds != OnOutOfBounds::Ignore);
     (bounds.is_some(), bounds.unwrap_or_default())
-}
-
-fn areas_with_vertices_of_rows(
-    row_count: usize,
-    row_vertices: impl Fn(usize) -> Range<usize>,
-) -> Range<usize> {
-    if row_count == 0 {
-        return 0..0;
-    }
-    // Offsets never decrease, also under a null row, so this spans the vertices of every row.
-    row_vertices(0).start..row_vertices(row_count - 1).end
 }
