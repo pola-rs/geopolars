@@ -20,7 +20,7 @@ from geopolars import geo
 ```
 
 Importing `geopolars` adds the `geo` namespace to Polars expressions.
-`gpl` holds the geometry data types, `gpl.col`, and the GeoParquet functions.
+`gpl` holds the geometry data types, `gpl.col`, and `with_covering` for GeoParquet.
 `geo` holds every geometry operation.
 
 The first is a *functional* API, in the `geo` module:

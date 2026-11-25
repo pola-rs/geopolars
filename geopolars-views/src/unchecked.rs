@@ -6,7 +6,8 @@ use polars_arrow::array::{Array, ListArray, StructArray};
 use polars_arrow::compute::utils::combine_validities_and;
 use polars_core::prelude::PolarsResult;
 
-use crate::{downcast, AxisArrays, Coords, List, ValidCoords};
+use crate::boxes::bound_arrays;
+use crate::{downcast, AxisArrays, BoxArray, Coords, List, ValidCoords};
 
 /// A chunk of storage as it comes from Polars, which might have null values below the rows.
 /// Use it only to move the null values below the rows out to the rows
@@ -53,5 +54,24 @@ impl UncheckedStorage {
             lists,
             coords: self.coords.sliced(items),
         }
+    }
+}
+
+/// [UncheckedStorage] for a chunk of boxes, whose bounds might be null under a valid row.
+pub struct UncheckedBoxes {
+    /// Null where the box struct is, or one of its bounds.
+    pub boxes: BoxArray,
+}
+
+impl UncheckedBoxes {
+    pub fn new(chunk: &dyn Array) -> PolarsResult<Self> {
+        let boxes: &StructArray = downcast(chunk, "a box struct")?;
+        let bounds = bound_arrays(boxes)?;
+        let validity = (bounds.iter()).fold(boxes.validity().cloned(), |validity, bound| {
+            combine_validities_and(validity.as_ref(), bound.validity())
+        });
+        Ok(Self {
+            boxes: BoxArray::from_bounds(validity, &bounds),
+        })
     }
 }

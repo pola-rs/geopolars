@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -33,39 +34,31 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print(
         "\n2. Writing GeoParquet:\n\
-  to enable interop with other tools, we have to add the `geo` metadata ourselves"
+  to enable interop with other tools, Polars adds the `geo` metadata"
     )
+    # You need to set an environment variable to enable this on polars, as it's still experimental.
+    os.environ["POLARS_GEOPARQUET_WRITE"] = "1.1"
     path = tmp / "geo.parquet"
     # Optional: a bbox covering per geometry column, that readers can filter on.
     covered = df.pipe(gpl.with_covering)
-    covered.write_parquet(
-        path,
-        metadata={
-            **gpl.geoparquet_metadata(covered, covering=True),
-            "owner": "the example",
-        },
-    )
+    covered.write_parquet(path, metadata={"owner": "the example"})
     geo_key = json.loads(pl.read_parquet_metadata(path)["geo"])
     print("  `geo` key of the column:", geo_key["columns"]["geometry"])
     # Streaming works the same way, with `sink_parquet`.
-    lf = df.lazy().pipe(gpl.with_covering)
-    # The magic line!
-    lf.sink_parquet(
-        tmp / "sunk.parquet", metadata=gpl.geoparquet_metadata(lf, covering=True)
-    )
+    df.lazy().pipe(gpl.with_covering).sink_parquet(tmp / "sunk.parquet")
     # Polars still reads it back as-is, the covering as a box.
     print("  read back:", pl.read_parquet(path).schema)
 
-    print("\n3. Reading GeoParquet from another writer: convert after reading")
+    print("\n3. Reading GeoParquet from another writer")
     # The example file of the GeoParquet spec has WKB geometries and a covering,
     # and only the `geo` key to say so.
     path = Path(__file__).parents[1] / "geopolars/tests/data/geoparquet/example.parquet"
-    plain = pl.scan_parquet(path)
-    print("  plain Polars:   ", plain.collect_schema())
-    # `from_geoparquet` reads the `geo` key from the file, so it needs the path too.
-    # The magic line!
-    lf = plain.pipe(gpl.from_geoparquet, path)
-    print("  from_geoparquet:", lf.collect_schema())
+    print("  plain Polars:   ", pl.scan_parquet(path).collect_schema())
+    # You need to set an environment variable to enable this on polars, as it's still experimental.
+    os.environ["POLARS_GEOPARQUET_READ"] = "1"
+    lf = pl.scan_parquet(path)
+    # Its covering has its bounds out of order, so Polars reads it as a plain struct.
+    print("  with GeoParquet:", lf.collect_schema())
     # It stays lazy: decode the WKB and filter like any other column.
     countries = lf.select(
         "name", "continent", geo.from_wkb("geometry", MultiPolygonXY)

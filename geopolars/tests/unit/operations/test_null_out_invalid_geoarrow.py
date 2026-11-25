@@ -13,7 +13,7 @@ from polars.testing import assert_frame_equal
 
 import geopolars as gpl
 from geopolars import geo
-from geopolars.datatypes import LineStringXY, PointXY, PolygonXY
+from geopolars.datatypes import BoxXY, LineStringXY, PointXY, PolygonXY
 
 _XY = pl.Struct({"x": pl.Float64, "y": pl.Float64})
 _XY_VERTICES = pl.List(_XY)
@@ -119,6 +119,44 @@ def test_a_point_outside_its_crs_is_nulled_and_the_crs_kept() -> None:
 
     assert out["point"].is_null().to_list() == [True, True]
     assert out.schema == df.schema
+
+
+_BOX = {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0}
+
+
+def test_a_box_without_any_bound_is_nulled_and_the_crs_kept() -> None:
+    """The way geopandas writes the box of a null geometry."""
+    df = pl.DataFrame(
+        {"bbox": [_BOX, dict.fromkeys(_BOX), None]},
+        schema={"bbox": BoxXY().ext_storage()},
+    ).select(pl.col("bbox").ext.to(BoxXY(crs="EPSG:4326")))
+
+    out = df.select(geo.null_out_invalid_geoarrow("bbox"))
+
+    assert out["bbox"].ext.storage().to_list() == [_BOX, None, None]
+    assert out.schema == df.schema
+
+
+def test_a_non_finite_box_is_nulled() -> None:
+    empty = _BOX | {"xmin": math.inf, "xmax": -math.inf}
+    df = pl.DataFrame(
+        {"bbox": [_BOX | {"ymin": math.nan}, empty]},
+        schema={"bbox": BoxXY().ext_storage()},
+    ).select(pl.col("bbox").ext.to(BoxXY()))
+
+    out = df.select(
+        geo.null_out_invalid_geoarrow("bbox", check_finite_coordinates=True)
+    )
+
+    assert out["bbox"].is_null().to_list() == [True, False]
+
+
+def test_it_leaves_a_whole_column_of_boxes_exactly_as_it_was() -> None:
+    df = pl.DataFrame({"x": [0.0, 1.0], "y": [2.0, 3.0]}).select(
+        geo.box("x", "y", "y", "y").alias("bbox")
+    )
+
+    assert_frame_equal(df.select(geo.null_out_invalid_geoarrow("bbox")), df)
 
 
 def test_every_chunk_is_checked() -> None:

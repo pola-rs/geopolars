@@ -3,8 +3,8 @@
 //! The parts of a multi-geometry that hold a null value can instead be unset in the mask of a [MaskedParts].
 
 use geopolars_views::{
-    LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray, PointArray,
-    PolygonArray, UncheckedStorage, ValidCoords, ValidList,
+    BoxArray, LineStringArray, List, MultiLineStringArray, MultiPointArray, MultiPolygonArray,
+    PointArray, PolygonArray, UncheckedBoxes, UncheckedStorage, ValidCoords, ValidList,
 };
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;
@@ -174,4 +174,10 @@ impl MaskedParts<MultiPolygonArray> {
     pub fn rows(&self) -> &List {
         &self.view.rows
     }
+}
+
+/// The boxes already combine the validity of the struct and its bounds,
+/// as the coordinates do in [propagate_inner_nulls_of_points].
+pub fn propagate_inner_nulls_of_boxes(storage: UncheckedBoxes) -> BoxArray {
+    storage.boxes
 }

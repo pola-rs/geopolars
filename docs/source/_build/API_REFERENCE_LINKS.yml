@@ -4,6 +4,7 @@ python:
   geo.bounds: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.bounds.html
   geo.buffer: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.buffer.html
   geo.centroid: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.centroid.html
+  geo.crs_to_projjson: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.crs_to_projjson.html
   geo.distance: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.distance.html
   geo.filter_coordinates: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.filter_coordinates.html
   geo.force_2d: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.force_2d.html
@@ -29,8 +30,6 @@ python:
   geo.wrap_longitude: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.wrap_longitude.html
   geo.z: https://docs.pola.rs/api/geopolars/stable/reference/geo/api/geopolars.geo.z.html
   gpl.col: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.col.html
-  from_geoparquet: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.from_geoparquet.html
-  geoparquet_metadata: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.geoparquet_metadata.html
   sink_parquet: https://docs.pola.rs/api/python/stable/reference/api/polars.LazyFrame.sink_parquet.html
   with_covering: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.with_covering.html
   LineStringXY: https://docs.pola.rs/api/geopolars/stable/reference/api/geopolars.datatypes.LineStringXY.html

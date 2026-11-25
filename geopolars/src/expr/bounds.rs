@@ -2,7 +2,6 @@
 //! Implements the Python `bounds` and `total_bounds`.
 
 use geopolars_compute::native::BoxOptions;
-use geopolars_views::Kind;
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use serde::Deserialize;
@@ -18,35 +17,24 @@ pub struct BoundsKwargs {
     margin_y: f64,
     /// The CRS's longitude turn, asked of PROJ at plan time.
     turn: Option<f64>,
-    /// Only `false` for the GeoParquet covering, which wants one box around a whole multi-geometry.
-    per_part: bool,
 }
 
-fn boxes_in_list(kind: Kind, per_part: bool) -> bool {
-    per_part && kind.is_multi()
-}
-
-/// The box of `dtype`'s dimension and metadata, in a list if each part gets one.
-fn bounds_dtype(dtype: &DataType, per_part: bool) -> PolarsResult<DataType> {
+/// The box of `dtype`'s dimension and metadata.
+fn bounds_dtype(dtype: &DataType) -> PolarsResult<DataType> {
     let geo = describe(dtype)?;
-    let bbox = GeoBox::new(geo.dim, geo.metadata.clone()).dtype();
-    Ok(if boxes_in_list(geo.kind, per_part) {
-        DataType::List(Box::new(bbox))
-    } else {
-        bbox
-    })
+    Ok(GeoBox::new(geo.dim, geo.metadata.clone()).dtype())
 }
 
-fn kernel_output_type_bounds(input_fields: &[Field], kwargs: BoundsKwargs) -> PolarsResult<Field> {
+fn kernel_output_type_bounds(input_fields: &[Field], _kwargs: BoundsKwargs) -> PolarsResult<Field> {
     let field = &input_fields[0];
-    let dtype = bounds_dtype(field.dtype(), kwargs.per_part)?;
+    let dtype = bounds_dtype(field.dtype())?;
     Ok(Field::new(field.name().clone(), dtype))
 }
 
 #[polars_expr(output_type_func_with_kwargs=kernel_output_type_bounds)]
 fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
-    let dtype = bounds_dtype(inputs[0].dtype(), kwargs.per_part)?;
+    let dtype = bounds_dtype(inputs[0].dtype())?;
     let options = BoxOptions {
         margin_x: kwargs.margin_x,
         margin_y: kwargs.margin_y,
@@ -56,9 +44,7 @@ fn bounds(inputs: &[Series], kwargs: BoundsKwargs) -> PolarsResult<Series> {
     let chunks = storage
         .chunks()
         .iter()
-        .map(|chunk| {
-            geopolars_core::bounds(chunk.as_ref(), geo.kind, geo.dim, kwargs.per_part, &options)
-        })
+        .map(|chunk| geopolars_core::bounds(chunk.as_ref(), geo.kind, geo.dim, &options))
         .collect::<PolarsResult<Vec<_>>>()?;
     storage_series(inputs[0].name().clone(), chunks, &dtype)
 }
@@ -77,7 +63,7 @@ fn kernel_output_type_total_bounds(
     _kwargs: TotalBoundsKwargs,
 ) -> PolarsResult<Field> {
     let field = &input_fields[0];
-    let dtype = bounds_dtype(field.dtype(), false)?;
+    let dtype = bounds_dtype(field.dtype())?;
     Ok(Field::new(field.name().clone(), dtype))
 }
 
@@ -85,7 +71,7 @@ fn kernel_output_type_total_bounds(
 fn total_bounds(inputs: &[Series], kwargs: TotalBoundsKwargs) -> PolarsResult<Series> {
     let geo = describe(inputs[0].dtype())?;
     let (kind, dim) = (geo.kind, geo.dim);
-    let dtype = bounds_dtype(inputs[0].dtype(), false)?;
+    let dtype = bounds_dtype(inputs[0].dtype())?;
     let name = inputs[0].name().clone();
     // No rows, or only null ones: nothing to bound.
     if inputs[0].null_count() == inputs[0].len() {

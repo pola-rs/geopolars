@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+import pytest
 from polars.testing import assert_frame_equal
 
 from geopolars import geo
@@ -20,9 +21,30 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+@pytest.fixture(params=[False, True], ids=["plain", "geoparquet"])
+def geoparquet_on(request: pytest.FixtureRequest) -> bool:
+    """Also Polars without GeoParquet, which keeps any extension type."""
+    if request.param:
+        request.getfixturevalue("geoparquet")
+    return request.param
+
+
+def _skip_m_under_geoparquet(geoparquet_on: bool, dimension: Dimension) -> None:
+    """GeoParquet 1.1 has no M values, so only a plain file can hold them."""
+    if dimension.has_m and geoparquet_on:
+        pytest.skip(
+            "GeoParquet 1.1 cannot store M values; "
+            "see test_refuses_what_geoparquet_cannot_hold"
+        )
+
+
 def test_point_survives_a_parquet_round_trip(
-    coords: pl.DataFrame, dimension: Dimension, tmp_path: Path
+    geoparquet_on: bool,
+    coords: pl.DataFrame,
+    dimension: Dimension,
+    tmp_path: Path,
 ) -> None:
+    _skip_m_under_geoparquet(geoparquet_on, dimension)
     df = coords.select(dimension.point())
     path = tmp_path / "points.parquet"
     df.write_parquet(path)
@@ -33,8 +55,12 @@ def test_point_survives_a_parquet_round_trip(
 
 
 def test_linestring_survives_a_parquet_round_trip(
-    line_coords: pl.DataFrame, dimension: Dimension, tmp_path: Path
+    geoparquet_on: bool,
+    line_coords: pl.DataFrame,
+    dimension: Dimension,
+    tmp_path: Path,
 ) -> None:
+    _skip_m_under_geoparquet(geoparquet_on, dimension)
     df = dimension.lines(line_coords)
     path = tmp_path / "lines.parquet"
     df.write_parquet(path)
@@ -45,8 +71,12 @@ def test_linestring_survives_a_parquet_round_trip(
 
 
 def test_polygon_survives_a_parquet_round_trip(
-    ring_coords: pl.DataFrame, dimension: Dimension, tmp_path: Path
+    geoparquet_on: bool,
+    ring_coords: pl.DataFrame,
+    dimension: Dimension,
+    tmp_path: Path,
 ) -> None:
+    _skip_m_under_geoparquet(geoparquet_on, dimension)
     df = dimension.polygons(ring_coords)
     path = tmp_path / "polygons.parquet"
     df.write_parquet(path)
@@ -56,10 +86,13 @@ def test_polygon_survives_a_parquet_round_trip(
     assert_frame_equal(back, df)
 
 
-def test_metadata_survives_a_parquet_round_trip(tmp_path: Path) -> None:
+def test_metadata_survives_a_parquet_round_trip(
+    geoparquet_on: bool, tmp_path: Path
+) -> None:
     """The metadata string is the slot `crs` lives in, so losing it on a write
-    would silently drop a file's coordinate reference system."""
-    metadata = '{"crs":"EPSG:4326"}'
+    would silently drop a file's coordinate reference system.
+    PROJJSON, as that is the only CRS GeoParquet holds."""
+    metadata = '{"crs":{"type":"GeographicCRS","name":"WGS 84"}}'
     dtype = PointType.ext_from_params(
         "geoarrow.point", PointXY().ext_storage(), metadata
     )
@@ -75,10 +108,13 @@ def test_metadata_survives_a_parquet_round_trip(tmp_path: Path) -> None:
 
 
 def test_a_null_geometry_survives_a_parquet_round_trip(
-    dimension: Dimension, tmp_path: Path
+    geoparquet_on: bool,
+    dimension: Dimension,
+    tmp_path: Path,
 ) -> None:
     """Nulls live at the outermost level only, and that is where a file has to
     put them back: an empty line is not a null one."""
+    _skip_m_under_geoparquet(geoparquet_on, dimension)
     df = pl.DataFrame(
         {"vertices": [[{name: 1.0 for name in dimension.coords}], [], None]},
         schema={
@@ -94,6 +130,8 @@ def test_a_null_geometry_survives_a_parquet_round_trip(
 
 
 def test_box_survives_a_parquet_round_trip(tmp_path: Path) -> None:
+    """Only without GeoParquet, which refuses a box that covers no geometry
+    (see test_a_box_that_covers_no_geometry_is_refused)."""
     df = pl.DataFrame({"a": [0.0], "b": [1.0], "c": [2.0], "d": [3.0]}).select(
         geo.box("a", "b", "c", "d", crs="EPSG:4326").alias("box")
     )

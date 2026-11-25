@@ -109,8 +109,8 @@ so `geo.area("geometry")` is the same as `gpl.col("geometry").geo.area()`.
 
 | GeoPandas | GeoPolars |
 | - | - |
-| `gpd.read_parquet(path)` | `pl.scan_parquet(path).pipe(gpl.from_geoparquet, path)` |
-| `gdf.to_parquet(path)` | `df.write_parquet(path, metadata=gpl.geoparquet_metadata(df))` |
+| `gpd.read_parquet(path)` | `pl.scan_parquet(path)`, with [GeoParquet reading](../io.md#reading) switched on |
+| `gdf.to_parquet(path)` | `df.write_parquet(path)`, with [GeoParquet writing](../io.md#writing) switched on |
 | `gpd.points_from_xy(x, y, crs=...)` | `geo.point("x", "y", crs=...)` |
 | `GeoSeries.from_wkt(...)`, `from_wkb(...)` | `geo.from_wkt(..., dtype)`, `geo.from_wkb(..., dtype)` |
 | `.to_wkt()`, `.to_wkb()` | `geo.to_wkt`, `geo.to_wkb` |

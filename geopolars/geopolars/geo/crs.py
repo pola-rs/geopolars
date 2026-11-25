@@ -9,11 +9,13 @@ from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
 from geopolars._utils import LIB
+from geopolars.datatypes import BoxType, Wkb, Wkt
 from geopolars.geo._dispatch import on_geometry
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
+    from geopolars.datatypes.encoded import EncodedGeometry
 
 
 @doc()
@@ -41,6 +43,31 @@ def set_crs(geometry: IntoExprColumn, crs: str, *, force: bool = False) -> pl.Ex
         return column.ext.storage().ext.to(geometry._with_crs(crs))
 
     return on_geometry(geometry, build)
+
+
+def crs_to_projjson(geometry: IntoExprColumn) -> pl.Expr:
+    """Write the column's CRS as PROJJSON, which is the same CRS in another form.
+
+    Nothing is reprojected, and any other metadata is kept.
+    A column without a CRS, or with one that already is PROJJSON, is left as it is.
+    A CRS that cannot be read is refused while the plan is built.
+    Besides the geometries, this also takes a box (such as the covering of `with_covering`),
+    `Wkb` and `Wkt`.
+
+    It is mainly needed to write GeoParquet,
+    as described under "CRS" in `docs/source/user-guide/geo/io.md`.
+
+    .. code-block:: python
+
+        df.with_columns(geo.crs_to_projjson("parcel")).write_parquet("parcels.parquet")
+    """
+
+    def build(
+        column: pl.Expr, geometry: GeoArrowType | BoxType | EncodedGeometry
+    ) -> pl.Expr:
+        return column.ext.storage().ext.to(geometry._with_projjson_crs())
+
+    return on_geometry(geometry, build, also=(BoxType, Wkb, Wkt))
 
 
 def is_geographic(geometry: IntoExprColumn, *, ignore_errors: bool = False) -> pl.Expr:

@@ -84,6 +84,11 @@ class GeoArrowType(pl.datatypes.BaseExtension):
         metadata = _rust.with_crs(self.ext_metadata(), crs)
         return self.ext_from_params(self._extension_name, self._geo_storage, metadata)
 
+    def _with_projjson_crs(self) -> GeoArrowType:
+        """The same type, with its CRS written as PROJJSON. See `geo.crs_to_projjson`."""
+        metadata = _rust.with_projjson_crs(self.ext_metadata())
+        return self.ext_from_params(self._extension_name, self._geo_storage, metadata)
+
     def _longitude_turn(self) -> float | None:
         """How far `x` goes in one full turn around the globe, in the CRS's unit:
         `360.0` for degrees. `None` without a CRS, or if `x` is not a longitude.

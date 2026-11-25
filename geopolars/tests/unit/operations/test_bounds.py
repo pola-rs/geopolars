@@ -38,12 +38,6 @@ def _unnest(df: pl.DataFrame, name: str) -> pl.DataFrame:
     return df.select(pl.col(name).ext.storage()).to_series().struct.unnest()
 
 
-def _unnest_parts(df: pl.DataFrame, name: str) -> pl.DataFrame:
-    """The boxes of a `list[box]` column, every part after the other."""
-    storage = pl.col(name).list.eval(pl.element().ext.storage()).explode()
-    return df.select(storage).to_series().struct.unnest()
-
-
 def test_a_point_repeats_its_own_coordinates(
     coords: pl.DataFrame, dimension: Dimension
 ) -> None:
@@ -78,44 +72,39 @@ def test_a_polygon_is_bounded_by_its_rings(
     )
 
 
-def test_a_multipoint_gives_one_box_per_point(
+def test_a_multipoint_gets_one_box_around_all_its_points(
     line_coords: pl.DataFrame, dimension: Dimension
 ) -> None:
     out = dimension.multipoints(line_coords).select(geo.bounds("multipoint"))
 
-    assert out.schema["multipoint"] == pl.List(_box_dtype(dimension)())
-    assert out["multipoint"].list.len().to_list() == [3, 2]
-    expected = line_coords.with_row_index().pipe(_bounds_per, "index", dimension)
-    assert_frame_equal(_unnest_parts(out, "multipoint"), expected)
+    assert out.schema["multipoint"] == _box_dtype(dimension)()
+    assert_frame_equal(
+        _unnest(out, "multipoint"), _bounds_per(line_coords, "line", dimension)
+    )
 
 
-def test_a_multilinestring_gives_one_box_per_linestring(
+def test_a_multilinestring_gets_one_box_around_all_its_linestrings(
     ring_coords: pl.DataFrame, dimension: Dimension
 ) -> None:
     out = dimension.multilinestrings(ring_coords).select(geo.bounds("multilinestring"))
 
-    assert out.schema["multilinestring"] == pl.List(_box_dtype(dimension)())
-    assert out["multilinestring"].list.len().to_list() == [2, 1]
-    parts = ring_coords.select(
-        pl.format("{}{}", "polygon", "ring").alias("part"), *dimension.coords
-    )
+    assert out.schema["multilinestring"] == _box_dtype(dimension)()
     assert_frame_equal(
-        _unnest_parts(out, "multilinestring"), _bounds_per(parts, "part", dimension)
+        _unnest(out, "multilinestring"), _bounds_per(ring_coords, "polygon", dimension)
     )
 
 
-def test_a_multipolygon_gives_one_box_per_polygon(
+def test_a_multipolygon_gets_one_box_around_all_its_polygons(
     multipolygon_coords: pl.DataFrame, dimension: Dimension
 ) -> None:
     out = dimension.multipolygons(multipolygon_coords).select(
         geo.bounds("multipolygon")
     )
 
-    assert out.schema["multipolygon"] == pl.List(_box_dtype(dimension)())
-    assert out["multipolygon"].list.len().to_list() == [2, 1]
+    assert out.schema["multipolygon"] == _box_dtype(dimension)()
     assert_frame_equal(
-        _unnest_parts(out, "multipolygon"),
-        _bounds_per(multipolygon_coords, "polygon", dimension),
+        _unnest(out, "multipolygon"),
+        _bounds_per(multipolygon_coords, "multipolygon", dimension),
     )
 
 
@@ -146,12 +135,10 @@ def test_a_margin_around_a_point() -> None:
     ]
 
 
-def test_a_margin_applies_to_every_part(line_coords: pl.DataFrame) -> None:
+def test_a_margin_widens_the_box_of_a_multigeometry(line_coords: pl.DataFrame) -> None:
     df = XY.multipoints(line_coords)
-    plain = _unnest_parts(df.select(geo.bounds("multipoint")), "multipoint")
-    padded = _unnest_parts(
-        df.select(geo.bounds("multipoint", margin_x=1.0)), "multipoint"
-    )
+    plain = _unnest(df.select(geo.bounds("multipoint")), "multipoint")
+    padded = _unnest(df.select(geo.bounds("multipoint", margin_x=1.0)), "multipoint")
 
     assert_frame_equal(
         padded, plain.with_columns(pl.col("xmin") - 1.0, pl.col("xmax") + 1.0)
@@ -197,7 +184,7 @@ def test_a_null_multigeometry_stays_null() -> None:
     out = df.select(geo.bounds("x"))
 
     assert out["x"].ext.storage().to_list() == [
-        [{"xmin": 1.0, "ymin": 2.0, "xmax": 1.0, "ymax": 2.0}],
+        {"xmin": 1.0, "ymin": 2.0, "xmax": 1.0, "ymax": 2.0},
         None,
     ]
 
@@ -209,9 +196,7 @@ def test_the_crs_is_carried_over() -> None:
 
     assert df.select(geo.bounds("x")).schema["x"] == BoxXY(crs="EPSG:4326")
     multipoints = df.select(geo.multi_point(pl.col("x").implode()))
-    assert multipoints.select(geo.bounds("x")).schema["x"] == pl.List(
-        BoxXY(crs="EPSG:4326")
-    )
+    assert multipoints.select(geo.bounds("x")).schema["x"] == BoxXY(crs="EPSG:4326")
 
 
 def test_a_rectangle_round_trips_through_its_box() -> None:
@@ -292,15 +277,14 @@ def test_without_a_crs_bounds_are_left_past_the_edge() -> None:
     ]
 
 
-def test_a_crossing_multigeometry_part_crosses_on_its_own() -> None:
+def test_a_multigeometry_crosses_the_antimeridian_as_a_whole() -> None:
     df = pl.DataFrame({"x": [[10.0, 190.0]], "y": [[0.0, 0.0]]}).select(
         geo.multi_point("x", "y", crs="EPSG:4326")
     )
     boxes = df.select(geo.bounds("x", margin_x=15.0)).to_series()
 
-    assert [(box["xmin"], box["xmax"]) for box in boxes.ext.storage().to_list()[0]] == [
-        (-5.0, 25.0),
-        (175.0, -155.0),
+    assert [(box["xmin"], box["xmax"]) for box in boxes.ext.storage().to_list()] == [
+        (-5.0, -155.0)
     ]
 
 

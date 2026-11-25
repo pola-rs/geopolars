@@ -19,10 +19,11 @@ polars-arrow = { version = "0.55", default-features = false }
 # Where polars-arrow's `Buffer` lives. It is not re-exported.
 polars-buffer = { version = "0.55", default-features = false }
 
-# pyo3-polars is versioned INDEPENDENTLY of polars. 0.28 is the release built
-# against polars 0.55 / pyo3 0.29. Bump all three together, never one alone.
+# pyo3-polars is versioned independently of polars,
+# and comes from the polars commit patched in below.
+# Keep pyo3 at the version that commit's pyo3-polars depends on.
 pyo3-polars = { version = "0.28" }
-pyo3 = { version = "0.29" }
+pyo3 = { version = "0.30" }
 
 serde = { version = "1.0.188", features = ["derive", "rc"] }
 
@@ -37,19 +38,20 @@ debug = "line-tables-only"
 lto = "thin"
 codegen-units = 1
 
-# We build against a specific polars commit.
-# The Makefile reads `rev` from here and checks out the same commit into .polars to build Python polars.
+# We build against a specific polars commit,
+# currently the polars 2.2 release.
+# The Makefile reads `git` and `rev` from here and checks out the same commit into .polars to build Python polars.
 # Using a a git source rather than a path into .polars, 
 # because cargo only hides # warnings from dependencies that are not path dependencies.
 # Be sure to keep them all the same!
 [patch.crates-io]
-polars = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-polars-arrow = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-polars-buffer = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-polars-core = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-polars-ffi = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-polars-lazy = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-polars-plan = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-polars-utils = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-pyo3-polars = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
-pyo3-polars-derive = { git = "https://github.com/pola-rs/polars", rev = "9f676aceb55fcf4e5ad62bec3104a0d141f661d4" }
+polars = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+polars-arrow = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+polars-buffer = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+polars-core = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+polars-ffi = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+polars-lazy = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+polars-plan = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+polars-utils = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+pyo3-polars = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }
+pyo3-polars-derive = { git = "https://github.com/pola-rs/polars", rev = "08b2814ce6386c0efe0fea512912353f42a8b7b6" }

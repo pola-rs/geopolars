@@ -56,6 +56,11 @@ class BoxType(pl.datatypes.BaseExtension):
         """Whether the metadata names a CRS. Read in Rust, like all metadata."""
         return _rust.declares_crs(self.ext_metadata())
 
+    def _with_projjson_crs(self) -> BoxType:
+        """The same type, with its CRS written as PROJJSON. See `geo.crs_to_projjson`."""
+        metadata = _rust.with_projjson_crs(self.ext_metadata())
+        return self.ext_from_params(self._extension_name, self._box_storage, metadata)
+
     def _longitude_turn(self) -> float | None:
         """How far `x` goes in one full turn around the globe, in the CRS's unit:
         `360.0` for degrees. `None` without a CRS, or if `x` is not a longitude.

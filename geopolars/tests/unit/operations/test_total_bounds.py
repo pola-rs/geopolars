@@ -15,7 +15,6 @@ from geopolars.datatypes import (
     MultiPolygonXYZM,
     PolygonXYZM,
 )
-from geopolars.geo.bounds import _envelope
 
 _INF = float("inf")
 
@@ -49,7 +48,7 @@ def _bounds_of(df: pl.DataFrame, **kwargs: bool) -> dict | None:
 )
 def test_the_box_surrounds_every_rows_box(wkts: list[str], dtype: type) -> None:
     df = _geometries(wkts, dtype)
-    boxes = df.select(_envelope("g")).to_series().ext.storage().struct.unnest()
+    boxes = df.select(geo.bounds("g")).to_series().ext.storage().struct.unnest()
     expected = boxes.select(
         *(pl.col(c).min() for c in boxes.columns if c.endswith("min")),
         *(pl.col(c).max() for c in boxes.columns if c.endswith("max")),

@@ -1,9 +1,9 @@
 # Reading and writing
 
-GeoPolars reads and writes geometries with Polars' own readers and writers.
-It only adds the steps around them:
-giving geometry columns their data types after reading,
-and describing them in the file when writing.
+GeoPolars reads and writes geometries with Polars' own readers and writers,
+which handle GeoParquet natively.
+GeoPolars only adds some utilities around them,
+such as decoding WKB and adding bounding boxes.
 
 ## GeoParquet
 
@@ -11,28 +11,30 @@ and describing them in the file when writing.
 That key says which columns hold geometries, how they are encoded, and in which [CRS](concepts/crs.md).
 GeoPandas, GDAL, DuckDB and many other tools read and write it.
 
+Polars' GeoParquet support is still experimental, and only switched on by two environment variables.
+`POLARS_GEOPARQUET_READ=1` reads the `geo` key,
+and `POLARS_GEOPARQUET_WRITE=1.1` (or `1.0`) writes it.
+Polars reads the variables at every read and write,
+so setting them through `os.environ` within Python works too.
+
 ### Writing
 
-Polars writes geometry columns to Parquet as they are.
-Other tools only see them as geometries, though, if the file also has the `geo` key.
-`geoparquet_metadata` gives you that key.
-Pass it to `write_parquet` or `sink_parquet`, next to any metadata of your own:
+Polars writes geometry columns to Parquet in the struct format they are stored in.
+The arrow type is also written, which is useful for a Polars roundtrip,
+but not something you can rely on for other consumers.
+Only if the `geo` key is set in the metadata can other consumers know that this is GeoParquet.
+Setting the `POLARS_GEOPARQUET_WRITE=1.1` environment variable makes it so
+that `write_parquet` and `sink_parquet` add that key, and describe every geometry column in it.
+GeoParquet 1.0 only holds WKB, so `POLARS_GEOPARQUET_WRITE=1.0` refuses a native geometry column.
 
-{{code_block('user-guide/geo/io','write',['geo.point','geoparquet_metadata','write_parquet'])}}
+GeoParquet is a little bit more limited in what it can store than what GeoPolars can represent.
+GeoParquet 1.1 cannot store [m values](concepts/geometry-types.md#dimensions), nor WKT.
+Its edges also have to be planar or spherical.
 
-```python exec="on" result="text" session="user-guide/geo/io"
---8<-- "python/user-guide/geo/io.py:write"
-```
+To make sure that information is not silently lost,
+Polars refuses such a column before anything is written:
 
-Not everything GeoPolars can hold fits into GeoParquet 1.1.
-It cannot store [m values](concepts/geometry-types.md#dimensions), nor WKT,
-and it needs a CRS that can be written as [PROJJSON](https://proj.org/specifications/projjson.html),
-the JSON form of a CRS.
-Its edges have to be planar or spherical.
-`geoparquet_metadata` refuses such a column.
-It only needs the schema to do so, so it refuses before anything is written:
-
-{{code_block('user-guide/geo/io','refuse',['geoparquet_metadata'])}}
+{{code_block('user-guide/geo/io','refuse',['write_parquet'])}}
 
 ```python exec="on" result="text" session="user-guide/geo/io"
 --8<-- "python/user-guide/geo/io.py:refuse"
@@ -40,23 +42,20 @@ It only needs the schema to do so, so it refuses before anything is written:
 
 ### Reading
 
-Polars reads a file it wrote itself with all its data types intact.
+Polars reads a file it wrote itself with all its data types intact due to the stored Arrow data.
 A file from another tool only has the `geo` key to go on.
-`from_geoparquet` reads that key, and gives each geometry column its data type.
-It reads the key from the file itself, so you pass it the path as well:
+The environment variable `POLARS_GEOPARQUET_READ=1` makes `read_parquet` and `scan_parquet`
+check for that metadata key.
 
-{{code_block('user-guide/geo/io','read',['scan_parquet','from_geoparquet'])}}
+{{code_block('user-guide/geo/io','read',['scan_parquet'])}}
+
+```python exec="on" result="text" session="user-guide/geo/io"
+--8<-- "python/user-guide/geo/io.py:write"
+```
 
 ```python exec="on" result="text" session="user-guide/geo/io"
 --8<-- "python/user-guide/geo/io.py:read"
 ```
-
-This works on a `LazyFrame` and on a `DataFrame` alike,
-and with the same paths, globs and cloud storage as `scan_parquet`.
-A plain Parquet file, without the `geo` key, is left as it is.
-By default, `from_geoparquet` checks that every file describes its geometries in the same way,
-and refuses a mix of files with and without the key.
-`check_every_file=False` only reads the key of the first one, which is faster for many files.
 
 GeoParquet stores geometries in one of two ways.
 A *native* column comes in as its geometry type, such as `PointXY`, and is ready to use.
@@ -70,14 +69,22 @@ Below, we first write the cities as WKB, and then read them back:
 --8<-- "python/user-guide/geo/io.py:wkb"
 ```
 
-!!! warning "The CRS comes back as PROJJSON"
+### CRS
 
-    GeoParquet writes every CRS as PROJJSON, and `from_geoparquet` labels the column with it.
-    A column you declared as `"EPSG:4326"` therefore comes back with a different label.
-    (The header of the DataFrame shortens it to `EPSG:4326`, but the label is the full PROJJSON.)
-    As GeoPolars [compares CRSs by how they are written](concepts/crs.md#combining-columns),
-    it no longer combines with columns that still say `"EPSG:4326"`.
+GeoParquet can take a CRS written as [PROJJSON](https://proj.org/specifications/projjson.html)
+(the JSON form of a CRS).
+Specifying 'no crs' is done by explicitly setting the crs key to `null`.
+If the key is missing, it is assumed to be in `"OGC:CRS84"`.
+A string-CRS such as `"EPSG:4326"` is valid in GeoPolars (as in GeoArrow), but not for GeoParquet.
+You'll have to convert it to its PROJJSON equivalent using `crs_to_projjson`.
 
+{{code_block('user-guide/geo/io','write',['geo.point','geo.crs_to_projjson','write_parquet'])}}
+
+The same holds for reading data from GeoParquet that has a CRS.
+You might now have your own column with the (string) label `"EPSG:4326"`,
+and one you read from GeoParquet with the PROJJSON representation of that same CRS.
+As GeoPolars [compares CRSs by how they are written](concepts/crs.md#combining-columns),
+it no longer combines with columns that still say `"EPSG:4326"`.
 If you know both mean the same CRS, relabel the column with `set_crs(..., force=True)`:
 
 {{code_block('user-guide/geo/io','crs',['geo.set_crs','geo.distance'])}}
@@ -86,24 +93,74 @@ If you know both mean the same CRS, relabel the column with `set_crs(..., force=
 --8<-- "python/user-guide/geo/io.py:crs"
 ```
 
-See [GeoParquet](concepts/crs.md#geoparquet) on the CRS page for how a column without a CRS is read.
-
 ### Bounding boxes
 
-A GeoParquet file can store a bounding box next to each geometry,
+A GeoParquet file can store two kinds of bounding boxes,
 which readers can use to skip parts of the file they do not need.
-`with_covering` adds a box column `<name>_bbox` for every geometry column,
-and `geoparquet_metadata(..., covering=True)` describes it in the file.
-A multi geometry gets one box around all of its parts.
-A `Wkb` column cannot be bounded, so decode it with `from_wkb` first:
+A per-row bounding box sits next to each geometry (a *covering*),
+and a per-column bounding box holds the extent of all the data in that column.
 
-{{code_block('user-guide/geo/io','covering',['with_covering','geoparquet_metadata','sink_parquet'])}}
+#### Per-column
+
+Polars fills in the per-column bounding box from the statistics it writes into the file.
+It does this for every native geometry column, but a `Wkb` column gets none.
+
+#### Covering
+
+Polars matches a covering column to its geometry column *by name*.
+`with_covering` adds one for every geometry column, with the name Polars expects.
+See its API reference for details.
+A covering must be in the same CRS as its geometry column.
+This has interplay with the `crs_to_projjson` mentioned above.
+This conversion must happen first, or convert both columns afterwards.
+
+{{code_block('user-guide/geo/io','covering',['with_covering','sink_parquet'])}}
 
 ```python exec="on" result="text" session="user-guide/geo/io"
 --8<-- "python/user-guide/geo/io.py:covering"
 ```
 
-When you read the file back, the box column comes in as a [box](concepts/geometry-types.md#boxes).
+When you read the file back, the covering comes in as a [box](concepts/geometry-types.md#boxes).
+Polars only reads it as a box if its bounds are `Float64`,
+in the order `xmin, ymin, [zmin,] xmax, ymax, [zmax]`.
+It reads any other covering as a plain struct, and warns.
+
+Polars refuses to write a box column that is not the covering of a geometry column,
+rather than silently write it as a plain struct.
+To write it as a plain struct anyway, convert it with `.ext.storage()` first.
+
+### Repairing what Polars does not read
+
+When Polars cannot honour the `geo` metadata of a column,
+it does not refuse the file.
+It reads the column as plain Polars data instead, and warns.
+This happens with an unknown encoding or version,
+storage that does not match the encoding, or a malformed covering.
+
+The plain column has lost its CRS, so first read it from the file yourself.
+In GeoParquet, a missing `crs` means `OGC:CRS84`, and `null` means unknown.
+
+```python
+import json
+
+column = json.loads(pl.read_parquet_metadata(path)["geo"])["columns"]["geometry"]
+crs = column.get("crs", "OGC:CRS84")
+crs = json.dumps(crs) if isinstance(crs, dict) else crs
+```
+
+Then turn the column into a geometry:
+
+- Storage that already fits a GeoPolars type: `pl.col("geometry").ext.to(PointXY(crs=crs))`.
+- Other storage: the matching constructor or decoder, such as `geo.from_wkt("geometry", PointXY, crs=crs)`.
+- A covering with all its bounds:
+  `geo.box(bound("xmin"), bound("ymin"), bound("xmax"), bound("ymax"), crs=crs)`,
+  with `bound = pl.col("bbox").struct.field`.
+- A covering with too few bounds: compute it again with `geo.bounds("geometry")`.
+
+GeoPandas writes the covering of a null geometry as a box with every bound null,
+rather than as a null box.
+Polars reads it as it is, which breaks GeoArrow's rule on nulls.
+`geo.null_out_invalid_geoarrow("bbox")` makes those boxes null.
 
 ## WKT and WKB
 

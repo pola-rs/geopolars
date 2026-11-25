@@ -170,8 +170,6 @@ PROJ cannot transform a place that does not exist.
 
 ## GeoParquet
 
-A GeoParquet file stores the CRS of each geometry column in its metadata, in the PROJJSON format.
-What that means when you write or read a CRS is described under [GeoParquet](../io.md#geoparquet).
-Also important to know for reading GeoParquet written by other tools is that a GeoParquet column
-without a CRS in its metadata is implied to be in OGC:CRS84, which is longitude/latitude on WGS 84.
-Data without a CRS is explicitly given as `"crs:null"`.
+How a GeoParquet file stores the CRS of each geometry column,
+and what that means when you write or read one,
+is described under [CRS](../io.md#crs) on the reading and writing page.

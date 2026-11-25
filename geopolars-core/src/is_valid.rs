@@ -1,12 +1,13 @@
 use geopolars_compute::geoarrow_validity::{
-    line_strings_are_valid_geoarrow, multi_line_strings_are_valid_geoarrow,
-    multi_points_are_valid_geoarrow, multi_polygons_are_valid_geoarrow, points_are_valid_geoarrow,
-    polygons_are_valid_geoarrow,
+    boxes_are_valid_geoarrow, line_strings_are_valid_geoarrow,
+    multi_line_strings_are_valid_geoarrow, multi_points_are_valid_geoarrow,
+    multi_polygons_are_valid_geoarrow, points_are_valid_geoarrow, polygons_are_valid_geoarrow,
 };
 use geopolars_compute::inner_nulls::{
-    propagate_inner_nulls_of_line_strings, propagate_inner_nulls_of_multi_line_strings,
-    propagate_inner_nulls_of_multi_points, propagate_inner_nulls_of_multi_polygons,
-    propagate_inner_nulls_of_points, propagate_inner_nulls_of_polygons,
+    propagate_inner_nulls_of_boxes, propagate_inner_nulls_of_line_strings,
+    propagate_inner_nulls_of_multi_line_strings, propagate_inner_nulls_of_multi_points,
+    propagate_inner_nulls_of_multi_polygons, propagate_inner_nulls_of_points,
+    propagate_inner_nulls_of_polygons,
 };
 use geopolars_compute::native::{Bounds, CoordinateSelection};
 use geopolars_compute::ogc_validity::{
@@ -15,8 +16,8 @@ use geopolars_compute::ogc_validity::{
     MultiPolygonTopologyChecks,
 };
 use geopolars_views::{
-    downcast, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
-    MultiPolygonArray, PointArray, PolygonArray, UncheckedStorage,
+    downcast, BoxArray, Coords, Kind, LineStringArray, MultiLineStringArray, MultiPointArray,
+    MultiPolygonArray, PointArray, PolygonArray, UncheckedBoxes, UncheckedStorage,
 };
 use polars_arrow::array::{Array, BooleanArray, ListArray};
 use polars_core::prelude::{polars_err, PolarsError, PolarsResult};
@@ -137,5 +138,21 @@ pub fn are_valid(
     };
     // In `valid`'s values, a null row and a row made null by a null value below it are both `false`.
     // Restoring the input's row validity keeps the former null, and makes the latter invalid.
+    Ok(valid.with_validity(chunk.validity().cloned()))
+}
+
+/// Checks whether every box in one chunk of a `geoarrow.box` column's storage is valid by GeoArrow.
+/// Implements the Python `is_valid_geoarrow` for a box, as [are_valid] does for the geometries.
+pub fn boxes_are_valid(
+    chunk: &dyn Array,
+    check_null_coordinates: bool,
+    check_finite_coordinates: bool,
+) -> PolarsResult<BooleanArray> {
+    let array = if check_null_coordinates {
+        propagate_inner_nulls_of_boxes(UncheckedBoxes::new(chunk)?)
+    } else {
+        BoxArray::new(chunk)?
+    };
+    let valid = boxes_are_valid_geoarrow(&array, check_finite_coordinates);
     Ok(valid.with_validity(chunk.validity().cloned()))
 }

@@ -33,6 +33,8 @@ pub struct ExtensionMetadata {
     /// Cache of `map`: the CRS in a form PROJ accepts, or why there is none.
     crs: Result<String, String>,
     /// Cache of `map`: how the edges run, or why they are invalid.
+    // Unused until an operation depends on the edges.
+    #[allow(dead_code)]
     edges: Result<Option<Edges>, String>,
     /// Cache of `map`: a short name for the CRS, to display. `None` without one.
     crs_label: Option<String>,
@@ -106,6 +108,9 @@ impl ExtensionMetadata {
     /// A short name for the CRS, to display: a PROJJSON CRS by its id or name.
     /// `None` if the metadata declares no CRS.
     pub fn crs_label(&self) -> Option<&str> {
+        // TODO: add a little marker so that a string CRS can be differentiated from a PROJJSON one.
+        // For PROJJSON, also make it so that in the debug view it also shows the rest of the json key,
+        // not just the name/id
         self.crs_label.as_deref()
     }
 
@@ -127,11 +132,20 @@ impl ExtensionMetadata {
         Self::from_map(map)
     }
 
-    /// The CRS as a PROJJSON object.
-    /// This is used for GeoParquet.
-    /// `None` if the metadata declares no CRS.
-    /// A PROJJSON CRS comes back as-is; any other form is converted by PROJ.
-    pub fn projjson(&self) -> PolarsResult<Option<Map<String, Value>>> {
+    pub fn with_projjson_crs(self) -> PolarsResult<Self> {
+        if matches!(
+            self.map.get("crs"),
+            None | Some(Value::Null | Value::Object(_))
+        ) {
+            return Ok(self);
+        }
+        let Some(projjson) = self.with_projjson_crs_convert()? else {
+            return Ok(self);
+        };
+        Ok(self.with_crs(&Value::Object(projjson).to_string()))
+    }
+
+    fn with_projjson_crs_convert(&self) -> PolarsResult<Option<Map<String, Value>>> {
         match self.map.get("crs") {
             None | Some(Value::Null) => return Ok(None),
             Some(Value::Object(projjson)) => return Ok(Some(projjson.clone())),
@@ -153,19 +167,12 @@ impl ExtensionMetadata {
     }
 
     /// How the edges between coordinates run. `None` means planar.
+    // Unused until an operation depends on the edges.
+    #[allow(dead_code)]
     pub fn edges(&self) -> PolarsResult<Option<Edges>> {
         self.edges
             .clone()
             .map_err(|e| polars_err!(ComputeError: "{e}"))
-    }
-
-    /// Consuming setter for edges.
-    pub fn with_edges(self, edges: Edges) -> Self {
-        // A unit variant always serialises.
-        let edges = serde_json::to_value(edges).unwrap();
-        let mut map = self.map;
-        map.insert("edges".to_owned(), edges);
-        Self::from_map(map)
     }
 }
 
@@ -180,7 +187,7 @@ fn crs_of(map: &Map<String, Value>) -> Result<String, String> {
         (None, _) => Err("the column does not declare a CRS, so it cannot be reprojected".into()),
         // Only the producer knows what an SRID refers to.
         (Some(srid), Some(CrsType::Srid)) => Err(format!(
-            "the column's CRS is the opaque SRID {srid}, which cannot be reprojected from"
+            "the column's CRS is the opaque SRID {srid}, which PROJ cannot read"
         )),
         // PROJJSON, WKT, `AUTH:CODE`, or a string of unstated kind: PROJ gets to try.
         (Some(Value::String(crs)), _) => Ok(crs.clone()),

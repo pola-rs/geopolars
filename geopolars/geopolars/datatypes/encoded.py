@@ -3,8 +3,10 @@ Mirrors `Encoded` in `src/geoarrow/encoded.rs`.
 
 These hold geometries serialised one value per row.
 They are for exchange only,
-as described under "WKT and WKB" in `docs/source/user-guide/geo/concepts/geometry-types.md`,
-which is why they are not a `GeoArrowType`.
+as described under "WKT and WKB" in `docs/source/user-guide/geo/concepts/geometry-types.md`.
+No operation works on them,
+other than converting them to and from the native geometries and `geo.crs_to_projjson`.
+That is why they are not a `GeoArrowType`.
 """
 
 from __future__ import annotations
@@ -39,6 +41,11 @@ class EncodedGeometry(pl.datatypes.BaseExtension):
     def _declares_crs(self) -> bool:
         """Whether the metadata names a CRS. Read in Rust, like all metadata."""
         return _rust.declares_crs(self.ext_metadata())
+
+    def _with_projjson_crs(self) -> EncodedGeometry:
+        """The same type, with its CRS written as PROJJSON. See `geo.crs_to_projjson`."""
+        metadata = _rust.with_projjson_crs(self.ext_metadata())
+        return self.ext_from_params(self._extension_name, self._storage_dtype, metadata)
 
     def __repr__(self) -> str:
         # `Wkb`, or `Wkb({"crs":"EPSG:4326"})` with metadata
