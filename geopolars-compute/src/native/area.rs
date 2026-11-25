@@ -13,7 +13,7 @@ use geopolars_views::{
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
 
-use super::{first_outside, has_none_outside, Bounds};
+use super::{first_outside, Bounds};
 use crate::early_coord_check::every_xy_passes;
 use crate::per_row::per_row_or_null;
 use crate::proj::ReprojectedXy;
@@ -281,15 +281,12 @@ fn areas_with_failed_check<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool
         return None;
     }
     let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
-    if has_none_outside(bounds, x, y) {
-        return None;
-    }
+    let position = first_outside(bounds, x, y)?;
     // `Ignore` never gets here, as it gives `CHECK_BOUNDS=false`.
     Some(match on_out_of_bounds {
         OnOutOfBounds::Null => Ok(None),
         _ => Err(GeoComputeError::OutOfBounds {
-            position: first_outside(bounds, x, y)
-                .expect("a coordinate outside, as the check above failed"),
+            position,
             bounds: *bounds,
         }),
     })

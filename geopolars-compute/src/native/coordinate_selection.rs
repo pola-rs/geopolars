@@ -75,15 +75,19 @@ fn is_outside(bounds: &Bounds, x: f64, y: f64) -> bool {
 
 /// Whether none of `x` and `y` lies outside `bounds`.
 #[inline(always)]
-pub(crate) fn has_none_outside(bounds: &Bounds, x: &[f64], y: &[f64]) -> bool {
+fn has_none_outside(bounds: &Bounds, x: &[f64], y: &[f64]) -> bool {
     // Does not stop at the first outside, so that it vectorises.
     x.iter()
         .zip(y)
         .fold(true, |ok, (&x, &y)| ok & !is_outside(bounds, x, y))
 }
 
-/// Finds the first `x` and `y` that lie outside `bounds`.
+/// The first `x` and `y` that lie outside `bounds`, if any.
+#[inline(always)]
 pub(crate) fn first_outside(bounds: &Bounds, x: &[f64], y: &[f64]) -> Option<(f64, f64)> {
+    if has_none_outside(bounds, x, y) {
+        return None;
+    }
     x.iter()
         .zip(y)
         .map(|(&x, &y)| (x, y))
