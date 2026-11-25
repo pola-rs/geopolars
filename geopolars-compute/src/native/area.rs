@@ -13,7 +13,7 @@ use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
 
 use super::{first_outside, Bounds};
-use crate::early_coord_check::every_xy_passes;
+use crate::early_coord_check::every_xy_passes_at;
 use crate::per_row::per_row_or_null;
 use crate::{
     BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, OnOutOfBounds, OnRowError,
@@ -213,13 +213,13 @@ fn areas_with_failed_check<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool
     bounds: &Bounds,
     on_out_of_bounds: OnOutOfBounds,
 ) -> Option<GeoComputeResult<Option<f64>>> {
-    let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
-    if !every_xy_passes::<EARLY_COORD_CHECK>(x, y) {
+    if !every_xy_passes_at::<EARLY_COORD_CHECK>(coords.x(), coords.y(), vertices.clone()) {
         return Some(Ok(Some(f64::NAN)));
     }
     if !CHECK_BOUNDS {
         return None;
     }
+    let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
     let position = first_outside(bounds, x, y)?;
     // `Ignore` never gets here, as it gives `CHECK_BOUNDS=false`.
     Some(match on_out_of_bounds {
