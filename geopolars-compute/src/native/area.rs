@@ -232,13 +232,13 @@ fn areas_with_failed_check<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool
     bounds: &Bounds,
     on_out_of_bounds: OnOutOfBounds,
 ) -> Option<GeoComputeResult<Option<f64>>> {
-    if !areas_with_failed_check_row_passes_early::<EARLY_COORD_CHECK>(coords, vertices.clone()) {
+    let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
+    if !every_xy_passes::<EARLY_COORD_CHECK>(x, y) {
         return Some(Ok(Some(f64::NAN)));
     }
     if !CHECK_BOUNDS {
         return None;
     }
-    let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
     let position = first_outside(bounds, x, y)?;
     // `Ignore` never gets here, as it gives `CHECK_BOUNDS=false`.
     Some(match on_out_of_bounds {
@@ -248,17 +248,6 @@ fn areas_with_failed_check<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool
             bounds: *bounds,
         }),
     })
-}
-
-#[inline(always)]
-fn areas_with_failed_check_row_passes_early<const EARLY_COORD_CHECK: u8>(
-    coords: &ValidCoords,
-    vertices: Range<usize>,
-) -> bool {
-    if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
-        return true;
-    }
-    every_xy_passes::<EARLY_COORD_CHECK>(&coords.x()[vertices.clone()], &coords.y()[vertices])
 }
 
 /// Splits `bounds` into whether to check them and the bounds themselves,

@@ -388,12 +388,8 @@ fn rows_to_geos_with<const ALL_VALID: bool, const EARLY_COORD_CHECK: u8>(
         } else {
             let parts = rows.range(i);
             let geometry =
-                if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
-                    row_parts_to_geos(parts)
-                } else {
-                    coords_pass_early_check::<EARLY_COORD_CHECK>(&x[coords.clone()], &y[coords])
-                        .and_then(|()| row_parts_to_geos(parts))
-                };
+                coords_pass_early_check::<EARLY_COORD_CHECK>(&x[coords.clone()], &y[coords])
+                    .and_then(|()| row_parts_to_geos(parts));
             match row_or_null(geometry.map(Some), on_row_error)? {
                 Some(geometry) => GeosRow::Geometry {
                     geometry,

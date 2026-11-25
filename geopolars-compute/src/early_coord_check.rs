@@ -28,6 +28,9 @@ fn xy_passes<const EARLY_COORD_CHECK: u8>(x: f64, y: f64) -> bool {
 #[cfg(any(feature = "native", feature = "geos"))]
 #[inline(always)]
 pub(crate) fn every_xy_passes<const EARLY_COORD_CHECK: u8>(x: &[f64], y: &[f64]) -> bool {
+    if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
+        return true;
+    }
     // Does not stop at the first that fails, so that it vectorises.
     x.iter().zip(y).fold(true, |ok, (&x, &y)| {
         ok & xy_passes::<EARLY_COORD_CHECK>(x, y)
