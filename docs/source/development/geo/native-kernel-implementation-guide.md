@@ -177,10 +177,11 @@ per_row_or_null(rows, on_row_error, |i| {
 })
 ```
 
-> [!NOTE] Where to run the check
-> Other approaches were slower when prototyped for `area`.
->
-> - Doing it ahead, over the whole chunk in a separate pass is 65-95% slower,
->   as it needs to read the coordinates from memory again.
-> - Doing it inside the work's loop over the coordinates is about 30% slower,
->   as the check loses vectorisation and the work's loop its unrolling.
+!!! note "Where to run the check"
+
+    Other approaches were slower when prototyped for `area`.
+
+    - Doing it ahead, over the whole chunk in a separate pass is 65-95% slower,
+      as it needs to read the coordinates from memory again.
+    - Doing it inside the work's loop over the coordinates is about 30% slower,
+      as the check loses vectorisation and the work's loop its unrolling.
