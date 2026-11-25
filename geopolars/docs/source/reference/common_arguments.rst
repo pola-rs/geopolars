@@ -75,9 +75,8 @@ such as infinity instead of NaN, or an error that the check would have caught fi
 With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
 What GEOS does with it depends on the operation, and often on where the point is:
 
+.. TODO: these should be on the expressions they describe, not here.
 
-
-TODO: these should be on the expressions they describe, not here.
 .. list-table::
    :header-rows: 1
 
