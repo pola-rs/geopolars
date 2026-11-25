@@ -252,6 +252,9 @@ and a point would stay where it is.
 A null geometry comes out null, and an empty one stays empty.
 Any other geometry without a centroid, such as a line without length,
 goes to `on_row_error` (see `centroid` for every such case).""",
+    "about_centroid_method": """\
+`method` measures the centroid as `centroid` does.
+A vertical geometry only has one with `method="3d"`.""",
     # TODO: Describe in the constructors' docstrings how `crs` labels the result:
     # it sets a CRS where none is declared,
     # and refuses a different declared one rather than reprojecting (`MetadataKwargs::apply`).

@@ -347,6 +347,22 @@ def test_a_polygon_without_area_has_no_centroid_in_3d(
     assert _centroids_of_only_column(df, "3d", on_row_error="null") == [None]
 
 
+@pytest.mark.parametrize(
+    "exterior",
+    [[], _xyz_ring((0, 0, 0), (2, 0, 0), (1, 0, 0))],
+    ids=["empty", "collinear"],
+)
+@pytest.mark.parametrize("method", ["footprint", "3d"])
+def test_a_hole_in_an_exterior_without_area_has_no_centroid(
+    exterior: XyzRing, method: CentroidMethod
+) -> None:
+    hole = _xyz_ring((5, 5, 0), (6, 5, 0), (6, 6, 0), (5, 6, 0))
+    df = _polygons_xyz([exterior, hole])
+
+    with pytest.raises(pl.exceptions.ComputeError, match=_HOLES_EXCEED):
+        _centroids_of_only_column(df, method)
+
+
 @pytest.mark.parametrize("reverse_hole", [False, True])
 def test_a_hole_in_a_vertical_polygon_is_taken_out_whichever_way_it_winds(
     reverse_hole: bool,

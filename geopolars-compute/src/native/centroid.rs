@@ -342,7 +342,12 @@ fn add_polygon_three_d<const M: bool, const ANCHOR: u8>(
     for hole in rings {
         let hole = ring_fan_three_d::<M, ANCHOR>(&hole);
         // The hole is taken out whichever way it winds.
-        let sign = dot(hole.normal, exterior_normal).signum();
+        // Against an exterior without area, it is taken out as it winds.
+        let sign = if dot(hole.normal, exterior_normal) < 0.0 {
+            -1.0
+        } else {
+            1.0
+        };
         for j in 0..3 {
             fan.normal[j] -= sign * hole.normal[j];
             for k in 0..4 {
@@ -358,8 +363,13 @@ fn add_polygon_three_d<const M: bool, const ANCHOR: u8>(
     // Dividing by `length` first keeps the sums from underflowing as soon as the weight does.
     let unit = fan.normal.map(|n| n / length);
     // Holes that take out more than the exterior flip the normal.
+    // An exterior without area faces nowhere, so any hole with area takes out more than it holds.
     // Their area then counts against the weight, as in `add_ring`.
-    let sign = dot(unit, exterior_normal).signum();
+    let sign = if dot(unit, exterior_normal) > 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
     for k in 0..4 {
         if has_axis::<true, M>(k) {
             let along_normal: f64 = (0..3).map(|j| unit[j] * fan.moment[j][k]).sum();

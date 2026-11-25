@@ -167,10 +167,16 @@ class ExprGeoNameSpace:
         amount: float,
         unit: AngleUnit = "deg",
         axis: Literal["x", "y", "z"] = "z",
+        method: CentroidMethod = "footprint",
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         return affine.rotate_about_centroid(
-            self._expr, amount, unit=unit, axis=axis, on_row_error=on_row_error
+            self._expr,
+            amount,
+            unit=unit,
+            axis=axis,
+            method=method,
+            on_row_error=on_row_error,
         )
 
     def skew(
@@ -191,10 +197,16 @@ class ExprGeoNameSpace:
         xs: float = 0.0,
         ys: float = 0.0,
         unit: AngleUnit = "deg",
+        method: CentroidMethod = "footprint",
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         return affine.skew_about_centroid(
-            self._expr, xs=xs, ys=ys, unit=unit, on_row_error=on_row_error
+            self._expr,
+            xs=xs,
+            ys=ys,
+            unit=unit,
+            method=method,
+            on_row_error=on_row_error,
         )
 
     def scale(
@@ -217,6 +229,7 @@ class ExprGeoNameSpace:
         xfact: float = 1.0,
         yfact: float = 1.0,
         zfact: float = 1.0,
+        method: CentroidMethod = "footprint",
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         return affine.scale_about_centroid(
@@ -224,6 +237,7 @@ class ExprGeoNameSpace:
             xfact=xfact,
             yfact=yfact,
             zfact=zfact,
+            method=method,
             on_row_error=on_row_error,
         )
 
