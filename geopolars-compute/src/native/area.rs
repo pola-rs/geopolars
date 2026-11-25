@@ -6,7 +6,6 @@
 use std::convert::Infallible;
 use std::ops::Range;
 
-use geographiclib_rs::{Geodesic, PolygonArea, Winding};
 use geopolars_views::{
     List, MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };
@@ -16,10 +15,9 @@ use polars_arrow::datatypes::ArrowDataType;
 use super::{first_outside, Bounds};
 use crate::early_coord_check::every_xy_passes;
 use crate::per_row::per_row_or_null;
-use crate::proj::ReprojectedXy;
 use crate::{
-    BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, GeodesicMetric, OnOutOfBounds,
-    OnRowError, Planar,
+    BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, OnOutOfBounds, OnRowError,
+    Planar,
 };
 
 /// The `negative_area` of the Python `area`.
@@ -107,46 +105,6 @@ pub(super) fn twice_signed_area(ring: &ScalarLineString) -> f64 {
     // The last vertex wraps around to the first.
     // That adds nothing to a closed ring, but keeps an unclosed one right.
     twice_signed + term(x[n - 1], y[n - 2], y[0])
-}
-
-impl AreaMetric for GeodesicMetric {
-    type Error = GeoComputeError;
-    type Chunk = ReprojectedXy;
-
-    fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
-        self.lonlats(coords, vertices)
-    }
-
-    #[inline(always)]
-    fn check_row(
-        &self,
-        lonlats: &ReprojectedXy,
-        coords: &ValidCoords,
-        vertices: Range<usize>,
-    ) -> Result<(), GeoComputeError> {
-        self.check_lonlats(lonlats, coords, vertices)
-    }
-
-    fn ring_area(&self, lonlats: &ReprojectedXy, ring: &ScalarLineString) -> f64 {
-        ring_signed_area(&self.ellipsoid, lonlats, ring).abs()
-    }
-}
-
-/// The area `ring` encloses on `ellipsoid`, positive when its smaller side lies to its left.
-#[inline(always)]
-fn ring_signed_area(ellipsoid: &Geodesic, lonlats: &ReprojectedXy, ring: &ScalarLineString) -> f64 {
-    // On the ellipsoid, in the CRS's unit squared, like [`between`](GeodesicMetric::between).
-    // Based on `geographiclib_rs`.
-    let mut area = PolygonArea::new(ellipsoid, Winding::CounterClockwise);
-    for i in ring.vertices.clone() {
-        let (lon, lat) = lonlats.xy(i);
-        // The repeated closing vertex adds an edge of length zero, which encloses nothing.
-        area.add_point(lat, lon);
-    }
-    // Signed, so that it lies within half the ellipsoid.
-    // Unsigned would take a clockwise ring to enclose everything outside of it.
-    let (_perimeter, area, _vertices) = area.compute(true);
-    area
 }
 
 #[inline(always)]

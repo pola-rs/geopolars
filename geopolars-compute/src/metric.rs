@@ -10,12 +10,22 @@
 // - Rhumb, distance along const lat or long bearing
 // - Projected, which is just Geodesic but first projected to WGS84, and uses Karney's algorithm.
 
+#[cfg(feature = "native")]
 use std::ops::Range;
 
 use geographiclib_rs::{Geodesic, InverseGeodesic};
-use geopolars_views::ValidCoords;
+#[cfg(feature = "native")]
+use geographiclib_rs::{PolygonArea, Winding};
+#[cfg(feature = "native")]
+use geopolars_views::{ScalarLineString, ValidCoords};
 
-use crate::proj::{reproject_position, ReprojectedXy, Transformation};
+#[cfg(feature = "native")]
+use crate::native::AreaMetric;
+#[cfg(feature = "native")]
+use crate::proj::ReprojectedXy;
+use crate::proj::{reproject_position, Transformation};
+#[cfg(feature = "native")]
+use crate::GeoComputeError;
 use crate::GeoComputeResult;
 
 /// Marker trait so we can trace all the metrics to one place :)
@@ -32,7 +42,7 @@ pub type WithHeight = ((f64, f64), f64);
 /// Measures coordinates in one CRS against each other along the ellipsoid that CRS lies on.
 pub struct GeodesicMetric {
     to_lonlat: Transformation,
-    pub(crate) ellipsoid: Geodesic,
+    ellipsoid: Geodesic,
 }
 
 impl BaseMetric for GeodesicMetric {}
@@ -55,25 +65,9 @@ impl GeodesicMetric {
     /// so something measuring many segments should do this once per vertex.
     pub fn lonlat(&self, (x, y): (f64, f64)) -> GeoComputeResult<(f64, f64)> {
         // TODO: `length` and `distance` still call this once per vertex.
-        // Batch them through `lonlats`, as `area` does.
+        // Batch them through `ReprojectedXy`, as `area` does.
         let [lon, lat, _] = reproject_position(&self.to_lonlat, [x, y, 0.0])?;
         Ok((lon, lat))
-    }
-
-    /// [`lonlat`](Self::lonlat) for `vertices` of `coords`, reprojected in a single call to PROJ.
-    pub(crate) fn lonlats(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
-        ReprojectedXy::new(&self.to_lonlat, coords, vertices)
-    }
-
-    /// [ReprojectedXy::check] for `lonlats` made by [`lonlats`](Self::lonlats) from `coords`.
-    #[inline(always)]
-    pub(crate) fn check_lonlats(
-        &self,
-        lonlats: &ReprojectedXy,
-        coords: &ValidCoords,
-        vertices: Range<usize>,
-    ) -> GeoComputeResult<()> {
-        lonlats.check(&self.to_lonlat, coords, vertices)
     }
 
     /// The geodesic distance between two coordinates already in [`lonlat`](Self::lonlat),
@@ -81,4 +75,46 @@ impl GeodesicMetric {
     pub fn between(&self, (lon_a, lat_a): (f64, f64), (lon_b, lat_b): (f64, f64)) -> f64 {
         self.ellipsoid.inverse(lat_a, lon_a, lat_b, lon_b)
     }
+}
+
+#[cfg(feature = "native")]
+impl AreaMetric for GeodesicMetric {
+    type Error = GeoComputeError;
+    type Chunk = ReprojectedXy;
+
+    fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
+        ReprojectedXy::new(&self.to_lonlat, coords, vertices)
+    }
+
+    #[inline(always)]
+    fn check_row(
+        &self,
+        lonlats: &ReprojectedXy,
+        coords: &ValidCoords,
+        vertices: Range<usize>,
+    ) -> Result<(), GeoComputeError> {
+        lonlats.check(&self.to_lonlat, coords, vertices)
+    }
+
+    fn ring_area(&self, lonlats: &ReprojectedXy, ring: &ScalarLineString) -> f64 {
+        ring_signed_area(&self.ellipsoid, lonlats, ring).abs()
+    }
+}
+
+/// The area `ring` encloses on `ellipsoid`, positive when its smaller side lies to its left.
+#[cfg(feature = "native")]
+#[inline(always)]
+fn ring_signed_area(ellipsoid: &Geodesic, lonlats: &ReprojectedXy, ring: &ScalarLineString) -> f64 {
+    // On the ellipsoid, in the CRS's unit squared, like [`between`](GeodesicMetric::between).
+    // Based on `geographiclib_rs`.
+    let mut area = PolygonArea::new(ellipsoid, Winding::CounterClockwise);
+    for i in ring.vertices.clone() {
+        let (lon, lat) = lonlats.xy(i);
+        // The repeated closing vertex adds an edge of length zero, which encloses nothing.
+        area.add_point(lat, lon);
+    }
+    // Signed, so that it lies within half the ellipsoid.
+    // Unsigned would take a clockwise ring to enclose everything outside of it.
+    let (_perimeter, area, _vertices) = area.compute(true);
+    area
 }
