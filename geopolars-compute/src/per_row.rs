@@ -133,34 +133,20 @@ fn per_row_values_with<const ALL_VALID: bool, T: Default, E>(
     Ok(values)
 }
 
-/// [per_row_values], handing each value to `push` rather than collecting them.
+/// Calls `visit` with every row of a chunk, and whether that row is valid.
 #[inline(always)]
-pub(crate) fn try_for_each_row_value<T: Default, E>(
-    rows: &List,
-    measure: impl Fn(usize) -> Result<T, E>,
-    push: impl FnMut(T),
-) -> Result<(), E> {
+pub(crate) fn for_each_row(rows: &List, visit: impl FnMut(usize, bool)) {
     with_const_flags!(
         ALL_VALID = rows.is_all_valid();
-        try_for_each_row_value_with::<ALL_VALID, T, E>(rows, measure, push)
+        for_each_row_with::<ALL_VALID>(rows, visit)
     )
 }
 
 #[inline(always)]
-fn try_for_each_row_value_with<const ALL_VALID: bool, T: Default, E>(
-    rows: &List,
-    measure: impl Fn(usize) -> Result<T, E>,
-    mut push: impl FnMut(T),
-) -> Result<(), E> {
+fn for_each_row_with<const ALL_VALID: bool>(rows: &List, mut visit: impl FnMut(usize, bool)) {
     for i in 0..rows.len() {
-        // A null row's offsets point anywhere, so it is not measured.
-        push(if ALL_VALID || rows.is_valid(i) {
-            measure(i)?
-        } else {
-            T::default()
-        });
+        visit(i, ALL_VALID || rows.is_valid(i));
     }
-    Ok(())
 }
 
 /// [per_row_optional_bool], as a list per row of a chunk, one per part.

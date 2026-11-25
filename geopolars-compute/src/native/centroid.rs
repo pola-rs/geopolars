@@ -17,16 +17,17 @@
 
 use std::ops::Range;
 
+use geopolars_views::output::succeeded;
 use geopolars_views::{
     Coords, LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PointArray,
     PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };
-use polars_arrow::bitmap::MutableBitmap;
+use polars_arrow::compute::utils::combine_validities_and;
 
 use super::is_empty::has_no_points;
 use super::DistanceMetric;
-use crate::per_row::try_for_each_row_value;
-use crate::{row_or_null, CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
+use crate::per_row::for_each_row;
+use crate::{CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
 
 /// Which axes measure the length or area that a centroid is weighted by.
 /// Implements `method` of the Python `centroid`.
@@ -55,7 +56,6 @@ const fn has_axis<const Z: bool, const M: bool>(k: usize) -> bool {
 
 /// Running average for a weight.
 /// You can keep adding to this!
-#[derive(Clone, Copy)]
 struct Moment<const Z: bool, const M: bool> {
     /// Σ weight * centre, in x, y, z, m.
     /// An axis that is not [there](has_axis) stays `0.0`.
@@ -381,12 +381,19 @@ fn norm(v: [f64; 3]) -> f64 {
 }
 
 /// Why a row has no centroid.
-/// Unlike [GeoComputeError], it is small and needs no drop, so a row's result stays cheap to return.
 #[derive(Clone, Copy)]
 enum NoCentroid {
     WithoutWeight,
     Underflow { extent: f64 },
     HolesExceedExterior,
+}
+
+/// What a row whose weight is too small to trust turns out to be.
+enum LightRow {
+    Empty,
+    /// A thin row, whose weight is small but whose sums are fine.
+    Sliver,
+    WithoutCentroid(NoCentroid),
 }
 
 /// What the centroids of a column are weighted by,
@@ -426,37 +433,79 @@ impl<'a> Weighing<'a> {
         }
     }
 
-    /// The centroid of a row whose weight is too small to trust without a closer look.
-    /// A row without vertices gets the empty point.
-    /// A row that only lies close to its first vertex, or has no weight at all, gets why it has none.
+    /// Overwrites the centroid of every suspect (a row and its weight, too small to trust)
+    /// that has none: with the empty point for a row without vertices.
+    /// Any other row without a centroid goes to `on_row_error`, so it is returned or listed as failed.
     #[cold]
     #[inline(never)]
-    fn centroid_with_little_weight<const Z: bool, const M: bool>(
+    fn fix_up_suspects<const Z: bool>(
         self,
-        vertices: Range<usize>,
-        moment: Moment<Z, M>,
-    ) -> Result<[f64; 4], NoCentroid> {
+        axes: &mut [Vec<f64>; 4],
+        suspects: &[(usize, f64)],
+        row_vertices: impl Fn(usize) -> Range<usize>,
+        on_row_error: OnRowError,
+    ) -> GeoComputeResult<Vec<usize>> {
+        let mut failed = Vec::new();
+        for &(i, weight) in suspects {
+            let fill = match self.look_at_light_row(row_vertices(i), weight) {
+                LightRow::Sliver => continue,
+                LightRow::Empty => f64::NAN,
+                LightRow::WithoutCentroid(why) => match on_row_error {
+                    OnRowError::Raise => return Err(self.error::<Z>(why)),
+                    OnRowError::Null => {
+                        failed.push(i);
+                        0.0
+                    }
+                },
+            };
+            // An axis that is not there is an empty `Vec`.
+            for axis in axes.iter_mut() {
+                if let Some(value) = axis.get_mut(i) {
+                    *value = fill;
+                }
+            }
+        }
+        Ok(failed)
+    }
+
+    fn look_at_light_row(self, vertices: Range<usize>, weight: f64) -> LightRow {
         if has_no_points::<false>(self.coords, vertices.clone()) {
-            return Ok([f64::NAN; 4]);
+            return LightRow::Empty;
         }
-        if moment.weight < 0.0 {
-            return Err(NoCentroid::HolesExceedExterior);
+        if weight < 0.0 {
+            return LightRow::WithoutCentroid(NoCentroid::HolesExceedExterior);
         }
-        let first = self.coords.position::<Z>(vertices.start);
-        let axes = if self.measures_z { 3 } else { 2 };
-        let extent = vertices.fold(0.0_f64, |extent, i| {
-            let position = self.coords.position::<Z>(i);
-            (0..axes).fold(extent, |extent, k| {
-                extent.max((position[k] - first[k]).abs())
-            })
-        });
+        let extent = self.extent_up_to_smallest(vertices);
         if extent > 0.0 && extent < self.smallest_extent {
-            return Err(NoCentroid::Underflow { extent });
+            return LightRow::WithoutCentroid(NoCentroid::Underflow { extent });
         }
-        if moment.weight > 0.0 {
-            return Ok(moment.average());
+        if weight > 0.0 {
+            return LightRow::Sliver;
         }
-        Err(NoCentroid::WithoutWeight)
+        LightRow::WithoutCentroid(NoCentroid::WithoutWeight)
+    }
+
+    /// How far `vertices` lie from the first along a measured axis, at most.
+    /// It stops at the first vertex at least `smallest_extent` away, as that rules out an underflow.
+    fn extent_up_to_smallest(self, vertices: Range<usize>) -> f64 {
+        let z = self.measures_z.then(|| self.coords.z()).flatten();
+        let mut extent = 0.0_f64;
+        for axis in [Some(self.coords.x()), Some(self.coords.y()), z]
+            .into_iter()
+            .flatten()
+        {
+            let values = &axis[vertices.clone()];
+            let Some(&first) = values.first() else {
+                continue;
+            };
+            for &value in values {
+                extent = extent.max((value - first).abs());
+                if extent >= self.smallest_extent {
+                    return extent;
+                }
+            }
+        }
+        extent
     }
 
     #[cold]
@@ -476,7 +525,7 @@ impl<'a> Weighing<'a> {
 }
 
 /// The centroid of every row of `rows`, of the moment `add_row` adds for it.
-/// A row without a centroid goes to `on_row_error` (see [Weighing::centroid_with_little_weight]).
+/// A row without a centroid goes to `on_row_error` (see [Weighing::fix_up_suspects]).
 #[inline(always)]
 fn centroids<const Z: bool, const M: bool>(
     rows: &List,
@@ -488,34 +537,38 @@ fn centroids<const Z: bool, const M: bool>(
     let len = rows.len();
     let mut axes: [Vec<f64>; 4] =
         std::array::from_fn(|k| Vec::with_capacity(if has_axis::<Z, M>(k) { len } else { 0 }));
-    let mut validity = MutableBitmap::with_capacity(len);
-    try_for_each_row_value(
-        rows,
-        |i| {
+    // The rows whose weight is too small to trust, which are looked at again after the loop,
+    // so that the loop itself does no more than average.
+    let mut suspects = Vec::new();
+    let smallest_weight = weighing.smallest_weight;
+    for_each_row(rows, |i, is_valid| {
+        // A null row's offsets point anywhere, so it is not measured.
+        let average = if is_valid {
             let mut moment = Moment::ZERO;
             add_row(&mut moment, i);
-            let centroid = if moment.outweighs(weighing.smallest_weight) {
-                Ok(moment.average())
-            } else {
-                weighing.centroid_with_little_weight(row_vertices(i), moment)
-            };
-            row_or_null(centroid.map(Some), on_row_error)
-        },
-        |centroid| {
-            let values = centroid.unwrap_or_default();
-            for k in 0..4 {
-                if has_axis::<Z, M>(k) {
-                    axes[k].push(values[k]);
-                }
+            if !moment.outweighs(smallest_weight) {
+                suspects.push((i, moment.weight));
             }
-            validity.push(centroid.is_some());
-        },
-    )
-    .map_err(|why| weighing.error::<Z>(why))?;
+            moment.average()
+        } else {
+            [0.0; 4]
+        };
+        for k in 0..4 {
+            if has_axis::<Z, M>(k) {
+                axes[k].push(average[k]);
+            }
+        }
+    });
+    let failed = if suspects.is_empty() {
+        Vec::new()
+    } else {
+        weighing.fix_up_suspects::<Z>(&mut axes, &suspects, row_vertices, on_row_error)?
+    };
+    let validity = combine_validities_and(rows.validity(), succeeded(len, &failed).as_ref());
     let [x, y, z, m] = axes;
     Ok(PointArray::new(Coords::from_valid(
         ValidCoords::from_axes((x, y, Z.then_some(z), M.then_some(m))),
-        Some(validity.into()),
+        validity,
     )))
 }
 
