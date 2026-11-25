@@ -93,7 +93,19 @@ and the `only gaps` route has nothing but empty points:
 ## Non-finite
 
 A NaN or an infinity in a coordinate is viral and permeates into every result that depends on it.
-The length of a line with a NaN vertex is NaN, and so are its area and the distance to it.
+For an operation like distance (and thus line length), the type follows naturally.
+The distance to an infinitely far vertex is also infinite.
+In other cases, such as an area, they can morph.
+The area of a polygon with both a -inf and +inf can become NaN.
+Some operations will raise errors (that can be handled by `on_row_error`) when they find a NaN.
+This can be for whatever reason, such as an external tool (GEOS) not supporting it,
+or because a precondition for a calculation is now not met.
+
+No matter how a Non-finite number is handled though,
+it is guaranteed that a NaN never comes out as a plausible finite number.
+You will always be able to find the invalid data, and it is never fixed silently.
+
+Non-finite numbers can also have implications on the validity of a geometry.
 It also becomes impossible to tell whether two shapes cross.
 Such a geometry is therefore not valid by OGC.
 `is_valid_geoarrow(..., check_finite_coordinates=True)` finds them in a single, cheap pass.

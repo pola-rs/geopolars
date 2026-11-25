@@ -163,14 +163,28 @@ keep the check for nulls and empties in the loop instead.
 
 ## `early_coord_check`
 
-Implement `early_coord_check` in a native kernel as `geopolars/docs/source/reference/common_arguments.rst` describes it.
+`geopolars/docs/source/reference/common_arguments.rst` describes what the user sees.
 
-Check each row in the loop over the rows, with a pass over its coordinates just before the work.
+`early_coord_check` is a pass over the coordinates of a row that finds a NaN or infinite x or y,
+so that the row gets NaN without its work being done.
+It is a shortcut that exists for speed, not for correctness
+(see "NaN, infinity and empties" in the [Kernel implementation guide](kernel-implementation-guide.md#nan-infinity-and-empties)).
+
+Give a kernel the check only where the work it skips clearly costs more than the pass
+(e.g. converting to a GEOS geometry).
+The check should not be done where the work costs about as much as the (check) pass
+(e.g. the shoelace formale of planar `area`)
+
+That the check may also change which non-finite outcome a row gets,
+such as NaN instead of an error PROJ would raise, is incidental.
+
+Run the check in the loop over the rows, with a pass over the coordinates of each row just before its work.
 Doing it here finds them still in cache:
 
 ```rust
 per_row_or_null(rows, on_row_error, |i| {
-    if !areas_with_failed_check_row_passes_early::<EARLY_COORD_CHECK>(coords, row_vertices(i)) {
+    let vertices = row_vertices(i);
+    if !every_xy_passes_at::<EARLY_COORD_CHECK>(coords.x(), coords.y(), vertices.clone()) {
         return Ok(Some(f64::NAN));
     }
     Ok(Some(row_area(&chunk, i)))
