@@ -171,6 +171,9 @@ def area(
 
     A NaN or infinite coordinate never gives a finite area.
     This takes precedence over the length of the ring.
+    (One edge case: with `early_coord_check="off"` and `on_out_of_bounds="ignore"`,
+    PROJ can take an infinite coordinate to a finite longitude/latitude when measuring geodesic,
+    such as `y=-inf` in Web Mercator to the south pole, which then gives a finite area.)
     An empty point in a ring is a NaN coordinate too, so it gives NaN.
     Use `.fill_nan(None)` on the area to make these null instead,
     or `null_out_invalid_ogc` on the polygons before measuring them.

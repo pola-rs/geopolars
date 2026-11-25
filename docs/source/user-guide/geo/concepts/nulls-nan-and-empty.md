@@ -101,9 +101,15 @@ Some operations will raise errors (that can be handled by `on_row_error`) when t
 This can be for whatever reason, such as an external tool (GEOS) not supporting it,
 or because a precondition for a calculation is now not met.
 
-No matter how a Non-finite number is handled though,
+No matter how a non-finite number is handled though,
 it is guaranteed that a NaN never comes out as a plausible finite number.
 You will always be able to find the invalid data, and it is never fixed silently.
+
+!!! warning
+
+    This holds with the default `early_coord_check`.
+    With `early_coord_check="off"`, a GEOS-backed operation cannot guarantee that the result stays non-finite,
+    as GEOS sometimes handles these internally inconsistently.
 
 Non-finite numbers can also have implications on the validity of a geometry.
 It also becomes impossible to tell whether two shapes cross.

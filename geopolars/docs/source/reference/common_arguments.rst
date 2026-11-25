@@ -59,16 +59,21 @@ GEOS cannot handle an empty point inside a geometry, nor any other NaN or infini
 (see `Non-finite and inner empties in GEOS-backed kernels <https://github.com/pola-rs/geopolars/blob/main/docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md#non-finite-and-inner-empties-in-geos-backed-kernels>`_ in the user guide).
 These kernels run the check while they convert a row into a GEOS geometry.
 
-This argument does not change anything about the correctness,
-as a NaN or infinite coordinate never comes out as a finite number
+With the check on, a NaN or infinite coordinate never comes out as a plausible finite number
 (see `Non-finite <https://github.com/pola-rs/geopolars/blob/main/docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md#non-finite>`_ in the user guide).
-It might mean that the exact shape might differ.
-For example, an infinite might get turned into a NaN, or an error is not raised because it is caught early by this.
-Skipping the check with `early_coord_check="off"` can silently change the results, which may come as a surprise.
-GEOS handles such input in different ways, and sometimes inconsistently.
+Turning it off gives the same result for most rows,
+but it is not guaranteed to always give the same values.
+A native kernel may give a different non-finite outcome,
+such as infinity instead of NaN, or an error that the check would have caught first.
+
+.. note::
+
+   With `early_coord_check="off"`, a GEOS kernel cannot guarantee that the result stays non-finite,
+   as GEOS sometimes handles these internally inconsistently.
+   For example, it silently returns (4, 0) for a distance of 0.5 along a line with a NaN vertex.
+
 With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
 What GEOS does with it depends on the operation, and often on where the point is:
-For example, it silently returns (4, 0) for a distance of 0.5 along a line with a NaN vertex.
 
 
 

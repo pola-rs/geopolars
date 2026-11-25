@@ -167,7 +167,11 @@ keep the check for nulls and empties in the loop instead.
 
 `early_coord_check` is a pass over the coordinates of a row that finds a NaN or infinite x or y,
 so that the row gets NaN without its work being done.
-It is a shortcut that exists for speed, not for correctness
+It is a shortcut that exists for speed.
+
+With the check disabled, there might be edge cases that get slightly different results.
+GEOS sometimes handles empty and NaNs inconsistently, and sometimes even makes non-finite values finite.
+Disabling the check will surface those, as they are now not checked before being passed on to GEOS.
 (see "NaN, infinity and empties" in the [Kernel implementation guide](kernel-implementation-guide.md#nan-infinity-and-empties)).
 
 Give a kernel the check only where the work it skips clearly costs more than the pass
