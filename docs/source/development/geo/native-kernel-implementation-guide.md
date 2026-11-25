@@ -163,5 +163,25 @@ keep the check for nulls and empties in the loop instead.
 
 ## `early_coord_check`
 
-A native kernel defaults to `early_coord_check="finite"`.
-The check runs as a pass of its own, before the loop.
+Implement `early_coord_check` in a native kernel as `geopolars/docs/source/reference/common_arguments.rst` describes it.
+
+Check each row in the loop over the rows, with a pass over its coordinates just before the work.
+Doing it here finds them still in cache:
+
+```rust
+per_row_or_null(rows, on_row_error, |i| {
+    if !areas_with_failed_check_row_passes_early::<EARLY_COORD_CHECK>(coords, row_vertices(i)) {
+        return Ok(Some(f64::NAN));
+    }
+    Ok(Some(row_area(&chunk, i)))
+})
+```
+
+!!! note "Where to run the check"
+
+    Other approaches were slower when prototyped for `area`.
+
+    - Doing it ahead, over the whole chunk in a separate pass is 65-95% slower,
+      as it needs to read the coordinates from memory again.
+    - Doing it inside the work's loop over the coordinates is about 30% slower,
+      as the check loses vectorisation and the work's loop its unrolling.

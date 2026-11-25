@@ -56,9 +56,9 @@ class OutOfBounds:
 
 
 def _bounds(
-    geometry: GeoArrowType, out_of_bounds: OutOfBounds
+    geometry: GeoArrowType, crs_bounds: CrsBounds
 ) -> tuple[float, float, float, float] | None:
-    allow_wrapped_longitude, within_area_of_use = _CRS_BOUNDS[out_of_bounds.crs_bounds]
+    allow_wrapped_longitude, within_area_of_use = _CRS_BOUNDS[crs_bounds]
     return geometry._crs_bounds(
         allow_wrapped_longitude=allow_wrapped_longitude,
         within_area_of_use=within_area_of_use,
@@ -68,7 +68,7 @@ def _bounds(
 def _fix_out_of_bounds(
     column: pl.Expr, geometry: GeoArrowType, *, out_of_bounds: OutOfBounds
 ) -> pl.Expr:
-    bounds = _bounds(geometry, out_of_bounds)
+    bounds = _bounds(geometry, out_of_bounds.crs_bounds)
     if bounds is None:
         # Nothing bounds the coordinates, so none lie outside.
         return column

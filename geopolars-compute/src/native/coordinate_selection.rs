@@ -65,6 +65,31 @@ fn is_within(bounds: &Bounds, x: f64, y: f64) -> bool {
     (xmin <= x) & (x <= xmax) & (ymin <= y) & (y <= ymax)
 }
 
+/// Whether `x` or `y` lies outside `bounds`.
+/// Unlike in [is_within], a NaN never lies outside them, so neither does the empty point.
+#[inline(always)]
+fn is_outside(bounds: &Bounds, x: f64, y: f64) -> bool {
+    let [xmin, ymin, xmax, ymax] = *bounds;
+    (x < xmin) | (xmax < x) | (y < ymin) | (ymax < y)
+}
+
+/// Whether none of `x` and `y` lies outside `bounds`.
+#[inline(always)]
+pub(crate) fn has_none_outside(bounds: &Bounds, x: &[f64], y: &[f64]) -> bool {
+    // Does not stop at the first outside, so that it vectorises.
+    x.iter()
+        .zip(y)
+        .fold(true, |ok, (&x, &y)| ok & !is_outside(bounds, x, y))
+}
+
+/// Finds the first `x` and `y` that lie outside `bounds`.
+pub(crate) fn first_outside(bounds: &Bounds, x: &[f64], y: &[f64]) -> Option<(f64, f64)> {
+    x.iter()
+        .zip(y)
+        .map(|(&x, &y)| (x, y))
+        .find(|&(x, y)| is_outside(bounds, x, y))
+}
+
 /// Packs `bits` bits into a word.
 /// Bit `j` is set where `is_set(start + j)`.
 #[inline(always)]

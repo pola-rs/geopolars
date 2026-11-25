@@ -10,10 +10,13 @@
 // - Rhumb, distance along const lat or long bearing
 // - Projected, which is just Geodesic but first projected to WGS84, and uses Karney's algorithm.
 
-use geographiclib_rs::{Geodesic, InverseGeodesic};
-use proj::Proj;
+use std::ops::Range;
 
-use crate::{GeoComputeError, GeoComputeResult};
+use geographiclib_rs::{Geodesic, InverseGeodesic};
+use geopolars_views::ValidCoords;
+
+use crate::proj::{reproject_position, ReprojectedXy, Transformation};
+use crate::GeoComputeResult;
 
 /// Marker trait so we can trace all the metrics to one place :)
 pub trait BaseMetric {}
@@ -28,18 +31,18 @@ pub type WithHeight = ((f64, f64), f64);
 
 /// Measures coordinates in one CRS against each other along the ellipsoid that CRS lies on.
 pub struct GeodesicMetric {
-    /// To the CRS's own longitude/latitude, so no datum is shifted.
-    to_lonlat: Proj,
+    to_lonlat: Transformation,
     pub(crate) ellipsoid: Geodesic,
 }
 
 impl BaseMetric for GeodesicMetric {}
 
 impl GeodesicMetric {
-    /// `to_lonlat` goes from the CRS to its own longitude/latitude, so no datum is shifted.
-    /// `semi_major` is in the unit of the CRS's `x` and `y` (metres if those are degrees),
-    /// which is the unit everything measured comes out in.
-    pub fn new(to_lonlat: Proj, semi_major: f64, flattening: f64) -> Self {
+    /// Measures along the ellipsoid of `semi_major` and `flattening`, in the unit of `semi_major`.
+    ///
+    /// `to_lonlat` must go from the CRS to its own longitude/latitude, so no datum is shifted.
+    /// `semi_major` must be in the unit of the CRS's `x` and `y` (metres if those are degrees).
+    pub fn new(to_lonlat: Transformation, semi_major: f64, flattening: f64) -> Self {
         Self {
             to_lonlat,
             ellipsoid: Geodesic::new(semi_major, flattening),
@@ -51,12 +54,26 @@ impl GeodesicMetric {
     /// Reprojecting is the expensive part of measuring,
     /// so something measuring many segments should do this once per vertex.
     pub fn lonlat(&self, (x, y): (f64, f64)) -> GeoComputeResult<(f64, f64)> {
-        self.to_lonlat
-            .convert((x, y))
-            .map_err(|source| GeoComputeError::Reproject {
-                position: (x, y),
-                source,
-            })
+        // TODO: `length` and `distance` still call this once per vertex.
+        // Batch them through `lonlats`, as `area` does.
+        let [lon, lat, _] = reproject_position(&self.to_lonlat, [x, y, 0.0])?;
+        Ok((lon, lat))
+    }
+
+    /// [`lonlat`](Self::lonlat) for `vertices` of `coords`, reprojected in a single call to PROJ.
+    pub(crate) fn lonlats(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
+        ReprojectedXy::new(&self.to_lonlat, coords, vertices)
+    }
+
+    /// [ReprojectedXy::check] for `lonlats` made by [`lonlats`](Self::lonlats) from `coords`.
+    #[inline(always)]
+    pub(crate) fn check_lonlats(
+        &self,
+        lonlats: &ReprojectedXy,
+        coords: &ValidCoords,
+        vertices: Range<usize>,
+    ) -> GeoComputeResult<()> {
+        lonlats.check(&self.to_lonlat, coords, vertices)
     }
 
     /// The geodesic distance between two coordinates already in [`lonlat`](Self::lonlat),

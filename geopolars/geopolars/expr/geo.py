@@ -27,11 +27,13 @@ if TYPE_CHECKING:
         NewHoles,
         NewRingOrientation,
         NullParts,
+        OnOutOfBounds,
         OnRowError,
         PromoteToMulti,
         ShortLines,
     )
     from geopolars.datatypes import GeoArrowType
+    from geopolars.geo.area import NegativeArea
     from geopolars.geo.close_rings import CloseRings
     from geopolars.geo.filter_coordinates import NonFiniteAction
     from geopolars.geo.fix_out_of_bounds import (
@@ -828,20 +830,29 @@ class ExprGeoNameSpace:
             ignore_nan=ignore_nan,
         )
 
-    def area(self, *, allow_non_polygons: bool = False) -> pl.Expr:
+    def area(
+        self,
+        *,
+        distance_method: DistanceMethod = "auto",
+        allow_non_polygons: bool = False,
+        on_row_error: OnRowError = "raise",
+        early_coord_check: EarlyCoordCheck = "finite",
+        on_out_of_bounds: OnOutOfBounds = "auto",
+        crs_bounds: CrsBounds = "crs_wrapped_longitude",
+        negative_area: NegativeArea = "zero",
+    ) -> pl.Expr:
         from geopolars.geo.area import area
 
-        return area(self._expr, allow_non_polygons=allow_non_polygons)
-
-    def area_planar(self, *, allow_non_polygons: bool = False) -> pl.Expr:
-        from geopolars.geo.area import area_planar
-
-        return area_planar(self._expr, allow_non_polygons=allow_non_polygons)
-
-    def area_geodesic(self, *, allow_non_polygons: bool = False) -> pl.Expr:
-        from geopolars.geo.area import area_geodesic
-
-        return area_geodesic(self._expr, allow_non_polygons=allow_non_polygons)
+        return area(
+            self._expr,
+            distance_method=distance_method,
+            allow_non_polygons=allow_non_polygons,
+            on_row_error=on_row_error,
+            early_coord_check=early_coord_check,
+            on_out_of_bounds=on_out_of_bounds,
+            crs_bounds=crs_bounds,
+            negative_area=negative_area,
+        )
 
     def is_empty(self, *, check_nested: bool = False) -> pl.Expr:
         from geopolars.geo.is_empty import is_empty

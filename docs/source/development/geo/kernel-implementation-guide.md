@@ -220,10 +220,18 @@ Before doing any work, a kernel must first check for two special conditions for 
 
 This is for most kernels, but there may of course be exceptions!
 
-A resulting row can only be null when its input is null,
-or when an error is handled as `on_row_error="null"`.
-Never turn an error into a null or a default value another way
-(`.ok()`, `unwrap_or_default()`, `Err(_) => None`). Use `on_row_error` instead.
+A resulting row is null in only three cases:
+
+- its input is null;
+- `on_row_error="null"` handles an error in it;
+- it has an argument that explicitly states how something should be handled,
+  with `"null"` being an option (e.g. `null_parts="null"`, `short_lines`,
+  `empty_polygon_exterior`, and `on_out_of_bounds` ).
+
+Never turn an error into a null or a default value any other way
+(`.ok()`, `unwrap_or_default()`, `Err(_) => None`).
+A state that users may want nulled or raised on gets an argument with a `"null"` and an `"error"` option.
+Its `"error"` hands the row to `on_row_error`, as `empty_polygon_exterior` and `on_out_of_bounds` do.
 
 - **Values under a null.**
 

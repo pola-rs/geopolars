@@ -1,25 +1,34 @@
-"""The area a geometry encloses.
+"""The area a geometry encloses, on the plane or along the ellipsoid of its CRS.
 
-`area_planar` measures on the plane, and `area_geodesic` along the ellipsoid of the CRS.
-`area` picks between them by the CRS,
-as described under "Geographic and projected" in `docs/source/user-guide/geo/concepts/crs.md`.
+Which of the two is picked by default
+is described under "Geographic and projected" in `docs/source/user-guide/geo/concepts/crs.md`.
 """
 
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 from polars.plugins import register_plugin_function
 
-from geopolars._utils import LIB
+from geopolars._docs import doc
+from geopolars._typing import (
+    DistanceMethod,
+    EarlyCoordCheck,
+    OnOutOfBounds,
+    OnRowError,
+)
+from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import MultiPolygonType, PolygonType
 from geopolars.geo._dispatch import on_geometry
+from geopolars.geo.fix_out_of_bounds import CrsBounds, _bounds
 
 if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
+
+NegativeArea = Literal["zero", "keep"]
 
 
 def _encloses_nothing(
@@ -38,136 +47,173 @@ def _encloses_nothing(
     return pl.when(column.is_not_null()).then(pl.lit(0.0, dtype=pl.Float64))
 
 
-def _planar(
-    column: pl.Expr, geometry: GeoArrowType, *, allow_non_polygons: bool
+def _area(
+    column: pl.Expr,
+    geometry: GeoArrowType,
+    *,
+    distance_method: DistanceMethod,
+    allow_non_polygons: bool,
+    on_row_error: OnRowError,
+    early_coord_check: EarlyCoordCheck,
+    on_out_of_bounds: OnOutOfBounds,
+    crs_bounds: CrsBounds,
+    negative_area: NegativeArea,
 ) -> pl.Expr:
-    zero = _encloses_nothing(column, geometry, allow_non_polygons=allow_non_polygons)
-    if zero is not None:
-        return zero
-    return register_plugin_function(
-        plugin_path=LIB,
-        args=[column],
-        function_name="area_planar",
-        is_elementwise=True,
-    )
-
-
-def _geodesic(
-    column: pl.Expr, geometry: GeoArrowType, *, allow_non_polygons: bool
-) -> pl.Expr:
-    # Whether PROJ can use the CRS is for the kernel to check.
-    if not geometry._declares_crs():
-        msg = "area_geodesic needs a CRS to measure on, but the geometry declares none"
+    if distance_method == "auto":
+        distance_method = _area_auto_method(geometry)
+    elif distance_method == "geodesic" and not geometry._declares_crs():
+        msg = (
+            "a geodesic area needs a CRS to measure on, but the geometry declares none"
+        )
         raise TypeError(msg)
+    if on_out_of_bounds == "auto":
+        on_out_of_bounds = "ignore" if distance_method == "planar" else "error"
     zero = _encloses_nothing(column, geometry, allow_non_polygons=allow_non_polygons)
     if zero is not None:
         return zero
+    # PROJ is only asked for the bounds when they are checked.
+    bounds = None if on_out_of_bounds == "ignore" else _bounds(geometry, crs_bounds)
+    # Whether PROJ can measure in the CRS is for the kernel to check, while the plan is built.
     return register_plugin_function(
         plugin_path=LIB,
         args=[column],
-        function_name="area_geodesic",
+        function_name="area",
+        kwargs={
+            "distance_method": distance_method,
+            "on_row_error": on_row_error,
+            "early_coord_check": early_coord_check,
+            "bounds": bounds,
+            "on_out_of_bounds": on_out_of_bounds,
+            "negative_area": negative_area,
+        },
         is_elementwise=True,
     )
 
 
-def area_planar(
-    geometry: IntoExprColumn, *, allow_non_polygons: bool = False
+def _area_auto_method(geometry: GeoArrowType) -> Literal["planar", "geodesic"]:
+    if not geometry._declares_crs() or geometry._is_equal_area():
+        return "planar"
+    return "geodesic"
+
+
+@doc()
+def area(
+    geometry: IntoExprColumn,
+    *,
+    distance_method: DistanceMethod = "auto",
+    allow_non_polygons: bool = False,
+    on_row_error: OnRowError = "raise",
+    early_coord_check: EarlyCoordCheck = "finite",
+    on_out_of_bounds: OnOutOfBounds = "auto",
+    crs_bounds: CrsBounds = "crs_wrapped_longitude",
+    negative_area: NegativeArea = "zero",
 ) -> pl.Expr:
-    """The area a geometry encloses on the plane its coordinates lie in, as an `f64`.
+    """The area a geometry encloses, as an `f64`.
 
-    A CRS is ignored: for longitude/latitude that gives square degrees,
-    which is rarely what you want (see `area_geodesic`).
+    ===================  =========================  ==========================
+    `distance_method`    measured                   in
+    ===================  =========================  ==========================
+    `"auto"`             depends on CRS             -
+    `"planar"`           shoelace formula           coordinate units²
+    `"geodesic"`         along the CRS's ellipsoid  CRS units², m² for degrees
+    ===================  =========================  ==========================
 
-    The area is computed with the shoelace formula, in the unit of the coordinates squared.
-    Only a polygon actually encloses something.
-    This also considers its holes.
-    Which way a ring winds does not matter: a hole is always subtracted from the exterior.
+
+    **Planar** measures the area straight from the coordinates.
+    As it can ignore the CRS, it is very fast.
+    It does not check the bounds of the CRS either, unless `on_out_of_bounds` asks for it.
+    Its area is only right in an equal-area CRS.
+    In any other projected CRS (a UTM zone included),
+    it is off by as much as the projection distorts areas.
+    In a geographic CRS, the coordinates are longitude/latitude.
+    Its area is then in square degrees, and that is most likely not what you want.
+
+    **Geodesic** first takes the coordinates to the longitude/latitude the CRS is defined on.
+    For a projected CRS, that is the one it projects from, and no datum is shifted.
+    It then measures every ring as the region its geodesic edges enclose on the CRS's own ellipsoid,
+    as `distance` measures two points.
+    The result is in the unit of the CRS's `x` and `y` squared
+    (such as square US survey feet for EPSG:2263),
+    or in square metres when those are degrees.
+
+    `"geodesic"` refuses a geometry without a CRS while the plan is built.
+    `"geodesic"` and `"auto"` also refuse a CRS that is not defined on longitude/latitude.
+
+    The default, `distance_method="auto"`, measures `"planar"` without a CRS or in an equal-area one.
+    It measures a geometry in any other CRS `"geodesic"`, including a projected one such as a UTM zone.
+    This differs from `"auto"` in `distance`, which measures every projected CRS on its plane.
+
+    A geodesic ring encloses the smaller of the two regions it splits the ellipsoid into.
+    A polygon that covers more than half the ellipsoid is therefore not supported.
+
+    A hole is always subtracted from the exterior, whichever way their rings wind.
     A multipolygon gets the sum of the areas of its polygons.
-    Only the two-dimensional part is considered: `z` and `m` are ignored.
-    For a 3D polygon that gives the area of its footprint
-    (its shadow on the x/y plane), not the area of its surface in 3D:
-    a tilted polygon gets less than its true area, and a vertical one gets `0.0`.
+
+    Only `x` and `y` are measured, and `z` and `m` are ignored.
+    A 3D polygon therefore gets the area of its footprint
+    (its shadow on the x/y plane), not the area of its surface in 3D.
+    A tilted 3D polygon gets less than its true area, and a vertical one gets `0.0`.
 
     An empty polygon encloses nothing, so it gets `0.0`.
-    Every other geometry (points, linestrings and their multi forms)
-    is refused while the plan is built,
-    unless `allow_non_polygons` is set: then each of them gets `0.0`
-    (and a null stays null).
+    Every other geometry (points, linestrings, and their multi forms)
+    is refused while the plan is built.
+    `allow_non_polygons=True` gives each of them `0.0` instead.
 
     =======================  ============
     in                       out
     =======================  ============
     `PointXY[ZM]`            refused
     `LineStringXY[ZM]`       refused
-    `PolygonXY[ZM]`          `0.0` and up
+    `PolygonXY[ZM]`          `f64`
     `MultiPointXY[ZM]`       refused
     `MultiLineStringXY[ZM]`  refused
-    `MultiPolygonXY[ZM]`     `0.0` and up
+    `MultiPolygonXY[ZM]`     `f64`
     =======================  ============
 
-    A self-intersecting ring is not valid by OGC (see `is_valid_ogc`), and the parts of it that
-    wind the other way will cancel rather than add.
 
-    .. code-block:: python
+    A self-intersecting ring is not valid by OGC (see `is_valid_ogc`).
+    The parts of it that wind the other way cancel rather than add.
 
-        df.select(geo.area_planar("parcel"))
-    """
-    return on_geometry(
-        geometry, partial(_planar, allow_non_polygons=allow_non_polygons)
-    )
+    A polygon that is not valid by OGC can come out below zero,
+    for example one with an empty exterior but a hole,
+    or one with holes that enclose more than its exterior
+    (such as a hole listed twice, or a hole around the exterior).
+    A valid polygon whose geodesic exterior covers more than half the ellipsoid can too,
+    as its exterior gets the smaller region.
+    By default, such a polygon gets `0.0`.
+    `negative_area="keep"` gives it its negative area instead.
+    In a multipolygon, this applies to each polygon before they are summed.
 
+    {on_row_error}
+    A geodesic row fails when PROJ cannot take one of its vertices to longitude/latitude.
+    By default, it also fails when it holds a coordinate outside the bounds of its CRS (see below).
 
-def area_geodesic(
-    geometry: IntoExprColumn, *, allow_non_polygons: bool = False
-) -> pl.Expr:
-    """The area a geometry encloses along the ellipsoid of its CRS, as an `f64`.
+    {early_coord_check}
+    A row that fails the check gets NaN, without being measured.
 
-    The coordinates are taken to the longitude/latitude
-    the CRS is defined on (for a projected CRS, the one it projects from;
-    no datum is shifted),
-    and every ring is measured as the region its geodesic edges enclose
-    on that CRS's own ellipsoid, as `distance` measures two points.
-    The result is in the unit of the CRS's `x` and `y` squared
-    (such as square US survey feet for EPSG:2263),
-    or in square metres when those are degrees.
-    That is the smaller side of the ring:
-    a ring around more than half the ellipsoid is taken to enclose the rest of it.
-
-    A geometry without a CRS is refused while the plan is built,
-    as is a CRS that is not defined on longitude/latitude.
-
-    Polygons, multipolygons, holes, `z` and `m`, and other geometries
-    (including `allow_non_polygons`) are treated as in `area_planar`.
-
-    .. code-block:: python
-
-        df.select(geo.area_geodesic("parcel"))
-    """
-    return on_geometry(
-        geometry, partial(_geodesic, allow_non_polygons=allow_non_polygons)
-    )
-
-
-def _area(
-    column: pl.Expr, geometry: GeoArrowType, *, allow_non_polygons: bool
-) -> pl.Expr:
-    """`area_planar` where the plane keeps areas, `area_geodesic` everywhere else."""
-    measure = (
-        _planar
-        if not geometry._declares_crs() or geometry._is_equal_area()
-        else _geodesic
-    )
-    return measure(column, geometry, allow_non_polygons=allow_non_polygons)
-
-
-def area(geometry: IntoExprColumn, *, allow_non_polygons: bool = False) -> pl.Expr:
-    """The area a geometry encloses.
-
-    Forwards to `area_planar` for a geometry without a CRS or with an equal-area CRS,
-    and to `area_geodesic` for every other CRS.
+    {on_out_of_bounds}
 
     .. code-block:: python
 
         df.select(geo.area("parcel"))
+        df.select(geo.area("parcel", distance_method="planar"))
     """
-    return on_geometry(geometry, partial(_area, allow_non_polygons=allow_non_polygons))
+    validate_one_of("distance_method", distance_method, DistanceMethod)
+    validate_one_of("on_row_error", on_row_error, OnRowError)
+    validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
+    validate_one_of("on_out_of_bounds", on_out_of_bounds, OnOutOfBounds)
+    validate_one_of("crs_bounds", crs_bounds, CrsBounds)
+    validate_one_of("negative_area", negative_area, NegativeArea)
+    return on_geometry(
+        geometry,
+        partial(
+            _area,
+            distance_method=distance_method,
+            allow_non_polygons=allow_non_polygons,
+            on_row_error=on_row_error,
+            early_coord_check=early_coord_check,
+            on_out_of_bounds=on_out_of_bounds,
+            crs_bounds=crs_bounds,
+            negative_area=negative_area,
+        ),
+    )

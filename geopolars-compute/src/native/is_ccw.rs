@@ -37,11 +37,10 @@ fn ring_runs<const CW: bool>(ring: &ScalarLineString) -> bool {
 
 #[inline(always)]
 fn polygon_is_ccw<const HOLES_CW: bool>(polygon: &ScalarPolygon) -> bool {
-    let mut rings = polygon.rings();
-    let Some(exterior) = rings.next() else {
+    let Some(exterior) = polygon.exterior() else {
         return true;
     };
-    ring_runs::<false>(&exterior) && rings.all(|hole| ring_runs::<HOLES_CW>(&hole))
+    ring_runs::<false>(&exterior) && polygon.holes().all(|hole| ring_runs::<HOLES_CW>(&hole))
 }
 
 pub fn line_strings_are_ccw(array: &Untrimmed<LineStringArray>) -> BooleanArray {

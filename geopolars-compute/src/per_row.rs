@@ -7,11 +7,13 @@
 //! The loop over the rows is generic over `ALL_VALID`.
 //! If `ALL_VALID=true`, every row is there, so none is checked for being null.
 
-use geopolars_views::output::{bool_array, f64_array, list_array};
+use geopolars_views::output::{bool_array, f64_array, f64_array_masked, list_array};
 use geopolars_views::{List, ValidList};
 use polars_arrow::array::{BooleanArray, ListArray, PrimitiveArray};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::Offsets;
+
+use crate::{row_or_null, OnRowError};
 
 /// `measure` of every row of a chunk, with the rows' own validity.
 #[inline(always)]
@@ -20,6 +22,44 @@ pub(crate) fn per_row<E>(
     measure: impl Fn(usize) -> Result<f64, E>,
 ) -> Result<PrimitiveArray<f64>, E> {
     Ok(f64_array(per_row_values(rows, measure)?, rows.validity()))
+}
+
+/// [per_row], where `measure` can also null a row by giving `Ok(None)`,
+/// and a row that fails is handled as `on_row_error` says.
+#[inline(always)]
+pub(crate) fn per_row_or_null<E>(
+    rows: &List,
+    on_row_error: OnRowError,
+    measure: impl Fn(usize) -> Result<Option<f64>, E>,
+) -> Result<PrimitiveArray<f64>, E> {
+    let (values, nulled) = with_const_flags!(
+        ALL_VALID = rows.is_all_valid();
+        per_row_or_null_with::<ALL_VALID, E>(rows, on_row_error, measure)
+    )?;
+    Ok(f64_array_masked(values, rows.validity(), None, &nulled))
+}
+
+/// [per_row_or_null]'s values, and the rows to null.
+#[inline(always)]
+fn per_row_or_null_with<const ALL_VALID: bool, E>(
+    rows: &List,
+    on_row_error: OnRowError,
+    measure: impl Fn(usize) -> Result<Option<f64>, E>,
+) -> Result<(Vec<f64>, Vec<usize>), E> {
+    // Filled by index, not collected,
+    // because collecting through `Result` loses the length.
+    let mut values = vec![0.0; rows.len()];
+    let mut nulled = Vec::new();
+    for (i, value) in values.iter_mut().enumerate() {
+        // The vertices under a null row mean nothing, so it is not measured.
+        if ALL_VALID || rows.is_valid(i) {
+            match row_or_null(measure(i), on_row_error)? {
+                Some(measured) => *value = measured,
+                None => nulled.push(i),
+            }
+        }
+    }
+    Ok((values, nulled))
 }
 
 /// [per_row], for a `bool` per row.
@@ -80,16 +120,17 @@ fn per_row_values_with<const ALL_VALID: bool, T: Default, E>(
     rows: &List,
     measure: impl Fn(usize) -> Result<T, E>,
 ) -> Result<Vec<T>, E> {
-    (0..rows.len())
-        // A null row's offsets point anywhere, so it is not measured.
-        .map(|i| {
-            if ALL_VALID || rows.is_valid(i) {
-                measure(i)
-            } else {
-                Ok(T::default())
-            }
-        })
-        .collect()
+    // Pushed, not collected, because collecting through `Result` loses the length.
+    let mut values = Vec::with_capacity(rows.len());
+    for i in 0..rows.len() {
+        // The vertices under a null row mean nothing, so it is not measured.
+        values.push(if ALL_VALID || rows.is_valid(i) {
+            measure(i)?
+        } else {
+            T::default()
+        });
+    }
+    Ok(values)
 }
 
 /// [per_row_optional_bool], as a list per row of a chunk, one per part.

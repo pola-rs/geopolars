@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from functools import partial
 
 import polars as pl
 import pytest
@@ -12,6 +13,7 @@ from polars.exceptions import ComputeError
 from polars.testing import assert_series_equal
 
 from geopolars import geo
+from geopolars._typing import DistanceMethod
 from geopolars.datatypes import (
     GeoArrowType,
     LineStringXY,
@@ -35,42 +37,55 @@ _XY_VERTICES = pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))
 _XY_RINGS = pl.List(_XY_VERTICES)
 
 
-def _rings(rings: list[list[dict[str, float]]], crs: str | None = None) -> pl.DataFrame:
-    """A one-row polygon column, built straight from XY rings."""
-    return pl.DataFrame({"rings": [rings]}, schema={"rings": _XY_RINGS}).select(
+def _polygons(
+    rows: list[list[list[dict[str, float]]]], crs: str | None = None
+) -> pl.DataFrame:
+    """A polygon column, built straight from the XY rings of each row."""
+    return pl.DataFrame({"rings": rows}, schema={"rings": _XY_RINGS}).select(
         geo.polygons_from_rings_in_single_column("rings", crs=crs).alias("polygon")
     )
 
 
-def _relabelled(rings: list[list[dict[str, float]]]) -> pl.DataFrame:
+def _rings(rings: list[list[dict[str, float]]], crs: str | None = None) -> pl.DataFrame:
+    """A one-row polygon column, built straight from XY rings."""
+    return _polygons([rings], crs=crs)
+
+
+def _relabelled(
+    rings: list[list[dict[str, float]]], crs: str | None = None
+) -> pl.DataFrame:
     """As `_rings`, but relabelled rather than built,
     for rings a constructor refuses but that can still arrive around it."""
     return pl.DataFrame({"rings": [rings]}, schema={"rings": _XY_RINGS}).select(
-        pl.col("rings").ext.to(PolygonXY()).alias("polygon")
+        pl.col("rings").ext.to(PolygonXY(crs=crs)).alias("polygon")
     )
 
 
 Area = Callable[..., pl.Expr]
 
 
-@pytest.fixture(params=[geo.area, geo.area_planar], ids=["area", "area_planar"])
+def _area_by(distance_method: DistanceMethod) -> Area:
+    return partial(geo.area, distance_method=distance_method)
+
+
+@pytest.fixture(params=["auto", "planar"])
 def planar_area(request: pytest.FixtureRequest) -> Area:
-    """`area` on a geometry without a CRS is `area_planar`."""
-    return request.param
+    """`"auto"` on a geometry without a CRS is `"planar"`."""
+    return _area_by(request.param)
 
 
-@pytest.fixture(params=[geo.area, geo.area_geodesic], ids=["area", "area_geodesic"])
+@pytest.fixture(params=["auto", "geodesic"])
 def geodesic_area(request: pytest.FixtureRequest) -> Area:
-    """`area` on a geometry with a CRS that is not equal-area is `area_geodesic`."""
-    return request.param
+    """`"auto"` on a geometry with a CRS that is not equal-area is `"geodesic"`."""
+    return _area_by(request.param)
 
 
-@pytest.fixture(params=["area", "explicit"])
+@pytest.fixture(params=["auto", "explicit"])
 def area(request: pytest.FixtureRequest) -> Area:
-    """`area`, or the function it forwards to for the test's `crs`."""
-    if request.param == "area":
+    """`"auto"`, or the method it picks for the test's `crs`."""
+    if request.param == "auto":
         return geo.area
-    return geo.area_geodesic if request.node.callspec.params["crs"] else geo.area_planar
+    return _area_by("geodesic" if request.node.callspec.params["crs"] else "planar")
 
 
 def _areas(area: Area, df: pl.DataFrame, name: str = "polygon") -> list[float | None]:
@@ -138,12 +153,47 @@ def test_an_empty_polygon_encloses_nothing(planar_area: Area) -> None:
     assert _areas(planar_area, _rings([])) == [0.0]
 
 
+# A 1x1 square inside `_SQUARE`.
+_SMALL_SQUARE = [{"x": 1.0 + v["x"] / 4, "y": 1.0 + v["y"] / 4} for v in _SQUARE]
+# A 6x6 square around `_SQUARE`.
+_BIG_HOLE = [{"x": v["x"] * 1.5 - 1.0, "y": v["y"] * 1.5 - 1.0} for v in _SQUARE]
+
+
+@pytest.mark.parametrize(
+    ("rings", "kept"),
+    [([[], _SMALL_SQUARE], -1.0), ([_SQUARE, _BIG_HOLE], -20.0)],
+    ids=["empty exterior", "hole larger than exterior"],
+)
+def test_a_polygon_below_zero_follows_negative_area(
+    planar_area: Area, rings: list[list[dict[str, float]]], kept: float
+) -> None:
+    df = _relabelled(rings)
+
+    assert _areas(planar_area, df) == [0.0]
+    assert _areas(partial(planar_area, negative_area="keep"), df) == [kept]
+
+
 def test_a_null_polygon_has_no_area(planar_area: Area) -> None:
     df = pl.DataFrame({"polygon": [[_SQUARE], None]}, schema={"polygon": _XY_RINGS})
 
     df = df.select(pl.col("polygon").ext.to(PolygonXY()))
 
     assert _areas(planar_area, df) == [16.0, None]
+
+
+@pytest.mark.parametrize(
+    ("storage", "dtype"),
+    [(_XY_RINGS, PolygonXY()), (pl.List(_XY_RINGS), MultiPolygonXY())],
+    ids=["polygon", "multipolygon"],
+)
+def test_an_all_null_column_has_no_area(
+    planar_area: Area, storage: pl.DataType, dtype: GeoArrowType
+) -> None:
+    df = pl.DataFrame({"polygon": [None, None]}, schema={"polygon": storage})
+
+    df = df.select(pl.col("polygon").ext.to(dtype))
+
+    assert _areas(planar_area, df) == [None, None]
 
 
 def test_the_area_survives_coordinates_far_from_the_origin(planar_area: Area) -> None:
@@ -159,16 +209,16 @@ def test_the_area_survives_coordinates_far_from_the_origin(planar_area: Area) ->
     assert got == pytest.approx(1.0, abs=1e-9)
 
 
+@pytest.mark.parametrize("distance_method", ["auto", "planar"])
 def test_the_namespace_matches_the_function(
-    planar_area: Area, ring_coords: pl.DataFrame
+    distance_method: DistanceMethod, ring_coords: pl.DataFrame
 ) -> None:
     df = XY.polygons(ring_coords)
-
-    method = getattr(pl.col("polygon").geo, area.__name__)
+    namespace = pl.col("polygon").geo.area(distance_method=distance_method)
 
     assert_series_equal(
-        df.select(method()).to_series(),
-        df.select(planar_area("polygon")).to_series(),
+        df.select(namespace).to_series(),
+        df.select(geo.area("polygon", distance_method=distance_method)).to_series(),
     )
 
 
@@ -227,6 +277,233 @@ def test_with_a_crs_a_hole_is_taken_out(geodesic_area: Area) -> None:
         (got,) = _areas(geodesic_area, _rings([_DEGREE_SQUARE, hole], crs=WGS84))
 
         assert got == pytest.approx(0.0, abs=1e-3)
+
+
+def test_with_a_crs_an_empty_exterior_with_a_hole_follows_negative_area(
+    geodesic_area: Area,
+) -> None:
+    df = _relabelled([[], _DEGREE_SQUARE], crs=WGS84)
+
+    assert _areas(geodesic_area, df) == [0.0]
+    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
+    assert kept == pytest.approx(-_DEGREE_SQUARE_AREA, rel=1e-9)
+
+
+def _band(lons: list[float], lat: float) -> list[dict[str, float]]:
+    """A closed ring along `lons` at `-lat`, and back along them at `lat`."""
+    ring = [{"x": x, "y": -lat} for x in lons] + [
+        {"x": x, "y": lat} for x in lons[::-1]
+    ]
+    return [*ring, ring[0]]
+
+
+# An exterior around most of the ellipsoid, and a hole that takes more than its smaller side.
+_LARGE_EXTERIOR = _band([-170.0, -85.0, 0.0, 85.0, 170.0], 60.0)
+_LARGE_HOLE = _band([-50.0, 0.0, 50.0], 50.0)
+
+
+# A 3x3 degree square around `_DEGREE_SQUARE`.
+_AROUND_DEGREE_SQUARE = [
+    {"x": v["x"] * 3 - 1.0, "y": v["y"] * 3 - 1.0} for v in _DEGREE_SQUARE
+]
+
+
+def test_with_a_crs_a_hole_around_its_exterior_follows_negative_area(
+    geodesic_area: Area,
+) -> None:
+    """Not valid by OGC. The hole takes more than the exterior,
+    but does not fit in the exterior's larger side either."""
+    df = _relabelled([_DEGREE_SQUARE, _AROUND_DEGREE_SQUARE], crs=WGS84)
+    (hole,) = _areas(geodesic_area, _relabelled([_AROUND_DEGREE_SQUARE], crs=WGS84))
+
+    assert _areas(geodesic_area, df) == [0.0]
+    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
+    assert kept == pytest.approx(_DEGREE_SQUARE_AREA - hole, rel=1e-9)
+
+
+def test_with_a_crs_a_hole_listed_twice_follows_negative_area(
+    geodesic_area: Area,
+) -> None:
+    """Not valid by OGC. The holes take more than the exterior, but lie inside it."""
+    exterior = [{"x": v["x"] * 2, "y": v["y"] * 2} for v in _DEGREE_SQUARE]
+    hole = [
+        {"x": 0.25 + v["x"] * 1.5, "y": 0.25 + v["y"] * 1.5} for v in _DEGREE_SQUARE
+    ]
+    df = _relabelled([exterior, hole, hole], crs=WGS84)
+
+    assert _areas(geodesic_area, df) == [0.0]
+    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
+    assert kept < 0.0
+
+
+def test_with_a_crs_every_ring_takes_its_smaller_side(geodesic_area: Area) -> None:
+    """An exterior around most of the ellipsoid gets the smaller side, so its hole exceeds it."""
+    df = _polygons(
+        [[_LARGE_EXTERIOR, _LARGE_HOLE], [_LARGE_EXTERIOR], [_LARGE_HOLE]], crs=WGS84
+    )
+
+    with_hole, smaller_side, hole = _areas(geodesic_area, df)
+    assert with_hole == 0.0
+    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df.head(1))
+    assert kept == pytest.approx(smaller_side - hole, rel=1e-9)
+
+
+def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -> None:
+    """A square far outside the UTM zone fails on its own row, not the whole column."""
+    far = [{"x": x * 1e30, "y": y * 1e30} for x, y in ((0, 0), (1, 0), (1, 1), (0, 0))]
+    near = [{"x": 500_000.0 + v["x"], "y": v["y"]} for v in _SQUARE]
+    df = _polygons([[near], [far]], crs="EPSG:32631")
+
+    with pytest.raises(ComputeError, match="failed to reproject"):
+        _areas(geodesic_area, df)
+
+    got = _areas(partial(geodesic_area, on_row_error="null"), df)
+    assert got[0] == pytest.approx(16.0, rel=1e-3)
+    assert got[1] is None
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf])
+@pytest.mark.parametrize(
+    ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
+)
+def test_a_non_finite_x_gives_a_non_finite_area(
+    value: float, distance_method: DistanceMethod, crs: str | None
+) -> None:
+    """A checked row gets NaN without being measured. An unchecked one is measured."""
+    area = _area_by(distance_method)
+    broken = [_SQUARE[0], {"x": value, "y": 0.0}, *_SQUARE[2:]]
+    df = _polygons([[_SQUARE], [broken]], crs=crs)
+    (square,) = _areas(area, _rings([_SQUARE], crs=crs))
+
+    for early_coord_check in ("finite", "finite_and_empty", "off"):
+        # With the check off, an infinite x would otherwise lie outside the bounds of WGS84.
+        checked = partial(
+            area, early_coord_check=early_coord_check, on_out_of_bounds="ignore"
+        )
+        got = _areas(checked, df)
+        assert got[0] == square
+        if early_coord_check == "off":
+            assert not math.isfinite(got[1])
+        else:
+            assert math.isnan(got[1])
+
+
+def test_the_early_check_keeps_an_infinite_y_from_proj() -> None:
+    """Web Mercator cannot take y=inf back to latitude, but the check skips the row first."""
+    area = _area_by("geodesic")
+    broken = [_SQUARE[0], {"x": 0.0, "y": math.inf}, *_SQUARE[2:]]
+    df = _rings([broken], crs="EPSG:3857")
+
+    (got,) = _areas(area, df)
+    assert math.isnan(got)
+
+    with pytest.raises(ComputeError, match="failed to reproject"):
+        _areas(partial(area, early_coord_check="off"), df)
+
+
+def _shifted(
+    ring: list[dict[str, float]], dx: float, dy: float = 0.0
+) -> list[dict[str, float]]:
+    return [{"x": v["x"] + dx, "y": v["y"] + dy} for v in ring]
+
+
+_EAST_OF_THE_ANTIMERIDIAN = _shifted(_DEGREE_SQUARE, 200.0)
+# Past the longitudes up to a full turn that `crs_bounds` lets through by default.
+_PAST_A_FULL_TURN = _shifted(_DEGREE_SQUARE, 400.0)
+
+
+@pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
+def test_a_row_outside_the_bounds_of_its_crs_goes_to_on_row_error(
+    distance_method: DistanceMethod,
+) -> None:
+    area = partial(_area_by(distance_method), on_out_of_bounds="error")
+    df = _polygons([[_DEGREE_SQUARE], [_PAST_A_FULL_TURN]], crs=WGS84)
+    (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
+
+    with pytest.raises(ComputeError, match=r"\(400, 0\) lies outside the bounds"):
+        _areas(area, df)
+
+    assert _areas(partial(area, on_row_error="null"), df) == [inside, None]
+
+
+@pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
+def test_on_out_of_bounds_null_nulls_the_row_whatever_on_row_error_says(
+    distance_method: DistanceMethod,
+) -> None:
+    area = _area_by(distance_method)
+    df = _polygons([[_DEGREE_SQUARE], [_PAST_A_FULL_TURN]], crs=WGS84)
+    (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
+
+    got = _areas(partial(area, on_out_of_bounds="null", on_row_error="raise"), df)
+    assert got == [inside, None]
+
+
+def test_on_out_of_bounds_ignore_measures_the_row() -> None:
+    df = _rings([_PAST_A_FULL_TURN], crs=WGS84)
+
+    assert _areas(partial(_area_by("planar"), on_out_of_bounds="ignore"), df) == [1.0]
+
+
+def test_by_default_longitudes_up_to_a_full_turn_are_within_the_bounds() -> None:
+    df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
+    area = partial(_area_by("planar"), on_out_of_bounds="error")
+
+    assert _areas(area, df) == [1.0]
+    assert _areas(partial(area, crs_bounds="crs", on_out_of_bounds="null"), df) == [
+        None
+    ]
+
+
+def test_planar_checks_no_bounds_unless_asked() -> None:
+    """Without the bounds check, it does not ask PROJ about the CRS either."""
+    unknown = _relabelled([_SQUARE], crs="EPSG:999999")
+    past = _rings([_PAST_A_FULL_TURN], crs=WGS84)
+    area = _area_by("planar")
+
+    assert _areas(area, unknown) == [16.0]
+    assert _areas(area, past) == [1.0]
+    with pytest.raises(ComputeError, match="lies outside the bounds"):
+        _areas(partial(area, on_out_of_bounds="error"), past)
+
+
+def test_a_projected_crs_only_has_bounds_from_its_area_of_use() -> None:
+    """UTM zone 31N is meant for 0 to 6 degrees east, far west of x=1e8."""
+    near = _shifted(_SQUARE, 500_000.0, 1_000_000.0)
+    far = _shifted(_SQUARE, 1e8, 1_000_000.0)
+    df = _polygons([[near], [far]], crs="EPSG:32631")
+    area = _area_by("planar")
+
+    assert _areas(area, df) == [16.0, 16.0]
+    got = _areas(partial(area, crs_bounds="area_of_use", on_out_of_bounds="null"), df)
+    assert got == [16.0, None]
+
+
+@pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
+def test_a_nan_is_not_outside_the_bounds(distance_method: DistanceMethod) -> None:
+    """NaN is left to `early_coord_check`, even when that check is off."""
+    area = partial(_area_by(distance_method), early_coord_check="off")
+    for vertex in ({"x": math.nan, "y": math.nan}, {"x": math.nan, "y": 0.5}):
+        broken = [_DEGREE_SQUARE[0], vertex, *_DEGREE_SQUARE[1:]]
+        (got,) = _areas(area, _relabelled([broken], crs=WGS84))
+
+        assert math.isnan(got)
+
+
+@pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
+def test_a_multipolygon_with_a_polygon_outside_the_bounds_is_out_of_bounds(
+    distance_method: DistanceMethod,
+) -> None:
+    df = _multipolygons(
+        [[[_DEGREE_SQUARE]], [[_DEGREE_SQUARE], [_PAST_A_FULL_TURN]]], crs=WGS84
+    )
+    area = partial(_area_by(distance_method), on_out_of_bounds="error")
+    (inside,) = _areas(area, _rings([_DEGREE_SQUARE], crs=WGS84))
+
+    with pytest.raises(ComputeError, match="lies outside the bounds"):
+        _areas(area, df, "multipolygon")
+
+    got = _areas(partial(area, on_out_of_bounds="null"), df, "multipolygon")
+    assert got == [inside, None]
 
 
 def test_with_a_crs_the_ellipsoid_is_the_one_the_crs_declares(
@@ -391,10 +668,23 @@ def test_a_multipolygon_measures_each_polygon_as_a_polygon(
 def test_a_multipolygon_without_polygons_encloses_nothing(
     area: Area, crs: str | None
 ) -> None:
-    """An empty polygon inside one still encloses nothing, like on its own."""
+    """An empty polygon inside one still encloses nothing, like on its own.
+    That is `0.0`, not `-0.0`."""
     df = _multipolygons([[], [[]], None], crs=crs)
 
-    assert _areas(area, df, "multipolygon") == [0.0, 0.0, None]
+    got = _areas(area, df, "multipolygon")
+
+    assert got == [0.0, 0.0, None]
+    assert [math.copysign(1.0, a) for a in got[:2]] == [1.0, 1.0]
+
+
+def test_a_multipolygon_takes_negative_area_per_polygon(planar_area: Area) -> None:
+    """The polygon below zero does not take area away from the square next to it."""
+    df = _multipolygons([[[_SQUARE], [[], _SMALL_SQUARE]]])
+
+    assert _areas(planar_area, df, "multipolygon") == [16.0]
+    keep = partial(planar_area, negative_area="keep")
+    assert _areas(keep, df, "multipolygon") == [15.0]
 
 
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
@@ -421,15 +711,17 @@ def test_a_multipolygon_gives_an_f64_named_after_the_geometry(
     )
 
 
-def test_area_planar_ignores_the_crs() -> None:
+def test_planar_ignores_the_crs() -> None:
     """Square degrees: the plane the coordinates lie in, not the ellipsoid."""
     df = _rings([_DEGREE_SQUARE], crs=WGS84)
 
-    assert _areas(geo.area_planar, df) == [1.0]
+    assert _areas(_area_by("planar"), df) == [1.0]
 
 
-def test_area_geodesic_refuses_a_geometry_without_a_crs_at_plan_time() -> None:
-    lf = _rings([_SQUARE]).lazy().select(geo.area_geodesic("polygon"))
+def test_geodesic_refuses_a_geometry_without_a_crs_at_plan_time() -> None:
+    lf = (
+        _rings([_SQUARE]).lazy().select(geo.area("polygon", distance_method="geodesic"))
+    )
 
     with pytest.raises(TypeError, match="declares none"):
         lf.collect_schema()
@@ -444,7 +736,7 @@ def test_an_equal_area_crs_is_measured_on_its_plane(crs: str) -> None:
     """Its plane keeps areas, so there is no need to go to the ellipsoid."""
     df = _rings([_SQUARE], crs=crs)
 
-    assert _areas(geo.area, df) == _areas(geo.area_planar, df) == [16.0]
+    assert _areas(geo.area, df) == _areas(_area_by("planar"), df) == [16.0]
 
 
 @pytest.mark.parametrize("crs", ["EPSG:3857", "EPSG:32631"], ids=["mercator", "utm"])
@@ -455,11 +747,11 @@ def test_any_other_projected_crs_is_measured_on_the_ellipsoid(crs: str) -> None:
 
     got = _areas(geo.area, df)
 
-    assert got == _areas(geo.area_geodesic, df)
-    assert got != _areas(geo.area_planar, df)
+    assert got == _areas(_area_by("geodesic"), df)
+    assert got != _areas(_area_by("planar"), df)
 
 
-def test_area_planar_lines_up_across_chunks_and_slices() -> None:
+def test_planar_lines_up_across_chunks_and_slices() -> None:
     hole = [
         {"x": 1.0, "y": 1.0},
         {"x": 2.0, "y": 1.0},
@@ -478,16 +770,15 @@ def test_area_planar_lines_up_across_chunks_and_slices() -> None:
         rechunk=False,
     )
 
-    assert _areas(geo.area_planar, polygons.slice(1)) == [15.5, 1.0]
-    assert _areas(geo.area_planar, multis.slice(1), "multipolygon") == [None, 16.5]
+    planar = _area_by("planar")
+    assert _areas(planar, polygons.slice(1)) == [15.5, 1.0]
+    assert _areas(planar, multis.slice(1), "multipolygon") == [None, 16.5]
 
 
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
-@pytest.mark.parametrize(
-    "fn", [geo.area, geo.area_planar, geo.area_geodesic], ids=lambda f: f.__name__
-)
+@pytest.mark.parametrize("distance_method", ["auto", "planar", "geodesic"])
 def test_only_polygons_are_accepted_while_resolving_the_schema(
-    fn: Area,
+    distance_method: DistanceMethod,
     crs: str | None,
     coords: pl.DataFrame,
     line_coords: pl.DataFrame,
@@ -495,8 +786,9 @@ def test_only_polygons_are_accepted_while_resolving_the_schema(
 ) -> None:
     """Points and linestrings, and their multi forms, enclose nothing:
     not even a closed linestring, which is a curve rather than a ring."""
-    if fn is geo.area_geodesic and crs is None:
+    if distance_method == "geodesic" and crs is None:
         pytest.skip("refused for having no CRS instead")
+    fn = _area_by(distance_method)
     point = _declaring(coords.select(XY.point()), PointXY, crs)
     line = _declaring(XY.lines(line_coords), LineStringXY, crs)
     multipoint = _declaring(XY.multipoints(line_coords), MultiPointXY, crs)
@@ -534,18 +826,17 @@ def _non_polygons(
 
 
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
-@pytest.mark.parametrize(
-    "fn", [geo.area, geo.area_planar, geo.area_geodesic], ids=lambda f: f.__name__
-)
+@pytest.mark.parametrize("distance_method", ["auto", "planar", "geodesic"])
 def test_with_allow_non_polygons_they_enclose_nothing(
-    fn: Area,
+    distance_method: DistanceMethod,
     crs: str | None,
     coords: pl.DataFrame,
     line_coords: pl.DataFrame,
     ring_coords: pl.DataFrame,
 ) -> None:
-    if fn is geo.area_geodesic and crs is None:
+    if distance_method == "geodesic" and crs is None:
         pytest.skip("refused for having no CRS instead")
+    fn = _area_by(distance_method)
 
     for df in _non_polygons(crs, coords, line_coords, ring_coords):
         (name,) = df.columns
@@ -555,13 +846,15 @@ def test_with_allow_non_polygons_they_enclose_nothing(
         assert got.to_list() == [0.0] * (len(df) - 1) + [None]
 
 
-def test_with_allow_non_polygons_area_geodesic_still_needs_a_crs(
+def test_with_allow_non_polygons_geodesic_still_needs_a_crs(
     line_coords: pl.DataFrame,
 ) -> None:
     lf = XY.lines(line_coords).lazy()
 
     with pytest.raises(TypeError, match="declares none"):
-        lf.select(geo.area_geodesic("line", allow_non_polygons=True)).collect_schema()
+        lf.select(
+            geo.area("line", distance_method="geodesic", allow_non_polygons=True)
+        ).collect_schema()
 
 
 def test_allow_non_polygons_leaves_polygons_alone(planar_area: Area) -> None:
@@ -572,13 +865,43 @@ def test_allow_non_polygons_leaves_polygons_alone(planar_area: Area) -> None:
     )
 
 
-@pytest.mark.parametrize("name", ["area", "area_planar"])
+@pytest.mark.parametrize("distance_method", ["auto", "planar"])
 def test_the_namespace_passes_allow_non_polygons_on(
-    name: str, line_coords: pl.DataFrame
+    distance_method: DistanceMethod, line_coords: pl.DataFrame
 ) -> None:
     df = XY.lines(line_coords)
-    method = getattr(pl.col("line").geo, name)
+    kwargs = {"distance_method": distance_method, "allow_non_polygons": True}
 
-    assert df.select(method(allow_non_polygons=True)).equals(
-        df.select(getattr(geo, name)("line", allow_non_polygons=True))
+    assert df.select(pl.col("line").geo.area(**kwargs)).equals(
+        df.select(geo.area("line", **kwargs))
     )
+
+
+def test_an_unknown_distance_method_is_refused() -> None:
+    with pytest.raises(ValueError, match="`distance_method` must be one of"):
+        geo.area("polygon", distance_method="Geodesic")  # type: ignore[arg-type]
+
+
+def test_the_namespace_passes_on_out_of_bounds_and_crs_bounds_on() -> None:
+    df = _rings([_EAST_OF_THE_ANTIMERIDIAN], crs=WGS84)
+    kwargs = {"on_out_of_bounds": "null", "crs_bounds": "crs"}
+
+    assert df.select(pl.col("polygon").geo.area(**kwargs)).equals(
+        df.select(geo.area("polygon", **kwargs))
+    )
+    assert df.select(geo.area("polygon", **kwargs)).item() is None
+
+
+def test_an_unknown_on_out_of_bounds_is_refused() -> None:
+    with pytest.raises(ValueError, match="`on_out_of_bounds` must be one of"):
+        geo.area("polygon", on_out_of_bounds="raise")  # type: ignore[arg-type]
+
+
+def test_an_unknown_crs_bounds_is_refused() -> None:
+    with pytest.raises(ValueError, match="`crs_bounds` must be one of"):
+        geo.area("polygon", crs_bounds="wrapped")  # type: ignore[arg-type]
+
+
+def test_an_unknown_negative_area_is_refused() -> None:
+    with pytest.raises(ValueError, match="`negative_area` must be one of"):
+        geo.area("polygon", negative_area="clamp")  # type: ignore[arg-type]

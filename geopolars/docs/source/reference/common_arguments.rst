@@ -44,11 +44,12 @@ Turning this off in data with very few NaNs might be faster, but if your data co
 you might be better off leaving this one as this can skip expensive calculations.
 
 - `early_coord_check="off"` skips this extra pass.
-- `early_coord_check="finite"` (default for native kernels) means that the kernel will
-  check for such values in the operation. If it finds one, it will mark it as an error,
-  which can be picked up by `on_row_error`. An empty point does not trigger this.
+- `early_coord_check="finite"` (default for native kernels) checks for a NaN or infinite `x` or `y`,
+  other than an empty point.
+  If it finds one, a native kernel that gives a float gives that row NaN without computing it.
+  A GEOS kernel marks the row as an error instead, which `on_row_error` handles.
 - `early_coord_check="finite_and_empty"` (default for GEOS kernels) does the same as the above,
-  but also goes to `on_row_error` for an empty point inside a geometry.
+  but also for an empty point inside a geometry.
 
 This argument matters most for kernels that forward to GEOS.
 GEOS cannot handle an empty point inside a geometry, nor any other NaN or infinite x or y
@@ -112,7 +113,7 @@ It is marked experimental.
 `distance_method: Literal["auto", "planar", "geodesic"] = "auto"`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Passed to functions that *measure* a distance.
+Passed to functions that *measure* a distance or an area.
 Why distances in degrees are rarely what you want is described under "Geographic and projected"
 in `docs/source/user-guide/geo/concepts/crs.md`.
 
@@ -132,6 +133,9 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
   about 1.6 times at 52°N.
   Pass `distance_method="geodesic"` for such a CRS.
 
+`area` resolves `"auto"` differently.
+It only measures planar without a CRS or in an equal-area one (see `area`).
+
 .. _arg-allow_geographic:
 
 `allow_geographic: bool = False`
@@ -146,6 +150,32 @@ By default, we want to be strict. Raising an error at plan-time is clear.
   a function with data in a geographic CRS.
 - `allow_geographic = True` shows that you know what you are doing,
   and intentionally want to express distances in degrees.
+
+.. _arg-on_out_of_bounds:
+
+`on_out_of_bounds: Literal["auto", "ignore", "error", "null"] = "auto"`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A coordinate outside the bounds of its CRS (a latitude of 91°, say) is not a place,
+so measuring it gives NaN, `0.0`, or a wrong number without warning.
+This argument checks for such coordinates.
+`crs_bounds` picks the bounds to check against, with the same values as in `fix_out_of_bounds`.
+Its default here is `"crs_wrapped_longitude"`, which lets longitudes from 180 to 360 pass.
+Data stored from 0 to 360 then measures as it would from -180 to 180,
+as does a box across the antimeridian (see `to_polygon`).
+
+`early_coord_check` runs first, so a row that fails it gets NaN, whatever this argument says.
+An infinite `x` or `y` lies outside the bounds, which only matters with `early_coord_check="off"`.
+A NaN one never does, so neither does an empty point inside a geometry.
+
+- `on_out_of_bounds="auto"` (default) is `"error"` when measuring geodesic,
+  and `"ignore"` when measuring planar, which then does not ask PROJ for any bounds.
+- `on_out_of_bounds="error"` fails the row, and `on_row_error` handles it.
+- `on_out_of_bounds="null"` makes the row null, whatever `on_row_error` says.
+- `on_out_of_bounds="ignore"` skips the check, and its extra pass over the coordinates.
+
+A column without a CRS, or with a projected CRS and bounds not taken from its area of use,
+has no bounds, so it is not checked.
 
 Comparing coordinates
 ~~~~~~~~~~~~~~~~~~~~~
@@ -334,17 +364,20 @@ Some arguments make another one necessary.
 
 - An expression that can remove points takes `short_lines`,
   as dropping coordinates or parts can make rings and linestrings too short.
-  So one that takes `null_parts` takes `short_lines` too.
+  One that takes `null_parts` therefore takes `short_lines` too.
 - An expression that takes polygons (or multipolygons) and `short_lines`
   takes `empty_polygon_exterior` too,
   as removing points from a ring can otherwise invalidate a polygon.
 - An expression that takes `new_ring_orientation` and can give polygons takes `new_holes` too.
 - An expression that takes `promote_to_multi` takes `on_row_error` too,
-  as with `"never"`, a result in several parts is an error.
+  as `promote_to_multi="never"` makes a result in several parts an error.
 - An expression that takes `early_coord_check` takes `on_row_error` too,
-  as the check hands what it finds to it.
+  as a GEOS kernel hands a row that fails the check to it.
 - An expression that takes `empty_polygon_exterior` takes `on_row_error` too,
   as `empty_polygon_exterior="error"` hands the error to it.
+- An expression that takes `on_out_of_bounds` takes `on_row_error` too,
+  as `on_out_of_bounds="error"` hands the error to it.
+  It also takes `crs_bounds`, to pick the bounds.
 
 Shared by two or three expressions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -359,14 +392,10 @@ They are described as they are now.
      - default
      - taken by
      - meaning
-   * - `allow_non_polygons`
+   * - `allow_non_polygons`, `allow_non_lines`
      - `False`
-     - `area`, `area_planar`, `area_geodesic`
-     - give a non-polygon `0.0` rather than refusing it
-   * - `allow_non_lines`
-     - `False`
-     - `length`
-     - as `allow_non_polygons`, for non-lines
+     - `area`, `length`
+     - give a non-polygon (or a non-line) `0.0` rather than refusing it
    * - `action`
      - `"drop"`
      - `filter_coordinates`, `fix_out_of_bounds` (inside `OutOfBounds`)

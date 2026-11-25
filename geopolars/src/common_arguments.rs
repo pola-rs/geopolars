@@ -1,8 +1,8 @@
 //! The serde mappings of the arguments that `geopolars/docs/source/reference/common_arguments.rst` documents.
 
 use geopolars_compute::{
-    EarlyCoordCheck, EmptyPolygonExterior, NewHoles, NewRingOrientation, NullParts, OnRowError,
-    ShortLines,
+    EarlyCoordCheck, EmptyPolygonExterior, NewHoles, NewRingOrientation, NullParts, OnOutOfBounds,
+    OnRowError, ShortLines,
 };
 use serde::Deserialize;
 
@@ -11,6 +11,14 @@ use serde::Deserialize;
 pub(crate) enum OnRowErrorDef {
     Null,
     Raise,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "OnOutOfBounds", rename_all = "snake_case")]
+pub(crate) enum OnOutOfBoundsDef {
+    Ignore,
+    Error,
+    Null,
 }
 
 #[derive(Deserialize)]

@@ -13,7 +13,7 @@ Rust tests can still be necessary if a certain functionality is only reachable f
 ## Naming kernel output types
 
 Polars allows you to pass a function which gets the output dtype of the kernel,
-e.g. `#[polars_expr(output_type_func=kernel_output_type_area_planar)]`.
+e.g. `#[polars_expr(output_type_func=kernel_output_type_centroid)]`.
 These should always be named `kernel_output_type_*`.
 Functions that wrap these should be `kernel_output_type_wrapper_*`
 
@@ -80,6 +80,7 @@ Examples are:
   `to_crs` hands it each run of valid coordinates in a single call through the `proj-sys` C API,
   and only retries the coordinates PROJ failed on one at a time, to get their error
   (see `geopolars-compute/src/proj.rs`).
+  Geodesic `area` does the same for the vertices of a chunk, retrying them per row instead.
   Prefer this over one call per coordinate.
 - [geographiclib](https://geographiclib.sourceforge.io/), to measure along an ellipsoid.
 - The [geo ecosystem](https://georust.org/)
@@ -133,5 +134,5 @@ This is useful for:
 
 - early exits (e.g. for counting coordinates,
   'return row count if counting points (native), or use my kernel x otherwise' ).
-- switching kernels based on geometry or metadata (e.g. for `area`, forward to `area_planar`
-  for equal projection CRSes, but use `area_geodesic` for other stuff)
+- switching kernels based on geometry or metadata (e.g. `area` with `distance_method="auto"`
+  measures planar in an equal-area CRS, and geodesic in any other)
