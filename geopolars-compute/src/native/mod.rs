@@ -38,7 +38,7 @@ pub use affine::{
     affine_line_strings, affine_multi_line_strings, affine_multi_points, affine_multi_polygons,
     affine_points, affine_polygons, AffineMatrix, RowShift,
 };
-pub use area::{multi_polygon_areas, polygon_areas, AreaMetric, ExteriorSide, NegativeArea};
+pub use area::{multi_polygon_areas, polygon_areas, AreaMetric, NegativeArea};
 pub use bounds::{
     box_array, line_string_bounds, line_string_column_extent, multi_line_string_bounds,
     multi_line_string_column_extent, multi_point_bounds, multi_point_column_extent,

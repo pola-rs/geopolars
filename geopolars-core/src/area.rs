@@ -1,5 +1,5 @@
 use geopolars_compute::native::{
-    multi_polygon_areas, polygon_areas, AreaMetric, Bounds, ExteriorSide, NegativeArea,
+    multi_polygon_areas, polygon_areas, AreaMetric, Bounds, NegativeArea,
 };
 use geopolars_compute::{EarlyCoordCheck, GeoComputeError, OnOutOfBounds, OnRowError};
 use geopolars_views::{downcast, MultiPolygonArray, PolygonArray};
@@ -21,7 +21,6 @@ pub fn areas(
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
     negative_area: NegativeArea,
-    exterior_side: ExteriorSide,
 ) -> PolarsResult<PrimitiveArray<f64>> {
     match kind {
         PolygonKind::Polygon => {
@@ -34,7 +33,6 @@ pub fn areas(
                 bounds,
                 on_out_of_bounds,
                 negative_area,
-                exterior_side,
             )
         }
         PolygonKind::MultiPolygon => {
@@ -47,7 +45,6 @@ pub fn areas(
                 bounds,
                 on_out_of_bounds,
                 negative_area,
-                exterior_side,
             )
         }
     }

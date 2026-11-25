@@ -289,10 +289,6 @@ def test_with_a_crs_an_empty_exterior_with_a_hole_follows_negative_area(
     assert kept == pytest.approx(-_DEGREE_SQUARE_AREA, rel=1e-9)
 
 
-# The area of the WGS 84 ellipsoid, in m².
-_WGS84_AREA = 510_065_621_724_088.44
-
-
 def _band(lons: list[float], lat: float) -> list[dict[str, float]]:
     """A closed ring along `lons` at `-lat`, and back along them at `lat`."""
     ring = [{"x": x, "y": -lat} for x in lons] + [
@@ -301,34 +297,54 @@ def _band(lons: list[float], lat: float) -> list[dict[str, float]]:
     return [*ring, ring[0]]
 
 
-# An exterior around most of the ellipsoid, and a hole that takes more than the rest of it.
+# An exterior around most of the ellipsoid, and a hole that takes more than its smaller side.
 _LARGE_EXTERIOR = _band([-170.0, -85.0, 0.0, 85.0, 170.0], 60.0)
 _LARGE_HOLE = _band([-50.0, 0.0, 50.0], 50.0)
 
 
-def test_with_a_crs_an_exterior_takes_the_side_its_holes_fit_in(
+# A 3x3 degree square around `_DEGREE_SQUARE`.
+_AROUND_DEGREE_SQUARE = [
+    {"x": v["x"] * 3 - 1.0, "y": v["y"] * 3 - 1.0} for v in _DEGREE_SQUARE
+]
+
+
+def test_with_a_crs_a_hole_around_its_exterior_follows_negative_area(
     geodesic_area: Area,
 ) -> None:
+    """Not valid by OGC. The hole takes more than the exterior,
+    but does not fit in the exterior's larger side either."""
+    df = _relabelled([_DEGREE_SQUARE, _AROUND_DEGREE_SQUARE], crs=WGS84)
+    (hole,) = _areas(geodesic_area, _relabelled([_AROUND_DEGREE_SQUARE], crs=WGS84))
+
+    assert _areas(geodesic_area, df) == [0.0]
+    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
+    assert kept == pytest.approx(_DEGREE_SQUARE_AREA - hole, rel=1e-9)
+
+
+def test_with_a_crs_a_hole_listed_twice_follows_negative_area(
+    geodesic_area: Area,
+) -> None:
+    """Not valid by OGC. The holes take more than the exterior, but lie inside it."""
+    exterior = [{"x": v["x"] * 2, "y": v["y"] * 2} for v in _DEGREE_SQUARE]
+    hole = [
+        {"x": 0.25 + v["x"] * 1.5, "y": 0.25 + v["y"] * 1.5} for v in _DEGREE_SQUARE
+    ]
+    df = _relabelled([exterior, hole, hole], crs=WGS84)
+
+    assert _areas(geodesic_area, df) == [0.0]
+    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
+    assert kept < 0.0
+
+
+def test_with_a_crs_every_ring_takes_its_smaller_side(geodesic_area: Area) -> None:
+    """An exterior around most of the ellipsoid gets the smaller side, so its hole exceeds it."""
     df = _polygons(
         [[_LARGE_EXTERIOR, _LARGE_HOLE], [_LARGE_EXTERIOR], [_LARGE_HOLE]], crs=WGS84
     )
 
-    got, smaller_side, hole = _areas(geodesic_area, df)
-
-    assert got == pytest.approx(_WGS84_AREA - smaller_side - hole, rel=1e-9)
-
-
-def test_with_exterior_side_smaller_every_ring_takes_its_smaller_side(
-    geodesic_area: Area,
-) -> None:
-    df = _polygons(
-        [[_LARGE_EXTERIOR, _LARGE_HOLE], [_LARGE_EXTERIOR], [_LARGE_HOLE]], crs=WGS84
-    )
-    smaller = partial(geodesic_area, exterior_side="smaller")
-
-    _, smaller_side, hole = _areas(geodesic_area, df)
-    assert _areas(smaller, df)[0] == 0.0
-    (kept,) = _areas(partial(smaller, negative_area="keep"), df.head(1))
+    with_hole, smaller_side, hole = _areas(geodesic_area, df)
+    assert with_hole == 0.0
+    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df.head(1))
     assert kept == pytest.approx(smaller_side - hole, rel=1e-9)
 
 
@@ -889,18 +905,3 @@ def test_an_unknown_crs_bounds_is_refused() -> None:
 def test_an_unknown_negative_area_is_refused() -> None:
     with pytest.raises(ValueError, match="`negative_area` must be one of"):
         geo.area("polygon", negative_area="clamp")  # type: ignore[arg-type]
-
-
-def test_the_namespace_passes_exterior_side_on() -> None:
-    df = _rings([_LARGE_EXTERIOR, _LARGE_HOLE], crs=WGS84)
-    kwargs = {"exterior_side": "smaller"}
-
-    assert df.select(pl.col("polygon").geo.area(**kwargs)).equals(
-        df.select(geo.area("polygon", **kwargs))
-    )
-    assert df.select(geo.area("polygon", **kwargs)).item() == 0.0
-
-
-def test_an_unknown_exterior_side_is_refused() -> None:
-    with pytest.raises(ValueError, match="`exterior_side` must be one of"):
-        geo.area("polygon", exterior_side="larger")  # type: ignore[arg-type]
