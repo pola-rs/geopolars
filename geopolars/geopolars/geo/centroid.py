@@ -63,7 +63,7 @@ def centroid(
 
     `method` says which axes measure a length or an area:
 
-    - `"footprint"` is the default. It only measures `x` and `y`, as `area_planar` does.
+    - `"footprint"` is the default. It only measures `x` and `y`, as `area(distance_method="planar")` does.
       A geometry with a `z` is measured by its footprint (its shadow on the x/y plane),
       and its `z` is averaged over that footprint.
       For a flat polygon that is not vertical,
