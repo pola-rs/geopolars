@@ -435,7 +435,7 @@ impl<'a> Weighing<'a> {
 
     /// Overwrites the centroid of every suspect (a row and its weight, too small to trust)
     /// that has none: with the empty point for a row without vertices.
-    /// Any other row without a centroid goes to `on_row_error`, so it is returned or listed as failed.
+    /// Any other row without a centroid goes to `on_row_error`, so it is returned or added to `failed`.
     #[cold]
     #[inline(never)]
     fn fix_up_suspects<const Z: bool>(
@@ -444,8 +444,8 @@ impl<'a> Weighing<'a> {
         suspects: &[(usize, f64)],
         row_vertices: impl Fn(usize) -> Range<usize>,
         on_row_error: OnRowError,
-    ) -> GeoComputeResult<Vec<usize>> {
-        let mut failed = Vec::new();
+        failed: &mut Vec<usize>,
+    ) -> GeoComputeResult<()> {
         for &(i, weight) in suspects {
             let fill = match self.look_at_light_row(row_vertices(i), weight) {
                 LightRow::Sliver => continue,
@@ -465,7 +465,7 @@ impl<'a> Weighing<'a> {
                 }
             }
         }
-        Ok(failed)
+        Ok(())
     }
 
     fn look_at_light_row(self, vertices: Range<usize>, weight: f64) -> LightRow {
@@ -524,6 +524,9 @@ impl<'a> Weighing<'a> {
     }
 }
 
+/// The number of rows averaged before the suspects among them are looked at again.
+const BLOCK_LEN: usize = 1024;
+
 /// The centroid of every row of `rows`, of the moment `add_row` adds for it.
 /// A row without a centroid goes to `on_row_error` (see [Weighing::fix_up_suspects]).
 #[inline(always)]
@@ -537,33 +540,41 @@ fn centroids<const Z: bool, const M: bool>(
     let len = rows.len();
     let mut axes: [Vec<f64>; 4] =
         std::array::from_fn(|k| Vec::with_capacity(if has_axis::<Z, M>(k) { len } else { 0 }));
-    // The rows whose weight is too small to trust, which are looked at again after the loop,
-    // so that the loop itself does no more than average.
+    // The rows whose weight is too small to trust, so that the loop itself does no more than average.
+    // They are looked at again after each block of rows, while their vertices are still in cache.
     let mut suspects = Vec::new();
+    let mut failed = Vec::new();
     let smallest_weight = weighing.smallest_weight;
-    for_each_row(rows, |i, is_valid| {
-        // A null row's offsets point anywhere, so it is not measured.
-        let average = if is_valid {
-            let mut moment = Moment::ZERO;
-            add_row(&mut moment, i);
-            if !moment.outweighs(smallest_weight) {
-                suspects.push((i, moment.weight));
+    for block in (0..len).step_by(BLOCK_LEN) {
+        for_each_row(rows, block..len.min(block + BLOCK_LEN), |i, is_valid| {
+            // A null row's offsets point anywhere, so it is not measured.
+            let average = if is_valid {
+                let mut moment = Moment::ZERO;
+                add_row(&mut moment, i);
+                if !moment.outweighs(smallest_weight) {
+                    suspects.push((i, moment.weight));
+                }
+                moment.average()
+            } else {
+                [0.0; 4]
+            };
+            for k in 0..4 {
+                if has_axis::<Z, M>(k) {
+                    axes[k].push(average[k]);
+                }
             }
-            moment.average()
-        } else {
-            [0.0; 4]
-        };
-        for k in 0..4 {
-            if has_axis::<Z, M>(k) {
-                axes[k].push(average[k]);
-            }
+        });
+        if !suspects.is_empty() {
+            weighing.fix_up_suspects::<Z>(
+                &mut axes,
+                &suspects,
+                &row_vertices,
+                on_row_error,
+                &mut failed,
+            )?;
+            suspects.clear();
         }
-    });
-    let failed = if suspects.is_empty() {
-        Vec::new()
-    } else {
-        weighing.fix_up_suspects::<Z>(&mut axes, &suspects, row_vertices, on_row_error)?
-    };
+    }
     let validity = combine_validities_and(rows.validity(), succeeded(len, &failed).as_ref());
     let [x, y, z, m] = axes;
     Ok(PointArray::new(Coords::from_valid(

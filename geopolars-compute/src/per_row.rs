@@ -12,6 +12,7 @@ use geopolars_views::{List, ValidList};
 use polars_arrow::array::{BooleanArray, ListArray, PrimitiveArray};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::Offsets;
+use std::ops::Range;
 
 use crate::{row_or_null, OnRowError};
 
@@ -133,18 +134,22 @@ fn per_row_values_with<const ALL_VALID: bool, T: Default, E>(
     Ok(values)
 }
 
-/// Calls `visit` with every row of a chunk, and whether that row is valid.
+/// Calls `visit` with every row in `to_visit` of a chunk, and whether that row is valid.
 #[inline(always)]
-pub(crate) fn for_each_row(rows: &List, visit: impl FnMut(usize, bool)) {
+pub(crate) fn for_each_row(rows: &List, to_visit: Range<usize>, visit: impl FnMut(usize, bool)) {
     with_const_flags!(
         ALL_VALID = rows.is_all_valid();
-        for_each_row_with::<ALL_VALID>(rows, visit)
+        for_each_row_with::<ALL_VALID>(rows, to_visit, visit)
     )
 }
 
 #[inline(always)]
-fn for_each_row_with<const ALL_VALID: bool>(rows: &List, mut visit: impl FnMut(usize, bool)) {
-    for i in 0..rows.len() {
+fn for_each_row_with<const ALL_VALID: bool>(
+    rows: &List,
+    to_visit: Range<usize>,
+    mut visit: impl FnMut(usize, bool),
+) {
+    for i in to_visit {
         visit(i, ALL_VALID || rows.is_valid(i));
     }
 }

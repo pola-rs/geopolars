@@ -472,6 +472,28 @@ def test_rows_without_a_centroid_line_up_across_chunks_and_slices() -> None:
     assert square == pytest.approx((0.5, 0.5))
 
 
+def test_rows_without_a_centroid_line_up_across_many_rows() -> None:
+    # Rows without a centroid are looked at again a block of rows at a time.
+    def polygon(i: int) -> list[Ring]:
+        if i % 11 == 0:
+            return []
+        if i % 7 == 0:
+            return [_ring((i, 0), (i + 2, 0), (i + 1, 0))]
+        return [_ring((i, 0), (i + 1, 0), (i + 1, 1), (i, 1))]
+
+    rows = range(5000)
+
+    centroids = _centroids(_polygons(*(polygon(i) for i in rows)), on_row_error="null")
+
+    for i, centroid in zip(rows, centroids, strict=True):
+        if i % 11 == 0:
+            assert _all_nan(centroid)
+        elif i % 7 == 0:
+            assert centroid is None
+        else:
+            assert centroid == pytest.approx((i + 0.5, 0.5))
+
+
 def test_rejects_a_non_geometry_while_resolving_the_schema() -> None:
     lf = pl.LazyFrame({"polygon": [1.0]}).select(geo.centroid("polygon"))
 
