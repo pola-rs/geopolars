@@ -276,35 +276,37 @@ struct RingFanThreeD {
 
 /// Fans `ring` out from its anchor in 3D, as a [RingFanThreeD] in absolute coordinates.
 #[inline(always)]
-fn ring_fan_three_d<const M: bool, const ANCHOR: u8>(ring: &ScalarLineString) -> RingFanThreeD {
+fn ring_fan_three_d<const Z: bool, const M: bool, const ANCHOR: u8>(
+    ring: &ScalarLineString,
+) -> RingFanThreeD {
     let mut fan = RingFanThreeD {
         normal: [0.0; 3],
         moment: [[0.0; 4]; 3],
     };
-    let mut coordinates = ring.coordinates::<true, M>();
+    let mut coordinates = ring.coordinates::<Z, M>();
     let Some(p0) = coordinates.next() else {
         return fan;
     };
     // As in `add_ring`, the triangles fan out from `p0`, relative to `p0`.
     // The cross product `n` of a triangle is twice its vector area.
     // `slope` lets the fan move to the anchor after the loop.
-    let mut anchor = RingAnchor::<true, M, ANCHOR>::ZERO;
+    let mut anchor = RingAnchor::<Z, M, ANCHOR>::ZERO;
     let mut slope = [[0.0; 4]; 3];
     let mut d_p = [0.0; 4];
     for q in coordinates {
         let d_q: [f64; 4] = std::array::from_fn(|k| {
-            if has_axis::<true, M>(k) {
+            if has_axis::<Z, M>(k) {
                 q[k] - p0[k]
             } else {
                 0.0
             }
         });
         let n = cross(xyz(d_p), xyz(d_q));
-        anchor.add_edge(d_p, d_q, planar_segment_length::<true>);
+        anchor.add_edge(d_p, d_q, planar_segment_length::<Z>);
         for j in 0..3 {
             fan.normal[j] += n[j];
             for k in 0..4 {
-                if has_axis::<true, M>(k) {
+                if has_axis::<Z, M>(k) {
                     let corners = d_p[k] + d_q[k];
                     fan.moment[j][k] += n[j] * corners;
                     slope[j][k] += (d_q[j] - d_p[j]) * corners;
@@ -317,7 +319,7 @@ fn ring_fan_three_d<const M: bool, const ANCHOR: u8>(ring: &ScalarLineString) ->
     // Over a closed ring, these add up to nothing, so `normal` stays the same.
     let c = anchor.relative_to_first();
     for k in 0..4 {
-        if has_axis::<true, M>(k) {
+        if has_axis::<Z, M>(k) {
             let shift = cross(xyz(c), [slope[0][k], slope[1][k], slope[2][k]]);
             for j in 0..3 {
                 fan.moment[j][k] += (c[k] + 3.0 * p0[k]) * fan.normal[j] - shift[j];
@@ -329,18 +331,18 @@ fn ring_fan_three_d<const M: bool, const ANCHOR: u8>(ring: &ScalarLineString) ->
 
 /// moment += (exterior - holes), measured on the plane facing along the polygon's vector area.
 #[inline(always)]
-fn add_polygon_three_d<const M: bool, const ANCHOR: u8>(
-    moment: &mut Moment<true, M>,
+fn add_polygon_three_d<const Z: bool, const M: bool, const ANCHOR: u8>(
+    moment: &mut Moment<Z, M>,
     polygon: &ScalarPolygon,
 ) {
     let mut rings = polygon.rings();
     let Some(exterior) = rings.next() else {
         return;
     };
-    let mut fan = ring_fan_three_d::<M, ANCHOR>(&exterior);
+    let mut fan = ring_fan_three_d::<Z, M, ANCHOR>(&exterior);
     let exterior_normal = fan.normal;
     for hole in rings {
-        let hole = ring_fan_three_d::<M, ANCHOR>(&hole);
+        let hole = ring_fan_three_d::<Z, M, ANCHOR>(&hole);
         // The hole is taken out whichever way it winds.
         // Against an exterior without area, it is taken out as it winds.
         let sign = if dot(hole.normal, exterior_normal) < 0.0 {
@@ -371,12 +373,31 @@ fn add_polygon_three_d<const M: bool, const ANCHOR: u8>(
         -1.0
     };
     for k in 0..4 {
-        if has_axis::<true, M>(k) {
+        if has_axis::<Z, M>(k) {
             let along_normal: f64 = (0..3).map(|j| unit[j] * fan.moment[j][k]).sum();
             moment.sum[k] += sign * along_normal / 6.0;
         }
     }
     moment.weight += sign * length / 2.0;
+}
+
+/// moment += (exterior - holes), measured in 3D if `MEASURE_Z`, or else on its footprint.
+#[inline(always)]
+fn add_polygon_measured<const Z: bool, const M: bool, const MEASURE_Z: bool, const ANCHOR: u8>(
+    moment: &mut Moment<Z, M>,
+    polygon: &ScalarPolygon,
+) {
+    if MEASURE_Z {
+        add_polygon_three_d::<Z, M, ANCHOR>(moment, polygon);
+    } else {
+        add_polygon::<Z, M, ANCHOR>(moment, polygon);
+    }
+}
+
+/// Whether `method` measures the length or area of `coords` in z too.
+/// Without a z, measuring in 3D is measuring the footprint.
+fn measures_z(method: CentroidMethod, coords: &ValidCoords) -> bool {
+    matches!(method, CentroidMethod::ThreeD) && coords.dim().has_z()
 }
 
 /// The length of `v`, scaled first so that its squares do not underflow before its cross products do.
@@ -420,7 +441,7 @@ struct Weighing<'a> {
 }
 
 impl<'a> Weighing<'a> {
-    fn new(coords: &'a ValidCoords, weighed_by: CentroidWeight, method: CentroidMethod) -> Self {
+    fn new(coords: &'a ValidCoords, weighed_by: CentroidWeight, measures_z: bool) -> Self {
         let (smallest_extent, smallest_weight) = match weighed_by {
             // A length squares the sides of a segment, and its sums multiply two sides.
             CentroidWeight::Length => {
@@ -437,7 +458,7 @@ impl<'a> Weighing<'a> {
         Self {
             coords,
             weighed_by,
-            measures_z: matches!(method, CentroidMethod::ThreeD) && coords.dim().has_z(),
+            measures_z,
             smallest_extent,
             smallest_weight,
         }
@@ -598,41 +619,25 @@ pub fn line_string_centroids(
     method: CentroidMethod,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
-    let dim = array.coords().dim();
+    let coords = array.coords();
+    let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m();
-        line_string_centroids_with::<Z, M>(array, method, on_row_error)
+        Z = dim.has_z(), M = dim.has_m(), MEASURE_Z = measures_z(method, coords);
+        line_string_centroids_with::<Z, M, MEASURE_Z>(array, on_row_error)
     )
 }
 
-fn line_string_centroids_with<const Z: bool, const M: bool>(
+fn line_string_centroids_with<const Z: bool, const M: bool, const MEASURE_Z: bool>(
     array: &Untrimmed<LineStringArray>,
-    method: CentroidMethod,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
-    let weighing = Weighing::new(array.coords(), CentroidWeight::Length, method);
-    let row_vertices = |i| array.row_vertices(i);
-    match method {
-        CentroidMethod::ThreeD if Z => centroids::<true, M>(
-            array.rows(),
-            row_vertices,
-            weighing,
-            on_row_error,
-            |moment, i| {
-                add_line(moment, &array.get(i), planar_segment_length::<true>);
-            },
-        ),
-        // Without a z, measuring in 3D is measuring the footprint.
-        CentroidMethod::Footprint | CentroidMethod::ThreeD => centroids::<Z, M>(
-            array.rows(),
-            row_vertices,
-            weighing,
-            on_row_error,
-            |moment, i| {
-                add_line(moment, &array.get(i), planar_segment_length::<false>);
-            },
-        ),
-    }
+    centroids::<Z, M>(
+        array.rows(),
+        |i| array.row_vertices(i),
+        Weighing::new(array.coords(), CentroidWeight::Length, MEASURE_Z),
+        on_row_error,
+        |moment, i| add_line(moment, &array.get(i), planar_segment_length::<MEASURE_Z>),
+    )
 }
 
 pub fn multi_line_string_centroids(
@@ -640,45 +645,29 @@ pub fn multi_line_string_centroids(
     method: CentroidMethod,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
-    let dim = array.coords().dim();
+    let coords = array.coords();
+    let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m();
-        multi_line_string_centroids_with::<Z, M>(array, method, on_row_error)
+        Z = dim.has_z(), M = dim.has_m(), MEASURE_Z = measures_z(method, coords);
+        multi_line_string_centroids_with::<Z, M, MEASURE_Z>(array, on_row_error)
     )
 }
 
-fn multi_line_string_centroids_with<const Z: bool, const M: bool>(
+fn multi_line_string_centroids_with<const Z: bool, const M: bool, const MEASURE_Z: bool>(
     array: &Untrimmed<MultiLineStringArray>,
-    method: CentroidMethod,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
-    let weighing = Weighing::new(array.coords(), CentroidWeight::Length, method);
-    let row_vertices = |i| array.row_vertices(i);
-    match method {
-        CentroidMethod::ThreeD if Z => centroids::<true, M>(
-            array.rows(),
-            row_vertices,
-            weighing,
-            on_row_error,
-            |moment, i| {
-                for line in array.get(i).line_strings() {
-                    add_line(moment, &line, planar_segment_length::<true>);
-                }
-            },
-        ),
-        // Without a z, measuring in 3D is measuring the footprint.
-        CentroidMethod::Footprint | CentroidMethod::ThreeD => centroids::<Z, M>(
-            array.rows(),
-            row_vertices,
-            weighing,
-            on_row_error,
-            |moment, i| {
-                for line in array.get(i).line_strings() {
-                    add_line(moment, &line, planar_segment_length::<false>);
-                }
-            },
-        ),
-    }
+    centroids::<Z, M>(
+        array.rows(),
+        |i| array.row_vertices(i),
+        Weighing::new(array.coords(), CentroidWeight::Length, MEASURE_Z),
+        on_row_error,
+        |moment, i| {
+            for line in array.get(i).line_strings() {
+                add_line(moment, &line, planar_segment_length::<MEASURE_Z>);
+            }
+        },
+    )
 }
 
 pub fn polygon_centroids(
@@ -687,41 +676,28 @@ pub fn polygon_centroids(
     anchor: CentroidAnchor,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
-    let dim = array.coords().dim();
+    let coords = array.coords();
+    let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m(), ANCHOR: CentroidAnchor = anchor;
-        polygon_centroids_with::<Z, M, ANCHOR>(array, method, on_row_error)
+        Z = dim.has_z(),
+        M = dim.has_m(),
+        MEASURE_Z = measures_z(method, coords),
+        ANCHOR: CentroidAnchor = anchor;
+        polygon_centroids_with::<Z, M, MEASURE_Z, ANCHOR>(array, on_row_error)
     )
 }
 
-fn polygon_centroids_with<const Z: bool, const M: bool, const ANCHOR: u8>(
+fn polygon_centroids_with<const Z: bool, const M: bool, const MEASURE_Z: bool, const ANCHOR: u8>(
     array: &Untrimmed<PolygonArray>,
-    method: CentroidMethod,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
-    let weighing = Weighing::new(array.coords(), CentroidWeight::Area, method);
-    let row_vertices = |i| array.row_vertices(i);
-    match method {
-        CentroidMethod::ThreeD if Z => centroids::<true, M>(
-            array.rows(),
-            row_vertices,
-            weighing,
-            on_row_error,
-            |moment, i| {
-                add_polygon_three_d::<M, ANCHOR>(moment, &array.get(i));
-            },
-        ),
-        // Without a z, a polygon's own plane is its footprint.
-        CentroidMethod::Footprint | CentroidMethod::ThreeD => centroids::<Z, M>(
-            array.rows(),
-            row_vertices,
-            weighing,
-            on_row_error,
-            |moment, i| {
-                add_polygon::<Z, M, ANCHOR>(moment, &array.get(i));
-            },
-        ),
-    }
+    centroids::<Z, M>(
+        array.rows(),
+        |i| array.row_vertices(i),
+        Weighing::new(array.coords(), CentroidWeight::Area, MEASURE_Z),
+        on_row_error,
+        |moment, i| add_polygon_measured::<Z, M, MEASURE_Z, ANCHOR>(moment, &array.get(i)),
+    )
 }
 
 pub fn multi_polygon_centroids(
@@ -730,43 +706,35 @@ pub fn multi_polygon_centroids(
     anchor: CentroidAnchor,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
-    let dim = array.coords().dim();
+    let coords = array.coords();
+    let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m(), ANCHOR: CentroidAnchor = anchor;
-        multi_polygon_centroids_with::<Z, M, ANCHOR>(array, method, on_row_error)
+        Z = dim.has_z(),
+        M = dim.has_m(),
+        MEASURE_Z = measures_z(method, coords),
+        ANCHOR: CentroidAnchor = anchor;
+        multi_polygon_centroids_with::<Z, M, MEASURE_Z, ANCHOR>(array, on_row_error)
     )
 }
 
-fn multi_polygon_centroids_with<const Z: bool, const M: bool, const ANCHOR: u8>(
+fn multi_polygon_centroids_with<
+    const Z: bool,
+    const M: bool,
+    const MEASURE_Z: bool,
+    const ANCHOR: u8,
+>(
     array: &Untrimmed<MultiPolygonArray>,
-    method: CentroidMethod,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
-    let weighing = Weighing::new(array.coords(), CentroidWeight::Area, method);
-    let row_vertices = |i| array.row_vertices(i);
-    match method {
-        CentroidMethod::ThreeD if Z => centroids::<true, M>(
-            array.rows(),
-            row_vertices,
-            weighing,
-            on_row_error,
-            |moment, i| {
-                for polygon in array.get(i).polygons() {
-                    add_polygon_three_d::<M, ANCHOR>(moment, &polygon);
-                }
-            },
-        ),
-        // Without a z, a polygon's own plane is its footprint.
-        CentroidMethod::Footprint | CentroidMethod::ThreeD => centroids::<Z, M>(
-            array.rows(),
-            row_vertices,
-            weighing,
-            on_row_error,
-            |moment, i| {
-                for polygon in array.get(i).polygons() {
-                    add_polygon::<Z, M, ANCHOR>(moment, &polygon);
-                }
-            },
-        ),
-    }
+    centroids::<Z, M>(
+        array.rows(),
+        |i| array.row_vertices(i),
+        Weighing::new(array.coords(), CentroidWeight::Area, MEASURE_Z),
+        on_row_error,
+        |moment, i| {
+            for polygon in array.get(i).polygons() {
+                add_polygon_measured::<Z, M, MEASURE_Z, ANCHOR>(moment, &polygon);
+            }
+        },
+    )
 }
