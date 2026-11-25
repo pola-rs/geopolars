@@ -164,13 +164,10 @@ _BIG_HOLE = [{"x": v["x"] * 1.5 - 1.0, "y": v["y"] * 1.5 - 1.0} for v in _SQUARE
     [([[], _SMALL_SQUARE], -1.0), ([_SQUARE, _BIG_HOLE], -20.0)],
     ids=["empty exterior", "hole larger than exterior"],
 )
-def test_a_polygon_below_zero_follows_negative_area(
+def test_a_polygon_below_zero_keeps_its_negative_area(
     planar_area: Area, rings: list[list[dict[str, float]]], kept: float
 ) -> None:
-    df = _relabelled(rings)
-
-    assert _areas(planar_area, df) == [0.0]
-    assert _areas(partial(planar_area, negative_area="keep"), df) == [kept]
+    assert _areas(planar_area, _relabelled(rings)) == [kept]
 
 
 def test_a_null_polygon_has_no_area(planar_area: Area) -> None:
@@ -279,14 +276,13 @@ def test_with_a_crs_a_hole_is_taken_out(geodesic_area: Area) -> None:
         assert got == pytest.approx(0.0, abs=1e-3)
 
 
-def test_with_a_crs_an_empty_exterior_with_a_hole_follows_negative_area(
+def test_with_a_crs_an_empty_exterior_with_a_hole_comes_out_below_zero(
     geodesic_area: Area,
 ) -> None:
     df = _relabelled([[], _DEGREE_SQUARE], crs=WGS84)
 
-    assert _areas(geodesic_area, df) == [0.0]
-    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
-    assert kept == pytest.approx(-_DEGREE_SQUARE_AREA, rel=1e-9)
+    (got,) = _areas(geodesic_area, df)
+    assert got == pytest.approx(-_DEGREE_SQUARE_AREA, rel=1e-9)
 
 
 def _band(lons: list[float], lat: float) -> list[dict[str, float]]:
@@ -308,7 +304,7 @@ _AROUND_DEGREE_SQUARE = [
 ]
 
 
-def test_with_a_crs_a_hole_around_its_exterior_follows_negative_area(
+def test_with_a_crs_a_hole_around_its_exterior_comes_out_below_zero(
     geodesic_area: Area,
 ) -> None:
     """Not valid by OGC. The hole takes more than the exterior,
@@ -316,12 +312,11 @@ def test_with_a_crs_a_hole_around_its_exterior_follows_negative_area(
     df = _relabelled([_DEGREE_SQUARE, _AROUND_DEGREE_SQUARE], crs=WGS84)
     (hole,) = _areas(geodesic_area, _relabelled([_AROUND_DEGREE_SQUARE], crs=WGS84))
 
-    assert _areas(geodesic_area, df) == [0.0]
-    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
-    assert kept == pytest.approx(_DEGREE_SQUARE_AREA - hole, rel=1e-9)
+    (got,) = _areas(geodesic_area, df)
+    assert got == pytest.approx(_DEGREE_SQUARE_AREA - hole, rel=1e-9)
 
 
-def test_with_a_crs_a_hole_listed_twice_follows_negative_area(
+def test_with_a_crs_a_hole_listed_twice_comes_out_below_zero(
     geodesic_area: Area,
 ) -> None:
     """Not valid by OGC. The holes take more than the exterior, but lie inside it."""
@@ -331,9 +326,8 @@ def test_with_a_crs_a_hole_listed_twice_follows_negative_area(
     ]
     df = _relabelled([exterior, hole, hole], crs=WGS84)
 
-    assert _areas(geodesic_area, df) == [0.0]
-    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df)
-    assert kept < 0.0
+    (got,) = _areas(geodesic_area, df)
+    assert got < 0.0
 
 
 def test_with_a_crs_every_ring_takes_its_smaller_side(geodesic_area: Area) -> None:
@@ -343,9 +337,7 @@ def test_with_a_crs_every_ring_takes_its_smaller_side(geodesic_area: Area) -> No
     )
 
     with_hole, smaller_side, hole = _areas(geodesic_area, df)
-    assert with_hole == 0.0
-    (kept,) = _areas(partial(geodesic_area, negative_area="keep"), df.head(1))
-    assert kept == pytest.approx(smaller_side - hole, rel=1e-9)
+    assert with_hole == pytest.approx(smaller_side - hole, rel=1e-9)
 
 
 def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -> None:
@@ -678,13 +670,11 @@ def test_a_multipolygon_without_polygons_encloses_nothing(
     assert [math.copysign(1.0, a) for a in got[:2]] == [1.0, 1.0]
 
 
-def test_a_multipolygon_takes_negative_area_per_polygon(planar_area: Area) -> None:
-    """The polygon below zero does not take area away from the square next to it."""
+def test_a_multipolygon_sums_negative_areas(planar_area: Area) -> None:
+    """The polygon below zero takes area away from the square next to it."""
     df = _multipolygons([[[_SQUARE], [[], _SMALL_SQUARE]]])
 
-    assert _areas(planar_area, df, "multipolygon") == [16.0]
-    keep = partial(planar_area, negative_area="keep")
-    assert _areas(keep, df, "multipolygon") == [15.0]
+    assert _areas(planar_area, df, "multipolygon") == [15.0]
 
 
 @pytest.mark.parametrize("crs", [None, WGS84], ids=["planar", "geodesic"])
@@ -900,8 +890,3 @@ def test_an_unknown_on_out_of_bounds_is_refused() -> None:
 def test_an_unknown_crs_bounds_is_refused() -> None:
     with pytest.raises(ValueError, match="`crs_bounds` must be one of"):
         geo.area("polygon", crs_bounds="wrapped")  # type: ignore[arg-type]
-
-
-def test_an_unknown_negative_area_is_refused() -> None:
-    with pytest.raises(ValueError, match="`negative_area` must be one of"):
-        geo.area("polygon", negative_area="clamp")  # type: ignore[arg-type]

@@ -28,8 +28,6 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
-NegativeArea = Literal["zero", "keep"]
-
 
 def _encloses_nothing(
     column: pl.Expr, geometry: GeoArrowType, *, allow_non_polygons: bool
@@ -57,7 +55,6 @@ def _area(
     early_coord_check: EarlyCoordCheck,
     on_out_of_bounds: OnOutOfBounds,
     crs_bounds: CrsBounds,
-    negative_area: NegativeArea,
 ) -> pl.Expr:
     if distance_method == "auto":
         distance_method = _area_auto_method(geometry)
@@ -84,7 +81,6 @@ def _area(
             "early_coord_check": early_coord_check,
             "bounds": bounds,
             "on_out_of_bounds": on_out_of_bounds,
-            "negative_area": negative_area,
         },
         is_elementwise=True,
     )
@@ -106,7 +102,6 @@ def area(
     early_coord_check: EarlyCoordCheck = "finite",
     on_out_of_bounds: OnOutOfBounds = "auto",
     crs_bounds: CrsBounds = "crs_wrapped_longitude",
-    negative_area: NegativeArea = "zero",
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.
 
@@ -180,9 +175,8 @@ def area(
     (such as a hole listed twice, or a hole around the exterior).
     A valid polygon whose geodesic exterior covers more than half the ellipsoid can too,
     as its exterior gets the smaller region.
-    By default, such a polygon gets `0.0`.
-    `negative_area="keep"` gives it its negative area instead.
-    In a multipolygon, this applies to each polygon before they are summed.
+    Such a polygon keeps its negative area.
+    In a multipolygon, it takes that much away from the sum of its other polygons.
 
     {on_row_error}
     A geodesic row fails when PROJ cannot take one of its vertices to longitude/latitude.
@@ -203,7 +197,6 @@ def area(
     validate_one_of("early_coord_check", early_coord_check, EarlyCoordCheck)
     validate_one_of("on_out_of_bounds", on_out_of_bounds, OnOutOfBounds)
     validate_one_of("crs_bounds", crs_bounds, CrsBounds)
-    validate_one_of("negative_area", negative_area, NegativeArea)
     return on_geometry(
         geometry,
         partial(
@@ -214,6 +207,5 @@ def area(
             early_coord_check=early_coord_check,
             on_out_of_bounds=on_out_of_bounds,
             crs_bounds=crs_bounds,
-            negative_area=negative_area,
         ),
     )

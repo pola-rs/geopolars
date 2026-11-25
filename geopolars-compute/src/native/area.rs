@@ -20,13 +20,6 @@ use crate::{
     Planar,
 };
 
-/// The `negative_area` of the Python `area`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NegativeArea {
-    Zero,
-    Keep,
-}
-
 /// How the area a ring encloses is measured
 pub trait AreaMetric: BaseMetric {
     /// Why a row could not be measured (e.g. a failed reprojection).
@@ -108,12 +101,7 @@ pub(super) fn twice_signed_area(ring: &ScalarLineString) -> f64 {
 }
 
 #[inline(always)]
-fn polygon_area<M: AreaMetric>(
-    metric: &M,
-    chunk: &M::Chunk,
-    polygon: &ScalarPolygon,
-    negative_area: NegativeArea,
-) -> f64 {
+fn polygon_area<M: AreaMetric>(metric: &M, chunk: &M::Chunk, polygon: &ScalarPolygon) -> f64 {
     let Some(exterior) = polygon.exterior() else {
         return 0.0;
     };
@@ -122,12 +110,7 @@ fn polygon_area<M: AreaMetric>(
         .holes()
         .map(|hole| metric.ring_area(chunk, &hole))
         .sum();
-    let area = exterior - holes;
-    // The Python `area` says which polygons come out below zero.
-    if area < 0.0 && negative_area == NegativeArea::Zero {
-        return 0.0;
-    }
-    area
+    exterior - holes
 }
 
 /// The area of every polygon of a chunk.
@@ -138,7 +121,6 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     early_coord_check: EarlyCoordCheck,
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
-    negative_area: NegativeArea,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
     areas_with(
         metric,
@@ -147,7 +129,7 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
         |i| array.row_vertices(i),
         |chunk, i| {
             let polygon = array.get(i);
-            polygon_area(metric, chunk, &polygon, negative_area)
+            polygon_area(metric, chunk, &polygon)
         },
         on_row_error,
         early_coord_check,
@@ -164,7 +146,6 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     early_coord_check: EarlyCoordCheck,
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
-    negative_area: NegativeArea,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
     areas_with(
         metric,
@@ -177,7 +158,7 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
                 .polygons()
                 // Folded from `0.0`, as `sum` starts from `-0.0`.
                 .fold(0.0, |total, polygon| {
-                    total + polygon_area(metric, chunk, &polygon, negative_area)
+                    total + polygon_area(metric, chunk, &polygon)
                 })
         },
         on_row_error,
