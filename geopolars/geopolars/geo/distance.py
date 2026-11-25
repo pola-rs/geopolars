@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from polars.plugins import register_plugin_function
 
+from geopolars._docs import doc
 from geopolars._typing import DistanceMethod
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import PointType
@@ -71,6 +72,7 @@ def _distance(
     )
 
 
+@doc()
 def distance(
     a: IntoExprColumn,
     b: IntoExprColumn,
@@ -88,9 +90,7 @@ def distance(
 
     The default, `distance_method="auto"`, measures points in a projected CRS, or without one, `"planar"`,
     and points in any other CRS `"geodesic"`.
-    A CRS that is not defined on longitude/latitude, such as a geocentric one, has no ellipsoid
-    to measure along, so `"geodesic"` and `"auto"` refuse it while the plan is built.
-    Ask for `"planar"` to measure it on its `x` and `y` anyway.
+    {crs_without_ellipsoid}
     Planar is close to geodesic in a projected CRS made for measuring, such as a UTM zone,
     but Web Mercator (EPSG:3857) stretches distances by 1/cos(latitude):
     pass `"geodesic"` for such a CRS.

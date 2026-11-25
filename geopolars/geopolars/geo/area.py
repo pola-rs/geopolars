@@ -115,31 +115,31 @@ def area(
 
 
     **Planar** measures the area straight from the coordinates.
-    As it can ignore the CRS, it is very fast.
-    It does not check the bounds of the CRS either, unless `on_out_of_bounds` asks for it.
-    Its area is only right in an equal-area CRS.
+    Does not need to do any projection, which makes it very fast.
+    It does not need to check the CRS at all, unless `on_out_of_bounds` asks for bounds checking.
+    This does mean its area is only right in an equal-area CRS.
     In any other projected CRS (a UTM zone included),
-    it is off by as much as the projection distorts areas.
-    In a geographic CRS, the coordinates are longitude/latitude.
-    Its area is then in square degrees, and that is most likely not what you want.
+    the error depends on the projection area distortion.
+    In a geographic CRS, the coordinates are longitude/latitude,
+    which means that the planar area gives a value in square degrees.
+    For most use cases, this is probably not what you want.
 
-    **Geodesic** first takes the coordinates to the longitude/latitude the CRS is defined on.
-    For a projected CRS, that is the one it projects from, and no datum is shifted.
-    It then measures every ring as the region its geodesic edges enclose on the CRS's own ellipsoid,
-    as `distance` measures two points.
+    **Geodesic** takes the CRS into consideration.
+    It measures every ring as the region its geodesic edges enclose on the CRS's own ellipsoid.
     The result is in the unit of the CRS's `x` and `y` squared
     (such as square US survey feet for EPSG:2263),
     or in square metres when those are degrees.
 
-    `"geodesic"` refuses a geometry without a CRS while the plan is built.
-    `"geodesic"` and `"auto"` also refuse a CRS that is not defined on longitude/latitude.
+    `"geodesic"` refuses a geometry without a CRS.
 
-    The default, `distance_method="auto"`, measures `"planar"` without a CRS or in an equal-area one.
-    It measures a geometry in any other CRS `"geodesic"`, including a projected one such as a UTM zone.
-    This differs from `"auto"` in `distance`, which measures every projected CRS on its plane.
+    {crs_without_ellipsoid}
 
-    A geodesic ring encloses the smaller of the two regions it splits the ellipsoid into.
-    A polygon that covers more than half the ellipsoid is therefore not supported.
+    The default, `distance_method="auto"`, attempts to get the meaningful value in the cheapest way possible.
+    If the geometry has no CRS, or an equal-area one, it will use the `"planar"` method.
+    Geometry in any other CRS is measured using `"geodesic"` (including a projected one such as a UTM zone).
+    Note that this differs from `"auto"` in `distance`, which measures every projected CRS on its plane.
+    This is because distance preservation does not necessarily imply area preservation.
+
 
     A hole is always subtracted from the exterior, whichever way their rings wind.
     A multipolygon gets the sum of the areas of its polygons.
@@ -166,23 +166,31 @@ def area(
     =======================  ============
 
 
-    A closed ring of fewer than 4 vertices can at most go there and back,
+    A closed ring of fewer than 4 vertices cannot span a surface,
     so it encloses nothing and gets `0.0`.
-    It gets `0.0` even with a NaN, infinite, or empty coordinate in it,
-    as being too short counts for more than holding an invalid coordinate.
-    In a ring that is long enough, an empty point gives NaN, like any other NaN coordinate.
 
-    A self-intersecting ring is not valid by OGC (see `is_valid_ogc`).
-    The parts of it that wind the other way cancel rather than add.
+    A NaN or infinite coordinate never gives a finite area.
+    This takes precedence over the length of the ring.
+    An empty point in a ring is a NaN coordinate too, so it gives NaN.
+    Use `.fill_nan(None)` on the area to make these null instead,
+    or `null_out_invalid_ogc` on the polygons before measuring them.
 
-    A polygon that is not valid by OGC can come out below zero,
-    for example one with an empty exterior but a hole,
-    or one with holes that enclose more than its exterior
-    (such as a hole listed twice, or a hole around the exterior).
-    A valid polygon whose geodesic exterior covers more than half the ellipsoid can too,
-    as its exterior gets the smaller region.
-    Such a polygon keeps its negative area.
-    In a multipolygon, it takes that much away from the sum of its other polygons.
+
+    A polygon that is not valid by OGC can lead to unexpected behaviour such as negative areas.
+    Examples where this happens are:
+    polygons with an empty exterior and a non-empty hole,
+    polygons with holes that are larger than their exterior,
+    or polygons with duplicate holes.
+    In a multipolygon, a negative value is summed normally.
+
+    Parts where the winding order changes inside of a ring (such as in a self-intersecting bow-tie)
+    way cancel rather than add.
+
+    This operation always uses the smallest area that can be enclosed by the polygon.
+    A polygon that covers more than half the ellipsoid is not supported,
+    as described under "Polygon edges" in `docs/source/user-guide/geo/concepts/geometry-types.md`.
+    This means that a valid polygon whose geodesic exterior covers more than half the ellipsoid
+    can still give a negative area, as its exterior gets the smaller region.
 
     {on_row_error}
     A geodesic row fails when PROJ cannot take one of its vertices to longitude/latitude.
@@ -191,8 +199,7 @@ def area(
     {early_coord_check}
     Only `"geodesic"` runs the check, as the planar formula costs no more than the check does.
     A geodesic row that fails it gets NaN, without being measured.
-    Measured planar, a NaN or infinite coordinate is simply propagated arithmetically,
-    unless its ring is too short to enclose anything (see above).
+    Measured planar, a NaN or infinite coordinate is simply propagated arithmetically.
 
     {on_out_of_bounds}
 

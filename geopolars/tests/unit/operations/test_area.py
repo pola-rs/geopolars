@@ -493,7 +493,7 @@ def test_a_nan_is_not_outside_the_bounds(distance_method: DistanceMethod) -> Non
 @pytest.mark.parametrize(
     ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
 )
-def test_a_ring_too_short_to_enclose_anything_ignores_its_coordinates(
+def test_a_ring_too_short_to_enclose_anything_still_gives_nan(
     vertex: dict[str, float], distance_method: DistanceMethod, crs: str | None
 ) -> None:
     """Turning the checks off lets the row be measured."""
@@ -502,19 +502,8 @@ def test_a_ring_too_short_to_enclose_anything_ignores_its_coordinates(
     )
     other = {"x": 1.0, "y": 1.0}
     for ring in ([vertex], [vertex, other], [other, vertex, other]):
-        assert _areas(area, _relabelled([ring], crs=crs)) == [0.0]
-
-
-@pytest.mark.parametrize(
-    ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
-)
-def test_a_ring_that_is_only_an_empty_point_encloses_nothing(
-    distance_method: DistanceMethod, crs: str | None
-) -> None:
-    empty = {"x": math.nan, "y": math.nan}
-    area = _area_by(distance_method)
-
-    assert _areas(area, _relabelled([[empty]], crs=crs)) == [0.0]
+        (got,) = _areas(area, _relabelled([_SQUARE, ring], crs=crs))
+        assert math.isnan(got)
 
 
 @pytest.mark.parametrize(

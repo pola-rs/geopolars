@@ -41,7 +41,10 @@ from the GEOS representation to the GeoArrow representation.
 
 Some tools do need a particular winding order.
 For example, GeoJSON (RFC 7946) asks for counter-clockwise exteriors,
-and so does GeoParquet when its edges are spherical.
+and so does GeoParquet when its edges are spherical,
+as the winding order then says which side of a ring is inside.
+GeoPolars does not read it that way, and takes the smaller side instead
+(see [polygon edges](geometry-types.md#polygon-edges)).
 
 - `is_ccw` checks whether a geometry follows the common convention.
 - `to_ccw` makes it follow the convention, reversing only the rings that run the wrong way.

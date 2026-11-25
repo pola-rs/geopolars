@@ -108,11 +108,13 @@ pub(super) fn twice_signed_area(ring: &ScalarLineString) -> f64 {
 
 #[inline(always)]
 fn polygon_area<M: AreaMetric>(metric: &M, chunk: &M::Chunk, polygon: &ScalarPolygon) -> f64 {
-    // A closed ring of fewer than 4 vertices can at most go there and back.
-    // It gets 0.0 even with a NaN or infinite coordinate, as being too short counts for more.
+    // A closed ring of fewer than 4 vertices can at most go there and back, so it encloses nothing.
+    // Multiplying by its coordinates still turns a NaN or infinite one into NaN.
     let ring_area = |ring: &ScalarLineString| {
         if ring.vertices.len() < 4 {
-            0.0
+            let x = &ring.coords.x()[ring.vertices.clone()];
+            let y = &ring.coords.y()[ring.vertices.clone()];
+            0.0 * x.iter().chain(y).sum::<f64>().abs()
         } else {
             metric.ring_area(chunk, ring)
         }

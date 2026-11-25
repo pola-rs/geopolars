@@ -170,6 +170,11 @@ By default, `early_coord_check` sends a row with such a vertex to `on_row_error`
 With `early_coord_check="off"`, such a vertex goes to GEOS, which is allowed to deal with it how it wants.
 GEOS handles these internal empties or invalid points differently per operation,
 so you might not get the same results.""",
+    "crs_without_ellipsoid": """\
+A CRS that is not defined on longitude/latitude,
+such as a geocentric one or a local engineering grid, has no ellipsoid to measure along,
+so `"geodesic"` and `"auto"` refuse it while the plan is built.
+Ask for `"planar"` to measure it on its `x` and `y` anyway.""",
     "early_coord_check": """\
 This expression can check for NaNs and nested empty points early.
 See :ref:`early_coord_check <arg-early_coord_check>` on the Common arguments page.""",
