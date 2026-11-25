@@ -135,7 +135,7 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     on_out_of_bounds: OnOutOfBounds,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
     let rows = array.rows();
-    let chunk_vertices = array.rings().span(rows.span(0..rows.len()));
+    let chunk_vertices = array.rows_vertices(0..rows.len());
     areas_with(
         metric,
         rows,
@@ -163,9 +163,7 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     on_out_of_bounds: OnOutOfBounds,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
     let rows = array.rows();
-    let chunk_vertices = array
-        .rings()
-        .span(array.polygons().span(rows.span(0..rows.len())));
+    let chunk_vertices = array.rows_vertices(0..rows.len());
     areas_with(
         metric,
         rows,

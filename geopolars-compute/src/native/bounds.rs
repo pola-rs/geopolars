@@ -268,28 +268,28 @@ pub fn point_column_extent<const Z: bool, const M: bool, const IGNORE_NULLS: boo
 pub fn line_string_column_extent<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
     array: &LineStringArray,
 ) -> Option<Extent<Z, M>> {
-    column_extent::<Z, M, IGNORE_NULLS>(&array.rows, &array.coords, |rows| array.rows.span(rows))
+    column_extent::<Z, M, IGNORE_NULLS>(&array.rows, &array.coords, |rows| array.rows_vertices(rows))
 }
 
 pub fn polygon_column_extent<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
     array: &PolygonArray,
 ) -> Option<Extent<Z, M>> {
     column_extent::<Z, M, IGNORE_NULLS>(&array.rows, &array.coords, |rows| {
-        array.rings.span(array.rows.span(rows))
+        array.rows_vertices(rows)
     })
 }
 
 pub fn multi_point_column_extent<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
     array: &MultiPointArray,
 ) -> Option<Extent<Z, M>> {
-    column_extent::<Z, M, IGNORE_NULLS>(&array.rows, &array.coords, |rows| array.rows.span(rows))
+    column_extent::<Z, M, IGNORE_NULLS>(&array.rows, &array.coords, |rows| array.rows_vertices(rows))
 }
 
 pub fn multi_line_string_column_extent<const Z: bool, const M: bool, const IGNORE_NULLS: bool>(
     array: &MultiLineStringArray,
 ) -> Option<Extent<Z, M>> {
     column_extent::<Z, M, IGNORE_NULLS>(&array.rows, &array.coords, |rows| {
-        array.lines.span(array.rows.span(rows))
+        array.rows_vertices(rows)
     })
 }
 
@@ -297,6 +297,6 @@ pub fn multi_polygon_column_extent<const Z: bool, const M: bool, const IGNORE_NU
     array: &MultiPolygonArray,
 ) -> Option<Extent<Z, M>> {
     column_extent::<Z, M, IGNORE_NULLS>(&array.rows, &array.coords, |rows| {
-        array.rings.span(array.polygons.span(array.rows.span(rows)))
+        array.rows_vertices(rows)
     })
 }
