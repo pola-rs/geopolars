@@ -50,6 +50,10 @@ check for that metadata key.
 {{code_block('user-guide/geo/io','read',['scan_parquet'])}}
 
 ```python exec="on" result="text" session="user-guide/geo/io"
+--8<-- "python/user-guide/geo/io.py:write"
+```
+
+```python exec="on" result="text" session="user-guide/geo/io"
 --8<-- "python/user-guide/geo/io.py:read"
 ```
 
@@ -75,10 +79,6 @@ A string-CRS such as `"EPSG:4326"` is valid in GeoPolars (as in GeoArrow), but n
 You'll have to convert it to its PROJJSON equivalent using `crs_to_projjson`.
 
 {{code_block('user-guide/geo/io','write',['geo.point','geo.crs_to_projjson','write_parquet'])}}
-
-```python exec="on" result="text" session="user-guide/geo/io"
---8<-- "python/user-guide/geo/io.py:write"
-```
 
 The same holds for reading data from GeoParquet that has a CRS.
 You might now have your own column with the (string) label `"EPSG:4326"`,

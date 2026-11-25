@@ -1,12 +1,23 @@
-# --8<-- [start:write]
+# --8<-- [start:refuse]
 import os
 
 import polars as pl
+from polars.exceptions import InvalidOperationError
 
-from geopolars import geo
+from geopolars import LineStringXYM, geo
 
 os.environ["POLARS_GEOPARQUET_WRITE"] = "1.1"
 
+tracks = pl.DataFrame({"track": ["LINESTRING M (0 0 1, 1 1 2)"]}).select(
+    track=geo.from_wkt("track", LineStringXYM)
+)
+try:
+    tracks.write_parquet("docs/assets/data/tracks.parquet")
+except InvalidOperationError as err:
+    print(err)
+# --8<-- [end:refuse]
+
+# --8<-- [start:write]
 cities = pl.DataFrame(
     {
         "city": ["Amsterdam", "Delft", "Utrecht"],
@@ -19,20 +30,6 @@ cities.with_columns(geo.crs_to_projjson("geometry")).write_parquet(
     "docs/assets/data/cities.parquet"
 )
 # --8<-- [end:write]
-
-# --8<-- [start:refuse]
-from polars.exceptions import InvalidOperationError
-
-from geopolars import LineStringXYM
-
-tracks = pl.DataFrame({"track": ["LINESTRING M (0 0 1, 1 1 2)"]}).select(
-    track=geo.from_wkt("track", LineStringXYM)
-)
-try:
-    tracks.write_parquet("docs/assets/data/tracks.parquet")
-except InvalidOperationError as err:
-    print(err)
-# --8<-- [end:refuse]
 
 # --8<-- [start:read]
 os.environ["POLARS_GEOPARQUET_READ"] = "1"
