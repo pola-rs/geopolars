@@ -84,6 +84,8 @@ impl AreaMetric for GeodesicMetric {
     const CHECKS_COORDS_EARLY: bool = true;
 
     fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
+        // One PROJ batch over the whole chunk is what makes this fast,
+        // even though it also reprojects the null rows and the rows the checks then skip.
         ReprojectedXy::new(&self.to_lonlat, coords, vertices)
     }
 

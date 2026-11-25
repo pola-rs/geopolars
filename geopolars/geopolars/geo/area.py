@@ -166,6 +166,12 @@ def area(
     =======================  ============
 
 
+    A closed ring of fewer than 4 vertices can at most go there and back,
+    so it encloses nothing and gets `0.0`.
+    It gets `0.0` even with a NaN, infinite, or empty coordinate in it,
+    as being too short counts for more than holding an invalid coordinate.
+    In a ring that is long enough, an empty point gives NaN, like any other NaN coordinate.
+
     A self-intersecting ring is not valid by OGC (see `is_valid_ogc`).
     The parts of it that wind the other way cancel rather than add.
 
@@ -185,7 +191,8 @@ def area(
     {early_coord_check}
     Only `"geodesic"` runs the check, as the planar formula costs no more than the check does.
     A geodesic row that fails it gets NaN, without being measured.
-    Measured planar, a NaN or infinite coordinate is simply propagated arithmetically.
+    Measured planar, a NaN or infinite coordinate is simply propagated arithmetically,
+    unless its ring is too short to enclose anything (see above).
 
     {on_out_of_bounds}
 

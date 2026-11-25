@@ -12,7 +12,8 @@ use geopolars_views::{
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
 
-use super::{first_outside, Bounds};
+use super::coordinate_selection::first_outside;
+use super::Bounds;
 use crate::early_coord_check::every_xy_passes_at;
 use crate::per_row::per_row_or_null;
 use crate::{
@@ -62,6 +63,7 @@ impl AreaMetric for Planar {
         Ok(())
     }
 
+    #[inline(always)]
     fn ring_area(&self, _chunk: &(), ring: &ScalarLineString) -> f64 {
         twice_signed_area(ring).abs() / 2.0
     }
@@ -106,14 +108,20 @@ pub(super) fn twice_signed_area(ring: &ScalarLineString) -> f64 {
 
 #[inline(always)]
 fn polygon_area<M: AreaMetric>(metric: &M, chunk: &M::Chunk, polygon: &ScalarPolygon) -> f64 {
+    // A closed ring of fewer than 4 vertices can at most go there and back.
+    // It gets 0.0 even with a NaN or infinite coordinate, as being too short counts for more.
+    let ring_area = |ring: &ScalarLineString| {
+        if ring.vertices.len() < 4 {
+            0.0
+        } else {
+            metric.ring_area(chunk, ring)
+        }
+    };
     let Some(exterior) = polygon.exterior() else {
         return 0.0;
     };
-    let exterior = metric.ring_area(chunk, &exterior);
-    let holes: f64 = polygon
-        .holes()
-        .map(|hole| metric.ring_area(chunk, &hole))
-        .sum();
+    let exterior = ring_area(&exterior);
+    let holes: f64 = polygon.holes().map(|hole| ring_area(&hole)).sum();
     exterior - holes
 }
 

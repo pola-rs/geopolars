@@ -482,6 +482,54 @@ def test_a_nan_is_not_outside_the_bounds(distance_method: DistanceMethod) -> Non
         assert math.isnan(got)
 
 
+@pytest.mark.parametrize(
+    "vertex",
+    [
+        {"x": math.nan, "y": 0.0},
+        {"x": math.inf, "y": 0.0},
+        {"x": math.nan, "y": math.nan},
+    ],
+)
+@pytest.mark.parametrize(
+    ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
+)
+def test_a_ring_too_short_to_enclose_anything_ignores_its_coordinates(
+    vertex: dict[str, float], distance_method: DistanceMethod, crs: str | None
+) -> None:
+    """Turning the checks off lets the row be measured."""
+    area = partial(
+        _area_by(distance_method), early_coord_check="off", on_out_of_bounds="ignore"
+    )
+    other = {"x": 1.0, "y": 1.0}
+    for ring in ([vertex], [vertex, other], [other, vertex, other]):
+        assert _areas(area, _relabelled([ring], crs=crs)) == [0.0]
+
+
+@pytest.mark.parametrize(
+    ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
+)
+def test_a_ring_that_is_only_an_empty_point_encloses_nothing(
+    distance_method: DistanceMethod, crs: str | None
+) -> None:
+    empty = {"x": math.nan, "y": math.nan}
+    area = _area_by(distance_method)
+
+    assert _areas(area, _relabelled([[empty]], crs=crs)) == [0.0]
+
+
+@pytest.mark.parametrize(
+    ("distance_method", "crs"), [("planar", None), ("geodesic", WGS84)]
+)
+def test_an_empty_point_in_a_ring_gives_nan(
+    distance_method: DistanceMethod, crs: str | None
+) -> None:
+    empty = {"x": math.nan, "y": math.nan}
+    broken = [_DEGREE_SQUARE[0], empty, *_DEGREE_SQUARE[1:]]
+    (got,) = _areas(_area_by(distance_method), _relabelled([broken], crs=crs))
+
+    assert math.isnan(got)
+
+
 @pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
 def test_a_multipolygon_with_a_polygon_outside_the_bounds_is_out_of_bounds(
     distance_method: DistanceMethod,
