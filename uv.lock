@@ -831,7 +831,7 @@ wheels = [
 
 [[package]]
 name = "polars"
-version = "2.1.0"
+version = "2.2.0"
 source = { directory = ".polars/py-polars" }
 dependencies = [
     { name = "polars-runtime-32" },
@@ -861,12 +861,12 @@ requires-dist = [
     { name = "polars", extras = ["pandas"], marker = "extra == 'sqlalchemy'" },
     { name = "polars", extras = ["pyarrow"], marker = "extra == 'pandas'" },
     { name = "polars-cloud", marker = "extra == 'polars-cloud'", specifier = ">=0.13.0" },
-    { name = "polars-database", marker = "extra == 'database'", specifier = ">=0.1.1,<1.0.0" },
-    { name = "polars-iceberg", marker = "extra == 'iceberg'", specifier = ">=0.1.0,<1.0.0" },
+    { name = "polars-database", marker = "extra == 'database'", specifier = ">=0.1.2,<1.0.0" },
+    { name = "polars-iceberg", marker = "extra == 'iceberg'", specifier = ">=0.1.1,<1.0.0" },
     { name = "polars-nanook", marker = "extra == 'polars-nanook'", specifier = ">=0.13.0" },
-    { name = "polars-runtime-32", specifier = "==2.1.0" },
-    { name = "polars-runtime-64", marker = "extra == 'rt64'", specifier = "==2.1.0" },
-    { name = "polars-runtime-compat", marker = "extra == 'rtcompat'", specifier = "==2.1.0" },
+    { name = "polars-runtime-32", specifier = "==2.2.0" },
+    { name = "polars-runtime-64", marker = "extra == 'rt64'", specifier = "==2.2.0" },
+    { name = "polars-runtime-compat", marker = "extra == 'rtcompat'", specifier = "==2.2.0" },
     { name = "pyarrow", marker = "extra == 'pyarrow'", specifier = ">=7.0.0" },
     { name = "pydantic", marker = "extra == 'pydantic'" },
     { name = "pyiceberg", marker = "extra == 'iceberg'", specifier = ">=0.12.0" },
