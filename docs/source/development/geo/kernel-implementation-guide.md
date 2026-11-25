@@ -211,7 +211,7 @@ Rules and helpers for single coordinates (empty, not finite, outside the bounds)
 are in `native/coordinate_selection.rs`.
 
 The one hard rule for a NaN or infinite coordinate is that it never becomes a plausible finite result.
-See [the nulls and empty guide](../../user-guide/geo/concepts/nulls-nan-and-empty.md#Non-Finite)
+See [the nulls and empty guide](../../user-guide/geo/concepts/nulls-nan-and-empty.md#non-finite).
 Check for non-finite coordinates only where the kernel needs it to uphold this rule,
 and never normalise an infinity to NaN or a NaN to an error just to look uniform.
 

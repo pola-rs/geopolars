@@ -173,7 +173,7 @@ It is a shortcut that exists for speed, not for correctness
 Give a kernel the check only where the work it skips clearly costs more than the pass
 (e.g. converting to a GEOS geometry).
 The check should not be done where the work costs about as much as the (check) pass
-(e.g. the shoelace formale of planar `area`)
+(e.g. the shoelace formula of planar `area`).
 
 That the check may also change which non-finite outcome a row gets,
 such as NaN instead of an error PROJ would raise, is incidental.

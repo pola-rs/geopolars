@@ -81,6 +81,7 @@ impl GeodesicMetric {
 impl AreaMetric for GeodesicMetric {
     type Error = GeoComputeError;
     type Chunk = ReprojectedXy;
+    const CHECKS_COORDS_EARLY: bool = true;
 
     fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
         ReprojectedXy::new(&self.to_lonlat, coords, vertices)

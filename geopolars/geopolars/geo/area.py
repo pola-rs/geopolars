@@ -183,7 +183,9 @@ def area(
     By default, it also fails when it holds a coordinate outside the bounds of its CRS (see below).
 
     {early_coord_check}
-    A row that fails the check gets NaN, without being measured.
+    Only `"geodesic"` runs the check, as the planar formula costs no more than the check does.
+    A geodesic row that fails it gets NaN, without being measured.
+    Measured planar, a NaN or infinite coordinate is simply propagated arithmetically.
 
     {on_out_of_bounds}
 

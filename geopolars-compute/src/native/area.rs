@@ -26,6 +26,9 @@ pub trait AreaMetric: BaseMetric {
     type Error;
     /// What is worked out once for a whole chunk, before its rings are measured.
     type Chunk;
+    /// Whether the kernel runs `early_coord_check` before measuring a row.
+    /// `false` where measuring costs no more than the check does.
+    const CHECKS_COORDS_EARLY: bool;
     /// Prepares measuring the rings whose vertices lie within `vertices` of `coords`.
     fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> Self::Chunk;
     /// Fails a row that cannot be measured, before its rings are.
@@ -45,6 +48,7 @@ pub trait AreaMetric: BaseMetric {
 impl AreaMetric for Planar {
     type Error = Infallible;
     type Chunk = ();
+    const CHECKS_COORDS_EARLY: bool = false;
 
     fn prepare_chunk(&self, _coords: &ValidCoords, _vertices: Range<usize>) {}
 
@@ -196,6 +200,12 @@ fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
     }
     let (check_bounds, bounds) = areas_with_split_bounds(bounds, on_out_of_bounds);
     let chunk = metric.prepare_chunk(coords, chunk_vertices);
+    // A metric that does not check gets the `Off` path, whatever the user passed.
+    let early_coord_check = if M::CHECKS_COORDS_EARLY {
+        early_coord_check
+    } else {
+        EarlyCoordCheck::Off
+    };
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
         per_row_or_null(rows, on_row_error, |i| {

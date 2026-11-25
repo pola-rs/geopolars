@@ -361,7 +361,8 @@ def test_a_row_proj_cannot_reproject_goes_to_on_row_error(geodesic_area: Area) -
 def test_a_non_finite_x_gives_a_non_finite_area(
     value: float, distance_method: DistanceMethod, crs: str | None
 ) -> None:
-    """A checked row gets NaN without being measured. An unchecked one is measured."""
+    """A checked geodesic row gets NaN without being measured.
+    A planar row is always measured, and comes out non-finite."""
     area = _area_by(distance_method)
     broken = [_SQUARE[0], {"x": value, "y": 0.0}, *_SQUARE[2:]]
     df = _polygons([[_SQUARE], [broken]], crs=crs)
@@ -374,10 +375,10 @@ def test_a_non_finite_x_gives_a_non_finite_area(
         )
         got = _areas(checked, df)
         assert got[0] == square
-        if early_coord_check == "off":
-            assert not math.isfinite(got[1])
-        else:
+        if distance_method == "geodesic" and early_coord_check != "off":
             assert math.isnan(got[1])
+        else:
+            assert not math.isfinite(got[1])
 
 
 def test_the_early_check_keeps_an_infinite_y_from_proj() -> None:
@@ -472,7 +473,7 @@ def test_a_projected_crs_only_has_bounds_from_its_area_of_use() -> None:
 
 @pytest.mark.parametrize("distance_method", ["planar", "geodesic"])
 def test_a_nan_is_not_outside_the_bounds(distance_method: DistanceMethod) -> None:
-    """NaN is left to `early_coord_check`, even when that check is off."""
+    """NaN passes the bounds, and the measurement gives NaN by itself."""
     area = partial(_area_by(distance_method), early_coord_check="off")
     for vertex in ({"x": math.nan, "y": math.nan}, {"x": math.nan, "y": 0.5}):
         broken = [_DEGREE_SQUARE[0], vertex, *_DEGREE_SQUARE[1:]]
