@@ -7,10 +7,17 @@ from typing import TYPE_CHECKING, Literal
 from polars.plugins import register_plugin_function
 
 from geopolars._docs import doc
-from geopolars._typing import OnRowError
+from geopolars._typing import DistanceMethod, OnRowError
 from geopolars._utils import LIB, validate_one_of
-from geopolars.datatypes import MultiPointType, PointType
+from geopolars.datatypes import (
+    MultiPointType,
+    MultiPolygonType,
+    PointType,
+    PolygonType,
+)
 from geopolars.geo._dispatch import on_geometry
+from geopolars.geo.area import _area_auto_method
+from geopolars.geo.distance import _auto_distance_method
 from geopolars.geo.mean_coordinate import _mean_coordinate
 
 if TYPE_CHECKING:
@@ -28,9 +35,11 @@ def _centroid(
     geometry: GeoArrowType,
     method: CentroidMethod,
     anchor: CentroidAnchor,
+    distance_method: DistanceMethod,
     on_row_error: OnRowError,
 ) -> pl.Expr:
     """The centroid of one geometry type, per row."""
+    _centroid_refuse_geodesic(geometry, distance_method)
     # Every point weighs the same, so the centroid is the mean of the points.
     if isinstance(geometry, PointType | MultiPointType):
         return _mean_coordinate(column, geometry, empty="empty_point")
@@ -43,12 +52,42 @@ def _centroid(
     )
 
 
+def _centroid_refuse_geodesic(
+    geometry: GeoArrowType, distance_method: DistanceMethod
+) -> None:
+    # A point is its own centroid, however it is measured.
+    if distance_method == "planar" or isinstance(geometry, PointType):
+        return
+    if distance_method == "auto":
+        if isinstance(geometry, PolygonType | MultiPolygonType):
+            if _area_auto_method(geometry) == "planar":
+                return
+            like, crs_kind = "area", "equal-area"
+        else:
+            if _auto_distance_method(geometry) == "planar":
+                return
+            like, crs_kind = "length", "projected"
+        reason = (
+            f'`distance_method="auto"` measures {geometry!r} geodesically'
+            f" as `{like}` would, since its CRS is not {crs_kind}"
+        )
+    else:
+        reason = '`distance_method="geodesic"` was asked for'
+    msg = (
+        f"{reason}, but centroid cannot measure geodesically yet;"
+        ' pass `distance_method="planar"` to measure the coordinates as they are,'
+        " or reproject the geometry first"
+    )
+    raise NotImplementedError(msg)
+
+
 @doc()
 def centroid(
     geometry: IntoExprColumn,
     *,
     method: CentroidMethod = "footprint",
     anchor: CentroidAnchor = "length_weighted_mean",
+    distance_method: DistanceMethod = "planar",
     on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """The centroid of a polygon (centre of area) or linestring (centre of length).
@@ -58,8 +97,16 @@ def centroid(
     The centroid is the average of every axis under those weights.
     It is therefore not the mean coordinate, which weighs every vertex the same
     (see `mean_coordinate`).
-    Lengths and areas are measured on the plane the coordinates lie in,
-    even when they carry a CRS.
+
+    `distance_method` says how lengths and areas are measured
+    (see :ref:`distance_method <arg-distance_method>` on the Common arguments page).
+    Only `"planar"` is supported for now, which is why it is the default.
+    It measures on the plane the coordinates lie in, even when they carry a CRS.
+    In a geographic CRS, the centroid is therefore weighted by lengths and areas in degrees.
+    `"geodesic"` raises an error at plan time.
+    `"auto"` picks the method `length` would for a linestring,
+    and the one `area` would for a polygon.
+    It raises the same error when it picks `"geodesic"`.
 
     `method` says which axes measure a length or an area:
 
@@ -132,9 +179,10 @@ def centroid(
     For a multilinestring or multipolygon, this holds for the centroid of the whole,
     whichever part the coordinate is in.
 
-    A point is its own centroid.
+    A point is its own centroid, whatever the `distance_method`.
     A multipoint gets the mean of its points as its centroid (see `mean_coordinate`),
     whatever the `method` and `anchor`.
+    `distance_method="auto"` picks the method for it that `length` would for a linestring.
 
     The result keeps the geometry's dimension and CRS.
 
@@ -156,8 +204,11 @@ def centroid(
     """
     validate_one_of("method", method, CentroidMethod)
     validate_one_of("anchor", anchor, CentroidAnchor)
+    validate_one_of("distance_method", distance_method, DistanceMethod)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     return on_geometry(
         geometry,
-        lambda column, dtype: _centroid(column, dtype, method, anchor, on_row_error),
+        lambda column, dtype: _centroid(
+            column, dtype, method, anchor, distance_method, on_row_error
+        ),
     )

@@ -293,12 +293,17 @@ class ExprGeoNameSpace:
         *,
         method: CentroidMethod = "footprint",
         anchor: CentroidAnchor = "length_weighted_mean",
+        distance_method: DistanceMethod = "planar",
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         from geopolars.geo.centroid import centroid
 
         return centroid(
-            self._expr, method=method, anchor=anchor, on_row_error=on_row_error
+            self._expr,
+            method=method,
+            anchor=anchor,
+            distance_method=distance_method,
+            on_row_error=on_row_error,
         )
 
     def exterior(self) -> pl.Expr:

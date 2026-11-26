@@ -29,7 +29,7 @@ from tests.unit.conftest import XY, Dimension, coordinates
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from geopolars._typing import OnRowError
+    from geopolars._typing import DistanceMethod, OnRowError
 
 _XY_VERTICES = pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))
 _XY_RINGS = pl.List(_XY_VERTICES)
@@ -312,10 +312,17 @@ def _centroids_of_only_column(
     method: CentroidMethod,
     anchor: CentroidAnchor = "length_weighted_mean",
     on_row_error: OnRowError = "raise",
+    distance_method: DistanceMethod = "planar",
 ) -> list[tuple[float, ...] | None]:
     (name,) = df.columns
     out = df.select(
-        geo.centroid(name, method=method, anchor=anchor, on_row_error=on_row_error)
+        geo.centroid(
+            name,
+            method=method,
+            anchor=anchor,
+            distance_method=distance_method,
+            on_row_error=on_row_error,
+        )
     )
     return [
         None if c is None else tuple(c.values())
@@ -1121,3 +1128,102 @@ def test_the_crs_of_a_multipoint_is_carried_over() -> None:
         df.schema["multipoint"]
     )
     assert coordinates(out, "multipoint").row(0) == (1.0, 2.0)
+
+
+# distance_method
+
+_WGS84 = "EPSG:4326"
+_UTM_31N = "EPSG:32631"
+_LAEA_EUROPE = "EPSG:3035"
+
+_NO_GEODESIC = "centroid cannot measure geodesically yet"
+
+
+def _measured_in(kind: str, crs: str | None) -> pl.DataFrame:
+    if kind == "line":
+        return _lines(_HOOK, crs=crs)
+    if kind == "multipoint":
+        return _lines(_HOOK, dtype=MultiPointXY, crs=crs)
+    return _polygons([_L], crs=crs)
+
+
+def _centroid_by(
+    df: pl.DataFrame, distance_method: DistanceMethod
+) -> list[tuple[float, ...] | None]:
+    return _centroids_of_only_column(df, "footprint", distance_method=distance_method)
+
+
+def test_planar_is_the_default_even_in_a_geographic_crs() -> None:
+    df = _polygons([_L], crs=_WGS84)
+
+    (got,) = _centroids_of_only_column(df, "footprint")
+
+    assert got == pytest.approx((5 / 6, 5 / 6))
+
+
+@pytest.mark.parametrize("crs", [None, _WGS84])
+@pytest.mark.parametrize("kind", ["line", "multipoint", "polygon"])
+def test_geodesic_is_refused(kind: str, crs: str | None) -> None:
+    df = _measured_in(kind, crs)
+
+    with pytest.raises(NotImplementedError, match=_NO_GEODESIC):
+        _centroid_by(df, "geodesic")
+
+
+@pytest.mark.parametrize("kind", ["line", "multipoint", "polygon"])
+def test_auto_measures_planar_without_a_crs(kind: str) -> None:
+    df = _measured_in(kind, None)
+
+    assert _centroid_by(df, "auto") == _centroid_by(df, "planar")
+
+
+@pytest.mark.parametrize("kind", ["line", "multipoint", "polygon"])
+def test_auto_is_refused_in_a_geographic_crs(kind: str) -> None:
+    df = _measured_in(kind, _WGS84)
+
+    with pytest.raises(NotImplementedError, match=_NO_GEODESIC):
+        _centroid_by(df, "auto")
+
+
+def test_auto_measures_a_line_planar_in_a_projected_crs() -> None:
+    df = _measured_in("line", _UTM_31N)
+
+    assert _centroid_by(df, "auto") == _centroid_by(df, "planar")
+
+
+def test_auto_is_refused_for_a_polygon_in_a_projected_crs_that_is_not_equal_area() -> (
+    None
+):
+    df = _measured_in("polygon", _UTM_31N)
+
+    with pytest.raises(NotImplementedError, match="its CRS is not equal-area"):
+        _centroid_by(df, "auto")
+
+
+def test_auto_measures_a_polygon_planar_in_an_equal_area_crs() -> None:
+    df = _measured_in("polygon", _LAEA_EUROPE)
+
+    assert _centroid_by(df, "auto") == _centroid_by(df, "planar")
+
+
+@pytest.mark.parametrize("distance_method", ["auto", "geodesic"])
+def test_a_point_is_its_own_centroid_whatever_the_distance_method(
+    distance_method: DistanceMethod,
+) -> None:
+    df = pl.DataFrame(
+        pl.Series("point", [{"x": 3.0, "y": 4.0}]).ext.to(PointXY(crs=_WGS84))
+    )
+
+    assert _centroid_by(df, distance_method) == [(3.0, 4.0)]
+
+
+def test_an_unknown_distance_method_is_refused() -> None:
+    with pytest.raises(ValueError, match="`distance_method` must be one of"):
+        geo.centroid("line", distance_method="spherical")  # type: ignore[arg-type]
+
+
+def test_the_namespace_forwards_the_distance_method() -> None:
+    df = _polygons([_L], crs=_WGS84)
+
+    with pytest.raises(NotImplementedError, match=_NO_GEODESIC):
+        df.select(pl.col("polygon").geo.centroid(distance_method="auto"))
