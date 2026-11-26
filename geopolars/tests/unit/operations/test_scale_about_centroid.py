@@ -114,20 +114,56 @@ def test_only_lines_and_polygons_are_accepted(
 def test_bad_arguments_are_refused() -> None:
     with pytest.raises(ValueError, match="`yfact`"):
         geo.scale_about_centroid("line", 2.0, float("nan"))
+    with pytest.raises(ValueError, match="`weighing_method`"):
+        geo.scale_about_centroid("line", 2.0, weighing_method="3D")  # type: ignore[arg-type]
 
 
-def test_a_geometry_without_a_centroid_comes_out_null() -> None:
+def test_a_null_comes_out_null_and_an_empty_geometry_stays_empty() -> None:
     df = pl.DataFrame(
         {"line": [[{"x": 0.0, "y": 0.0}, {"x": 2.0, "y": 0.0}], [], None]},
         schema={"line": pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))},
     ).select(pl.col("line").ext.to(XY.linestring_dtype()))
     out = df.select(geo.scale_about_centroid("line", 2.0))
 
-    assert out["line"].is_null().to_list() == [False, True, True]
+    assert out["line"].ext.storage()[1:].to_list() == [[], None]
     assert out["line"].ext.storage()[0].to_list() == [
         {"x": -1.0, "y": 0.0},
         {"x": 3.0, "y": 0.0},
     ]
+
+
+def test_a_line_without_length_goes_to_on_row_error() -> None:
+    df = pl.DataFrame(
+        {"line": [[{"x": 1.0, "y": 1.0}, {"x": 1.0, "y": 1.0}]]},
+        schema={"line": pl.List(pl.Struct({"x": pl.Float64, "y": pl.Float64}))},
+    ).select(pl.col("line").ext.to(XY.linestring_dtype()))
+
+    with pytest.raises(pl.exceptions.ComputeError, match="got one without"):
+        df.select(geo.scale_about_centroid("line", 2.0))
+    out = df.select(geo.scale_about_centroid("line", 2.0, on_row_error="null"))
+
+    assert out["line"].is_null().to_list() == [True]
+
+
+def test_a_vertical_line_only_has_a_centroid_with_3d() -> None:
+    df = pl.DataFrame(
+        {"line": [[{"x": 1.0, "y": 1.0, "z": 0.0}, {"x": 1.0, "y": 1.0, "z": 2.0}]]},
+        schema={"line": pl.List(pl.Struct(dict.fromkeys("xyz", pl.Float64)))},
+    ).select(pl.col("line").ext.to(XYZ.linestring_dtype()))
+
+    with pytest.raises(
+        pl.exceptions.ComputeError, match='length with `weighing_method="3d"`'
+    ):
+        df.select(geo.scale_about_centroid("line", zfact=3.0))
+    assert_frame_equal(
+        df.select(geo.scale_about_centroid("line", zfact=3.0, weighing_method="3d")),
+        df.select(
+            geo.scale(
+                "line", zfact=3.0, origin=geo.centroid("line", weighing_method="3d")
+            )
+        ),
+        check_exact=True,
+    )
 
 
 def test_the_crs_is_carried_over(ring_coords: pl.DataFrame) -> None:
@@ -144,6 +180,8 @@ def test_the_namespace_forwards(line_coords: pl.DataFrame) -> None:
     df = XYZ.lines(line_coords)
 
     assert_frame_equal(
-        df.select(gpl.col("line").geo.scale_about_centroid(2.0, 0.5, 3.0)),
-        df.select(geo.scale_about_centroid("line", 2.0, 0.5, 3.0)),
+        df.select(gpl.col("line").geo.scale_about_centroid(2.0, 0.5, 3.0, "3d")),
+        df.select(
+            geo.scale_about_centroid("line", 2.0, 0.5, 3.0, weighing_method="3d")
+        ),
     )

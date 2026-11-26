@@ -149,6 +149,10 @@ in `docs/source/user-guide/geo/concepts/crs.md`.
 `area` resolves `"auto"` differently.
 It only measures planar without a CRS or in an equal-area one (see `area`).
 
+`centroid` does not measure geodesically yet, so it defaults to `"planar"`.
+Its `"auto"` resolves as `length` does for a linestring, and as `area` does for a polygon.
+It refuses to measure geodesically at plan time.
+
 .. _arg-allow_geographic:
 
 `allow_geographic: bool = False`

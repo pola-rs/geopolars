@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         ShortLines,
     )
     from geopolars.datatypes import GeoArrowType
+    from geopolars.geo.centroid import CentroidAnchor, CentroidWeighing
     from geopolars.geo.close_rings import CloseRings
     from geopolars.geo.filter_coordinates import NonFiniteAction
     from geopolars.geo.fix_out_of_bounds import (
@@ -166,8 +167,17 @@ class ExprGeoNameSpace:
         amount: float,
         unit: AngleUnit = "deg",
         axis: Literal["x", "y", "z"] = "z",
+        weighing_method: CentroidWeighing = "footprint",
+        on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
-        return affine.rotate_about_centroid(self._expr, amount, unit=unit, axis=axis)
+        return affine.rotate_about_centroid(
+            self._expr,
+            amount,
+            unit=unit,
+            axis=axis,
+            weighing_method=weighing_method,
+            on_row_error=on_row_error,
+        )
 
     def skew(
         self,
@@ -183,9 +193,21 @@ class ExprGeoNameSpace:
         return affine.skew(self._expr, xs=xs, ys=ys, unit=unit, origin=origin)
 
     def skew_about_centroid(
-        self, xs: float = 0.0, ys: float = 0.0, unit: AngleUnit = "deg"
+        self,
+        xs: float = 0.0,
+        ys: float = 0.0,
+        unit: AngleUnit = "deg",
+        weighing_method: CentroidWeighing = "footprint",
+        on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
-        return affine.skew_about_centroid(self._expr, xs=xs, ys=ys, unit=unit)
+        return affine.skew_about_centroid(
+            self._expr,
+            xs=xs,
+            ys=ys,
+            unit=unit,
+            weighing_method=weighing_method,
+            on_row_error=on_row_error,
+        )
 
     def scale(
         self,
@@ -203,10 +225,20 @@ class ExprGeoNameSpace:
         )
 
     def scale_about_centroid(
-        self, xfact: float = 1.0, yfact: float = 1.0, zfact: float = 1.0
+        self,
+        xfact: float = 1.0,
+        yfact: float = 1.0,
+        zfact: float = 1.0,
+        weighing_method: CentroidWeighing = "footprint",
+        on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         return affine.scale_about_centroid(
-            self._expr, xfact=xfact, yfact=yfact, zfact=zfact
+            self._expr,
+            xfact=xfact,
+            yfact=yfact,
+            zfact=zfact,
+            weighing_method=weighing_method,
+            on_row_error=on_row_error,
         )
 
     def snap_to_grid(
@@ -256,10 +288,23 @@ class ExprGeoNameSpace:
 
         return mean_coordinate(self._expr)
 
-    def centroid(self) -> pl.Expr:
+    def centroid(
+        self,
+        *,
+        weighing_method: CentroidWeighing = "footprint",
+        anchor: CentroidAnchor = "length_weighted_mean",
+        distance_method: DistanceMethod = "planar",
+        on_row_error: OnRowError = "raise",
+    ) -> pl.Expr:
         from geopolars.geo.centroid import centroid
 
-        return centroid(self._expr)
+        return centroid(
+            self._expr,
+            weighing_method=weighing_method,
+            anchor=anchor,
+            distance_method=distance_method,
+            on_row_error=on_row_error,
+        )
 
     def exterior(self) -> pl.Expr:
         from geopolars.geo.exterior import exterior

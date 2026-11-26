@@ -110,9 +110,6 @@ macro_rules! const_enum {
 
 #[cfg(test)]
 mod tests {
-    //! The Python suite cannot reach [const_enum](crate::const_enum)
-    //! until a kernel dispatches on one.
-
     mod modes {
         const_enum!(
             pub enum Mode {

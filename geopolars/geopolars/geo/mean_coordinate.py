@@ -4,8 +4,9 @@ Note that this is not a centroid, which weighs by length or area!
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
@@ -77,7 +78,11 @@ def _coordinates(geometry: GeoArrowType, column: pl.Expr) -> pl.Expr:
     return _per_geometry(storage, geometry._nesting, _count, geometry._rings)
 
 
-def _mean_coordinate(column: pl.Expr, geometry: GeoArrowType) -> pl.Expr:
+def _mean_coordinate(
+    column: pl.Expr,
+    geometry: GeoArrowType,
+    empty: Literal["null", "empty_point"] = "null",
+) -> pl.Expr:
     """The mean coordinate of one geometry type, per row."""
     # A point is its own mean coordinate.
     if geometry._nesting == 0:
@@ -86,14 +91,15 @@ def _mean_coordinate(column: pl.Expr, geometry: GeoArrowType) -> pl.Expr:
     # `m` is a measure rather than an axis, but it averages like one.
     dimension = geometry._dimension
     means = [_mean(geometry, column, axis).alias(axis) for axis in dimension]
-    return (
-        # Geometries don't have interior nulls (see spec), so only check whether
-        # it has a coordinate at all. A null geometry counts null, which `when`
-        # reads as false.
-        pl.when(_coordinates(geometry, column) > 0)
-        .then(pl.struct(means))
-        .ext.to(PointType.of_dimension(dimension)._with_metadata_of(geometry))
-    )
+    # Geometries don't have interior nulls (see spec), so only check whether
+    # it has a coordinate at all. A null geometry counts null, which `when`
+    # reads as false.
+    coordinates = _coordinates(geometry, column)
+    mean = pl.when(coordinates > 0).then(pl.struct(means))
+    if empty == "empty_point":
+        nan = [pl.lit(math.nan).alias(axis) for axis in dimension]
+        mean = mean.when(coordinates == 0).then(pl.struct(nan))
+    return mean.ext.to(PointType.of_dimension(dimension)._with_metadata_of(geometry))
 
 
 def mean_coordinate(geometry: IntoExprColumn) -> pl.Expr:
