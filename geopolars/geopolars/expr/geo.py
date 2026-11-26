@@ -33,7 +33,7 @@ if TYPE_CHECKING:
         ShortLines,
     )
     from geopolars.datatypes import GeoArrowType
-    from geopolars.geo.centroid import CentroidAnchor, CentroidMethod
+    from geopolars.geo.centroid import CentroidAnchor, CentroidWeighing
     from geopolars.geo.close_rings import CloseRings
     from geopolars.geo.filter_coordinates import NonFiniteAction
     from geopolars.geo.fix_out_of_bounds import (
@@ -167,7 +167,7 @@ class ExprGeoNameSpace:
         amount: float,
         unit: AngleUnit = "deg",
         axis: Literal["x", "y", "z"] = "z",
-        method: CentroidMethod = "footprint",
+        weighing_method: CentroidWeighing = "footprint",
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         return affine.rotate_about_centroid(
@@ -175,7 +175,7 @@ class ExprGeoNameSpace:
             amount,
             unit=unit,
             axis=axis,
-            method=method,
+            weighing_method=weighing_method,
             on_row_error=on_row_error,
         )
 
@@ -197,7 +197,7 @@ class ExprGeoNameSpace:
         xs: float = 0.0,
         ys: float = 0.0,
         unit: AngleUnit = "deg",
-        method: CentroidMethod = "footprint",
+        weighing_method: CentroidWeighing = "footprint",
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         return affine.skew_about_centroid(
@@ -205,7 +205,7 @@ class ExprGeoNameSpace:
             xs=xs,
             ys=ys,
             unit=unit,
-            method=method,
+            weighing_method=weighing_method,
             on_row_error=on_row_error,
         )
 
@@ -229,7 +229,7 @@ class ExprGeoNameSpace:
         xfact: float = 1.0,
         yfact: float = 1.0,
         zfact: float = 1.0,
-        method: CentroidMethod = "footprint",
+        weighing_method: CentroidWeighing = "footprint",
         on_row_error: OnRowError = "raise",
     ) -> pl.Expr:
         return affine.scale_about_centroid(
@@ -237,7 +237,7 @@ class ExprGeoNameSpace:
             xfact=xfact,
             yfact=yfact,
             zfact=zfact,
-            method=method,
+            weighing_method=weighing_method,
             on_row_error=on_row_error,
         )
 
@@ -291,7 +291,7 @@ class ExprGeoNameSpace:
     def centroid(
         self,
         *,
-        method: CentroidMethod = "footprint",
+        weighing_method: CentroidWeighing = "footprint",
         anchor: CentroidAnchor = "length_weighted_mean",
         distance_method: DistanceMethod = "planar",
         on_row_error: OnRowError = "raise",
@@ -300,7 +300,7 @@ class ExprGeoNameSpace:
 
         return centroid(
             self._expr,
-            method=method,
+            weighing_method=weighing_method,
             anchor=anchor,
             distance_method=distance_method,
             on_row_error=on_row_error,

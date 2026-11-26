@@ -102,8 +102,8 @@ def test_bad_arguments_are_refused() -> None:
         geo.rotate_about_centroid("line", 30, axis="w")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="`unit`"):
         geo.rotate_about_centroid("line", 30, unit="pi")  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="`method`"):
-        geo.rotate_about_centroid("line", 30, method="3D")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="`weighing_method`"):
+        geo.rotate_about_centroid("line", 30, weighing_method="3D")  # type: ignore[arg-type]
 
 
 def test_a_null_comes_out_null_and_an_empty_geometry_stays_empty() -> None:
@@ -139,12 +139,18 @@ def test_a_vertical_line_only_has_a_centroid_with_3d() -> None:
         schema={"line": pl.List(pl.Struct(dict.fromkeys("xyz", pl.Float64)))},
     ).select(pl.col("line").ext.to(XYZ.linestring_dtype()))
 
-    with pytest.raises(pl.exceptions.ComputeError, match='length with `method="3d"`'):
+    with pytest.raises(
+        pl.exceptions.ComputeError, match='length with `weighing_method="3d"`'
+    ):
         df.select(geo.rotate_about_centroid("line", 90, axis="x"))
     assert_frame_equal(
-        df.select(geo.rotate_about_centroid("line", 90, axis="x", method="3d")),
         df.select(
-            geo.rotate("line", 90, axis="x", origin=geo.centroid("line", method="3d"))
+            geo.rotate_about_centroid("line", 90, axis="x", weighing_method="3d")
+        ),
+        df.select(
+            geo.rotate(
+                "line", 90, axis="x", origin=geo.centroid("line", weighing_method="3d")
+            )
         ),
         check_exact=True,
     )
@@ -166,8 +172,10 @@ def test_the_namespace_forwards(line_coords: pl.DataFrame) -> None:
     assert_frame_equal(
         df.select(
             gpl.col("line").geo.rotate_about_centroid(
-                math.pi / 4, "rad", "x", method="3d"
+                math.pi / 4, "rad", "x", weighing_method="3d"
             )
         ),
-        df.select(geo.rotate_about_centroid("line", 45, axis="x", method="3d")),
+        df.select(
+            geo.rotate_about_centroid("line", 45, axis="x", weighing_method="3d")
+        ),
     )

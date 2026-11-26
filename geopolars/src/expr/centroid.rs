@@ -2,7 +2,7 @@
 //! Implements the Python `centroid` for (multi)linestrings and (multi)polygons,
 //! as the Python side takes the mean coordinate of a (multi)point itself.
 
-use geopolars_compute::native::{CentroidAnchor, CentroidMethod};
+use geopolars_compute::native::{CentroidAnchor, CentroidWeighing};
 use geopolars_compute::OnRowError;
 use geopolars_core::{centroids, SegmentKind};
 use geopolars_views::Kind;
@@ -14,8 +14,8 @@ use crate::common_arguments::OnRowErrorDef;
 use crate::geoarrow::{describe, geometry_series, Geo};
 
 #[derive(Deserialize)]
-#[serde(remote = "CentroidMethod", rename_all = "snake_case")]
-enum CentroidMethodDef {
+#[serde(remote = "CentroidWeighing", rename_all = "snake_case")]
+enum CentroidWeighingDef {
     Footprint,
     #[serde(rename = "3d")]
     ThreeD,
@@ -31,8 +31,8 @@ enum CentroidAnchorDef {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CentroidKwargs {
-    #[serde(with = "CentroidMethodDef")]
-    method: CentroidMethod,
+    #[serde(with = "CentroidWeighingDef")]
+    weighing_method: CentroidWeighing,
     #[serde(with = "CentroidAnchorDef")]
     anchor: CentroidAnchor,
     #[serde(with = "OnRowErrorDef")]
@@ -65,7 +65,7 @@ fn centroid(inputs: &[Series], kwargs: CentroidKwargs) -> PolarsResult<Series> {
             centroids(
                 chunk.as_ref(),
                 kind,
-                kwargs.method,
+                kwargs.weighing_method,
                 kwargs.anchor,
                 kwargs.on_row_error,
             )

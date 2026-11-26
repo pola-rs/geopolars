@@ -23,7 +23,7 @@ from geopolars.datatypes import (
     PolygonXYZ,
     PolygonXYZM,
 )
-from geopolars.geo.centroid import CentroidAnchor, CentroidMethod
+from geopolars.geo.centroid import CentroidAnchor, CentroidWeighing
 from tests.unit.conftest import XY, Dimension, coordinates
 
 if TYPE_CHECKING:
@@ -154,18 +154,18 @@ def _polygon_xyzm(
     ids=["L", "hole"],
 )
 @pytest.mark.parametrize("anchor", ["length_weighted_mean", "vertex_mean"])
-@pytest.mark.parametrize("method", ["footprint", "3d"])
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
 def test_z_and_m_are_averaged_over_the_area(
     rings: list[Ring],
     z: Callable[[float, float], float],
     expected: float,
     anchor: CentroidAnchor,
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
 ) -> None:
     # On a tilted plane, the centroid lies on it: above the centroid of the footprint.
     # As z and m change linearly over the polygon, the anchor makes no difference.
     out = _polygon_xyzm(rings, z).select(
-        geo.centroid("polygon", method=method, anchor=anchor)
+        geo.centroid("polygon", weighing_method=weighing_method, anchor=anchor)
     )
 
     (got,) = out.to_series().ext.storage().to_list()
@@ -236,16 +236,16 @@ def test_a_small_polygon_far_from_the_origin_keeps_its_centroid(
     assert got == pytest.approx(expected, rel=0, abs=1e-6)
 
 
-@pytest.mark.parametrize("method", ["footprint", "3d"])
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
 def test_a_hole_that_nearly_fills_its_exterior_far_from_the_origin_keeps_its_centroid(
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
 ) -> None:
     # Powers of two keep every corner exact.
     corner, border = 2.0**17, 2.0**-20
     exterior = _square_at((corner, corner), 1.0)
     hole = _square_at((corner + border, corner + border), 1.0 - 2 * border)
     out = _polygon_xyzm([exterior, hole], lambda _x, _y: 100.0).select(
-        geo.centroid("polygon", method=method)
+        geo.centroid("polygon", weighing_method=weighing_method)
     )
 
     (got,) = out.to_series().ext.storage().to_list()
@@ -256,13 +256,13 @@ def test_a_hole_that_nearly_fills_its_exterior_far_from_the_origin_keeps_its_cen
     )
 
 
-@pytest.mark.parametrize("method", ["footprint", "3d"])
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
 def test_a_flat_polygon_far_from_the_origin_keeps_its_z_and_m(
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
 ) -> None:
     corner = (_UTM[0] + 0.1, _UTM[1] + 0.7)
     out = _polygon_xyzm([_square_at(corner, 0.3)], lambda _x, _y: 100.0).select(
-        geo.centroid("polygon", method=method)
+        geo.centroid("polygon", weighing_method=weighing_method)
     )
 
     (got,) = out.to_series().ext.storage().to_list()
@@ -309,7 +309,7 @@ def _multipolygons_xyz(*multis: list[list[XyzRing]]) -> pl.DataFrame:
 
 def _centroids_of_only_column(
     df: pl.DataFrame,
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
     anchor: CentroidAnchor = "length_weighted_mean",
     on_row_error: OnRowError = "raise",
     distance_method: DistanceMethod = "planar",
@@ -318,7 +318,7 @@ def _centroids_of_only_column(
     out = df.select(
         geo.centroid(
             name,
-            method=method,
+            weighing_method=weighing_method,
             anchor=anchor,
             distance_method=distance_method,
             on_row_error=on_row_error,
@@ -334,18 +334,20 @@ def test_a_vertical_polygon_only_has_a_centroid_in_3d() -> None:
     df = _polygons_xyz([_xyz_ring((0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1))])
 
     assert _centroids_of_only_column(df, "3d") == [pytest.approx((0.5, 0.0, 0.5))]
-    with pytest.raises(pl.exceptions.ComputeError, match='area with `method="3d"`'):
+    with pytest.raises(
+        pl.exceptions.ComputeError, match='area with `weighing_method="3d"`'
+    ):
         _centroids_of_only_column(df, "footprint")
 
 
-@pytest.mark.parametrize("method", ["footprint", "3d"])
-def test_a_small_polygon_keeps_its_centroid(method: CentroidMethod) -> None:
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
+def test_a_small_polygon_keeps_its_centroid(weighing_method: CentroidWeighing) -> None:
     # Small enough that the squared normal of the 3D fan underflows.
     side = 1e-90
     square = _xyz_ring((0, 0, 0), (side, 0, side), (side, side, side), (0, side, 0))
     df = _polygons_xyz([square])
 
-    got = _centroids_of_only_column(df, method)
+    got = _centroids_of_only_column(df, weighing_method)
 
     assert got == [pytest.approx((side / 2,) * 3, rel=1e-12, abs=0)]
 
@@ -379,15 +381,15 @@ def test_a_polygon_without_area_has_no_centroid_in_3d(
     [[], _xyz_ring((0, 0, 0), (2, 0, 0), (1, 0, 0))],
     ids=["empty", "collinear"],
 )
-@pytest.mark.parametrize("method", ["footprint", "3d"])
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
 def test_a_hole_in_an_exterior_without_area_has_no_centroid(
-    exterior: XyzRing, method: CentroidMethod
+    exterior: XyzRing, weighing_method: CentroidWeighing
 ) -> None:
     hole = _xyz_ring((5, 5, 0), (6, 5, 0), (6, 6, 0), (5, 6, 0))
     df = _polygons_xyz([exterior, hole])
 
     with pytest.raises(pl.exceptions.ComputeError, match=_HOLES_EXCEED):
-        _centroids_of_only_column(df, method)
+        _centroids_of_only_column(df, weighing_method)
 
 
 @pytest.mark.parametrize("reverse_hole", [False, True])
@@ -434,18 +436,18 @@ def test_splitting_an_edge_does_not_move_the_length_weighted_3d_centroid() -> No
 
 
 @pytest.mark.parametrize(
-    ("method", "expected"),
+    ("weighing_method", "expected"),
     # 1 at (0.5, 0.5, 0), and in 3D also 4 at (11, 0, 1)
     [("footprint", (0.5, 0.5, 0.0)), ("3d", (8.9, 0.1, 0.8))],
 )
 def test_a_vertical_part_of_a_multipolygon_only_weighs_in_3d(
-    method: CentroidMethod, expected: tuple[float, float, float]
+    weighing_method: CentroidWeighing, expected: tuple[float, float, float]
 ) -> None:
     flat = _xyz_ring((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0))
     upright = _xyz_ring((10, 0, 0), (12, 0, 0), (12, 0, 2), (10, 0, 2))
     df = _multipolygons_xyz([[flat], [upright]])
 
-    assert _centroids_of_only_column(df, method) == [pytest.approx(expected)]
+    assert _centroids_of_only_column(df, weighing_method) == [pytest.approx(expected)]
 
 
 def test_the_crs_is_carried_over() -> None:
@@ -592,11 +594,15 @@ def _lines(
 
 def _line_centroids(
     df: pl.DataFrame,
-    method: CentroidMethod = "footprint",
+    weighing_method: CentroidWeighing = "footprint",
     on_row_error: OnRowError = "raise",
 ) -> list[tuple[float, ...] | None]:
     out = (
-        df.select(geo.centroid("line", method=method, on_row_error=on_row_error))
+        df.select(
+            geo.centroid(
+                "line", weighing_method=weighing_method, on_row_error=on_row_error
+            )
+        )
         .to_series()
         .ext.storage()
         .to_list()
@@ -630,13 +636,13 @@ _RISING_HOOK = [(0, 0, 0), (0, 0, 2), (1, 0, 2)]
 
 
 @pytest.mark.parametrize(
-    ("method", "expected"),
+    ("weighing_method", "expected"),
     [("footprint", (0.5, 0.0, 2.0)), ("3d", (1 / 6, 0.0, 4 / 3))],
 )
 def test_the_method_says_whether_z_counts_towards_the_length(
-    method: CentroidMethod, expected: tuple[float, float, float]
+    weighing_method: CentroidWeighing, expected: tuple[float, float, float]
 ) -> None:
-    (got,) = _line_centroids(_lines(_RISING_HOOK, dtype=LineStringXYZ), method)
+    (got,) = _line_centroids(_lines(_RISING_HOOK, dtype=LineStringXYZ), weighing_method)
 
     assert got == pytest.approx(expected)
 
@@ -645,26 +651,28 @@ def test_a_vertical_line_only_has_a_centroid_in_3d() -> None:
     df = _lines([(1, 1, 0), (1, 1, 5)], dtype=LineStringXYZ)
 
     assert _line_centroids(df, "3d") == [pytest.approx((1.0, 1.0, 2.5))]
-    with pytest.raises(pl.exceptions.ComputeError, match='length with `method="3d"`'):
+    with pytest.raises(
+        pl.exceptions.ComputeError, match='length with `weighing_method="3d"`'
+    ):
         _line_centroids(df)
 
 
-@pytest.mark.parametrize("method", ["footprint", "3d"])
-def test_without_z_both_methods_agree(method: CentroidMethod) -> None:
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
+def test_without_z_both_methods_agree(weighing_method: CentroidWeighing) -> None:
     lines = _lines(_HOOK, [(0, 0), (2, 4)])
     polygons = _polygons([_L], [_SQUARE])
 
-    assert lines.select(geo.centroid("line", method=method)).equals(
+    assert lines.select(geo.centroid("line", weighing_method=weighing_method)).equals(
         lines.select(geo.centroid("line"))
     )
-    assert polygons.select(geo.centroid("polygon", method=method)).equals(
-        polygons.select(geo.centroid("polygon"))
-    )
+    assert polygons.select(
+        geo.centroid("polygon", weighing_method=weighing_method)
+    ).equals(polygons.select(geo.centroid("polygon")))
 
 
 def test_an_unknown_method_is_refused() -> None:
-    with pytest.raises(ValueError, match="`method` must be one of"):
-        geo.centroid("line", method="3D")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="`weighing_method` must be one of"):
+        geo.centroid("line", weighing_method="3D")  # type: ignore[arg-type]
 
 
 def test_an_unknown_anchor_is_refused() -> None:
@@ -672,13 +680,13 @@ def test_an_unknown_anchor_is_refused() -> None:
         geo.centroid("line", anchor="first_vertex")  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("method", ["footprint", "3d"])
-def test_a_line_ignores_the_anchor(method: CentroidMethod) -> None:
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
+def test_a_line_ignores_the_anchor(weighing_method: CentroidWeighing) -> None:
     df = _lines(_RISING_HOOK, dtype=LineStringXYZ)
 
-    assert df.select(geo.centroid("line", method=method, anchor="vertex_mean")).equals(
-        df.select(geo.centroid("line", method=method))
-    )
+    assert df.select(
+        geo.centroid("line", weighing_method=weighing_method, anchor="vertex_mean")
+    ).equals(df.select(geo.centroid("line", weighing_method=weighing_method)))
 
 
 def test_m_is_averaged_along_the_length_without_adding_to_it() -> None:
@@ -736,13 +744,15 @@ def test_a_line_too_small_for_its_length_has_no_centroid() -> None:
     assert _line_centroids(df, on_row_error="null")[0] is None
 
 
-@pytest.mark.parametrize("method", ["footprint", "3d"])
-def test_the_namespace_matches_the_function_for_lines(method: CentroidMethod) -> None:
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
+def test_the_namespace_matches_the_function_for_lines(
+    weighing_method: CentroidWeighing,
+) -> None:
     df = _lines(_RISING_HOOK, dtype=LineStringXYZ)
 
-    assert df.select(pl.col("line").geo.centroid(method=method)).equals(
-        df.select(geo.centroid("line", method=method))
-    )
+    assert df.select(
+        pl.col("line").geo.centroid(weighing_method=weighing_method)
+    ).equals(df.select(geo.centroid("line", weighing_method=weighing_method)))
 
 
 def test_line_rows_line_up_across_chunks_and_slices() -> None:
@@ -982,7 +992,7 @@ def _weighted_mean_of_parts(
     name: str,
     part: GeoArrowType,
     weight: Callable[[str], pl.Expr],
-    method: CentroidMethod = "footprint",
+    weighing_method: CentroidWeighing = "footprint",
 ) -> pl.DataFrame:
     """The centroid of each part on its own, weighted by `weight` and averaged
     per row, as plain float columns."""
@@ -995,7 +1005,9 @@ def _weighted_mean_of_parts(
     centroids = parts.select(
         "row",
         weight(name).alias("weight"),
-        geo.centroid(name, method=method).ext.storage().struct.unnest(),
+        geo.centroid(name, weighing_method=weighing_method)
+        .ext.storage()
+        .struct.unnest(),
     )
     fields = [c for c in centroids.columns if c not in ("row", "weight")]
     return (
@@ -1008,24 +1020,26 @@ def _weighted_mean_of_parts(
     )
 
 
-_LENGTHS: dict[CentroidMethod, Callable[[str], pl.Expr]] = {
+_LENGTHS: dict[CentroidWeighing, Callable[[str], pl.Expr]] = {
     "footprint": lambda name: geo.length(geo.force_2d(name), distance_method="planar"),
     "3d": lambda name: geo.length(name, distance_method="planar"),
 }
 
 
-@pytest.mark.parametrize("method", ["footprint", "3d"])
+@pytest.mark.parametrize("weighing_method", ["footprint", "3d"])
 def test_a_multilinestring_weighs_each_part_like_a_lone_linestring(
-    ring_coords: pl.DataFrame, dimension: Dimension, method: CentroidMethod
+    ring_coords: pl.DataFrame, dimension: Dimension, weighing_method: CentroidWeighing
 ) -> None:
     multis = dimension.multilinestrings(ring_coords)
-    out = multis.select(geo.centroid("multilinestring", method=method))
+    out = multis.select(
+        geo.centroid("multilinestring", weighing_method=weighing_method)
+    )
     expected = _weighted_mean_of_parts(
         multis,
         "multilinestring",
         dimension.linestring_dtype(),
-        _LENGTHS[method],
-        method,
+        _LENGTHS[weighing_method],
+        weighing_method,
     )
 
     assert out.schema["multilinestring"] == dimension.point_dtype()

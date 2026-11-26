@@ -49,7 +49,8 @@ pub enum GeoComputeError {
     /// A geometry with vertices but without the length or area its centroid is weighted by.
     CentroidWithoutWeight {
         weighed_by: CentroidWeight,
-        /// Whether `method="3d"` could measure it, as it has a z that `method="footprint"` ignores.
+        /// Whether `weighing_method="3d"` could measure it,
+        /// as it has a z that `weighing_method="footprint"` ignores.
         suggest_3d: bool,
     },
     /// A geometry whose length or area underflows to 0 as an `f64`.
@@ -170,7 +171,7 @@ impl fmt::Display for GeoComputeError {
                 if *suggest_3d {
                     write!(
                         f,
-                        "; a vertical geometry only has {weight} with `method=\"3d\"`"
+                        "; a vertical geometry only has {weight} with `weighing_method=\"3d\"`"
                     )?;
                 }
                 Ok(())

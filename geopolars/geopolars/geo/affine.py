@@ -14,7 +14,7 @@ from geopolars._typing import OnRowError
 from geopolars._utils import LIB, validate_one_of
 from geopolars.datatypes import LineStringType, PointType, PolygonType
 from geopolars.geo._dispatch import on_geometry, on_geometry_pair
-from geopolars.geo.centroid import CentroidMethod, _centroid
+from geopolars.geo.centroid import CentroidWeighing, _centroid
 from geopolars.geo.construct.point import point
 
 # TODO: maybe merge 'rotate' and 'rotate_about_centroid'?
@@ -240,7 +240,7 @@ def _points(name: str, dtype: GeoArrowType) -> None:
 def _about_centroid(
     name: str,
     build_about: Callable[[pl.Expr, GeoArrowType, pl.Expr, GeoArrowType], pl.Expr],
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
     on_row_error: OnRowError,
 ) -> Callable[[pl.Expr, GeoArrowType], pl.Expr]:
     """An `on_geometry` callback that hands `build_about` (one of the `_*_about` builders)
@@ -260,7 +260,7 @@ def _about_centroid(
             _centroid(
                 column,
                 geometry,
-                method,
+                weighing_method,
                 "length_weighted_mean",
                 "planar",
                 on_row_error,
@@ -383,12 +383,12 @@ def rotate_about_centroid(
     amount: float,
     unit: AngleUnit = "deg",
     axis: Literal["x", "y", "z"] = "z",
-    method: CentroidMethod = "footprint",
+    weighing_method: CentroidWeighing = "footprint",
     on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """Turn every geometry about an axis through its own centroid.
 
-    This is `rotate(geometry, amount, unit, axis, origin=geo.centroid(geometry, method=method))`,
+    This is `rotate(geometry, amount, unit, axis, origin=geo.centroid(geometry, weighing_method=weighing_method))`,
     see `rotate` for `amount`, `unit` and `axis`,
     and `centroid` for where the centroid of a linestring or polygon is.
 
@@ -403,10 +403,12 @@ def rotate_about_centroid(
         df.select(geo.rotate_about_centroid("parcel", 30))
     """
     _axis(axis)
-    validate_one_of("method", method, CentroidMethod)
+    validate_one_of("weighing_method", weighing_method, CentroidWeighing)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     about = _rotate_about(_degrees(amount, unit, "amount"), axis)
-    return on_geometry(geometry, _about_centroid("rotate", about, method, on_row_error))
+    return on_geometry(
+        geometry, _about_centroid("rotate", about, weighing_method, on_row_error)
+    )
 
 
 def _shear(
@@ -483,12 +485,12 @@ def skew_about_centroid(
     xs: float = 0.0,
     ys: float = 0.0,
     unit: AngleUnit = "deg",
-    method: CentroidMethod = "footprint",
+    weighing_method: CentroidWeighing = "footprint",
     on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """Shear every geometry in the plane about its own centroid.
 
-    This is `skew(geometry, xs, ys, unit, origin=geo.centroid(geometry, method=method))`,
+    This is `skew(geometry, xs, ys, unit, origin=geo.centroid(geometry, weighing_method=weighing_method))`,
     see `skew` for `xs`, `ys` and `unit`,
     and `centroid` for where the centroid of a linestring or polygon is.
 
@@ -502,10 +504,12 @@ def skew_about_centroid(
 
         df.select(geo.skew_about_centroid("parcel", xs=15))
     """
-    validate_one_of("method", method, CentroidMethod)
+    validate_one_of("weighing_method", weighing_method, CentroidWeighing)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     about = _skew_about(_shear(xs, ys, unit))
-    return on_geometry(geometry, _about_centroid("skew", about, method, on_row_error))
+    return on_geometry(
+        geometry, _about_centroid("skew", about, weighing_method, on_row_error)
+    )
 
 
 def _stretch(
@@ -604,12 +608,12 @@ def scale_about_centroid(
     xfact: float = 1.0,
     yfact: float = 1.0,
     zfact: float = 1.0,
-    method: CentroidMethod = "footprint",
+    weighing_method: CentroidWeighing = "footprint",
     on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """Stretch every geometry away from (or towards) its own centroid.
 
-    This is `scale(geometry, xfact, yfact, zfact, origin=geo.centroid(geometry, method=method))`,
+    This is `scale(geometry, xfact, yfact, zfact, origin=geo.centroid(geometry, weighing_method=weighing_method))`,
     see `scale` for the factors,
     and `centroid` for where the centroid of a linestring or polygon is.
 
@@ -624,10 +628,12 @@ def scale_about_centroid(
         df.select(geo.scale_about_centroid("parcel", 2.0, 2.0))
     """
     _factors(xfact, yfact, zfact)
-    validate_one_of("method", method, CentroidMethod)
+    validate_one_of("weighing_method", weighing_method, CentroidWeighing)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     about = _scale_about(xfact, yfact, zfact)
-    return on_geometry(geometry, _about_centroid("scale", about, method, on_row_error))
+    return on_geometry(
+        geometry, _about_centroid("scale", about, weighing_method, on_row_error)
+    )
 
 
 def _can_transform(matrix: list[float], geometry: GeoArrowType) -> None:

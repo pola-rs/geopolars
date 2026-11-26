@@ -28,9 +28,9 @@ use crate::utils::validity_with_null_at;
 use crate::{row_or_null, CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
 
 /// Which axes measure the length or area that a centroid is weighted by.
-/// Implements `method` of the Python `centroid`.
+/// Implements `weighing_method` of the Python `centroid`.
 #[derive(Clone, Copy, Debug)]
-pub enum CentroidMethod {
+pub enum CentroidWeighing {
     Footprint,
     ThreeD,
 }
@@ -414,10 +414,10 @@ fn add_polygon_measured<const Z: bool, const M: bool, const MEASURE_Z: bool, con
     }
 }
 
-/// Whether `method` measures the length or area of `coords` in z too.
+/// Whether `weighing_method` measures the length or area of `coords` in z too.
 /// Without a z, measuring in 3D is measuring the footprint.
-fn measures_z(method: CentroidMethod, coords: &ValidCoords) -> bool {
-    matches!(method, CentroidMethod::ThreeD) && coords.dim().has_z()
+fn measures_z(weighing_method: CentroidWeighing, coords: &ValidCoords) -> bool {
+    matches!(weighing_method, CentroidWeighing::ThreeD) && coords.dim().has_z()
 }
 
 /// The length of `v`, scaled first so that its squares do not underflow before its cross products do.
@@ -634,13 +634,13 @@ fn centroids<const Z: bool, const M: bool>(
 
 pub fn line_string_centroids(
     array: &Untrimmed<LineStringArray>,
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
     let coords = array.coords();
     let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m(), MEASURE_Z = measures_z(method, coords);
+        Z = dim.has_z(), M = dim.has_m(), MEASURE_Z = measures_z(weighing_method, coords);
         line_string_centroids_with::<Z, M, MEASURE_Z>(array, on_row_error)
     )
 }
@@ -660,13 +660,13 @@ fn line_string_centroids_with<const Z: bool, const M: bool, const MEASURE_Z: boo
 
 pub fn multi_line_string_centroids(
     array: &Untrimmed<MultiLineStringArray>,
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
     let coords = array.coords();
     let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m(), MEASURE_Z = measures_z(method, coords);
+        Z = dim.has_z(), M = dim.has_m(), MEASURE_Z = measures_z(weighing_method, coords);
         multi_line_string_centroids_with::<Z, M, MEASURE_Z>(array, on_row_error)
     )
 }
@@ -690,7 +690,7 @@ fn multi_line_string_centroids_with<const Z: bool, const M: bool, const MEASURE_
 
 pub fn polygon_centroids(
     array: &Untrimmed<PolygonArray>,
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
     anchor: CentroidAnchor,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
@@ -699,7 +699,7 @@ pub fn polygon_centroids(
     with_const_flags!(
         Z = dim.has_z(),
         M = dim.has_m(),
-        MEASURE_Z = measures_z(method, coords),
+        MEASURE_Z = measures_z(weighing_method, coords),
         ANCHOR: CentroidAnchor = anchor;
         polygon_centroids_with::<Z, M, MEASURE_Z, ANCHOR>(array, on_row_error)
     )
@@ -720,7 +720,7 @@ fn polygon_centroids_with<const Z: bool, const M: bool, const MEASURE_Z: bool, c
 
 pub fn multi_polygon_centroids(
     array: &Untrimmed<MultiPolygonArray>,
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
     anchor: CentroidAnchor,
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
@@ -729,7 +729,7 @@ pub fn multi_polygon_centroids(
     with_const_flags!(
         Z = dim.has_z(),
         M = dim.has_m(),
-        MEASURE_Z = measures_z(method, coords),
+        MEASURE_Z = measures_z(weighing_method, coords),
         ANCHOR: CentroidAnchor = anchor;
         multi_polygon_centroids_with::<Z, M, MEASURE_Z, ANCHOR>(array, on_row_error)
     )

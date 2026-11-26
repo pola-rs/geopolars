@@ -26,14 +26,14 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
     from geopolars.datatypes import GeoArrowType
 
-CentroidMethod = Literal["footprint", "3d"]
+CentroidWeighing = Literal["footprint", "3d"]
 CentroidAnchor = Literal["length_weighted_mean", "vertex_mean"]
 
 
 def _centroid(
     column: pl.Expr,
     geometry: GeoArrowType,
-    method: CentroidMethod,
+    weighing_method: CentroidWeighing,
     anchor: CentroidAnchor,
     distance_method: DistanceMethod,
     on_row_error: OnRowError,
@@ -48,7 +48,11 @@ def _centroid(
         args=[column],
         function_name="centroid",
         is_elementwise=True,
-        kwargs={"method": method, "anchor": anchor, "on_row_error": on_row_error},
+        kwargs={
+            "weighing_method": weighing_method,
+            "anchor": anchor,
+            "on_row_error": on_row_error,
+        },
     )
 
 
@@ -85,7 +89,7 @@ def _centroid_refuse_geodesic(
 def centroid(
     geometry: IntoExprColumn,
     *,
-    method: CentroidMethod = "footprint",
+    weighing_method: CentroidWeighing = "footprint",
     anchor: CentroidAnchor = "length_weighted_mean",
     distance_method: DistanceMethod = "planar",
     on_row_error: OnRowError = "raise",
@@ -108,7 +112,7 @@ def centroid(
     and the one `area` would for a polygon.
     It raises the same error when it picks `"geodesic"`.
 
-    `method` says which axes measure a length or an area:
+    `weighing_method` says which axes measure a length or an area:
 
     - `"footprint"` is the default. It only measures `x` and `y`, as `area(distance_method="planar")` does.
       A geometry with a `z` is measured by its footprint (its shadow on the x/y plane),
@@ -136,7 +140,7 @@ def centroid(
     It also moves an `m` that does not change linearly over the polygon.
 
     - `"length_weighted_mean"` is the default.
-      It fans out from the centre of the ring's length, measured as `method` says.
+      It fans out from the centre of the ring's length, measured as `weighing_method` says.
       The centroid therefore does not change when a vertex is added on a straight edge,
       or when the ring starts at another vertex.
     - `"vertex_mean"` fans out from the mean of the ring's vertices.
@@ -146,7 +150,7 @@ def centroid(
     A linestring has no area to fan out over, so it ignores `anchor`.
 
     {measure}
-    As it is not a position, it never adds to a length or area, whatever the `method`.
+    As it is not a position, it never adds to a length or area, whatever the `weighing_method`.
     It is averaged with the same weights as the positions,
     which gives the mean `m` over the length or area of the geometry.
 
@@ -163,7 +167,7 @@ def centroid(
     or a polygon with all its vertices on a line.
     GEOS and Shapely fall back to the centroid of its length, or else to the mean of its vertices.
     This does not, as a centroid of another kind would go unnoticed.
-    The error for it suggests `method="3d"` when the geometry has a `z`,
+    The error for it suggests `weighing_method="3d"` when the geometry has a `z`,
     as a vertical geometry only has length or area in 3D.
     There are two more cases without a centroid, which each have an error of their own.
     A geometry whose vertices all lie very close to the first
@@ -181,7 +185,7 @@ def centroid(
 
     A point is its own centroid, whatever the `distance_method`.
     A multipoint gets the mean of its points as its centroid (see `mean_coordinate`),
-    whatever the `method` and `anchor`.
+    whatever the `weighing_method` and `anchor`.
     `distance_method="auto"` picks the method for it that `length` would for a linestring.
 
     The result keeps the geometry's dimension and CRS.
@@ -200,15 +204,15 @@ def centroid(
     .. code-block:: python
 
         df.select(geo.centroid("parcel"), geo.centroid("road"))
-        df.select(geo.centroid("flight_path", method="3d"))
+        df.select(geo.centroid("flight_path", weighing_method="3d"))
     """
-    validate_one_of("method", method, CentroidMethod)
+    validate_one_of("weighing_method", weighing_method, CentroidWeighing)
     validate_one_of("anchor", anchor, CentroidAnchor)
     validate_one_of("distance_method", distance_method, DistanceMethod)
     validate_one_of("on_row_error", on_row_error, OnRowError)
     return on_geometry(
         geometry,
         lambda column, dtype: _centroid(
-            column, dtype, method, anchor, distance_method, on_row_error
+            column, dtype, weighing_method, anchor, distance_method, on_row_error
         ),
     )

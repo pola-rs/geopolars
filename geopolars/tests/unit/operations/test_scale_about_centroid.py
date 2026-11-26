@@ -114,8 +114,8 @@ def test_only_lines_and_polygons_are_accepted(
 def test_bad_arguments_are_refused() -> None:
     with pytest.raises(ValueError, match="`yfact`"):
         geo.scale_about_centroid("line", 2.0, float("nan"))
-    with pytest.raises(ValueError, match="`method`"):
-        geo.scale_about_centroid("line", 2.0, method="3D")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="`weighing_method`"):
+        geo.scale_about_centroid("line", 2.0, weighing_method="3D")  # type: ignore[arg-type]
 
 
 def test_a_null_comes_out_null_and_an_empty_geometry_stays_empty() -> None:
@@ -151,12 +151,16 @@ def test_a_vertical_line_only_has_a_centroid_with_3d() -> None:
         schema={"line": pl.List(pl.Struct(dict.fromkeys("xyz", pl.Float64)))},
     ).select(pl.col("line").ext.to(XYZ.linestring_dtype()))
 
-    with pytest.raises(pl.exceptions.ComputeError, match='length with `method="3d"`'):
+    with pytest.raises(
+        pl.exceptions.ComputeError, match='length with `weighing_method="3d"`'
+    ):
         df.select(geo.scale_about_centroid("line", zfact=3.0))
     assert_frame_equal(
-        df.select(geo.scale_about_centroid("line", zfact=3.0, method="3d")),
+        df.select(geo.scale_about_centroid("line", zfact=3.0, weighing_method="3d")),
         df.select(
-            geo.scale("line", zfact=3.0, origin=geo.centroid("line", method="3d"))
+            geo.scale(
+                "line", zfact=3.0, origin=geo.centroid("line", weighing_method="3d")
+            )
         ),
         check_exact=True,
     )
@@ -177,5 +181,7 @@ def test_the_namespace_forwards(line_coords: pl.DataFrame) -> None:
 
     assert_frame_equal(
         df.select(gpl.col("line").geo.scale_about_centroid(2.0, 0.5, 3.0, "3d")),
-        df.select(geo.scale_about_centroid("line", 2.0, 0.5, 3.0, method="3d")),
+        df.select(
+            geo.scale_about_centroid("line", 2.0, 0.5, 3.0, weighing_method="3d")
+        ),
     )
