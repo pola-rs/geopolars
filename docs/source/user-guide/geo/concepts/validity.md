@@ -1,9 +1,11 @@
 # Validity
 
-Every operation expects a *valid* geometry as its input.
+Most operations expect a *valid* geometry as their input.
 If given one, they should (generally) not fail, and give sensible results.
 
 But what does *valid* mean? GeoPolars knows *two* levels, which nest.
+Which one is required varies per operation
+(see [What an expression requires](#what-an-expression-requires)).
 
 The first is validity according to the GeoArrow spec, checked by `geo.is_valid_geoarrow`.
 
@@ -61,6 +63,31 @@ See `is_valid_geoarrow` and `is_valid_ogc` in the API reference for all the rule
 ```python exec="on" result="text" session="user-guide/geo/concepts/validity"
 --8<-- "python/user-guide/geo/concepts/validity.py:null_out"
 ```
+
+## What an expression requires
+
+Every expression in the API reference says how valid its input has to be.
+
+- **no validity required**: the expression takes geometries that are not valid at all.
+  These are the constructors, the decoders (`from_wkb`, `from_wkt`),
+  the checks (`is_valid_geoarrow`, `is_valid_ogc`) and the repairs (such as `close_rings`).
+- **requires valid GeoArrow**: the expression expects geometries that `is_valid_geoarrow` accepts.
+- **requires OGC validity**: the expression expects geometries that `is_valid_ogc` accepts,
+  which are valid GeoArrow too.
+- **requires simple geometries**: the expression expects geometries that `is_simple` accepts.
+  This comes on top of one of the requirements above, as a simple geometry need not be valid.
+
+The first three nest: an expression that requires no validity also takes valid GeoArrow,
+and one that requires valid GeoArrow also takes OGC-valid geometries.
+
+An expression that requires validity lists, for each requirement,
+what it does with input that does not meet it:
+it may give unexpected results, or raise errors.
+It never panics.
+If you are not sure about your data, check it first,
+or null out what does not pass with `null_out_invalid_geoarrow` or `null_out_invalid_ogc`.
+
+## All checks
 
 The table below lists every check, the geometries it applies to,
 and the expressions that check or repair it.

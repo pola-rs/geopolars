@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from geopolars._docs import doc
 from geopolars.datatypes import BoxType
 from geopolars.geo.construct._common import _coord, _given
 
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     from geopolars._typing import IntoExprColumn
 
 
+@doc()
 def box(
     xmin: IntoExprColumn,
     ymin: IntoExprColumn,
@@ -26,6 +28,9 @@ def box(
     crs: str | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.box` column from its bounds.
+
+    {no_validity_required}
+
     Whether you pass the `z` and/or `m` bounds decides the dimension, and so the dtype:
 
     ==============================  =========

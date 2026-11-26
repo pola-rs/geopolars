@@ -16,7 +16,37 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+
+def _badge(colour: str, text: str) -> str:
+    return f":bdg-{colour}:`{text}`"
+
+
+# The rows of the table of what an expression requires of its input.
+# Each requirement is padded to one width, so that the outcomes line up after it.
+_REQUIREMENTS = {
+    "requires_valid_geoarrow": _badge("info", "requires valid GeoArrow"),
+    "requires_ogc_validity": _badge("warning", "requires OGC validity"),
+    "requires_simple": _badge("primary", "requires simple geometries"),
+}
+_OUTCOMES = {
+    "unexpected_results": "may give unexpected results",
+    "raises_errors": "can raise errors",
+    "unexpected_results_or_errors": "may give unexpected results, or raise errors",
+}
+_REQUIREMENT_WIDTH = max(map(len, _REQUIREMENTS.values()))
+_VALIDITY_TABLE_BORDER = (
+    f"{'=' * _REQUIREMENT_WIDTH}  {'=' * max(map(len, _OUTCOMES.values()))}"
+)
+
 _shared_docs = {
+    "no_validity_required": _badge("success", "no validity required"),
+    "validity_table_start": f"""\
+{_VALIDITY_TABLE_BORDER}
+{"requirement".ljust(_REQUIREMENT_WIDTH)}  otherwise, results may be
+{_VALIDITY_TABLE_BORDER}""",
+    **{name: badge.ljust(_REQUIREMENT_WIDTH) for name, badge in _REQUIREMENTS.items()},
+    **_OUTCOMES,
+    "validity_table_end": _VALIDITY_TABLE_BORDER,
     "computed_by_geos_dropping_z_and_m": """\
 Computed by GEOS.
 This operation drops z and m.""",
@@ -53,8 +83,6 @@ An appended F brings its own z and m, so the ring is closed in every axis.""",
     "flag_for_absent_axis": """\
 A flag for an axis requires only does something if the geometry has that axis.
 If the geometry does not have the specific axis, the flag is ignored. """,
-    "repairing_function": """\
-As a repairing function, it does not require the geometry to be valid (yet).""",
     "empty_point": """\
 The empty point has NaN on every axis it has,
 as described under "Empty geometries" in `docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md`.""",

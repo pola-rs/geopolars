@@ -94,7 +94,8 @@ def fix_out_of_bounds(
     short_lines: ShortLines = "null",
 ) -> pl.Expr:
     """Drops, empties, nulls or clamps the coordinates that lie outside the bounds of the CRS.
-    {repairing_function}
+
+    {no_validity_required}
 
     `crs_bounds` says which bounds the coordinates have to lie in.
     They only apply to a column that declares a CRS PROJ can read.

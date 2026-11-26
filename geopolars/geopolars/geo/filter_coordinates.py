@@ -68,7 +68,8 @@ def filter_coordinates(
 ) -> pl.Expr:
     """Finds coordinates that are not finite (NaN, inf) or empty,
     and performs an action on then (make empty, null, or drop).
-    {repairing_function}
+
+    {no_validity_required}
 
     A coordinate is selected by either of:
 
