@@ -24,6 +24,7 @@ def _badge(colour: str, text: str) -> str:
 # The rows of the table of what an expression requires of its input.
 # Each requirement is padded to one width, so that the outcomes line up after it.
 _REQUIREMENTS = {
+    "requires_no_nested_nulls": _badge("secondary", "requires no nested nulls"),
     "requires_valid_geoarrow": _badge("info", "requires valid GeoArrow"),
     "requires_ogc_validity": _badge("warning", "requires OGC validity"),
     "requires_simple": _badge("primary", "requires simple geometries"),

@@ -69,7 +69,9 @@ def filter_coordinates(
     """Finds coordinates that are not finite (NaN, inf) or empty,
     and performs an action on then (make empty, null, or drop).
 
-    {no_validity_required}
+    {validity_table_start}
+    {requires_no_nested_nulls}  {unexpected_results}
+    {validity_table_end}
 
     A coordinate is selected by either of:
 

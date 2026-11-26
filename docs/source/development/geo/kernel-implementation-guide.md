@@ -210,6 +210,8 @@ It has a row for every requirement (`requires_simple` comes on top of the others
 with what the kernel does with input that does not meet it:
 `unexpected_results`, `raises_errors`, or `unexpected_results_or_errors`.
 A kernel that requires no validity gets the badge `{no_validity_required}` instead of the table.
+A kernel that handles unclosed rings itself, such as `close_rings`,
+takes `requires_no_nested_nulls` instead of `requires_valid_geoarrow`.
 
 ### NaN, infinity and empties
 

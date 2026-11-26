@@ -65,7 +65,9 @@ def close_rings(
     in x, y and z (see `is_valid_geoarrow`).
     For a polygon, this acts on all of the rings.
 
-    {no_validity_required}
+    {validity_table_start}
+    {requires_no_nested_nulls}  {unexpected_results}
+    {validity_table_end}
 
     {keeps_type_dimension_and_crs}
     {ignores_empty_and_invalid}
