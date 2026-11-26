@@ -39,7 +39,6 @@ Ring = list[dict[str, float]]
 # How the errors for a geometry without a centroid start, one per reason.
 _NO_LENGTH = "needs a geometry with length, got one without"
 _NO_AREA = "needs a geometry with area, got one without"
-_UNDERFLOW = "too small for a float"
 _HOLES_EXCEED = "holes take out more area than its exterior holds"
 
 
@@ -355,7 +354,7 @@ def test_a_small_polygon_keeps_its_centroid(weighing_method: CentroidWeighing) -
 @pytest.mark.parametrize(
     ("rings", "error"),
     [
-        ([_xyz_ring((0, 0, 0), (1e-200, 0, 0), (0, 0, 1e-200))], _UNDERFLOW),
+        ([_xyz_ring((0, 0, 0), (1e-200, 0, 0), (0, 0, 1e-200))], _NO_AREA),
         (
             [
                 _xyz_ring((0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)),
@@ -481,14 +480,23 @@ def test_a_polygon_that_encloses_nothing_has_no_centroid() -> None:
 _TINY_TRIANGLE = _ring((0, 0), (1e-200, 0), (0, 1e-200))
 
 
-# The area of the second one is still there, but the sums it is weighted by underflow.
-@pytest.mark.parametrize("side", [1e-200, 1e-105])
-def test_a_polygon_too_small_for_its_area_has_no_centroid(side: float) -> None:
-    df = _polygons([_ring((0, 0), (side, 0), (0, side))], [_SQUARE])
+def test_a_polygon_too_small_for_its_area_has_no_centroid() -> None:
+    df = _polygons([_TINY_TRIANGLE], [_SQUARE])
 
-    with pytest.raises(pl.exceptions.ComputeError, match=_UNDERFLOW):
+    with pytest.raises(pl.exceptions.ComputeError, match=_NO_AREA):
         _centroids(df)
     assert _centroids(df, on_row_error="null") == [None, (0.5, 0.5)]
+
+
+def test_a_polygon_too_small_for_its_sums_keeps_a_centroid_near_it() -> None:
+    # The area is still there, but the sums it is weighted by underflow.
+    side = 1e-105
+    df = _polygons([_ring((0, 0), (side, 0), (0, side))])
+
+    [(x, y)] = _centroids(df)
+
+    assert abs(x - side / 3) <= side
+    assert abs(y - side / 3) <= side
 
 
 def test_a_polygon_whose_hole_exceeds_its_exterior_has_no_centroid() -> None:
@@ -739,7 +747,7 @@ def test_a_line_without_length_has_no_centroid(line: Line) -> None:
 def test_a_line_too_small_for_its_length_has_no_centroid() -> None:
     df = _lines([(0, 0), (1e-200, 1e-200)], _HOOK)
 
-    with pytest.raises(pl.exceptions.ComputeError, match=_UNDERFLOW):
+    with pytest.raises(pl.exceptions.ComputeError, match=_NO_LENGTH):
         _line_centroids(df)
     assert _line_centroids(df, on_row_error="null")[0] is None
 
@@ -866,7 +874,7 @@ def test_an_empty_multipolygon_has_the_empty_point_as_its_centroid() -> None:
     ("polygons", "error"),
     [
         ([[_ring((0, 0), (2, 0), (1, 0))]], _NO_AREA),
-        ([[_TINY_TRIANGLE]], _UNDERFLOW),
+        ([[_TINY_TRIANGLE]], _NO_AREA),
         ([[_SQUARE, _BIG_SQUARE]], _HOLES_EXCEED),
     ],
     ids=["flat", "tiny", "hole exceeds exterior"],

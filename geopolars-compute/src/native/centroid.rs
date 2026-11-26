@@ -102,11 +102,11 @@ impl<const Z: bool, const M: bool> Moment<Z, M> {
         weight: 0.0,
     };
 
-    /// Whether the weight is at least `smallest_weight`, or is NaN or infinite, so that it propagates.
+    /// Whether the weight is 0 or negative, rather than positive, NaN or infinite, which propagate.
     #[inline(always)]
-    fn outweighs(&self, smallest_weight: f64) -> bool {
+    fn weighs_at_most_zero(&self) -> bool {
         // A hole with an infinite coordinate can weigh -inf.
-        !(self.weight < smallest_weight && self.weight.is_finite())
+        self.weight <= 0.0 && self.weight.is_finite()
     }
 
     /// Σ weight * centre / Σ weight.
@@ -458,198 +458,70 @@ fn norm(v: [f64; 3]) -> f64 {
     largest * dot(scaled, scaled).sqrt()
 }
 
-/// Why a row has no centroid.
-#[derive(Clone, Copy)]
-enum NoCentroid {
-    WithoutWeight,
-    Underflow { extent: f64 },
-    HolesExceedExterior,
-}
-
-/// What a row whose weight is too small to trust turns out to be.
-enum LightRow {
-    Empty,
-    /// A thin row, whose weight is small but whose sums are fine.
-    Sliver,
-    WithoutCentroid(NoCentroid),
-}
-
-/// What the centroids of a column are weighted by,
-/// to take a closer look at a row whose weight is too small to trust.
-#[derive(Clone, Copy)]
-struct Weighing<'a> {
-    coords: &'a ValidCoords,
+/// Why a row whose weight is at most 0 has no centroid,
+/// or `None` for an empty row, whose average `0 / 0` is already the empty point.
+#[cold]
+#[inline(never)]
+fn no_centroid_error(
+    vertices: Range<usize>,
+    weight: f64,
     weighed_by: CentroidWeight,
-    measures_z: bool,
-    /// Below this, the products the length or area and its sums are made of go subnormal.
-    smallest_extent: f64,
-    /// A row lighter than this may lie within `smallest_extent` of its first vertex.
-    smallest_weight: f64,
-}
-
-impl<'a> Weighing<'a> {
-    fn new(coords: &'a ValidCoords, weighed_by: CentroidWeight, measures_z: bool) -> Self {
-        let (smallest_extent, smallest_weight) = match weighed_by {
-            // A length squares the sides of a segment, and its sums multiply two sides.
-            CentroidWeight::Length => {
-                let extent = f64::MIN_POSITIVE.sqrt();
-                (extent, extent)
-            }
-            // An area's sums multiply three sides.
-            // A polygon within `extent` of its first vertex fits in a square of side `2 * extent`.
-            CentroidWeight::Area => {
-                let extent = f64::MIN_POSITIVE.cbrt();
-                (extent, 4.0 * extent * extent)
-            }
-        };
-        Self {
-            coords,
+    suggest_3d: bool,
+) -> Option<GeoComputeError> {
+    if vertices.is_empty() {
+        return None;
+    }
+    Some(if weight < 0.0 {
+        GeoComputeError::HolesExceedExterior
+    } else {
+        GeoComputeError::CentroidWithoutWeight {
             weighed_by,
-            measures_z,
-            smallest_extent,
-            smallest_weight,
+            suggest_3d,
         }
-    }
-
-    /// Overwrites the centroid of every suspect (a row and its weight, too small to trust)
-    /// that has none: with the empty point for a row without vertices.
-    /// Any other row without a centroid goes to `on_row_error`, so it is returned or added to `failed`.
-    #[cold]
-    #[inline(never)]
-    fn fix_up_suspects<const Z: bool>(
-        self,
-        axes: &mut [Vec<f64>; 4],
-        suspects: &[(usize, f64)],
-        row_vertices: impl Fn(usize) -> Range<usize>,
-        on_row_error: OnRowError,
-        failed: &mut Vec<usize>,
-    ) -> GeoComputeResult<()> {
-        for &(i, weight) in suspects {
-            let fill = match self.look_at_light_row(row_vertices(i), weight) {
-                LightRow::Sliver => continue,
-                LightRow::Empty => f64::NAN,
-                LightRow::WithoutCentroid(why) => {
-                    row_or_null::<(), _>(Err(self.error::<Z>(why)), on_row_error)?;
-                    failed.push(i);
-                    0.0
-                }
-            };
-            // An axis that is not there is an empty `Vec`.
-            for axis in axes.iter_mut() {
-                if let Some(value) = axis.get_mut(i) {
-                    *value = fill;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn look_at_light_row(self, vertices: Range<usize>, weight: f64) -> LightRow {
-        if vertices.is_empty() {
-            return LightRow::Empty;
-        }
-        if weight < 0.0 {
-            return LightRow::WithoutCentroid(NoCentroid::HolesExceedExterior);
-        }
-        let extent = self.extent_up_to_smallest(vertices);
-        if extent > 0.0 && extent < self.smallest_extent {
-            return LightRow::WithoutCentroid(NoCentroid::Underflow { extent });
-        }
-        if weight > 0.0 {
-            return LightRow::Sliver;
-        }
-        LightRow::WithoutCentroid(NoCentroid::WithoutWeight)
-    }
-
-    /// How far `vertices` lie from the first along a measured axis, at most.
-    /// It stops at the first vertex at least `smallest_extent` away, as that rules out an underflow.
-    fn extent_up_to_smallest(self, vertices: Range<usize>) -> f64 {
-        let z = self.measures_z.then(|| self.coords.z()).flatten();
-        let mut extent = 0.0_f64;
-        for axis in [Some(self.coords.x()), Some(self.coords.y()), z]
-            .into_iter()
-            .flatten()
-        {
-            let values = &axis[vertices.clone()];
-            let Some(&first) = values.first() else {
-                continue;
-            };
-            for &value in values {
-                extent = extent.max((value - first).abs());
-                if extent >= self.smallest_extent {
-                    return extent;
-                }
-            }
-        }
-        extent
-    }
-
-    #[cold]
-    fn error<const Z: bool>(self, why: NoCentroid) -> GeoComputeError {
-        let weighed_by = self.weighed_by;
-        match why {
-            NoCentroid::WithoutWeight => GeoComputeError::CentroidWithoutWeight {
-                weighed_by,
-                suggest_3d: Z && !self.measures_z,
-            },
-            NoCentroid::Underflow { extent } => {
-                GeoComputeError::CentroidUnderflow { weighed_by, extent }
-            }
-            NoCentroid::HolesExceedExterior => GeoComputeError::HolesExceedExterior,
-        }
-    }
+    })
 }
-
-/// The number of rows averaged before the suspects among them are looked at again.
-const BLOCK_LEN: usize = 1024;
 
 /// The centroid of every row of `rows`, of the moment `add_row` adds for it.
-/// A row without a centroid goes to `on_row_error` (see [Weighing::fix_up_suspects]).
+/// A row without a centroid goes to `on_row_error`.
 #[inline(always)]
 fn centroids<const Z: bool, const M: bool>(
     rows: &List,
     row_vertices: impl Fn(usize) -> Range<usize>,
-    weighing: Weighing,
+    weighed_by: CentroidWeight,
+    suggest_3d: bool,
     on_row_error: OnRowError,
     add_row: impl Fn(&mut Moment<Z, M>, usize),
 ) -> GeoComputeResult<PointArray> {
     let len = rows.len();
     let mut axes: [Vec<f64>; 4] =
         std::array::from_fn(|k| Vec::with_capacity(if has_axis::<Z, M>(k) { len } else { 0 }));
-    // The rows whose weight is too small to trust, so that the loop itself does no more than average.
-    // They are looked at again after each block of rows, while their vertices are still in cache.
-    let mut suspects = Vec::new();
     let mut failed = Vec::new();
-    let smallest_weight = weighing.smallest_weight;
-    for block in (0..len).step_by(BLOCK_LEN) {
-        for_each_row(rows, block..len.min(block + BLOCK_LEN), |i, is_valid| {
-            // A null row's offsets point anywhere, so it is not measured.
-            let average = if is_valid {
-                let mut moment = Moment::ZERO;
-                add_row(&mut moment, i);
-                if !moment.outweighs(smallest_weight) {
-                    suspects.push((i, moment.weight));
-                }
-                moment.average()
-            } else {
-                [0.0; 4]
-            };
-            for k in 0..4 {
-                if has_axis::<Z, M>(k) {
-                    axes[k].push(average[k]);
+    let mut first_error = None;
+    for_each_row(rows, 0..len, |i, is_valid| {
+        // A null row's offsets point anywhere, so it is not measured.
+        let average = if is_valid {
+            let mut moment = Moment::ZERO;
+            add_row(&mut moment, i);
+            if moment.weighs_at_most_zero() {
+                let error =
+                    no_centroid_error(row_vertices(i), moment.weight, weighed_by, suggest_3d);
+                if let Some(error) = error {
+                    failed.push(i);
+                    first_error.get_or_insert(error);
                 }
             }
-        });
-        if !suspects.is_empty() {
-            weighing.fix_up_suspects::<Z>(
-                &mut axes,
-                &suspects,
-                &row_vertices,
-                on_row_error,
-                &mut failed,
-            )?;
-            suspects.clear();
+            moment.average()
+        } else {
+            [0.0; 4]
+        };
+        for k in 0..4 {
+            if has_axis::<Z, M>(k) {
+                axes[k].push(average[k]);
+            }
         }
+    });
+    if let Some(error) = first_error {
+        row_or_null::<(), _>(Err(error), on_row_error)?;
     }
     let validity = validity_with_null_at(rows, &failed);
     let [x, y, z, m] = axes;
@@ -682,7 +554,8 @@ fn line_string_centroids_with<const Z: bool, const M: bool, const MEASURE_Z: boo
     centroids::<Z, M>(
         array.rows(),
         |i| array.row_vertices(i),
-        Weighing::new(array.coords(), CentroidWeight::Length, MEASURE_Z),
+        CentroidWeight::Length,
+        Z && !MEASURE_Z,
         on_row_error,
         |moment, i| add_line(moment, &array.get(i), planar_segment_length::<MEASURE_Z>),
     )
@@ -711,7 +584,8 @@ fn multi_line_string_centroids_with<const Z: bool, const M: bool, const MEASURE_
     centroids::<Z, M>(
         array.rows(),
         |i| array.row_vertices(i),
-        Weighing::new(array.coords(), CentroidWeight::Length, MEASURE_Z),
+        CentroidWeight::Length,
+        Z && !MEASURE_Z,
         on_row_error,
         |moment, i| {
             for line in array.get(i).line_strings() {
@@ -748,7 +622,8 @@ fn polygon_centroids_with<const Z: bool, const M: bool, const MEASURE_Z: bool, c
     centroids::<Z, M>(
         array.rows(),
         |i| array.row_vertices(i),
-        Weighing::new(array.coords(), CentroidWeight::Area, MEASURE_Z),
+        CentroidWeight::Area,
+        Z && !MEASURE_Z,
         on_row_error,
         |moment, i| add_polygon_measured::<Z, M, MEASURE_Z, ANCHOR>(moment, &array.get(i)),
     )
@@ -786,7 +661,8 @@ fn multi_polygon_centroids_with<
     centroids::<Z, M>(
         array.rows(),
         |i| array.row_vertices(i),
-        Weighing::new(array.coords(), CentroidWeight::Area, MEASURE_Z),
+        CentroidWeight::Area,
+        Z && !MEASURE_Z,
         on_row_error,
         |moment, i| {
             for polygon in array.get(i).polygons() {

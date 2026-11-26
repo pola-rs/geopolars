@@ -164,17 +164,17 @@ def centroid(
     {on_row_error}
     A geometry with vertices but without length or area has no centroid,
     such as a linestring with all its vertices on one spot,
-    or a polygon with all its vertices on a line.
+    a polygon with all its vertices on a line,
+    or a geometry whose vertices all lie within about 1e-162 of each other,
+    so that its length or area rounds to 0 as a float.
     GEOS and Shapely fall back to the centroid of its length, or else to the mean of its vertices.
     This does not, as a centroid of another kind would go unnoticed.
     The error for it suggests `weighing_method="3d"` when the geometry has a `z`,
     as a vertical geometry only has length or area in 3D.
-    There are two more cases without a centroid, which each have an error of their own.
-    A geometry whose vertices all lie very close to the first
-    (within about 1e-154 for a linestring, or 1e-103 for a polygon)
-    has a length or area too small to be held by a float.
-    A polygon whose holes take out more area than its exterior holds is not valid,
-    and would have a negative area.
+    A slightly larger geometry (within about 1e-154 for a linestring, or 1e-103 for a polygon)
+    has a centroid, but it loses precision relative to the size of the geometry.
+    A polygon whose holes take out more area than its exterior holds has no centroid either,
+    with an error of its own: it is not valid, and would have a negative area.
 
     A NaN or an infinity in a coordinate gives a centroid that is not finite,
     rather than a null.

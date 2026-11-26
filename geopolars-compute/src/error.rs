@@ -46,18 +46,13 @@ pub enum GeoComputeError {
         position: (f64, f64),
         bounds: [f64; 4],
     },
-    /// A geometry with vertices but without the length or area its centroid is weighted by.
+    /// A geometry with vertices but without the length or area its centroid is weighted by,
+    /// or with one that rounds to 0 as an `f64`.
     CentroidWithoutWeight {
         weighed_by: CentroidWeight,
         /// Whether `weighing_method="3d"` could measure it,
         /// as it has a z that `weighing_method="footprint"` ignores.
         suggest_3d: bool,
-    },
-    /// A geometry whose length or area underflows to 0 as an `f64`.
-    CentroidUnderflow {
-        weighed_by: CentroidWeight,
-        /// How far the vertices lie from the first, at most.
-        extent: f64,
     },
     /// A polygon whose holes take out more area than its exterior holds.
     HolesExceedExterior,
@@ -166,7 +161,8 @@ impl fmt::Display for GeoComputeError {
                 write!(
                     f,
                     "a centroid needs a geometry with {weight}, \
-                    got one without (such as one with {degenerate})"
+                    got one without (such as one with {degenerate}, \
+                    or one too small for its {weight} to be held by a float)"
                 )?;
                 if *suggest_3d {
                     write!(
@@ -176,13 +172,6 @@ impl fmt::Display for GeoComputeError {
                 }
                 Ok(())
             }
-            Self::CentroidUnderflow { weighed_by, extent } => write!(
-                f,
-                "a centroid needs a geometry with {weight}, got one whose {weight} is too small \
-                for a float (every vertex lies within {extent:e} of the first); \
-                scale the geometry up first",
-                weight = weighed_by.name(),
-            ),
             Self::HolesExceedExterior => write!(
                 f,
                 "a centroid needs a polygon with area, got one whose holes take out more area \
@@ -209,7 +198,6 @@ impl std::error::Error for GeoComputeError {
             | Self::HoleInEmptyExterior
             | Self::OutOfBounds { .. }
             | Self::CentroidWithoutWeight { .. }
-            | Self::CentroidUnderflow { .. }
             | Self::HolesExceedExterior => None,
             #[cfg(feature = "geos")]
             Self::Geos(source) => Some(source),
