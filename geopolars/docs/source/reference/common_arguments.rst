@@ -179,8 +179,8 @@ as does a box across the antimeridian (see `to_polygon`).
 
 An infinite `x` or `y` lies outside the bounds.
 A NaN one never does, so neither does an empty point inside a geometry.
-Where the kernel also runs `early_coord_check`, either check may catch an infinite coordinate first.
-The row then gets NaN or counts as out of bounds, but is never measured.
+Infinite values will be caught by `early_coord_check` instead if the expression uses it (and it is enabled),
+as that runs before this check.
 
 - `on_out_of_bounds="auto"` (default) is `"error"` when measuring geodesic,
   and `"ignore"` when measuring planar, which then does not ask PROJ for any bounds.

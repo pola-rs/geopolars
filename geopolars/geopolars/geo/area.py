@@ -203,6 +203,7 @@ def area(
     Only `"geodesic"` runs the check, as the planar formula costs no more than the check does.
     A geodesic row that fails it gets NaN, without being measured.
     Measured planar, a NaN or infinite coordinate is simply propagated arithmetically.
+    With a bounds check (see below), an infinite coordinate then counts as out of bounds instead.
 
     {on_out_of_bounds}
 

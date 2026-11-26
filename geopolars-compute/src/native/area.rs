@@ -1,7 +1,5 @@
 //! The area a polygon encloses, as an [AreaMetric] measures it.
 //! Implements the Python `area`.
-//!
-//! The const generic `EARLY_COORD_CHECK` holds an [EarlyCoordCheck].
 
 use std::convert::Infallible;
 use std::ops::Range;
@@ -27,8 +25,10 @@ pub trait AreaMetric: BaseMetric {
     type Error;
     /// What is worked out once for a whole chunk, before its rings are measured.
     type Chunk;
-    /// Whether the kernel runs `early_coord_check` before measuring a row.
-    /// `false` where measuring costs no more than the check does.
+    /// With `false`, the `early_coord_check` passed in is ignored.
+    /// used where measuring costs no more than the check does.
+    /// so [`ring_area`](Self::ring_area) itself must give a NaN or infinite area
+    /// for every ring with a NaN or infinite x or y.
     const CHECKS_COORDS_EARLY: bool;
     /// Prepares measuring the rings whose vertices lie within `vertices` of `coords`.
     fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> Self::Chunk;
@@ -208,12 +208,15 @@ fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
     }
     let (check_bounds, bounds) = areas_with_split_bounds(bounds, on_out_of_bounds);
     let chunk = metric.prepare_chunk(coords, chunk_vertices);
-    // A metric that does not check gets the `Off` path, whatever the user passed.
+    // A metric without `CHECKS_COORDS_EARLY` gets the `Off` path, whatever the user passed.
+    // `early_coord_check` is ignored for a metric without
+    // [`CHECKS_COORDS_EARLY`](AreaMetric::CHECKS_COORDS_EARLY).
     let early_coord_check = if M::CHECKS_COORDS_EARLY {
         early_coord_check
     } else {
         EarlyCoordCheck::Off
     };
+
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
         per_row_or_null(rows, on_row_error, |i| {
