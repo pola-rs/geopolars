@@ -105,6 +105,11 @@ def area(
 ) -> pl.Expr:
     """The area a geometry encloses, as an `f64`.
 
+    {validity_table_start}
+    {requires_valid_geoarrow}  {unexpected_results_or_errors}
+    {requires_ogc_validity}  {unexpected_results}
+    {validity_table_end}
+
     ===================  =========================  ==========================
     `distance_method`    measured                   in
     ===================  =========================  ==========================

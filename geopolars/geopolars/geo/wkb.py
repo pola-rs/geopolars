@@ -38,6 +38,8 @@ def from_wkb(
 ) -> pl.Expr:
     """Decode a `Wkb` or plain binary column into `dtype`.
 
+    {no_validity_required}
+
     {decode_into_dtype}
 
     .. code-block:: python

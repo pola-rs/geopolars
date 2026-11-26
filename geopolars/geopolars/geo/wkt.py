@@ -39,6 +39,8 @@ def from_wkt(
 ) -> pl.Expr:
     """Decode a `Wkt` or plain string column into `dtype`.
 
+    {no_validity_required}
+
     {decode_into_dtype}
 
     .. code-block:: python

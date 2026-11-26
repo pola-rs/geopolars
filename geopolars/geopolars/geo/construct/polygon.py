@@ -31,6 +31,8 @@ def polygons_from_rings_in_single_column(
 ) -> pl.Expr:
     """Build a `geoarrow.polygon` column out of lists of rings.
 
+    {no_validity_required}
+
     `rings` is a list column holding one list per polygon, of either
     `geoarrow.linestring` values or the bare vertex lists a linestring wraps. The
     first ring of a polygon is its exterior ring; the rest are its holes.
@@ -80,6 +82,8 @@ def polygons_from_rings_in_separate_columns(
     null_parts: NullParts = "null",
 ) -> pl.Expr:
     """Build a `geoarrow.polygon` column out of an exterior ring and its holes.
+
+    {no_validity_required}
 
     `exterior` holds one ring per polygon,
     as a `geoarrow.linestring`, a `geoarrow.multipoint`, or a list of its points.
@@ -137,6 +141,7 @@ def polygons_from_rings_in_separate_columns(
     )
 
 
+@doc()
 def polygons_from_coordinates(
     x: IntoExprColumn,
     y: IntoExprColumn,
@@ -147,6 +152,9 @@ def polygons_from_coordinates(
     close: CloseRings | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.polygon` column from one coordinate column per axis.
+
+    {no_validity_required}
+
     Each is a `List[Float64]`, holding the exterior ring of one polygon per row.
     Polygons created by this expression can therefore not have any holes.
     For those, use :func:`~geopolars.geo.polygons_from_nested_coordinates`
@@ -162,6 +170,7 @@ def polygons_from_coordinates(
     return _from_columns("polygon_coords", x, y, z, m, _polygon_kwargs(crs, close))
 
 
+@doc()
 def polygons_from_nested_coordinates(
     x: IntoExprColumn,
     y: IntoExprColumn,
@@ -172,6 +181,9 @@ def polygons_from_nested_coordinates(
     close: CloseRings | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.polygon` column from one coordinate column per axis.
+
+    {no_validity_required}
+
     Each is a `List[List[Float64]]`: one list per polygon, of one list per ring.
     The first ring of a polygon is its exterior ring, and the rest are its holes.
     See :func:`~geopolars.geo.polygons_from_coordinates`
@@ -197,6 +209,9 @@ def multi_polygons_from_polygons(
     close: CloseRings | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.multipolygon` column out of lists of polygons.
+
+    {no_validity_required}
+
     Takes either a list of polygons, or bare lists of rings.
 
     .. code-block:: python
@@ -229,6 +244,7 @@ def multi_polygons_from_polygons(
     return _gather("multipolygon", polygons, _polygon_kwargs(crs, close))
 
 
+@doc()
 def multi_polygons_from_coordinates(
     x: IntoExprColumn,
     y: IntoExprColumn,
@@ -239,6 +255,9 @@ def multi_polygons_from_coordinates(
     close: CloseRings | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.multipolygon` column from one coordinate column per axis.
+
+    {no_validity_required}
+
     Each is a `List[List[Float64]]`: one list per multipolygon,
     of the exterior ring of each of its polygons.
     Multipolygons created by this expression can therefore not have any holes.
@@ -256,6 +275,7 @@ def multi_polygons_from_coordinates(
     return _from_columns("multipolygon_coords", x, y, z, m, _polygon_kwargs(crs, close))
 
 
+@doc()
 def multi_polygons_from_nested_coordinates(
     x: IntoExprColumn,
     y: IntoExprColumn,
@@ -266,6 +286,9 @@ def multi_polygons_from_nested_coordinates(
     close: CloseRings | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.multipolygon` column from one coordinate column per axis.
+
+    {no_validity_required}
+
     Each is a `List[List[List[Float64]]]`: polygons, then rings, then coordinates.
     The first ring of every polygon is its exterior ring, and the rest are its holes.
     See :func:`~geopolars.geo.multi_polygons_from_coordinates`

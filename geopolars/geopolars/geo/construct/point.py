@@ -30,6 +30,9 @@ def point(
     crs: str | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.point` column from its coordinate columns.
+
+    {no_validity_required}
+
     Whether you pass `z` and/or `m` decides the dimension, and so the dtype:
 
     ===========  ===========
@@ -74,6 +77,8 @@ def multi_point_from_points(
 ) -> pl.Expr:
     """Build a `geoarrow.multipoint` column out of lists of points.
 
+    {no_validity_required}
+
     .. code-block:: python
 
         df.group_by("survey").agg(
@@ -99,6 +104,9 @@ def multi_point_from_columns(
     crs: str | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.multipoint` column from one coordinate column per axis.
+
+    {no_validity_required}
+
     Each is a `List[Float64]` holding one list of coordinates per multipoint.
 
     .. code-block:: python
@@ -112,6 +120,7 @@ def multi_point_from_columns(
     return _from_columns("multipoint_coords", x, y, z, m, _metadata(crs))
 
 
+@doc()
 def multi_point(
     x: IntoExprColumn,
     y: IntoExprColumn | None = None,
@@ -121,6 +130,9 @@ def multi_point(
     crs: str | None = None,
 ) -> pl.Expr:
     """Build a `geoarrow.multipoint` column, from points or from coordinates.
+
+    {no_validity_required}
+
     Dispatches to either:
 
     - :func:`~geopolars.geo.multi_point_from_points`

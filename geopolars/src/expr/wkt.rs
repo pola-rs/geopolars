@@ -36,6 +36,8 @@ fn to_wkt(inputs: &[Series]) -> PolarsResult<Series> {
                 return Ok(());
             };
             buf.clear();
+            // BUG: a multipolygon holding an empty polygon panics in `wkt`,
+            // which unwraps every polygon's exterior (https://github.com/georust/wkt/issues/172).
             write_geometry(&mut buf, &geometry)
                 .map_err(|e| polars_err!(ComputeError: "failed to write WKT: {e}"))?;
             out.push_value(&buf);

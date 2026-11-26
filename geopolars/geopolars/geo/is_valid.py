@@ -60,6 +60,9 @@ def is_valid_geoarrow(
     check_finite_coordinates: bool = False,
 ) -> pl.Expr:
     """Whether each geometry is valid by the GeoArrow spec: one `bool` per row, a multi-geometry included.
+
+    {no_validity_required}
+
     A null geometry gives a null result.
 
     GeoArrow asks two things (https://geoarrow.org/format.html):
@@ -116,6 +119,7 @@ def is_valid_geoarrow(
     )
 
 
+@doc()
 def null_out_invalid_geoarrow(
     geometry: IntoExprColumn,
     *,
@@ -124,6 +128,9 @@ def null_out_invalid_geoarrow(
     check_finite_coordinates: bool = False,
 ) -> pl.Expr:
     """Null out every geometry that `is_valid_geoarrow` rejects, keeping the rest as they are.
+
+    {no_validity_required}
+
     The arguments are those of `is_valid_geoarrow`.
 
     Every constructor in `geo` already holds to GeoArrow's rules,
@@ -156,6 +163,7 @@ def null_out_invalid_geoarrow(
     )
 
 
+@doc()
 def is_valid_ogc(
     geometry: IntoExprColumn,
     *,
@@ -167,6 +175,9 @@ def is_valid_ogc(
 ) -> pl.Expr:
     """Whether each geometry is valid by OGC Simple Features
     (which GEOS, and therefore shapely and GeoPandas also uses).
+
+    {no_validity_required}
+
     One `bool` per row, a multi-geometry included. A null geometry gives a null result.
 
     A geometry valid by OGC is valid by `is_valid_geoarrow` as well,
@@ -227,6 +238,7 @@ def is_valid_ogc(
     )
 
 
+@doc()
 def null_out_invalid_ogc(
     geometry: IntoExprColumn,
     *,
@@ -237,6 +249,9 @@ def null_out_invalid_ogc(
     check_multi_polygon_self_overlap: bool = True,
 ) -> pl.Expr:
     """Null out every geometry that `is_valid_ogc` rejects, keeping the rest as they are.
+
+    {no_validity_required}
+
     The arguments are those of `is_valid_ogc`.
 
     .. code-block:: python
