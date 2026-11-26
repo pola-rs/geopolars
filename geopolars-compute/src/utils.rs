@@ -5,6 +5,7 @@ use std::ops::Range;
 
 use geopolars_views::output::succeeded;
 use geopolars_views::{List, ValidCoords};
+use polars_arrow::bitmap::Bitmap;
 use polars_arrow::compute::utils::combine_validities_and;
 
 /// Copies the coordinates into new buffers, reversing each of `ranges`.
@@ -84,7 +85,10 @@ pub(crate) fn gathered(coords: &ValidCoords, indices: &[usize]) -> ValidCoords {
 
 /// Marks the rows at `failed` as null, on top of those that already are.
 pub(crate) fn with_null_at(rows: List, failed: &[usize]) -> List {
-    let succeeded = succeeded(rows.len(), failed);
-    let validity = combine_validities_and(rows.validity(), succeeded.as_ref());
+    let validity = validity_with_null_at(&rows, failed);
     rows.with_validity(validity)
+}
+
+pub(crate) fn validity_with_null_at(rows: &List, failed: &[usize]) -> Option<Bitmap> {
+    combine_validities_and(rows.validity(), succeeded(rows.len(), failed).as_ref())
 }

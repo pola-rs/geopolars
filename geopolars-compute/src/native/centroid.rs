@@ -17,15 +17,14 @@
 
 use std::ops::Range;
 
-use geopolars_views::output::succeeded;
 use geopolars_views::{
     Coords, LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PointArray,
     PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };
-use polars_arrow::compute::utils::combine_validities_and;
 
 use super::DistanceMetric;
 use crate::per_row::for_each_row;
+use crate::utils::validity_with_null_at;
 use crate::{row_or_null, CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
 
 /// Which axes measure the length or area that a centroid is weighted by.
@@ -603,7 +602,7 @@ fn centroids<const Z: bool, const M: bool>(
             suspects.clear();
         }
     }
-    let validity = combine_validities_and(rows.validity(), succeeded(len, &failed).as_ref());
+    let validity = validity_with_null_at(rows, &failed);
     let [x, y, z, m] = axes;
     Ok(PointArray::new(Coords::from_valid(
         ValidCoords::from_axes((x, y, Z.then_some(z), M.then_some(m))),
