@@ -95,14 +95,14 @@ def centroid(
     on_row_error: OnRowError = "raise",
 ) -> pl.Expr:
     """The centroid is the 'middle' of a geometry, represented as a weighted average of every axis.
-    What this exactly is depends on the geometry.
-    This weighing makes it different from the `mean_coordinate`.
-    The resulting is always a `PointXY[ZM]`.
+    What exactly this is depends on the geometry.
+    This weighing makes it different from `mean_coordinate`.
+    The result is always a `PointXY[ZM]`.
     The result inherits the geometry's dimension and CRS.
     TODO: ^ shared doc
 
-    For a polygon, this give the centre of area, doing weighing evenly over its area without its holes.
-    For linestring its centre of length, where every segments weighs as much as it is long.
+    For a polygon, this gives the centre of area, weighted evenly over its area without its holes.
+    For a linestring, it gives the centre of length, where every segment weighs as much as it is long.
 
     `distance_method` says how lengths and areas are measured
     (see :ref:`distance_method <arg-distance_method>` on the Common arguments page),
@@ -118,30 +118,35 @@ def centroid(
       with its `z` simply averaged over it.
       For a flat polygon that is not vertical,
       this puts the centroid on the polygon's plane, right above the centroid of its footprint.
-      A vertical linestring or polygon has no centroid,
+      A vertical linestring or polygon calculated using the `"footprint"` method therefore has no centroid,
       as its footprint has no length or area.
       This method is cheaper, and more useful if your data represents a surface that happens to have elevation data.
-    - `"3d"` also considers `z` in the weighing process using Newell's method.
-      This gives an accurate z-centroid too.
+    - `"3d"` also considers `z` in the weighing process.
+      A linestring's segments then count their difference in height too.
+      The calculation uses Newell's method.
+      Here, a non-flat polygon is measured by its shadow on the plane facing along its vector area.
+      With this method, a vertical linestring or polygon will have a centroid too.
       This is more expensive, but more representative if your data represents a sampled data set with height information.
 
+    A polygon's area is split into triangles that fan out from one point per ring.
     `anchor` sets from where the fanning of a polygon's area is done.
-    A linestring has no area to fan out over, so it ignores `anchor`.
     If the polygon does not lie on a plane, it moves the `z` with `"footprint"`,
     and every axis with `"3d"`.
     It has no effect if the polygon is flat.
     It also moves an `m` that does not change linearly over the polygon.
+    A linestring has no area to fan out over, so it ignores `anchor`.
 
     - `"length_weighted_mean"` is the default.
-      It fans out from the centre of the ring's length (measured as `weighing_method`).
+      It fans out from the centre of the ring's length (measured as `weighing_method` says).
       The centroid therefore does not change when a vertex is added on a straight edge,
       or when the ring starts at another vertex.
     - `"vertex_mean"` fans out from the mean of the ring's vertices.
-      It is quicker to find, but it moves when a vertex is added on a straight edge.
+      It is quicker to find, but it moves when a vertex is added on a straight edge,
+      and so does the centroid of a polygon that is not flat.
 
     {measure}
     As it is not a position, it never contributes to the weights.
-    The resulting `m` of the centroid is the geometry's mean value.
+    The resulting `m` of the centroid is the geometry's weighted mean value.
 
     A multilinestring or multipolygon gets a single centroid.
     Its calculation is done per part, and then compounded.
@@ -150,22 +155,25 @@ def centroid(
     gives the empty point as its centroid.
 
     {on_row_error}
-    If the geometry has no length or no area, it will have no centroid.
-        - a linestring with all its vertices on one spot
-        - a polygon with all its vertices exactly on a line
-          A polygon whose vertices lie on a line only up to rounding
-          (such as points computed as `(x, 3 * x)`)
-          usually keeps a tiny area from that rounding, and therefore has a centroid.
-          That centroid can lie far outside the polygon.
-        - a geometry whose vertices all lie within about 1e-162 of each other.
-          A slightly larger geometry (within about 1e-154 for a linestring,
-          or 1e-103 for a polygon) has a centroid, but it loses precision relative to the size of the geometry.
-        - An invalid polygon that has a negative area raises an error
+    If the geometry has no length or no area, it will have no centroid, such as:
+
+    - a linestring with all its vertices on one spot.
+    - a polygon with all its vertices exactly on a line.
+      A polygon whose vertices lie on a line only up to rounding
+      (such as points computed as `(x, 3 * x)`) can underflow.
+      That centroid can lie far outside the polygon.
+      TODO: make it automatically fall back to line weight in this rare case, and otherwise to vertex mean.
+    - a geometry whose vertices all lie within about 1e-162 of each other,
+      because it gets a tiny length or area.
+      A slightly larger geometry (within about 1e-154 for a linestring,
+      or 1e-103 for a polygon) has a centroid, but it loses precision relative to the size of the geometry.
+
+    An invalid polygon that has a negative area due to oversized holes raises an error too.
 
     A NaN or an infinity propagates this value through arithmetically,
-    resulting in a centroid that itself is also not finite.
+    resulting in a centroid that itself is also non-finite.
     If the axis that this value is used in is part of the weighing process (see `weighing_method`),
-    it can make the entire centroid NaN.
+    the entire centroid will be NaN as the summed weight is now non-finite.
     If it is not used to weigh (`m`, or `z` with `"footprint"`), it only changes that axis.
 
     A point is its own centroid, whatever the `distance_method`.
