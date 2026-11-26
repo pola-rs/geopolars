@@ -195,6 +195,22 @@ the kernels that take `null_parts` or `check_null_coordinates`,
 or that build geometries from parts or coordinates.
 They take what may not be valid GeoArrow yet.
 
+Every expression's python docstring must have a table that shows the required validity.
+This should be done in a in a table built from the `_docs.py` snippets, not only text.
+The table should be placed right below the summary
+
+```text
+{validity_table_start}
+{requires_valid_geoarrow}  {unexpected_results}
+{requires_ogc_validity}  {unexpected_results}
+{validity_table_end}
+```
+
+It has a row for every requirement (`requires_simple` comes on top of the others),
+with what the kernel does with input that does not meet it:
+`unexpected_results`, `raises_errors`, or `unexpected_results_or_errors`.
+A kernel that requires no validity gets the badge `{no_validity_required}` instead of the table.
+
 ### NaN, infinity and empties
 
 Validity does **not** shield you from NaN or infinite values, nor from *empty* geometries.
