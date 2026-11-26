@@ -234,6 +234,8 @@ fn add_ring<const Z: bool, const M: bool, const ANCHOR: u8>(
     };
     // The ring is split into triangles that fan out from `base`.
     // Each weighs half its cross product `fan`, at the mean of its corners.
+    // Summing these weights already gives the area,
+    // so calling `twice_signed_area` would only pass over the ring a second time.
     // Taking the coordinates relative to `base` keeps their precision far from the origin.
     // As every ring of a polygon shares `base`,
     // taking a hole out of its exterior loses no precision there either.
