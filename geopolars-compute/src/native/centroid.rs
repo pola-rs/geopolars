@@ -89,6 +89,16 @@ impl<const Z: bool, const M: bool> Moment<Z, M> {
     }
 
     #[inline(always)]
+    fn add(&mut self, weight: f64, centre: [f64; 4]) {
+        for k in 0..4 {
+            if has_axis::<Z, M>(k) {
+                self.sum[k] += weight * centre[k];
+            }
+        }
+        self.weight += weight;
+    }
+
+    #[inline(always)]
     fn add_relative_to(&mut self, base: [f64; 4], relative: &Self) {
         for k in 0..4 {
             if has_axis::<Z, M>(k) {
@@ -131,12 +141,7 @@ fn add_line<const Z: bool, const M: bool>(
     };
     for here in coordinates {
         let len = segment_length(previous, here);
-        for k in 0..4 {
-            if has_axis::<Z, M>(k) {
-                moment.sum[k] += 0.5 * len * (previous[k] + here[k]);
-            }
-        }
-        moment.weight += len;
+        moment.add(len, std::array::from_fn(|k| 0.5 * (previous[k] + here[k])));
         previous = here;
     }
 }
@@ -147,16 +152,10 @@ fn planar_segment_length<const Z: bool>(a: [f64; 4], b: [f64; 4]) -> f64 {
 }
 
 /// The point a ring fans out from, relative to the `base` of its polygon.
-struct RingAnchor<const Z: bool, const M: bool, const ANCHOR: u8> {
-    sum: [f64; 4],
-    weight: f64,
-}
+struct RingAnchor<const Z: bool, const M: bool, const ANCHOR: u8>(Moment<Z, M>);
 
 impl<const Z: bool, const M: bool, const ANCHOR: u8> RingAnchor<Z, M, ANCHOR> {
-    const ZERO: Self = Self {
-        sum: [0.0; 4],
-        weight: 0.0,
-    };
+    const ZERO: Self = Self(Moment::ZERO);
 
     #[inline(always)]
     fn add_edge(
@@ -173,21 +172,16 @@ impl<const Z: bool, const M: bool, const ANCHOR: u8> RingAnchor<Z, M, ANCHOR> {
                 std::array::from_fn(|k| 0.5 * (d_p[k] + d_q[k])),
             ),
         };
-        for k in 0..4 {
-            if has_axis::<Z, M>(k) {
-                self.sum[k] += weight * centre[k];
-            }
-        }
-        self.weight += weight;
+        self.0.add(weight, centre);
     }
 
     #[inline(always)]
     fn relative_to_base(&self) -> [f64; 4] {
         // A ring without length has no area either, so any point does.
-        if self.weight == 0.0 {
+        if self.0.weight == 0.0 {
             return [0.0; 4];
         }
-        self.sum.map(|s| s / self.weight)
+        self.0.average()
     }
 }
 
