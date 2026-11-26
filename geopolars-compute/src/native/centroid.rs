@@ -87,6 +87,36 @@ impl<const Z: bool, const M: bool> Moment<Z, M> {
             }
         })
     }
+
+    #[inline(always)]
+    fn add_relative_to(&mut self, base: [f64; 4], relative: &Self) {
+        for k in 0..4 {
+            if has_axis::<Z, M>(k) {
+                self.sum[k] += relative.sum[k] + base[k] * relative.weight;
+            }
+        }
+        self.weight += relative.weight;
+    }
+}
+
+#[inline(always)]
+fn relative_to<const Z: bool, const M: bool>(q: [f64; 4], base: [f64; 4]) -> [f64; 4] {
+    std::array::from_fn(|k| {
+        if has_axis::<Z, M>(k) {
+            q[k] - base[k]
+        } else {
+            0.0
+        }
+    })
+}
+
+#[inline(always)]
+fn first_vertex_of_polygon<const Z: bool, const M: bool>(
+    polygon: &ScalarPolygon,
+) -> Option<[f64; 4]> {
+    polygon
+        .rings()
+        .find_map(|ring| ring.coordinates::<Z, M>().next())
 }
 
 #[inline(always)]
@@ -116,7 +146,7 @@ fn planar_segment_length<const Z: bool>(a: [f64; 4], b: [f64; 4]) -> f64 {
     Planar.segment::<Z>(xyz(a), xyz(b))
 }
 
-/// The point a ring fans out from, relative to its first vertex.
+/// The point a ring fans out from, relative to the `base` of its polygon.
 struct RingAnchor<const Z: bool, const M: bool, const ANCHOR: u8> {
     sum: [f64; 4],
     weight: f64,
@@ -152,7 +182,7 @@ impl<const Z: bool, const M: bool, const ANCHOR: u8> RingAnchor<Z, M, ANCHOR> {
     }
 
     #[inline(always)]
-    fn relative_to_first(&self) -> [f64; 4] {
+    fn relative_to_base(&self) -> [f64; 4] {
         // A ring without length has no area either, so any point does.
         if self.weight == 0.0 {
             return [0.0; 4];
@@ -161,38 +191,34 @@ impl<const Z: bool, const M: bool, const ANCHOR: u8> RingAnchor<Z, M, ANCHOR> {
     }
 }
 
-/// Adds the area of a closed ring, and its area-weighted centre, to `moment`.
+/// Adds the area of a closed ring, and its area-weighted centre relative to `base`, to `moment`.
 /// A hole passes `sign = -1.0`, which takes its area out again.
 #[inline(always)]
 fn add_ring<const Z: bool, const M: bool, const ANCHOR: u8>(
     moment: &mut Moment<Z, M>,
     ring: &ScalarLineString,
+    base: [f64; 4],
     sign: f64,
 ) {
-    let mut coordinates = ring.coordinates::<Z, M>();
-    let Some(p0) = coordinates.next() else {
+    let mut coordinates = ring
+        .coordinates::<Z, M>()
+        .map(|q| relative_to::<Z, M>(q, base));
+    let Some(mut d_p) = coordinates.next() else {
         return;
     };
-    // The ring is split into triangles that fan out from `p0`.
+    // The ring is split into triangles that fan out from `base`.
     // Each weighs half its cross product `fan`, at the mean of its corners.
-    // Taking the coordinates relative to `p0` keeps their precision far from the origin.
-    // `p0` itself is added back once, after the loop.
+    // Taking the coordinates relative to `base` keeps their precision far from the origin.
+    // As every ring of a polygon shares `base`,
+    // taking a hole out of its exterior loses no precision there either.
     // The area, x, and y come out the same whichever point the fan starts from.
     // As z and m need not lie on a plane, they do depend on it.
     // `sum_dx` and `sum_dy` let them move to the fan from the anchor after the loop.
     let (mut a, mut sum) = (0.0, [0.0; 4]);
     let mut anchor = RingAnchor::<Z, M, ANCHOR>::ZERO;
     let (mut sum_dx, mut sum_dy) = ([0.0; 4], [0.0; 4]);
-    let mut d_p = [0.0; 4];
-    // The repeated last vertex is only ever the `q`.
-    for q in coordinates {
-        let d_q: [f64; 4] = std::array::from_fn(|k| {
-            if has_axis::<Z, M>(k) {
-                q[k] - p0[k]
-            } else {
-                0.0
-            }
-        });
+    // The repeated last vertex is only ever the `d_q`.
+    for d_q in coordinates {
         let fan = d_p[0] * d_q[1] - d_q[0] * d_p[1];
         a += fan;
         for k in 0..4 {
@@ -212,9 +238,9 @@ fn add_ring<const Z: bool, const M: bool, const ANCHOR: u8>(
         d_p = d_q;
     }
     if Z || M {
-        // Moving the tip of a triangle from `p0` to `c` takes `c × (d_q - d_p)` off its `fan`.
+        // Moving the tip of a triangle from `base` to `c` takes `c × (d_q - d_p)` off its `fan`.
         // Over a closed ring, these add up to nothing, so `a` stays the same.
-        let c = anchor.relative_to_first();
+        let c = anchor.relative_to_base();
         for k in 2..4 {
             if has_axis::<Z, M>(k) {
                 sum[k] += c[k] * a - (c[0] * sum_dy[k] - c[1] * sum_dx[k]);
@@ -224,7 +250,7 @@ fn add_ring<const Z: bool, const M: bool, const ANCHOR: u8>(
     let sign = sign * a.signum();
     for (k, (total, s)) in moment.sum.iter_mut().zip(sum).enumerate() {
         if has_axis::<Z, M>(k) {
-            *total += sign * (s / 6.0 + p0[k] * a / 2.0);
+            *total += sign * s / 6.0;
         }
     }
     moment.weight += sign * a / 2.0;
@@ -236,13 +262,17 @@ fn add_polygon<const Z: bool, const M: bool, const ANCHOR: u8>(
     moment: &mut Moment<Z, M>,
     polygon: &ScalarPolygon,
 ) {
-    let Some(exterior) = polygon.exterior() else {
+    let (Some(exterior), Some(base)) =
+        (polygon.exterior(), first_vertex_of_polygon::<Z, M>(polygon))
+    else {
         return;
     };
-    add_ring::<Z, M, ANCHOR>(moment, &exterior, 1.0);
+    let mut relative = Moment::ZERO;
+    add_ring::<Z, M, ANCHOR>(&mut relative, &exterior, base, 1.0);
     for hole in polygon.holes() {
-        add_ring::<Z, M, ANCHOR>(moment, &hole, -1.0);
+        add_ring::<Z, M, ANCHOR>(&mut relative, &hole, base, -1.0);
     }
+    moment.add_relative_to(base, &relative);
 }
 
 #[inline(always)]
@@ -272,33 +302,28 @@ struct RingFanThreeD {
     moment: [[f64; 4]; 3],
 }
 
-/// Fans `ring` out from its anchor in 3D, as a [RingFanThreeD] in absolute coordinates.
+/// Fans `ring` out from its anchor in 3D, as a [RingFanThreeD] relative to `base`.
 #[inline(always)]
 fn ring_fan_three_d<const Z: bool, const M: bool, const ANCHOR: u8>(
     ring: &ScalarLineString,
+    base: [f64; 4],
 ) -> RingFanThreeD {
     let mut fan = RingFanThreeD {
         normal: [0.0; 3],
         moment: [[0.0; 4]; 3],
     };
-    let mut coordinates = ring.coordinates::<Z, M>();
-    let Some(p0) = coordinates.next() else {
+    let mut coordinates = ring
+        .coordinates::<Z, M>()
+        .map(|q| relative_to::<Z, M>(q, base));
+    let Some(mut d_p) = coordinates.next() else {
         return fan;
     };
-    // As in `add_ring`, the triangles fan out from `p0`, relative to `p0`.
+    // As in `add_ring`, the triangles fan out from `base`, relative to `base`.
     // The cross product `n` of a triangle is twice its vector area.
     // `slope` lets the fan move to the anchor after the loop.
     let mut anchor = RingAnchor::<Z, M, ANCHOR>::ZERO;
     let mut slope = [[0.0; 4]; 3];
-    let mut d_p = [0.0; 4];
-    for q in coordinates {
-        let d_q: [f64; 4] = std::array::from_fn(|k| {
-            if has_axis::<Z, M>(k) {
-                q[k] - p0[k]
-            } else {
-                0.0
-            }
-        });
+    for d_q in coordinates {
         let n = cross(xyz(d_p), xyz(d_q));
         anchor.add_edge(d_p, d_q, planar_segment_length::<Z>);
         for j in 0..3 {
@@ -313,14 +338,14 @@ fn ring_fan_three_d<const Z: bool, const M: bool, const ANCHOR: u8>(
         }
         d_p = d_q;
     }
-    // Moving the tip of a triangle from `p0` to `c` takes `c × (d_q - d_p)` off its `n`.
+    // Moving the tip of a triangle from `base` to `c` takes `c × (d_q - d_p)` off its `n`.
     // Over a closed ring, these add up to nothing, so `normal` stays the same.
-    let c = anchor.relative_to_first();
+    let c = anchor.relative_to_base();
     for k in 0..4 {
         if has_axis::<Z, M>(k) {
             let shift = cross(xyz(c), [slope[0][k], slope[1][k], slope[2][k]]);
             for j in 0..3 {
-                fan.moment[j][k] += (c[k] + 3.0 * p0[k]) * fan.normal[j] - shift[j];
+                fan.moment[j][k] += c[k] * fan.normal[j] - shift[j];
             }
         }
     }
@@ -334,13 +359,14 @@ fn add_polygon_three_d<const Z: bool, const M: bool, const ANCHOR: u8>(
     polygon: &ScalarPolygon,
 ) {
     let mut rings = polygon.rings();
-    let Some(exterior) = rings.next() else {
+    let (Some(exterior), Some(base)) = (rings.next(), first_vertex_of_polygon::<Z, M>(polygon))
+    else {
         return;
     };
-    let mut fan = ring_fan_three_d::<Z, M, ANCHOR>(&exterior);
+    let mut fan = ring_fan_three_d::<Z, M, ANCHOR>(&exterior, base);
     let exterior_normal = fan.normal;
     for hole in rings {
-        let hole = ring_fan_three_d::<Z, M, ANCHOR>(&hole);
+        let hole = ring_fan_three_d::<Z, M, ANCHOR>(&hole, base);
         // The hole is taken out whichever way it winds.
         // Against an exterior without area, it is taken out as it winds.
         let sign = if dot(hole.normal, exterior_normal) < 0.0 {
@@ -370,13 +396,15 @@ fn add_polygon_three_d<const Z: bool, const M: bool, const ANCHOR: u8>(
     } else {
         -1.0
     };
+    let mut relative = Moment::ZERO;
     for k in 0..4 {
         if has_axis::<Z, M>(k) {
             let along_normal: f64 = (0..3).map(|j| unit[j] * fan.moment[j][k]).sum();
-            moment.sum[k] += sign * along_normal / 6.0;
+            relative.sum[k] = sign * along_normal / 6.0;
         }
     }
-    moment.weight += sign * length / 2.0;
+    relative.weight = sign * length / 2.0;
+    moment.add_relative_to(base, &relative);
 }
 
 /// moment += (exterior - holes), measured in 3D if `MEASURE_Z`, or else on its footprint.

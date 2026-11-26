@@ -237,6 +237,26 @@ def test_a_small_polygon_far_from_the_origin_keeps_its_centroid(
 
 
 @pytest.mark.parametrize("method", ["footprint", "3d"])
+def test_a_hole_that_nearly_fills_its_exterior_far_from_the_origin_keeps_its_centroid(
+    method: CentroidMethod,
+) -> None:
+    # Powers of two keep every corner exact.
+    corner, border = 2.0**17, 2.0**-20
+    exterior = _square_at((corner, corner), 1.0)
+    hole = _square_at((corner + border, corner + border), 1.0 - 2 * border)
+    out = _polygon_xyzm([exterior, hole], lambda _x, _y: 100.0).select(
+        geo.centroid("polygon", method=method)
+    )
+
+    (got,) = out.to_series().ext.storage().to_list()
+
+    expected = (corner + 0.5, corner + 0.5, 100.0, 100.0)
+    assert (got["x"], got["y"], got["z"], got["m"]) == pytest.approx(
+        expected, rel=0, abs=1e-9
+    )
+
+
+@pytest.mark.parametrize("method", ["footprint", "3d"])
 def test_a_flat_polygon_far_from_the_origin_keeps_its_z_and_m(
     method: CentroidMethod,
 ) -> None:
