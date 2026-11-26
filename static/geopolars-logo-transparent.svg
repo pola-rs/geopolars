@@ -58,15 +58,15 @@
        gradientUnits="userSpaceOnUse">
       <stop
          offset="0"
-         stop-color="#B6D0FF"
+         stop-color="#DCE9FF"
          id="stop1" />
       <stop
          offset="0.5"
-         stop-color="#82AEFF"
+         stop-color="#CADDFF"
          id="stop2" />
       <stop
          offset="1"
-         stop-color="#4F8BFF"
+         stop-color="#B6D0FF"
          id="stop3" />
     </linearGradient>
     <!-- Slightly deeper rim along the bottom (Polars Blue 500) -->
@@ -80,12 +80,12 @@
        gradientUnits="userSpaceOnUse">
       <stop
          offset="0.6"
-         stop-color="#1E6BFF"
+         stop-color="#4F8BFF"
          stop-opacity="0"
          id="stop4" />
       <stop
          offset="1"
-         stop-color="#1E6BFF"
+         stop-color="#4F8BFF"
          stop-opacity="0.3"
          id="stop5" />
     </linearGradient>
@@ -98,12 +98,12 @@
        r="860">
       <stop
          offset="0"
-         stop-color="#1E6BFF"
+         stop-color="#0075FF"
          stop-opacity="0.95"
          id="stop6" />
       <stop
          offset="1"
-         stop-color="#1E6BFF"
+         stop-color="#0075FF"
          stop-opacity="0.35"
          id="stop7" />
     </radialGradient>
@@ -138,6 +138,7 @@
     </radialGradient>
     <mask
        id="polar-mask"
+       style="color-interpolation:sRGB"
        maskUnits="userSpaceOnUse"
        x="0"
        y="0"
@@ -150,6 +151,47 @@
          id="rect11"
          x="0"
          y="0" />
+      <!-- Gridlines: drawn black at 60% in the mask, so they are 60% see-through -->
+      <g
+         id="grid"
+         fill="none"
+         stroke="#000000"
+         opacity="0.6"
+         stroke-width="5"
+         stroke-linecap="round">
+        <!-- Latitudes: ring near the pole, and the front arc of a wider ring -->
+        <ellipse
+           cx="512"
+           cy="570"
+           rx="283"
+           ry="73"
+           id="ellipse65" />
+        <path
+           d="m -8,560 a 520,210 0 0 0 1040,0"
+           id="path65" />
+        <!-- Meridians converging on the pole -->
+        <path
+           d="M 512,800 V 450"
+           id="path66" />
+        <path
+           d="M 330,790 Q 374,567 512,450"
+           id="path67" />
+        <path
+           d="M 694,790 Q 650,567 512,450"
+           id="path68" />
+        <path
+           d="M 160,790 Q 248,580 512,450"
+           id="path69" />
+        <path
+           d="M 864,790 Q 776,580 512,450"
+           id="path70" />
+        <path
+           d="M 90,710 Q 240,560 512,450"
+           id="path71" />
+        <path
+           d="M 934,710 Q 784,560 512,450"
+           id="path72" />
+      </g>
     </mask>
     <radialGradient
        id="paint1_radial_62_3"
@@ -1119,47 +1161,6 @@
            id="rect65"
            style="fill:url(#radialGradient129)" />
       </g>
-    </g>
-    <!-- Gridlines -->
-    <g
-       id="grid"
-       fill="none"
-       stroke="#ffffff"
-       stroke-width="5"
-       stroke-linecap="round"
-       opacity="0.92">
-      <!-- Latitudes: ring near the pole, and the front arc of a wider ring -->
-      <ellipse
-         cx="512"
-         cy="570"
-         rx="283"
-         ry="73"
-         id="ellipse65" />
-      <path
-         d="m -8,560 a 520,210 0 0 0 1040,0"
-         id="path65" />
-      <!-- Meridians converging on the pole -->
-      <path
-         d="M 512,800 V 450"
-         id="path66" />
-      <path
-         d="M 330,790 Q 374,567 512,450"
-         id="path67" />
-      <path
-         d="M 694,790 Q 650,567 512,450"
-         id="path68" />
-      <path
-         d="M 160,790 Q 248,580 512,450"
-         id="path69" />
-      <path
-         d="M 864,790 Q 776,580 512,450"
-         id="path70" />
-      <path
-         d="M 90,710 Q 240,560 512,450"
-         id="path71" />
-      <path
-         d="M 934,710 Q 784,560 512,450"
-         id="path72" />
     </g>
   </g>
   <path
