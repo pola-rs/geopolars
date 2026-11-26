@@ -61,16 +61,18 @@ def close_rings(
     geometry: IntoExprColumn, *, snap_z: bool = False, snap_m: bool = False
 ) -> pl.Expr:
     """Closes any unclosed lines into rings.
-    A ring is closed when its last vertex lies at exactly the same place as its first,
-    in x, y and z (see `is_valid_geoarrow`).
-    For a polygon, this acts on all of the rings.
 
     {validity_table_start}
     {requires_no_nested_nulls}  {unexpected_results}
     {validity_table_end}
 
+    A ring is closed when its last vertex lies at exactly the same place as its first,
+    in x, y and z (see `is_valid_geoarrow`).
+    For a polygon, this acts on all of the rings.
+
     {keeps_type_dimension_and_crs}
-    {ignores_empty_and_invalid}
+    An empty geometry stays empty.
+    A ring of fewer than 3 vertices stays too short for `is_valid_geoarrow`, even when closed.
 
     {closing_rings}
 

@@ -45,6 +45,11 @@ def add_parts(
     empty_parts: EmptyParts = "keep",
 ) -> pl.Expr:
     """Add the parts of `parts` to each geometry, after the parts it already has.
+
+    {validity_table_start}
+    {requires_no_nested_nulls}  {unexpected_results}
+    {validity_table_end}
+
     The result is always a multi-geometry.
 
     ===========================================  =====================================================================  =======================

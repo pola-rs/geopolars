@@ -21,8 +21,11 @@ def _badge(colour: str, text: str) -> str:
     return f":bdg-{colour}:`{text}`"
 
 
-# The rows of the table of what an expression requires of its input.
-# Each requirement is padded to one width, so that the outcomes line up after it.
+# A docstring builds the table of what an expression requires
+# from `{validity_table_start}`, one row per requirement, and `{validity_table_end}`.
+# A row is a requirement, two spaces and an outcome: `{requires_ogc_validity}  {unexpected_results}`.
+# Every requirement is padded to the widest,
+# so that its outcome starts in the second column of the RST table.
 _REQUIREMENTS = {
     "requires_no_nested_nulls": _badge("secondary", "requires no nested nulls"),
     "requires_valid_geoarrow": _badge("info", "requires valid GeoArrow"),
@@ -43,7 +46,7 @@ _shared_docs = {
     "no_validity_required": _badge("success", "no validity required"),
     "validity_table_start": f"""\
 {_VALIDITY_TABLE_BORDER}
-{"requirement".ljust(_REQUIREMENT_WIDTH)}  otherwise, results may be
+{"requirement".ljust(_REQUIREMENT_WIDTH)}  if not met, it
 {_VALIDITY_TABLE_BORDER}""",
     **{name: badge.ljust(_REQUIREMENT_WIDTH) for name, badge in _REQUIREMENTS.items()},
     **_OUTCOMES,
@@ -100,7 +103,8 @@ as described under "Empty geometries" in `docs/source/user-guide/geo/concepts/nu
 
 A point cannot lose its coordinate, so with `"drop"` it becomes the empty point,
 just as a linestring or ring that loses every vertex becomes empty.
-With `"drop"`, a ring that is no longer closed (see `is_valid_geoarrow`) is too short as well (see below).
+With `"drop"`, a ring that is not closed (see `is_valid_geoarrow`) is too short as well (see below),
+also when it was unclosed in the input and lost no vertex.
 With `"set_empty"` and `"set_null"`, every offset is kept, and `short_lines` is ignored.
 A ring whose ends are emptied is no longer closed.""",
     "short_lines": """\

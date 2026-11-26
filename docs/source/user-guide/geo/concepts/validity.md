@@ -68,13 +68,12 @@ See `is_valid_geoarrow` and `is_valid_ogc` in the API reference for all the rule
 
 Every expression in the API reference says how valid its input has to be.
 
-- **no validity required**: the expression takes geometries that are not valid at all.
-  These are the constructors, the decoders (`from_wkb`, `from_wkt`)
-  and the checks (`is_valid_geoarrow`, `is_valid_ogc`).
+- **no validity required**: the expression also takes geometries that are not valid,
+  such as the constructors, the decoders and `is_valid_geoarrow`.
 - **requires no nested nulls**: the expression expects that only whole geometries are null,
   never a part, ring or coordinate in one.
   This is the half of valid GeoArrow about nulls: the rings need not be closed.
-  These are the repairs (`close_rings`, `filter_coordinates`, `fix_out_of_bounds`).
+  `close_rings` is one, as it repairs unclosed rings.
 - **requires valid GeoArrow**: the expression expects geometries that `is_valid_geoarrow` accepts.
 - **requires OGC validity**: the expression expects geometries that `is_valid_ogc` accepts,
   which are valid GeoArrow too.

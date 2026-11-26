@@ -190,14 +190,16 @@ So do not check for nulls below the rows:
 ensuring validity is the task of whoever builds the views.
 This puts the burden on the kernel to give valid output too, though.
 
-Constructors and sanitising functions are the exception:
-the kernels that take `null_parts` or `check_null_coordinates`,
-or that build geometries from parts or coordinates.
-They take what may not be valid GeoArrow yet.
+Constructors, decoders and validity checks are the exception:
+they take what may not be valid GeoArrow yet.
+A kernel that takes `null_parts` or `check_null_coordinates` makes the same exception
+only for the argument that flag acts on, such as the parts of `add_parts`.
 
-Every expression's python docstring must have a table that shows the required validity.
-This should be done in a in a table built from the `_docs.py` snippets, not only text.
-The table should be placed right below the summary
+Right below its summary, every expression's Python docstring says what validity it requires,
+rather than only in prose.
+Prefer using the `_docs.py` snippets to fill these in.
+An expression that requires none, such as a constructor, gets the badge `{no_validity_required}`.
+Any other gets a table:
 
 ```text
 {validity_table_start}
@@ -206,12 +208,13 @@ The table should be placed right below the summary
 {validity_table_end}
 ```
 
-It has a row for every requirement (`requires_simple` comes on top of the others),
-with what the kernel does with input that does not meet it:
-`unexpected_results`, `raises_errors`, or `unexpected_results_or_errors`.
-A kernel that requires no validity gets the badge `{no_validity_required}` instead of the table.
-A kernel that handles unclosed rings itself, such as `close_rings`,
-takes `requires_no_nested_nulls` instead of `requires_valid_geoarrow`.
+It has a row for each requirement the expression relies on,
+with what it does with input that does not meet it.
+Though validity is tiered (OGC validity implies GeoArrow valid), both are still listed,
+as outcomes can differ.
+One that also needs simple geometries adds a `requires_simple` row.
+An expression that requires only partial validity can say so explicitly in a row for that part,
+such as `requires_no_nested_nulls` for `close_rings`.
 
 ### NaN, infinity and empties
 
