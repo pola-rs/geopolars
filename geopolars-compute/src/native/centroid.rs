@@ -11,6 +11,12 @@
 //!
 //! If `M=true`, the m values are averaged too.
 //!
+//! ## `MEASURE_Z`
+//!
+//! If `MEASURE_Z=true`, the lengths and areas that weigh a centroid are measured in 3D,
+//! rather than on their footprint.
+//! It is never set without `Z`.
+//!
 //! ## `ANCHOR`
 //!
 //! The [CentroidAnchor] that every ring of a polygon fans out from.
@@ -43,6 +49,33 @@ const_enum!(
         VertexMean,
     }
 );
+
+const_enum!(
+    /// Whether a centroid averages z, and whether it also measures its weight in z.
+    enum ZAxis {
+        Absent,
+        Averaged,
+        Measured,
+    }
+);
+
+impl ZAxis {
+    fn of(weighing_method: CentroidWeighing, coords: &ValidCoords) -> Self {
+        match (coords.dim().has_z(), weighing_method) {
+            (false, _) => ZAxis::Absent,
+            (true, CentroidWeighing::Footprint) => ZAxis::Averaged,
+            (true, CentroidWeighing::ThreeD) => ZAxis::Measured,
+        }
+    }
+
+    const fn has_z(self) -> bool {
+        !matches!(self, ZAxis::Absent)
+    }
+
+    const fn measures_z(self) -> bool {
+        matches!(self, ZAxis::Measured)
+    }
+}
 
 /// Used at compile to drop loops
 /// Whether axis `k` is there.
@@ -414,12 +447,6 @@ fn add_polygon_measured<const Z: bool, const M: bool, const MEASURE_Z: bool, con
     }
 }
 
-/// Whether `weighing_method` measures the length or area of `coords` in z too.
-/// Without a z, measuring in 3D is measuring the footprint.
-fn measures_z(weighing_method: CentroidWeighing, coords: &ValidCoords) -> bool {
-    matches!(weighing_method, CentroidWeighing::ThreeD) && coords.dim().has_z()
-}
-
 /// The length of `v`, scaled first so that its squares do not underflow before its cross products do.
 #[inline(always)]
 fn norm(v: [f64; 3]) -> f64 {
@@ -638,10 +665,13 @@ pub fn line_string_centroids(
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
     let coords = array.coords();
-    let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m(), MEASURE_Z = measures_z(weighing_method, coords);
-        line_string_centroids_with::<Z, M, MEASURE_Z>(array, on_row_error)
+        Z_AXIS: ZAxis = ZAxis::of(weighing_method, coords), M = coords.dim().has_m();
+        line_string_centroids_with::<
+            { ZAxis::from_u8(Z_AXIS).has_z() },
+            M,
+            { ZAxis::from_u8(Z_AXIS).measures_z() },
+        >(array, on_row_error)
     )
 }
 
@@ -664,10 +694,13 @@ pub fn multi_line_string_centroids(
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
     let coords = array.coords();
-    let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(), M = dim.has_m(), MEASURE_Z = measures_z(weighing_method, coords);
-        multi_line_string_centroids_with::<Z, M, MEASURE_Z>(array, on_row_error)
+        Z_AXIS: ZAxis = ZAxis::of(weighing_method, coords), M = coords.dim().has_m();
+        multi_line_string_centroids_with::<
+            { ZAxis::from_u8(Z_AXIS).has_z() },
+            M,
+            { ZAxis::from_u8(Z_AXIS).measures_z() },
+        >(array, on_row_error)
     )
 }
 
@@ -695,13 +728,16 @@ pub fn polygon_centroids(
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
     let coords = array.coords();
-    let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(),
-        M = dim.has_m(),
-        MEASURE_Z = measures_z(weighing_method, coords),
+        Z_AXIS: ZAxis = ZAxis::of(weighing_method, coords),
+        M = coords.dim().has_m(),
         ANCHOR: CentroidAnchor = anchor;
-        polygon_centroids_with::<Z, M, MEASURE_Z, ANCHOR>(array, on_row_error)
+        polygon_centroids_with::<
+            { ZAxis::from_u8(Z_AXIS).has_z() },
+            M,
+            { ZAxis::from_u8(Z_AXIS).measures_z() },
+            ANCHOR,
+        >(array, on_row_error)
     )
 }
 
@@ -725,13 +761,16 @@ pub fn multi_polygon_centroids(
     on_row_error: OnRowError,
 ) -> GeoComputeResult<PointArray> {
     let coords = array.coords();
-    let dim = coords.dim();
     with_const_flags!(
-        Z = dim.has_z(),
-        M = dim.has_m(),
-        MEASURE_Z = measures_z(weighing_method, coords),
+        Z_AXIS: ZAxis = ZAxis::of(weighing_method, coords),
+        M = coords.dim().has_m(),
         ANCHOR: CentroidAnchor = anchor;
-        multi_polygon_centroids_with::<Z, M, MEASURE_Z, ANCHOR>(array, on_row_error)
+        multi_polygon_centroids_with::<
+            { ZAxis::from_u8(Z_AXIS).has_z() },
+            M,
+            { ZAxis::from_u8(Z_AXIS).measures_z() },
+            ANCHOR,
+        >(array, on_row_error)
     )
 }
 
