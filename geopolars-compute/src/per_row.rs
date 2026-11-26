@@ -8,12 +8,12 @@
 //! If `ALL_VALID=true`, every row is there, so none is checked for being null.
 
 use geopolars_views::output::{bool_array, f64_array, f64_array_masked, list_array};
-use geopolars_views::{List, ValidList};
+use geopolars_views::{Coords, List, PointArray, ValidCoords, ValidList};
 use polars_arrow::array::{BooleanArray, ListArray, PrimitiveArray};
 use polars_arrow::bitmap::Bitmap;
 use polars_arrow::offset::Offsets;
-use std::ops::Range;
 
+use crate::utils::validity_with_null_at;
 use crate::{row_or_null, OnRowError};
 
 /// `measure` of every row of a chunk, with the rows' own validity.
@@ -61,6 +61,59 @@ fn per_row_or_null_with<const ALL_VALID: bool, E>(
         }
     }
     Ok((values, nulled))
+}
+
+/// [per_row_or_null], for a point per row:
+/// `measure` gives its x, y, z and m, of which z and m are only kept under `Z` and `M`.
+#[inline(always)]
+pub(crate) fn per_row_point_or_null<const Z: bool, const M: bool, E>(
+    rows: &List,
+    on_row_error: OnRowError,
+    measure: impl Fn(usize) -> Result<[f64; 4], E>,
+) -> Result<PointArray, E> {
+    with_const_flags!(
+        ALL_VALID = rows.is_all_valid();
+        per_row_point_or_null_with::<ALL_VALID, Z, M, E>(rows, on_row_error, measure)
+    )
+}
+
+#[inline(always)]
+fn per_row_point_or_null_with<const ALL_VALID: bool, const Z: bool, const M: bool, E>(
+    rows: &List,
+    on_row_error: OnRowError,
+    measure: impl Fn(usize) -> Result<[f64; 4], E>,
+) -> Result<PointArray, E> {
+    let len = rows.len();
+    let capacity_if = |present: bool| if present { len } else { 0 };
+    let (mut x, mut y) = (Vec::with_capacity(len), Vec::with_capacity(len));
+    let (mut z, mut m) = (
+        Vec::with_capacity(capacity_if(Z)),
+        Vec::with_capacity(capacity_if(M)),
+    );
+    let mut nulled = Vec::new();
+    for i in 0..len {
+        // The vertices under a null row mean nothing, so it is not measured.
+        let point = if ALL_VALID || rows.is_valid(i) {
+            row_or_null(measure(i).map(Some), on_row_error)?.unwrap_or_else(|| {
+                nulled.push(i);
+                [0.0; 4]
+            })
+        } else {
+            [0.0; 4]
+        };
+        x.push(point[0]);
+        y.push(point[1]);
+        if Z {
+            z.push(point[2]);
+        }
+        if M {
+            m.push(point[3]);
+        }
+    }
+    Ok(PointArray::new(Coords::from_valid(
+        ValidCoords::from_axes((x, y, Z.then_some(z), M.then_some(m))),
+        validity_with_null_at(rows, &nulled),
+    )))
 }
 
 /// [per_row], for a `bool` per row.
@@ -132,26 +185,6 @@ fn per_row_values_with<const ALL_VALID: bool, T: Default, E>(
         });
     }
     Ok(values)
-}
-
-/// Calls `visit` with every row in `to_visit` of a chunk, and whether that row is valid.
-#[inline(always)]
-pub(crate) fn for_each_row(rows: &List, to_visit: Range<usize>, visit: impl FnMut(usize, bool)) {
-    with_const_flags!(
-        ALL_VALID = rows.is_all_valid();
-        for_each_row_with::<ALL_VALID>(rows, to_visit, visit)
-    )
-}
-
-#[inline(always)]
-fn for_each_row_with<const ALL_VALID: bool>(
-    rows: &List,
-    to_visit: Range<usize>,
-    mut visit: impl FnMut(usize, bool),
-) {
-    for i in to_visit {
-        visit(i, ALL_VALID || rows.is_valid(i));
-    }
 }
 
 /// [per_row_optional_bool], as a list per row of a chunk, one per part.

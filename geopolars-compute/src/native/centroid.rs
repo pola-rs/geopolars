@@ -24,14 +24,13 @@
 use std::ops::Range;
 
 use geopolars_views::{
-    Coords, LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PointArray,
-    PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
+    LineStringArray, List, MultiLineStringArray, MultiPolygonArray, PointArray, PolygonArray,
+    ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };
 
 use super::DistanceMetric;
-use crate::per_row::for_each_row;
-use crate::utils::validity_with_null_at;
-use crate::{row_or_null, CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
+use crate::per_row::per_row_point_or_null;
+use crate::{CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
 
 /// Which axes measure the length or area that a centroid is weighted by.
 /// Implements `weighing_method` of the Python `centroid`.
@@ -492,43 +491,17 @@ fn centroids<const Z: bool, const M: bool>(
     on_row_error: OnRowError,
     add_row: impl Fn(&mut Moment<Z, M>, usize),
 ) -> GeoComputeResult<PointArray> {
-    let len = rows.len();
-    let mut axes: [Vec<f64>; 4] =
-        std::array::from_fn(|k| Vec::with_capacity(if has_axis::<Z, M>(k) { len } else { 0 }));
-    let mut failed = Vec::new();
-    let mut first_error = None;
-    for_each_row(rows, 0..len, |i, is_valid| {
-        // A null row's offsets point anywhere, so it is not measured.
-        let average = if is_valid {
-            let mut moment = Moment::ZERO;
-            add_row(&mut moment, i);
-            if moment.weighs_at_most_zero() {
-                let error =
-                    no_centroid_error(row_vertices(i), moment.weight, weighed_by, suggest_3d);
-                if let Some(error) = error {
-                    failed.push(i);
-                    first_error.get_or_insert(error);
-                }
-            }
-            moment.average()
-        } else {
-            [0.0; 4]
-        };
-        for k in 0..4 {
-            if has_axis::<Z, M>(k) {
-                axes[k].push(average[k]);
+    per_row_point_or_null::<Z, M, _>(rows, on_row_error, |i| {
+        let mut moment = Moment::ZERO;
+        add_row(&mut moment, i);
+        if moment.weighs_at_most_zero() {
+            let error = no_centroid_error(row_vertices(i), moment.weight, weighed_by, suggest_3d);
+            if let Some(error) = error {
+                return Err(error);
             }
         }
-    });
-    if let Some(error) = first_error {
-        row_or_null::<(), _>(Err(error), on_row_error)?;
-    }
-    let validity = validity_with_null_at(rows, &failed);
-    let [x, y, z, m] = axes;
-    Ok(PointArray::new(Coords::from_valid(
-        ValidCoords::from_axes((x, y, Z.then_some(z), M.then_some(m))),
-        validity,
-    )))
+        Ok(moment.average())
+    })
 }
 
 pub fn line_string_centroids(
