@@ -26,7 +26,7 @@ use polars_arrow::compute::utils::combine_validities_and;
 
 use super::DistanceMetric;
 use crate::per_row::for_each_row;
-use crate::{CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
+use crate::{row_or_null, CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
 
 /// Which axes measure the length or area that a centroid is weighted by.
 /// Implements `method` of the Python `centroid`.
@@ -480,13 +480,11 @@ impl<'a> Weighing<'a> {
             let fill = match self.look_at_light_row(row_vertices(i), weight) {
                 LightRow::Sliver => continue,
                 LightRow::Empty => f64::NAN,
-                LightRow::WithoutCentroid(why) => match on_row_error {
-                    OnRowError::Raise => return Err(self.error::<Z>(why)),
-                    OnRowError::Null => {
-                        failed.push(i);
-                        0.0
-                    }
-                },
+                LightRow::WithoutCentroid(why) => {
+                    row_or_null::<(), _>(Err(self.error::<Z>(why)), on_row_error)?;
+                    failed.push(i);
+                    0.0
+                }
             };
             // An axis that is not there is an empty `Vec`.
             for axis in axes.iter_mut() {
