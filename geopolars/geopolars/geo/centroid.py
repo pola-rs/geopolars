@@ -98,8 +98,7 @@ def centroid(
     What exactly this is depends on the geometry.
     This weighing makes it different from `mean_coordinate`.
     The result is always a `PointXY[ZM]`.
-    The result inherits the geometry's dimension and CRS.
-    TODO: ^ shared doc
+    {keeps_dimension_and_crs}
 
     For a polygon, this gives the centre of area, weighted evenly over its area without its holes.
     For a linestring, it gives the centre of length, where every segment weighs as much as it is long.
@@ -160,9 +159,7 @@ def centroid(
     - a linestring with all its vertices on one spot.
     - a polygon with all its vertices exactly on a line.
       A polygon whose vertices lie on a line only up to rounding
-      (such as points computed as `(x, 3 * x)`) can underflow.
-      That centroid can lie far outside the polygon.
-      TODO: make it automatically fall back to line weight in this rare case, and otherwise to vertex mean.
+      (such as points computed as `(x, 3 * x)`)
     - a geometry whose vertices all lie within about 1e-162 of each other,
       because it gets a tiny length or area.
       A slightly larger geometry (within about 1e-154 for a linestring,
