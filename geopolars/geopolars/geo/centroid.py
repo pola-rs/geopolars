@@ -162,15 +162,17 @@ def centroid(
     If the geometry has no length or no area, it will have no centroid, such as:
 
     - a linestring with all its vertices on one spot.
-    - a polygon with all its vertices exactly on a line.
-      A polygon whose vertices lie on a line only up to rounding
-      (such as points computed as `(x, 3 * x)`)
+    - a polygon with all its vertices exactly on a line (collinear).
+      This does not take a margin,
+      so anything that's *almost* a line would get a tiny area.
     - a geometry whose vertices all lie within about 1e-162 of each other,
       because it gets a tiny length or area.
       A slightly larger geometry (within about 1e-154 for a linestring,
       or 1e-103 for a polygon) has a centroid, but it loses precision relative to the size of the geometry.
 
     An invalid polygon that has a negative area due to oversized holes raises an error too.
+    An invalid multipolygon might raise under the same conditions,
+    but pass silently if the total area is still positive.
 
     A NaN or an infinity propagates this value through arithmetically,
     resulting in a centroid that itself is also non-finite.

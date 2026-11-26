@@ -84,14 +84,11 @@ const fn has_axis<const Z: bool, const M: bool>(k: usize) -> bool {
     k < 2 || (k == 2 && Z) || (k == 3 && M)
 }
 
-/// Running average for a weight.
-/// You can keep adding to this!
+/// The two sums a weighted average is taken from, which every segment, ring, and part of a row adds to.
 struct Moment<const Z: bool, const M: bool> {
-    /// Σ weight * centre, in x, y, z, m.
-    /// An axis that is not [there](has_axis) stays `0.0`.
+    /// Σ weight * centre per axis, which stays `0.0` for an axis that is not [there](has_axis).
     sum: [f64; 4],
-    /// Σ weight
-    /// All share the same
+    /// Σ weight, shared by every axis.
     weight: f64,
 }
 
@@ -275,6 +272,8 @@ fn add_ring<const Z: bool, const M: bool, const ANCHOR: u8>(
             }
         }
     }
+    // `a` is negative for a clockwise ring.
+    // Taking out its sign counts every ring by its absolute area, whatever its winding.
     let sign = sign * a.signum();
     for (k, (total, s)) in moment.sum.iter_mut().zip(sum).enumerate() {
         if has_axis::<Z, M>(k) {
