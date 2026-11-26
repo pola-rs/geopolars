@@ -100,6 +100,11 @@ def centroid(
     The result is always a `PointXY[ZM]`.
     {keeps_dimension_and_crs}
 
+    {validity_table_start}
+    {requires_valid_geoarrow}  {unexpected_results_or_errors}
+    {requires_ogc_validity}  {unexpected_results_or_errors}
+    {validity_table_end}
+
     For a polygon, this gives the centre of area, weighted evenly over its area without its holes.
     For a linestring, it gives the centre of length, where every segment weighs as much as it is long.
 
