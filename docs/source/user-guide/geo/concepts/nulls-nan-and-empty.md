@@ -24,7 +24,7 @@ Below, we compare a square, an empty polygon and a null:
 
 See if this makes sense in your mental model:
 The empty polygon is still a polygon. It has an area, which is 0.
-Its centroid is empty too: the empty point.
+Its centroid would also be the empty point.
 If it does, then you got it!
 
 ## Nulls

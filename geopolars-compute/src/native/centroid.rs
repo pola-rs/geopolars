@@ -24,7 +24,6 @@ use geopolars_views::{
 };
 use polars_arrow::compute::utils::combine_validities_and;
 
-use super::is_empty::has_no_points;
 use super::DistanceMetric;
 use crate::per_row::for_each_row;
 use crate::{CentroidWeight, GeoComputeError, GeoComputeResult, OnRowError, Planar};
@@ -500,7 +499,7 @@ impl<'a> Weighing<'a> {
     }
 
     fn look_at_light_row(self, vertices: Range<usize>, weight: f64) -> LightRow {
-        if has_no_points::<false>(self.coords, vertices.clone()) {
+        if vertices.is_empty() {
             return LightRow::Empty;
         }
         if weight < 0.0 {
