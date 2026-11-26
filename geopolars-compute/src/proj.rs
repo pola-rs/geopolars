@@ -171,21 +171,34 @@ fn reprojected(
     z: bool,
 ) -> GeoComputeResult<[Option<Vec<f64>>; 3]> {
     let mut positions = copied_positions(coords, z);
-    match validity {
-        // Only the runs of points that are there go to PROJ,
-        // so a null point keeps the coordinates it was copied with.
-        Some(validity) => {
-            for (start, len) in SlicesIterator::new(validity) {
-                reproject_positions_in_place(transformation, &mut positions, start..start + len, z);
-            }
-        }
-        None => reproject_positions_in_place(transformation, &mut positions, 0..coords.len(), z),
-    }
-    retry_failed_positions(transformation, coords, &mut positions, z, |i| {
-        validity.is_some_and(|validity| !validity.get_bit(i))
+    // Only the runs of points that are there go to PROJ,
+    // so a null point keeps the coordinates it was copied with.
+    reprojected_for_each_run(coords.len(), validity, |run| {
+        reproject_positions_in_place(transformation, &mut positions, run, z);
+        Ok(())
     })?;
+    // One scan over every `x` rather than one per run,
+    // so that many short runs between nulls stay cheap.
+    if !did_batch_reproject_all(&positions[0]) {
+        reprojected_for_each_run(coords.len(), validity, |run| {
+            check_batch(transformation, coords, &positions[0][run.clone()], run, z)
+        })?;
+    }
     let [xs, ys, zs] = positions;
     Ok([Some(xs), Some(ys), z.then_some(zs)])
+}
+
+fn reprojected_for_each_run(
+    len: usize,
+    validity: Option<&Bitmap>,
+    mut f: impl FnMut(Range<usize>) -> GeoComputeResult<()>,
+) -> GeoComputeResult<()> {
+    match validity {
+        Some(validity) => {
+            SlicesIterator::new(validity).try_for_each(|(start, len)| f(start..start + len))
+        }
+        None => f(0..len),
+    }
 }
 
 fn copied_positions(coords: &ValidCoords, z: bool) -> [Vec<f64>; 3] {
@@ -197,17 +210,9 @@ fn copied_positions(coords: &ValidCoords, z: bool) -> [Vec<f64>; 3] {
     [coords.x().to_vec(), coords.y().to_vec(), zs]
 }
 
-fn set_position([xs, ys, zs]: &mut [Vec<f64>; 3], i: usize, [x, y, new_z]: [f64; 3], z: bool) {
-    xs[i] = x;
-    ys[i] = y;
-    if z {
-        zs[i] = new_z;
-    }
-}
-
 /// Moves the positions in `range` through PROJ in a single call.
 /// A coordinate PROJ fails on is marked as [failed_in_batch] rather than giving an error,
-/// so [retry_failed_positions] or [ReprojectedXy::check] has to follow.
+/// so [check_batch] has to follow.
 fn reproject_positions_in_place(
     transformation: &Transformation,
     [xs, ys, zs]: &mut [Vec<f64>; 3],
@@ -257,6 +262,40 @@ fn failed_in_batch(x: f64) -> bool {
     x == f64::INFINITY
 }
 
+#[inline(always)]
+fn did_batch_reproject_all(new_xs: &[f64]) -> bool {
+    // Does not stop at the first that failed, so that it vectorises.
+    new_xs.iter().fold(true, |ok, &x| ok & !failed_in_batch(x))
+}
+
+/// Gives PROJ's error for the first of `vertices` that [reproject_positions_in_place] failed on,
+/// by reprojecting it once more, on its own.
+/// `new_xs` holds the new `x` the batch gave each of `vertices`.
+#[inline(always)]
+fn check_batch(
+    transformation: &Transformation,
+    original: &ValidCoords,
+    new_xs: &[f64],
+    vertices: Range<usize>,
+    z: bool,
+) -> GeoComputeResult<()> {
+    if did_batch_reproject_all(new_xs) {
+        return Ok(());
+    }
+    for (i, &x) in vertices.zip(new_xs) {
+        if failed_in_batch(x) {
+            let position = if z {
+                original.position::<true>(i)
+            } else {
+                original.position::<false>(i)
+            };
+            // Comes back fine for one that went in infinite, which keeps its value from the batch.
+            reproject_position(transformation, position)?;
+        }
+    }
+    Ok(())
+}
+
 /// A run of vertices, with their `x` and `y` moved through PROJ in a single call.
 pub struct ReprojectedXy {
     x: Vec<f64>,
@@ -294,17 +333,7 @@ impl ReprojectedXy {
         vertices: Range<usize>,
     ) -> GeoComputeResult<()> {
         let x = &self.x[vertices.start - self.first_vertex..vertices.end - self.first_vertex];
-        // Does not stop at the first that failed, so that it vectorises.
-        if x.iter().fold(true, |ok, &x| ok & !failed_in_batch(x)) {
-            return Ok(());
-        }
-        for (i, &x) in vertices.zip(x) {
-            if failed_in_batch(x) {
-                // Comes back fine for one that went in infinite, which keeps its value from the batch.
-                reproject_position(transformation, coords.position::<false>(i))?;
-            }
-        }
-        Ok(())
+        check_batch(transformation, coords, x, vertices, false)
     }
 
     /// The `x` and `y` of vertex `i` of the coordinates.
@@ -314,29 +343,6 @@ impl ReprojectedXy {
         let j = i - self.first_vertex;
         (self.x[j], self.y[j])
     }
-}
-
-/// Reprojects every coordinate that [reproject_positions_in_place] failed on once more, on its own,
-/// to get the error back. A coordinate for which `is_skipped` holds is left as it is.
-fn retry_failed_positions(
-    transformation: &Transformation,
-    original: &ValidCoords,
-    positions: &mut [Vec<f64>; 3],
-    z: bool,
-    is_skipped: impl Fn(usize) -> bool,
-) -> GeoComputeResult<()> {
-    for i in 0..original.len() {
-        if failed_in_batch(positions[0][i]) && !is_skipped(i) {
-            let position = if z {
-                original.position::<true>(i)
-            } else {
-                original.position::<false>(i)
-            };
-            let position = reproject_position(transformation, position)?;
-            set_position(positions, i, position, z);
-        }
-    }
-    Ok(())
 }
 
 /// Reprojects one `[x, y, z]` through PROJ (see the module docs).

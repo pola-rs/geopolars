@@ -90,15 +90,12 @@ fn add_line<const Z: bool, const M: bool>(moment: &mut Moment<Z, M>, line: &Scal
     }
 }
 
-/// Moment += that of a (closed) ring.
-/// shoelace formula:
-/// Over the ring, a = Σ cross, mx = Σ (x_i + x_{i+1}) cross and my = Σ (y_i + y_{i+1}) cross,
-/// with cross = x_i y_{i+1} - x_{i+1} y_i: its centroid is (mx, my) / 3a,
-/// so weighted by its area a / 2, (mx, my) / 6.
-/// z and m are averaged over the area too:
-/// over the triangles fanning out from the first vertex `p0`,
-/// each weighted by its area, fan / 2 (with fan the cross of `p_i - p0` and `p_{i+1} - p0`),
-/// at the mean of its corners, (z_0 + z_i + z_{i+1}) / 3: Σ fan (z_0 + z_i + z_{i+1}) / 6.
+/// Adds the moment of a closed ring, with the shoelace formula.
+/// x and y are taken relative to the first vertex `p0`, so rings far from the origin keep their precision.
+/// With cross = x_i y_{i+1} - x_{i+1} y_i over those, a = Σ cross is twice the area,
+/// and the centroid is p0 + (Σ (x_i + x_{i+1}) cross, Σ (y_i + y_{i+1}) cross) / 3a.
+/// As each cross is twice the area of a triangle fanning out from `p0`,
+/// z and m are averaged over those triangles at the mean of their corners: Σ cross (z_0 + z_i + z_{i+1}) / 3a.
 /// On a flat ring, that is the height of its plane above the centroid.
 #[inline(always)]
 fn add_ring<const Z: bool, const M: bool>(
@@ -110,20 +107,20 @@ fn add_ring<const Z: bool, const M: bool>(
     let Some(p0) = coordinates.next() else {
         return;
     };
+    let shift = [p0[0], p0[1], 0.0, 0.0];
+    let shifted = |p: [f64; 4]| [p[0] - shift[0], p[1] - shift[1], p[2], p[3]];
     let (mut a, mut sum) = (0.0, [0.0; 4]);
-    let mut p = p0;
+    let mut p = shifted(p0);
     // The repeated last vertex is only ever the `q`.
     for q in coordinates {
+        let q = shifted(q);
         let cross = p[0] * q[1] - q[0] * p[1];
         a += cross;
         sum[0] += (p[0] + q[0]) * cross;
         sum[1] += (p[1] + q[1]) * cross;
-        if Z || M {
-            let fan = (p[0] - p0[0]) * (q[1] - p0[1]) - (q[0] - p0[0]) * (p[1] - p0[1]);
-            for k in 2..4 {
-                if has_axis::<Z, M>(k) {
-                    sum[k] += fan * (p0[k] + p[k] + q[k]);
-                }
+        for k in 2..4 {
+            if has_axis::<Z, M>(k) {
+                sum[k] += cross * (p0[k] + p[k] + q[k]);
             }
         }
         p = q;
@@ -131,7 +128,7 @@ fn add_ring<const Z: bool, const M: bool>(
     let sign = sign * a.signum();
     for (k, (total, s)) in moment.sum.iter_mut().zip(sum).enumerate() {
         if has_axis::<Z, M>(k) {
-            *total += sign * s / 6.0;
+            *total += sign * (s / 6.0 + shift[k] * a / 2.0);
         }
     }
     moment.weight += sign * a / 2.0;

@@ -38,7 +38,7 @@ pub use affine::{
     affine_line_strings, affine_multi_line_strings, affine_multi_points, affine_multi_polygons,
     affine_points, affine_polygons, AffineMatrix, RowShift,
 };
-pub use area::{multi_polygon_areas, polygon_areas, AreaMetric, NegativeArea};
+pub use area::{multi_polygon_areas, polygon_areas, AreaMetric};
 pub use bounds::{
     box_array, line_string_bounds, line_string_column_extent, multi_line_string_bounds,
     multi_line_string_column_extent, multi_point_bounds, multi_point_column_extent,
@@ -48,7 +48,7 @@ pub use bounds::{
 pub use centroid::{
     line_string_centroids, multi_line_string_centroids, multi_polygon_centroids, polygon_centroids,
 };
-pub(crate) use coordinate_selection::{first_outside, has_none_outside, which_are_not_selected};
+pub(crate) use coordinate_selection::which_are_not_selected;
 pub use coordinate_selection::{selected_coords, Bounds, CoordinateSelection, NonFinite};
 pub use count_coordinates::{
     line_string_coordinate_counts, multi_line_string_coordinate_counts,

@@ -36,31 +36,46 @@ If there is an error in the setup, it can still fail the entire query even if `o
 `early_coord_check: Literal["finite", "off", "finite_and_empty"]`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Most operations will return a non-finite result if the input is also non-finite.
-This argument controls an early check for this in this kernel.
-Checking this requires an extra pass over the geometry though.
-See this as a safety check you can turn off for extra speed in some cases.
-Turning this off in data with very few NaNs might be faster, but if your data contains a lot of NaNs,
-you might be better off leaving this one as this can skip expensive calculations.
+This argument controls a shortcut path to allow faster execution in some cases.
+It controls a pass over the coordinates of a row to find non-finite and/or empty values
+in operations that do a lot of work that would be thrown away if there is a NaN.
+This allows it to save needing to do that work in the first place.
+It costs a little to check it for every row, so that some rows do not have to be worked on at all. 
+Turn it off when you know your data holds (almost) no invalid data.
+Leave it on when it holds many, as skipping their work is then the bigger saving.
 
 - `early_coord_check="off"` skips this extra pass.
-- `early_coord_check="finite"` (default for native kernels) checks for a NaN or infinite `x` or `y`,
-  other than an empty point.
-  If it finds one, a native kernel that gives a float gives that row NaN without computing it.
-  A GEOS kernel marks the row as an error instead, which `on_row_error` handles.
+- `early_coord_check="finite"` (default for native kernels) checks for a NaN or infinite `x` or `y`.
+  The empty point (which is represented as an all-NaN) is allowed.
+  It then either marks the row as NaN for single-value returns, or errors if the row result is not a float.
+  For example, a GEOS kernel marks the row as an error instead.
+  `on_row_error` handles the error case.
 - `early_coord_check="finite_and_empty"` (default for GEOS kernels) does the same as the above,
   but also for an empty point inside a geometry.
+  It will try to honour the 'empty' where possible.
 
-This argument matters most for kernels that forward to GEOS.
+This argument is very useful for kernels that forward to GEOS.
 GEOS cannot handle an empty point inside a geometry, nor any other NaN or infinite x or y
 (see `Non-finite and inner empties in GEOS-backed kernels <https://github.com/pola-rs/geopolars/blob/main/docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md#non-finite-and-inner-empties-in-geos-backed-kernels>`_ in the user guide).
 These kernels run the check while they convert a row into a GEOS geometry.
-Skipping the check with `early_coord_check="off"` can silently change the results, which may come as a surprise.
-GEOS handles such input in different ways, and sometimes inconsistently.
-For example, it silently returns (4, 0) for a distance of 0.5 along a line with a NaN vertex.
+
+With the check on, a NaN or infinite coordinate never comes out as a plausible finite number
+(see `Non-finite <https://github.com/pola-rs/geopolars/blob/main/docs/source/user-guide/geo/concepts/nulls-nan-and-empty.md#non-finite>`_ in the user guide).
+Turning it off gives the same result for most rows,
+but it is not guaranteed to always give the same values.
+A native kernel may give a different non-finite outcome,
+such as infinity instead of NaN, or an error that the check would have caught first.
+
+.. note::
+
+   With `early_coord_check="off"`, a GEOS kernel cannot guarantee that the result stays non-finite,
+   as GEOS sometimes handles these internally inconsistently.
+   For example, it silently returns (4, 0) for a distance of 0.5 along a line with a NaN vertex.
 
 With `early_coord_check="finite"`, an empty point inside a geometry goes to GEOS.
 What GEOS does with it depends on the operation, and often on where the point is:
+
+.. TODO: these should be on the expressions they describe, not here.
 
 .. list-table::
    :header-rows: 1
@@ -84,8 +99,6 @@ What GEOS does with it depends on the operation, and often on where the point is
    * - `is_topologically_equal`
      - gives a wrong answer
 
-A geometry that is itself the empty point passes either check,
-and works as you'd expect it to, as it is a standard GEOS type.
 
 If this is a function that also takes `include_m`/`include_z`,
 the check only includes the coordinates that these flags specify.
@@ -164,9 +177,10 @@ Its default here is `"crs_wrapped_longitude"`, which lets longitudes from 180 to
 Data stored from 0 to 360 then measures as it would from -180 to 180,
 as does a box across the antimeridian (see `to_polygon`).
 
-`early_coord_check` runs first, so a row that fails it gets NaN, whatever this argument says.
-An infinite `x` or `y` lies outside the bounds, which only matters with `early_coord_check="off"`.
+An infinite `x` or `y` lies outside the bounds.
 A NaN one never does, so neither does an empty point inside a geometry.
+Infinite values will be caught by `early_coord_check` instead if the expression uses it (and it is enabled),
+as that runs before this check.
 
 - `on_out_of_bounds="auto"` (default) is `"error"` when measuring geodesic,
   and `"ignore"` when measuring planar, which then does not ask PROJ for any bounds.

@@ -1,3 +1,6 @@
+#[cfg(any(feature = "native", feature = "geos"))]
+use std::ops::Range;
+
 const_enum!(
     /// Which coordinates a kernel looks for in a check before its work.
     /// Implements `early_coord_check`, which `geopolars/docs/source/reference/common_arguments.rst` documents.
@@ -25,13 +28,30 @@ fn xy_passes<const EARLY_COORD_CHECK: u8>(x: f64, y: f64) -> bool {
 }
 
 /// Whether every `x` and `y` passes `EARLY_COORD_CHECK`. z and m are not checked.
-#[cfg(any(feature = "native", feature = "geos"))]
+#[cfg(feature = "geos")]
 #[inline(always)]
 pub(crate) fn every_xy_passes<const EARLY_COORD_CHECK: u8>(x: &[f64], y: &[f64]) -> bool {
+    every_xy_passes_at::<EARLY_COORD_CHECK>(x, y, 0..x.len())
+}
+
+/// [every_xy_passes] on the `vertices` of `x` and `y`, which are only sliced if there is a check.
+#[cfg(any(feature = "native", feature = "geos"))]
+#[inline(always)]
+pub(crate) fn every_xy_passes_at<const EARLY_COORD_CHECK: u8>(
+    x: &[f64],
+    y: &[f64],
+    vertices: Range<usize>,
+) -> bool {
+    if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
+        return true;
+    }
     // Does not stop at the first that fails, so that it vectorises.
-    x.iter().zip(y).fold(true, |ok, (&x, &y)| {
-        ok & xy_passes::<EARLY_COORD_CHECK>(x, y)
-    })
+    x[vertices.clone()]
+        .iter()
+        .zip(&y[vertices])
+        .fold(true, |ok, (&x, &y)| {
+            ok & xy_passes::<EARLY_COORD_CHECK>(x, y)
+        })
 }
 
 /// The first `x` and `y` that fail `EARLY_COORD_CHECK`, if any.

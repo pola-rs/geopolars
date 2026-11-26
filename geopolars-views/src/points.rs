@@ -117,4 +117,10 @@ impl MultiPointArray {
     pub fn row_vertices(&self, i: usize) -> Range<usize> {
         self.rows.range(i)
     }
+
+    /// See [`LineStringArray::rows_vertices`](crate::LineStringArray::rows_vertices).
+    #[inline(always)]
+    pub fn rows_vertices(&self, rows: Range<usize>) -> Range<usize> {
+        self.rows.span(rows)
+    }
 }

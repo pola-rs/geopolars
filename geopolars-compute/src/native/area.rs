@@ -1,33 +1,23 @@
 //! The area a polygon encloses, as an [AreaMetric] measures it.
 //! Implements the Python `area`.
-//!
-//! The const generic `EARLY_COORD_CHECK` holds an [EarlyCoordCheck].
 
 use std::convert::Infallible;
 use std::ops::Range;
 
-use geographiclib_rs::{Geodesic, PolygonArea, Winding};
 use geopolars_views::{
     List, MultiPolygonArray, PolygonArray, ScalarLineString, ScalarPolygon, Untrimmed, ValidCoords,
 };
 use polars_arrow::array::PrimitiveArray;
 use polars_arrow::datatypes::ArrowDataType;
 
-use super::{first_outside, has_none_outside, Bounds};
-use crate::early_coord_check::every_xy_passes;
+use super::coordinate_selection::first_outside;
+use super::Bounds;
+use crate::early_coord_check::every_xy_passes_at;
 use crate::per_row::per_row_or_null;
-use crate::proj::ReprojectedXy;
 use crate::{
-    BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, GeodesicMetric, OnOutOfBounds,
-    OnRowError, Planar,
+    BaseMetric, EarlyCoordCheck, GeoComputeError, GeoComputeResult, OnOutOfBounds, OnRowError,
+    Planar,
 };
-
-/// The `negative_area` of the Python `area`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NegativeArea {
-    Zero,
-    Keep,
-}
 
 /// How the area a ring encloses is measured
 pub trait AreaMetric: BaseMetric {
@@ -35,6 +25,11 @@ pub trait AreaMetric: BaseMetric {
     type Error;
     /// What is worked out once for a whole chunk, before its rings are measured.
     type Chunk;
+    /// With `false`, the `early_coord_check` passed in is ignored.
+    /// used where measuring costs no more than the check does.
+    /// so [`ring_area`](Self::ring_area) itself must give a NaN or infinite area
+    /// for every ring with a NaN or infinite x or y.
+    const CHECKS_COORDS_EARLY: bool;
     /// Prepares measuring the rings whose vertices lie within `vertices` of `coords`.
     fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> Self::Chunk;
     /// Fails a row that cannot be measured, before its rings are.
@@ -54,6 +49,7 @@ pub trait AreaMetric: BaseMetric {
 impl AreaMetric for Planar {
     type Error = Infallible;
     type Chunk = ();
+    const CHECKS_COORDS_EARLY: bool = false;
 
     fn prepare_chunk(&self, _coords: &ValidCoords, _vertices: Range<usize>) {}
 
@@ -67,6 +63,7 @@ impl AreaMetric for Planar {
         Ok(())
     }
 
+    #[inline(always)]
     fn ring_area(&self, _chunk: &(), ring: &ScalarLineString) -> f64 {
         twice_signed_area(ring).abs() / 2.0
     }
@@ -109,67 +106,25 @@ pub(super) fn twice_signed_area(ring: &ScalarLineString) -> f64 {
     twice_signed + term(x[n - 1], y[n - 2], y[0])
 }
 
-impl AreaMetric for GeodesicMetric {
-    type Error = GeoComputeError;
-    type Chunk = ReprojectedXy;
-
-    fn prepare_chunk(&self, coords: &ValidCoords, vertices: Range<usize>) -> ReprojectedXy {
-        self.lonlats(coords, vertices)
-    }
-
-    #[inline(always)]
-    fn check_row(
-        &self,
-        lonlats: &ReprojectedXy,
-        coords: &ValidCoords,
-        vertices: Range<usize>,
-    ) -> Result<(), GeoComputeError> {
-        self.check_lonlats(lonlats, coords, vertices)
-    }
-
-    fn ring_area(&self, lonlats: &ReprojectedXy, ring: &ScalarLineString) -> f64 {
-        ring_signed_area(&self.ellipsoid, lonlats, ring).abs()
-    }
-}
-
-/// The area `ring` encloses on `ellipsoid`, positive when its smaller side lies to its left.
 #[inline(always)]
-fn ring_signed_area(ellipsoid: &Geodesic, lonlats: &ReprojectedXy, ring: &ScalarLineString) -> f64 {
-    // On the ellipsoid, in the CRS's unit squared, like [`between`](GeodesicMetric::between).
-    // Based on `geographiclib_rs`.
-    let mut area = PolygonArea::new(ellipsoid, Winding::CounterClockwise);
-    for i in ring.vertices.clone() {
-        let (lon, lat) = lonlats.xy(i);
-        // The repeated closing vertex adds an edge of length zero, which encloses nothing.
-        area.add_point(lat, lon);
-    }
-    // Signed, so that it lies within half the ellipsoid.
-    // Unsigned would take a clockwise ring to enclose everything outside of it.
-    let (_perimeter, area, _vertices) = area.compute(true);
-    area
-}
-
-#[inline(always)]
-fn polygon_area<M: AreaMetric>(
-    metric: &M,
-    chunk: &M::Chunk,
-    polygon: &ScalarPolygon,
-    negative_area: NegativeArea,
-) -> f64 {
+fn polygon_area<M: AreaMetric>(metric: &M, chunk: &M::Chunk, polygon: &ScalarPolygon) -> f64 {
+    // A closed ring of fewer than 4 vertices can at most go there and back, so it encloses nothing.
+    // Multiplying by its coordinates still turns a NaN or infinite one into NaN.
+    let ring_area = |ring: &ScalarLineString| {
+        if ring.vertices.len() < 4 {
+            let x = &ring.coords.x()[ring.vertices.clone()];
+            let y = &ring.coords.y()[ring.vertices.clone()];
+            0.0 * x.iter().chain(y).sum::<f64>().abs()
+        } else {
+            metric.ring_area(chunk, ring)
+        }
+    };
     let Some(exterior) = polygon.exterior() else {
         return 0.0;
     };
-    let exterior = metric.ring_area(chunk, &exterior);
-    let holes: f64 = polygon
-        .holes()
-        .map(|hole| metric.ring_area(chunk, &hole))
-        .sum();
-    let area = exterior - holes;
-    // The Python `area` says which polygons come out below zero.
-    if area < 0.0 && negative_area == NegativeArea::Zero {
-        return 0.0;
-    }
-    area
+    let exterior = ring_area(&exterior);
+    let holes: f64 = polygon.holes().map(|hole| ring_area(&hole)).sum();
+    exterior - holes
 }
 
 /// The area of every polygon of a chunk.
@@ -180,16 +135,18 @@ pub fn polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     early_coord_check: EarlyCoordCheck,
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
-    negative_area: NegativeArea,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
+    let rows = array.rows();
+    let chunk_vertices = array.rows_vertices(0..rows.len());
     areas_with(
         metric,
-        array.rows(),
+        rows,
         array.coords(),
+        chunk_vertices,
         |i| array.row_vertices(i),
         |chunk, i| {
             let polygon = array.get(i);
-            polygon_area(metric, chunk, &polygon, negative_area)
+            polygon_area(metric, chunk, &polygon)
         },
         on_row_error,
         early_coord_check,
@@ -206,12 +163,14 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
     early_coord_check: EarlyCoordCheck,
     bounds: Option<Bounds>,
     on_out_of_bounds: OnOutOfBounds,
-    negative_area: NegativeArea,
 ) -> GeoComputeResult<PrimitiveArray<f64>> {
+    let rows = array.rows();
+    let chunk_vertices = array.rows_vertices(0..rows.len());
     areas_with(
         metric,
-        array.rows(),
+        rows,
         array.coords(),
+        chunk_vertices,
         |i| array.row_vertices(i),
         |chunk, i| {
             array
@@ -219,7 +178,7 @@ pub fn multi_polygon_areas<M: AreaMetric<Error: Into<GeoComputeError>>>(
                 .polygons()
                 // Folded from `0.0`, as `sum` starts from `-0.0`.
                 .fold(0.0, |total, polygon| {
-                    total + polygon_area(metric, chunk, &polygon, negative_area)
+                    total + polygon_area(metric, chunk, &polygon)
                 })
         },
         on_row_error,
@@ -236,6 +195,7 @@ fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
     metric: &M,
     rows: &List,
     coords: &ValidCoords,
+    chunk_vertices: Range<usize>,
     row_vertices: impl Fn(usize) -> Range<usize>,
     row_area: impl Fn(&M::Chunk, usize) -> f64,
     on_row_error: OnRowError,
@@ -247,10 +207,16 @@ fn areas_with<M: AreaMetric<Error: Into<GeoComputeError>>>(
         return Ok(PrimitiveArray::new_null(ArrowDataType::Float64, rows.len()));
     }
     let (check_bounds, bounds) = areas_with_split_bounds(bounds, on_out_of_bounds);
-    let chunk = metric.prepare_chunk(
-        coords,
-        areas_with_vertices_of_rows(rows.len(), &row_vertices),
-    );
+    let chunk = metric.prepare_chunk(coords, chunk_vertices);
+    // A metric without `CHECKS_COORDS_EARLY` gets the `Off` path, whatever the user passed.
+    // `early_coord_check` is ignored for a metric without
+    // [`CHECKS_COORDS_EARLY`](AreaMetric::CHECKS_COORDS_EARLY).
+    let early_coord_check = if M::CHECKS_COORDS_EARLY {
+        early_coord_check
+    } else {
+        EarlyCoordCheck::Off
+    };
+
     with_const_flags!(
         EARLY_COORD_CHECK: EarlyCoordCheck = early_coord_check, CHECK_BOUNDS = check_bounds;
         per_row_or_null(rows, on_row_error, |i| {
@@ -274,36 +240,22 @@ fn areas_with_failed_check<const EARLY_COORD_CHECK: u8, const CHECK_BOUNDS: bool
     bounds: &Bounds,
     on_out_of_bounds: OnOutOfBounds,
 ) -> Option<GeoComputeResult<Option<f64>>> {
-    if !areas_with_failed_check_row_passes_early::<EARLY_COORD_CHECK>(coords, vertices.clone()) {
+    if !every_xy_passes_at::<EARLY_COORD_CHECK>(coords.x(), coords.y(), vertices.clone()) {
         return Some(Ok(Some(f64::NAN)));
     }
     if !CHECK_BOUNDS {
         return None;
     }
     let (x, y) = (&coords.x()[vertices.clone()], &coords.y()[vertices]);
-    if has_none_outside(bounds, x, y) {
-        return None;
-    }
+    let position = first_outside(bounds, x, y)?;
     // `Ignore` never gets here, as it gives `CHECK_BOUNDS=false`.
     Some(match on_out_of_bounds {
         OnOutOfBounds::Null => Ok(None),
         _ => Err(GeoComputeError::OutOfBounds {
-            position: first_outside(bounds, x, y)
-                .expect("a coordinate outside, as the check above failed"),
+            position,
             bounds: *bounds,
         }),
     })
-}
-
-#[inline(always)]
-fn areas_with_failed_check_row_passes_early<const EARLY_COORD_CHECK: u8>(
-    coords: &ValidCoords,
-    vertices: Range<usize>,
-) -> bool {
-    if const { EarlyCoordCheck::from_u8(EARLY_COORD_CHECK) } == EarlyCoordCheck::Off {
-        return true;
-    }
-    every_xy_passes::<EARLY_COORD_CHECK>(&coords.x()[vertices.clone()], &coords.y()[vertices])
 }
 
 /// Splits `bounds` into whether to check them and the bounds themselves,
@@ -315,15 +267,4 @@ fn areas_with_split_bounds(
 ) -> (bool, Bounds) {
     let bounds = bounds.filter(|_| on_out_of_bounds != OnOutOfBounds::Ignore);
     (bounds.is_some(), bounds.unwrap_or_default())
-}
-
-fn areas_with_vertices_of_rows(
-    row_count: usize,
-    row_vertices: impl Fn(usize) -> Range<usize>,
-) -> Range<usize> {
-    if row_count == 0 {
-        return 0..0;
-    }
-    // Offsets never decrease, also under a null row, so this spans the vertices of every row.
-    row_vertices(0).start..row_vertices(row_count - 1).end
 }

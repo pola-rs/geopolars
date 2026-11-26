@@ -32,6 +32,16 @@ each of which is a list of structs.
 The multi kinds add one more list around their single kind.
 (See [user-defined functions](../udfs.md) for where you might run into this.)
 
+### Polygon edges
+
+A polygon only stores the vertices of its rings.
+In a planar operation, the edge between two vertices is a straight line in the coordinates.
+In a [geodesic one](crs.md#geographic-and-projected), such as `area` in a geographic CRS,
+it follows the shortest path along the ellipsoid instead.
+This makes it impossible to represent regions that are larger than half the globe, as
+GeoPolars always takes the smaller one as the inside.
+<!-- other software uses winding directions for this, which we currently don't. -->
+
 ## One kind per column
 
 A Polars column has a single data type, so every row in a geometry column is the same kind.

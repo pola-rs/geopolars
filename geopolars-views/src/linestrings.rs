@@ -114,6 +114,13 @@ impl LineStringArray {
     pub fn row_vertices(&self, i: usize) -> Range<usize> {
         self.rows.range(i)
     }
+
+    /// Gives the range of `coords` that holds the vertices of rows `rows`,
+    /// including any that null rows among them point to.
+    #[inline(always)]
+    pub fn rows_vertices(&self, rows: Range<usize>) -> Range<usize> {
+        self.rows.span(rows)
+    }
 }
 
 /// A column of multilinestrings: rows of linestrings of coordinates.
@@ -180,5 +187,11 @@ impl MultiLineStringArray {
     #[inline(always)]
     pub fn row_vertices(&self, i: usize) -> Range<usize> {
         self.lines.span(self.rows.range(i))
+    }
+
+    /// See [`LineStringArray::rows_vertices`].
+    #[inline(always)]
+    pub fn rows_vertices(&self, rows: Range<usize>) -> Range<usize> {
+        self.lines.span(self.rows.span(rows))
     }
 }

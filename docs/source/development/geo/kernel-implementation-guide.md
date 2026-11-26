@@ -210,6 +210,22 @@ but the result for each has to match what the expression documents.
 Rules and helpers for single coordinates (empty, not finite, outside the bounds)
 are in `native/coordinate_selection.rs`.
 
+The one hard rule for a NaN or infinite coordinate is that it never becomes a plausible finite result.
+See [the nulls and empty guide](../../user-guide/geo/concepts/nulls-nan-and-empty.md#non-finite).
+Check for non-finite coordinates only where the kernel needs it to uphold this rule,
+and never normalise an infinity to NaN or a NaN to an error just to look uniform.
+
+What it becomes instead is the kernel's business.
+Generally, it is best to let it propagate where the arithmetic does that by itself,
+as the shoelace formula does for `area`.
+If an operation really is not defined for a non-finite value,
+then you should also explicitly check for it.
+
+It is also *sometimes* worth explicitly checking for a non-finite values,
+but it must always be done consciously.
+One such example would be for "`early_coord_check`"
+(See the [Native kernel implementation guide](native-kernel-implementation-guide.md#early_coord_check))
+
 ## Nulls
 
 Before doing any work, a kernel must first check for two special conditions for an all-null result:

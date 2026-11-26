@@ -39,6 +39,11 @@ impl Untrimmed<LineStringArray> {
         self.0.row_vertices(i)
     }
 
+    #[inline(always)]
+    pub fn rows_vertices(&self, rows: Range<usize>) -> Range<usize> {
+        self.0.rows_vertices(rows)
+    }
+
     /// The view, with every level sliced to what its rows use.
     /// Free when it already is.
     pub fn trimmed(self) -> LineStringArray {
@@ -73,6 +78,11 @@ impl Untrimmed<MultiPointArray> {
     #[inline(always)]
     pub fn row_vertices(&self, i: usize) -> Range<usize> {
         self.0.row_vertices(i)
+    }
+
+    #[inline(always)]
+    pub fn rows_vertices(&self, rows: Range<usize>) -> Range<usize> {
+        self.0.rows_vertices(rows)
     }
 
     /// See [`Untrimmed::<LineStringArray>::trimmed`].
@@ -115,6 +125,11 @@ impl Untrimmed<PolygonArray> {
         self.0.row_vertices(i)
     }
 
+    #[inline(always)]
+    pub fn rows_vertices(&self, rows: Range<usize>) -> Range<usize> {
+        self.0.rows_vertices(rows)
+    }
+
     /// See [`Untrimmed::<LineStringArray>::trimmed`].
     pub fn trimmed(self) -> PolygonArray {
         let array = self.0;
@@ -155,6 +170,11 @@ impl Untrimmed<MultiLineStringArray> {
     #[inline(always)]
     pub fn row_vertices(&self, i: usize) -> Range<usize> {
         self.0.row_vertices(i)
+    }
+
+    #[inline(always)]
+    pub fn rows_vertices(&self, rows: Range<usize>) -> Range<usize> {
+        self.0.rows_vertices(rows)
     }
 
     /// See [`Untrimmed::<LineStringArray>::trimmed`].
@@ -202,6 +222,11 @@ impl Untrimmed<MultiPolygonArray> {
     #[inline(always)]
     pub fn row_vertices(&self, i: usize) -> Range<usize> {
         self.0.row_vertices(i)
+    }
+
+    #[inline(always)]
+    pub fn rows_vertices(&self, rows: Range<usize>) -> Range<usize> {
+        self.0.rows_vertices(rows)
     }
 
     /// See [`Untrimmed::<LineStringArray>::trimmed`].
